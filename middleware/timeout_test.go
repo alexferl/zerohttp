@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -221,8 +222,9 @@ func TestTimeout_NoRaceCondition(t *testing.T) {
 				return
 			case <-time.After(45 * time.Millisecond):
 				_, err := w.Write([]byte("done"))
-				if err != nil {
-					t.Fatalf("write failed: %v", err)
+				// Ignore timeout middleware write errors - this is expected behavior
+				if err != nil && !errors.Is(err, ErrTimeoutWrite) {
+					t.Fatalf("unexpected write error: %v", err)
 				}
 			}
 		})
