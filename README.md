@@ -1,4 +1,4 @@
-# zerohttp
+# zerohttp [![Go Report Card](https://goreportcard.com/badge/github.com/alexferl/zerohttp)](https://goreportcard.com/report/github.com/alexferl/zerohttp) [![codecov](https://codecov.io/gh/alexferl/zerohttp/branch/master/graph/badge.svg)](https://codecov.io/gh/alexferl/zerohttp)
 
 A lightweight HTTP framework for Go built on top of the standard `net/http` library. Designed for simplicity, developer productivity, and security.
 
