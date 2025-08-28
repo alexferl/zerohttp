@@ -52,7 +52,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 
 ## Requirements
 
-- **Go 1.25 or later**
+- **Go 1.23 or later**
 - **No external dependencies** (except `golang.org/x/crypto` for AutoTLS features)
 
 
