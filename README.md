@@ -200,27 +200,26 @@ var staticFiles embed.FS
 //go:embed dist
 var appFiles embed.FS
 
-func main() {
 app := zh.New()
-    // API routes
-    app.GET("/api/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-        return zh.R.JSON(w, 200, zh.M{"status": "healthy"})
-    }))
 
-    // Serve static assets (CSS, JS, images) from embedded FS
-    app.Files("/static/", staticFiles, "static")
+// API routes
+app.GET("/api/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    return zh.R.JSON(w, 200, zh.M{"status": "healthy"})
+}))
 
-    // Serve files from directory (uploads, user content)
-    app.FilesDir("/uploads/", "./uploads")
+// Serve static assets (CSS, JS, images) from embedded FS
+app.Files("/static/", staticFiles, "static")
 
-    // Serve web application with client-side routing support
-    app.Static(appFiles, "dist", "/api/")
+// Serve files from directory (uploads, user content)
+app.FilesDir("/uploads/", "./uploads")
 
-    // Or serve from directory for development
-    // app.StaticDir("./dist", "/api/")
+// Serve web application with client-side routing support
+app.Static(appFiles, "dist", "/api/")
 
-    log.Fatal(app.Start())
-}
+// Or serve from directory for development
+// app.StaticDir("./dist", "/api/")
+
+log.Fatal(app.Start())
 ```
 
 ### Static File Methods
