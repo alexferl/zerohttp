@@ -1,8 +1,12 @@
 package zerohttp
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"os"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -69,6 +73,22 @@ type Router interface {
 	// MethodNotAllowed sets a custom handler for 405 Method Not Allowed responses.
 	// If not set, a default handler that returns a problem detail response is used.
 	MethodNotAllowed(h http.HandlerFunc)
+
+	// Files serves static files from embedded FS at the specified prefix.
+	// The prefix is stripped from URLs before looking up files in the embedFS.
+	Files(prefix string, embedFS embed.FS, dir string)
+
+	// FilesDir serves static files from a directory at the specified prefix.
+	// The prefix is stripped from URLs before looking up files in the directory.
+	FilesDir(prefix, dir string)
+
+	// Static serves a static web application from embedded FS with client-side routing fallback.
+	// Falls back to index.html for non-existent files, except for requests matching apiPrefix patterns which return 404.
+	Static(embedFS embed.FS, distDir string, apiPrefix ...string)
+
+	// StaticDir serves a static web application from a directory with client-side routing fallback.
+	// Falls back to index.html for non-existent files, except for requests matching apiPrefix patterns which return 404.
+	StaticDir(dir string, apiPrefix ...string)
 
 	// ServeMux returns the underlying http.ServeMux for advanced usage or integration.
 	ServeMux() *http.ServeMux
@@ -256,6 +276,96 @@ func (r *defaultRouter) MethodNotAllowed(h http.HandlerFunc) {
 	r.methodNotAllowedHandler = h
 }
 
+// Files serves static files from embedded FS at the specified prefix.
+func (r *defaultRouter) Files(prefix string, embedFS embed.FS, dir string) {
+	subFS, err := fs.Sub(embedFS, dir)
+	if err != nil {
+		panic(fmt.Errorf("failed to create sub-filesystem: %w", err))
+	}
+
+	handler := http.StripPrefix(prefix, http.FileServer(http.FS(subFS)))
+
+	// Ensure prefix ends with slash for subtree matching
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	r.mux.Handle("GET "+prefix, r.wrap(handler, nil))
+}
+
+// FilesDir serves static files from a directory at the specified prefix.
+func (r *defaultRouter) FilesDir(prefix, dir string) {
+	handler := http.StripPrefix(prefix, http.FileServer(http.Dir(dir)))
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	r.mux.Handle("GET "+prefix, r.wrap(handler, nil))
+}
+
+// Static serves a static web application from embedded FS with fallback to index.html.
+func (r *defaultRouter) Static(embedFS embed.FS, distDir string, apiPrefix ...string) {
+	subFS, err := fs.Sub(embedFS, distDir)
+	if err != nil {
+		panic(fmt.Errorf("failed to create sub-filesystem: %w", err))
+	}
+
+	handler := r.createStaticHandler(subFS, apiPrefix)
+
+	r.mux.Handle("GET /{$}", r.wrap(handler, nil))
+	r.mux.Handle("GET /{path...}", r.wrap(handler, nil))
+}
+
+// StaticDir serves a static web application from a directory with fallback to index.html.
+func (r *defaultRouter) StaticDir(dir string, apiPrefix ...string) {
+	filesystem := os.DirFS(dir)
+	handler := r.createStaticHandler(filesystem, apiPrefix)
+
+	r.mux.Handle("GET /{$}", r.wrap(handler, nil))
+	r.mux.Handle("GET /{path...}", r.wrap(handler, nil))
+}
+
+// createStaticHandler creates an HTTP handler for static routing with API prefix exclusions.
+func (r *defaultRouter) createStaticHandler(filesystem fs.FS, apiPrefixes []string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+		requestID := req.Header.Get(r.config.RequestID.Header)
+		if requestID == "" {
+			requestID = r.config.RequestID.Generator()
+		}
+		w.Header().Set(r.config.RequestID.Header, requestID)
+
+		cleanPath := path.Clean(req.URL.Path)
+
+		// Skip API routes - return 404
+		for _, prefix := range apiPrefixes {
+			if strings.HasPrefix(cleanPath, prefix) {
+				r.notFoundHandler(w, req)
+				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusNotFound, time.Since(start))
+				return
+			}
+		}
+
+		if file, err := filesystem.Open(strings.TrimPrefix(cleanPath, "/")); err == nil {
+			defer func() {
+				if cerr := file.Close(); cerr != nil {
+					r.logger.Error("Failed to close file", log.F("error", cerr), log.F("path", cleanPath))
+				}
+			}()
+
+			if stat, err := file.Stat(); err == nil && !stat.IsDir() {
+				http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
+				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
+				return
+			}
+		}
+
+		// File doesn't exist, serve index.html for client-side routing
+		req.URL.Path = "/"
+		http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
+		middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
+	})
+}
+
 // ServeMux returns the underlying http.ServeMux instance.
 // This can be useful for advanced integration scenarios or when you need
 // to access ServeMux-specific functionality.
@@ -352,9 +462,7 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 
 		w.Header().Set(r.config.RequestID.Header, requestID)
 
-		path := req.URL.Path
-
-		if methods, exists := r.registeredRoutes[path]; exists {
+		if methods, exists := r.registeredRoutes[req.URL.Path]; exists {
 			if !methods[req.Method] {
 				w.Header().Set(HeaderAllow, allowedMethods(methods))
 				r.methodNotAllowedHandler(w, req)

@@ -1,6 +1,7 @@
 package zerohttp
 
 import (
+	"embed"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -663,4 +664,219 @@ func TestUtilityFunctions(t *testing.T) {
 			t.Errorf("Expected 3 methods separated by commas, got %d parts", len(parts))
 		}
 	})
+}
+
+//go:embed testdata/files
+var testFilesFS embed.FS
+
+func TestRouter_StaticFiles(t *testing.T) {
+	t.Run("Files - embedded FS", func(t *testing.T) {
+		router := NewRouter()
+		router.Files("/static/", testFilesFS, "testdata/files")
+
+		// Test serving a file
+		req := httptest.NewRequest("GET", "/static/test.txt", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		expected := "test file content"
+		if strings.TrimSpace(w.Body.String()) != expected {
+			t.Errorf("Expected '%s', got '%s'", expected, strings.TrimSpace(w.Body.String()))
+		}
+
+		// Test 404 for non-existent file
+		req = httptest.NewRequest("GET", "/static/nonexistent.txt", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for non-existent file, got %d", w.Code)
+		}
+	})
+
+	t.Run("Files - with trailing slash", func(t *testing.T) {
+		router := NewRouter()
+		router.Files("/assets", testFilesFS, "testdata/files") // No trailing slash
+
+		req := httptest.NewRequest("GET", "/assets/test.txt", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("FilesDir - directory serving", func(t *testing.T) {
+		router := NewRouter()
+		router.FilesDir("/files/", "testdata/files")
+
+		// Test serving a file
+		req := httptest.NewRequest("GET", "/files/test.txt", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		expected := "test file content"
+		if strings.TrimSpace(w.Body.String()) != expected {
+			t.Errorf("Expected '%s', got '%s'", expected, strings.TrimSpace(w.Body.String()))
+		}
+
+		// Test 404 for non-existent file
+		req = httptest.NewRequest("GET", "/files/nonexistent.txt", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for non-existent file, got %d", w.Code)
+		}
+	})
+
+	t.Run("FilesDir - without trailing slash", func(t *testing.T) {
+		router := NewRouter()
+		router.FilesDir("/downloads", "testdata/files") // No trailing slash
+
+		req := httptest.NewRequest("GET", "/downloads/test.txt", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+	})
+}
+
+//go:embed testdata/static
+var testStaticFS embed.FS
+
+func TestRouter_Static(t *testing.T) {
+	t.Run("Static - with custom API prefix", func(t *testing.T) {
+		router := NewRouter()
+		router.Static(testStaticFS, "testdata/static", "/v1/", "/v2/")
+
+		// Test custom API prefix exclusion
+		req := httptest.NewRequest("GET", "/v1/users", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
+		}
+
+		// Test second custom API prefix exclusion
+		req = httptest.NewRequest("GET", "/v2/users", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
+		}
+
+		// Test that old API prefix doesn't work
+		req = httptest.NewRequest("GET", "/api/users", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for Static fallback with old API prefix, got %d", w.Code)
+		}
+	})
+
+	t.Run("StaticDir - directory serving", func(t *testing.T) {
+		router := NewRouter()
+		router.StaticDir("testdata/static")
+
+		// Test serving index.html for root
+		req := httptest.NewRequest("GET", "/", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		if !strings.Contains(w.Body.String(), "<!DOCTYPE html>") {
+			t.Error("Expected index.html content")
+		}
+
+		// Test serving static asset
+		req = httptest.NewRequest("GET", "/app.js", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for static asset, got %d", w.Code)
+		}
+
+		// Test Static fallback
+		req = httptest.NewRequest("GET", "/dashboard", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for Static fallback, got %d", w.Code)
+		}
+
+		if !strings.Contains(w.Body.String(), "<!DOCTYPE html>") {
+			t.Error("Expected index.html content for Static fallback")
+		}
+	})
+
+	t.Run("StaticDir - with custom API prefixes", func(t *testing.T) {
+		router := NewRouter()
+		router.StaticDir("testdata/static", "/custom-api/", "/other-api/")
+
+		// Test custom API prefix exclusion
+		req := httptest.NewRequest("GET", "/custom-api/data", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
+		}
+
+		// Test second custom API prefix exclusion
+		req = httptest.NewRequest("GET", "/other-api/data", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
+		}
+	})
+}
+
+func TestRouter_ServeMux(t *testing.T) {
+	router := NewRouter()
+
+	mux := router.ServeMux()
+	if mux == nil {
+		t.Fatal("Expected ServeMux to return a non-nil mux")
+	}
+
+	mux.HandleFunc("GET /direct", func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte("direct handler"))
+		if err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	})
+
+	req := httptest.NewRequest("GET", "/direct", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	if w.Body.String() != "direct handler" {
+		t.Errorf("Expected 'direct handler', got '%s'", w.Body.String())
+	}
 }
