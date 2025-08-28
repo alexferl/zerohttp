@@ -4,6 +4,34 @@
 
 A lightweight HTTP framework for Go built on top of the standard `net/http` library. Designed for simplicity, developer productivity, and security.
 
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Secure by Default](#secure-by-default)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Response Rendering](#response-rendering)
+- [Request Binding](#request-binding)
+- [Middleware](#middleware)
+- [Route Groups](#route-groups)
+- [Static File Serving](#static-file-serving)
+    - [Static File Methods](#static-file-methods)
+- [Error Handling](#error-handling)
+    - [Validation Errors](#validation-errors)
+- [Configuration](#configuration)
+- [Disabling Default Security](#disabling-default-security)
+- [Available Middlewares](#available-middlewares)
+- [Extensible Interfaces](#extensible-interfaces)
+- [Auto-TLS with Let's Encrypt](#auto-tls-with-lets-encrypt)
+- [Health Checks](#health-checks)
+- [Circuit Breaker](#circuit-breaker)
+- [Configuration Reference](#configuration-reference)
+    - [Server Configuration](#server-configuration)
+    - [Middleware Configuration](#middleware-configuration)
+    - [Logging](#logging)
+
+
 ## Features
 
 - **Lightweight**: Built on Go's standard `net/http` with minimal overhead
