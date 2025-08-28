@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	zh "github.com/alexferl/zerohttp"
 	"github.com/danielgtaylor/huma/v2"
 )
 
