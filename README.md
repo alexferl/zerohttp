@@ -175,7 +175,7 @@ The binder uses `json.Decoder` with `DisallowUnknownFields()` for stricter valid
 zerohttp includes a comprehensive set of built-in middlewares:
 
 ```go
-app := zerohttp.New()
+app := zh.New()
 
 // Add additional middleware (default security middlewares already applied)
 app.Use(
@@ -206,7 +206,7 @@ app.GET("/admin", adminHandler,
 Organize your routes with groups:
 
 ```go
-app.Group(func(api zerohttp.Router) {
+app.Group(func(api zh.Router) {
     api.Use(middleware.RequireAuth())
 
     api.GET("/users", listUsers)
@@ -265,11 +265,11 @@ The `Static` methods support API prefix exclusions - requests matching specified
 Built-in support for RFC 9457 Problem Details:
 
 ```go
-app.GET("/error", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    problem := zerohttp.NewProblemDetail(400, "Invalid request")
+app.GET("/error", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    problem := zh.NewProblemDetail(400, "Invalid request")
     problem.Set("field", "email")
     problem.Set("reason", "Email address is required")
-    return zerohttp.R.ProblemDetail(w, problem)
+    return zh.R.ProblemDetail(w, problem)
 }))
 ```
 
@@ -280,12 +280,12 @@ Built-in support for validation error responses:
 
 ```go
 // Using default validation errors
-errors := []zerohttp.ValidationError{
+errors := []zh.ValidationError{
     {Detail: "must be a valid email", Pointer: "#/email"},
     {Detail: "must be at least 8 characters", Field: "password"},
 }
-problem := zerohttp.NewValidationProblemDetail("Validation failed", errors)
-return zerohttp.R.ProblemDetail(w, problem)
+problem := zh.NewValidationProblemDetail("Validation failed", errors)
+return zh.R.ProblemDetail(w, problem)
 
 // Using custom error structures
 type CustomError struct {
@@ -297,8 +297,8 @@ type CustomError struct {
 customErrors := []CustomError{
     {Code: "INVALID_EMAIL", Field: "email", Message: "Email format is invalid"},
 }
-problem := zerohttp.NewValidationProblemDetail("Validation failed", customErrors)
-return zerohttp.R.ProblemDetail(w, problem)
+problem := zh.NewValidationProblemDetail("Validation failed", customErrors)
+return zh.R.ProblemDetail(w, problem)
 ```
 
 
@@ -307,7 +307,7 @@ return zerohttp.R.ProblemDetail(w, problem)
 Flexible configuration system with functional options:
 
 ```go
-app := zerohttp.New(
+app := zh.New(
     // Server configuration
     config.WithAddr(":8080"),
     config.WithServer(&http.Server{
@@ -351,7 +351,7 @@ app := zerohttp.New(
 If you need to disable default middlewares:
 
 ```go
-app := zerohttp.New(
+app := zh.New(
     config.WithDisableDefaultMiddlewares(), // Disable all defaults
     // Or provide custom defaults
     config.WithDefaultMiddlewares([]func(http.Handler) http.Handler{
@@ -421,7 +421,7 @@ func (r *MyRenderer) JSON(w http.ResponseWriter, code int, data any) error {
 }
 
 // Replace default
-zerohttp.Render = &MyRenderer{}
+zh.Render = &MyRenderer{}
 
 // Custom binder
 type MyBinder struct{}
@@ -434,15 +434,15 @@ func (b *MyBinder) JSON(r io.Reader, dst any) error {
 }
 
 // Replace default
-zerohttp.Bind = &MyBinder{}
+zh.Bind = &MyBinder{}
 ```
 
 
 ## Auto-TLS with Let's Encrypt
 
 ```go
-app := zerohttp.New(
-    config.WithAutocertManager(zerohttp.NewAutocertManager("/tmp/certs", "example.com")),
+app := zh.New(
+    config.WithAutocertManager(zh.NewAutocertManager("/tmp/certs", "example.com")),
 )
 
 app.StartAutoTLS("example.com", "www.example.com")
