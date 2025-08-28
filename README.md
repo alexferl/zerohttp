@@ -369,7 +369,7 @@ app := zh.New(
 - **Rate Limiting**: Rate Limit with configurable algorithms
 - **Content Handling**: Compress, Content Charset, Content Encoding, Content Type
 - **Monitoring**: Request Logger, Circuit Breaker, Timeout, Recover
-- **Utilities**: Request ID, Real IP, Trailing Slash, Set Header, No Cache
+- **Utilities**: Request ID, Real IP, Trailing Slash, Set Header, No Cache, With Value
 
 Each middleware uses functional options for configuration:
 
