@@ -41,6 +41,15 @@ type Renderer interface {
 	// File serves a file as the response, automatically setting appropriate headers
 	File(w http.ResponseWriter, r *http.Request, filename string) error
 
+	// NoContent writes a 204 No Content response with no body
+	NoContent(w http.ResponseWriter) error
+
+	// NotModified writes a 304 Not Modified response for conditional requests
+	NotModified(w http.ResponseWriter) error
+
+	// Redirect performs an HTTP redirect with the specified status code and location
+	Redirect(w http.ResponseWriter, r *http.Request, url string, code int) error
+
 	// ProblemDetail writes an RFC 9457 Problem Details response
 	ProblemDetail(w http.ResponseWriter, problem *ProblemDetail) error
 }
@@ -132,6 +141,24 @@ func (r *defaultRenderer) File(w http.ResponseWriter, req *http.Request, filenam
 
 	http.ServeContent(w, req, filepath.Base(filename), fileInfo.ModTime(), file)
 	return err
+}
+
+// NoContent writes a 204 No Content response with no body
+func (r *defaultRenderer) NoContent(w http.ResponseWriter) error {
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+// NotModified writes a 304 Not Modified response for conditional requests
+func (r *defaultRenderer) NotModified(w http.ResponseWriter) error {
+	w.WriteHeader(http.StatusNotModified)
+	return nil
+}
+
+// Redirect performs an HTTP redirect with the specified status code and location
+func (r *defaultRenderer) Redirect(w http.ResponseWriter, req *http.Request, url string, code int) error {
+	http.Redirect(w, req, url, code)
+	return nil
 }
 
 // ProblemDetail writes an RFC 9457 Problem Details response

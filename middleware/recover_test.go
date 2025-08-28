@@ -31,7 +31,7 @@ func (m *mockLogger) Fatal(msg string, fields ...log.Field)      {}
 func (m *mockLogger) WithFields(fields ...log.Field) log.Logger  { return m }
 func (m *mockLogger) WithContext(ctx context.Context) log.Logger { return m }
 
-func panicHandler(panicValue interface{}) http.Handler {
+func panicHandler(panicValue any) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic(panicValue)
 	})

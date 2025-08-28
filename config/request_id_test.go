@@ -19,7 +19,7 @@ func TestRequestIDConfig_DefaultValues(t *testing.T) {
 	}
 
 	// Test context key type
-	if key, ok := interface{}(cfg.ContextKey).(RequestIDContextKey); !ok {
+	if key, ok := any(cfg.ContextKey).(RequestIDContextKey); !ok {
 		t.Error("expected ContextKey to be of type RequestIDContextKey")
 	} else if string(key) != "request_id" {
 		t.Errorf("expected context key string value = 'request_id', got %s", string(key))

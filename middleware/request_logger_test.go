@@ -45,7 +45,7 @@ func (m *requestLoggerMockLogger) Fatal(msg string, fields ...log.Field)      {}
 func (m *requestLoggerMockLogger) WithFields(fields ...log.Field) log.Logger  { return m }
 func (m *requestLoggerMockLogger) WithContext(ctx context.Context) log.Logger { return m }
 
-func findFieldValue(fields []log.Field, key string) (interface{}, bool) {
+func findFieldValue(fields []log.Field, key string) (any, bool) {
 	for _, field := range fields {
 		if field.Key == key {
 			return field.Value, true

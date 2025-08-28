@@ -240,6 +240,120 @@ func TestRenderer_File_Range(t *testing.T) {
 	}
 }
 
+func TestRenderer_NoContent(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	if err := R.NoContent(w); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected status %d, got %d", http.StatusNoContent, w.Code)
+	}
+
+	if body := w.Body.String(); body != "" {
+		t.Errorf("expected empty body, got %s", body)
+	}
+
+	// 204 responses should not have Content-Type or Content-Length headers
+	if ct := w.Header().Get(HeaderContentType); ct != "" {
+		t.Errorf("expected no Content-Type header, got %s", ct)
+	}
+}
+
+func TestRenderer_NotModified(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	if err := R.NotModified(w); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if w.Code != http.StatusNotModified {
+		t.Errorf("expected status %d, got %d", http.StatusNotModified, w.Code)
+	}
+
+	if body := w.Body.String(); body != "" {
+		t.Errorf("expected empty body, got %s", body)
+	}
+
+	// 304 responses should not have Content-Type or Content-Length headers
+	if ct := w.Header().Get(HeaderContentType); ct != "" {
+		t.Errorf("expected no Content-Type header, got %s", ct)
+	}
+}
+
+func TestRenderer_Redirect(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		statusCode int
+	}{
+		{"permanent redirect", "/new-location", http.StatusMovedPermanently},
+		{"temporary redirect", "/temp-location", http.StatusFound},
+		{"see other", "/other", http.StatusSeeOther},
+		{"temporary redirect (307)", "/temp", http.StatusTemporaryRedirect},
+		{"permanent redirect (308)", "/perm", http.StatusPermanentRedirect},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/original", nil)
+
+			if err := R.Redirect(w, r, tt.url, tt.statusCode); err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			if w.Code != tt.statusCode {
+				t.Errorf("expected status %d, got %d", tt.statusCode, w.Code)
+			}
+
+			if location := w.Header().Get("Location"); location != tt.url {
+				t.Errorf("expected Location header %s, got %s", tt.url, location)
+			}
+
+			body := w.Body.String()
+			if body == "" {
+				t.Error("expected redirect to have body content")
+			}
+
+			if !strings.Contains(body, tt.url) {
+				t.Errorf("expected body to contain redirect URL %s, got %s", tt.url, body)
+			}
+		})
+	}
+}
+
+func TestRenderer_Redirect_AbsoluteURL(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/original", nil)
+
+	absoluteURL := "https://example.com/external"
+
+	if err := R.Redirect(w, r, absoluteURL, http.StatusFound); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if location := w.Header().Get("Location"); location != absoluteURL {
+		t.Errorf("expected Location header %s, got %s", absoluteURL, location)
+	}
+}
+
+func TestRenderer_Redirect_WithQuery(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/original?param=value", nil)
+
+	redirectURL := "/login?next=/original"
+
+	if err := R.Redirect(w, r, redirectURL, http.StatusFound); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if location := w.Header().Get("Location"); location != redirectURL {
+		t.Errorf("expected Location header %s, got %s", redirectURL, location)
+	}
+}
+
 func TestNewProblemDetail(t *testing.T) {
 	problem := NewProblemDetail(404, "Not found")
 
