@@ -1,142 +1,350 @@
 package middleware
 
 import (
+	"bufio"
 	"compress/flate"
 	"compress/gzip"
+	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/alexferl/zerohttp/config"
 )
 
-// compressResponseWriter wraps http.ResponseWriter to handle compression
-type compressResponseWriter struct {
-	http.ResponseWriter
-	compressor    io.WriteCloser
-	algorithm     config.CompressionAlgorithm
-	minSize       int
-	types         map[string]bool
-	buffer        []byte
-	headerWritten bool
-	compressed    bool
+// Compressor represents a set of encoding configurations.
+type Compressor struct {
+	// The mapping of encoder names to encoder functions.
+	encoders map[string]EncoderFunc
+	// The mapping of pooled encoders to pools.
+	pooledEncoders map[string]*sync.Pool
+	// The set of content types allowed to be compressed.
+	allowedTypes     map[string]struct{}
+	allowedWildcards map[string]struct{}
+	// The list of encoders in order of decreasing precedence.
+	encodingPrecedence []string
+	level              int                                  // The compression level.
+	algorithms         map[config.CompressionAlgorithm]bool // Allowed algorithms
+	exemptPaths        []string                             // Paths to skip compression
 }
 
-func (w *compressResponseWriter) WriteHeader(code int) {
-	if w.headerWritten {
-		return
-	}
-	w.headerWritten = true
-	w.ResponseWriter.WriteHeader(code)
-}
-
-func (w *compressResponseWriter) Write(data []byte) (int, error) {
-	if !w.headerWritten {
-		w.WriteHeader(http.StatusOK)
-	}
-
-	if !w.compressed && w.compressor == nil {
-		w.buffer = append(w.buffer, data...)
-
-		if len(w.buffer) >= w.minSize {
-			w.startCompressionIfNeeded()
-
-			if w.compressed {
-				w.compressor = w.createCompressor()
-				if w.compressor == nil {
-					w.compressed = false
-				}
+// NewCompressor creates a new Compressor that will handle encoding responses.
+func NewCompressor(level int, types ...string) *Compressor {
+	allowedTypes := make(map[string]struct{})
+	allowedWildcards := make(map[string]struct{})
+	if len(types) > 0 {
+		for _, t := range types {
+			if strings.Contains(strings.TrimSuffix(t, "/*"), "*") {
+				panic(fmt.Sprintf("middleware/compress: Unsupported content-type wildcard pattern '%s'. Only '/*' supported", t))
+			}
+			if strings.HasSuffix(t, "/*") {
+				allowedWildcards[strings.TrimSuffix(t, "/*")] = struct{}{}
+			} else {
+				allowedTypes[t] = struct{}{}
 			}
 		}
-
-		if w.compressed && w.compressor != nil {
-			return w.flushBufferToCompressor()
+	} else {
+		for _, t := range config.DefaultCompressConfig.Types {
+			allowedTypes[t] = struct{}{}
 		}
-
-		return len(data), nil
+	}
+	c := &Compressor{
+		level:            level,
+		encoders:         make(map[string]EncoderFunc),
+		pooledEncoders:   make(map[string]*sync.Pool),
+		allowedTypes:     allowedTypes,
+		allowedWildcards: allowedWildcards,
+		algorithms:       make(map[config.CompressionAlgorithm]bool),
+		exemptPaths:      []string{},
 	}
 
-	if w.compressed && w.compressor != nil {
-		return w.compressor.Write(data)
-	}
+	// Set default algorithms
+	c.algorithms[config.Gzip] = true
+	c.algorithms[config.Deflate] = true
 
-	return w.ResponseWriter.Write(data)
+	c.SetEncoder("deflate", encoderDeflate)
+	c.SetEncoder("gzip", encoderGzip)
+	return c
 }
 
-func (w *compressResponseWriter) createCompressor() io.WriteCloser {
-	switch w.algorithm {
-	case config.Gzip:
-		compressor, err := gzip.NewWriterLevel(w.ResponseWriter, 6)
-		if err != nil {
-			return nil
+// SetEncoder can be used to set the implementation of a compression algorithm.
+func (c *Compressor) SetEncoder(encoding string, fn EncoderFunc) {
+	encoding = strings.ToLower(encoding)
+	if encoding == "" {
+		panic("the encoding can not be empty")
+	}
+	if fn == nil {
+		panic("attempted to set a nil encoder function")
+	}
+
+	delete(c.pooledEncoders, encoding)
+	delete(c.encoders, encoding)
+
+	encoder := fn(io.Discard, c.level)
+	if _, ok := encoder.(ioResetterWriter); ok {
+		pool := &sync.Pool{
+			New: func() interface{} {
+				return fn(io.Discard, c.level)
+			},
 		}
-		return compressor
-	case config.Deflate:
-		compressor, err := flate.NewWriter(w.ResponseWriter, 6)
-		if err != nil {
-			return nil
+		c.pooledEncoders[encoding] = pool
+	}
+
+	if _, ok := c.pooledEncoders[encoding]; !ok {
+		c.encoders[encoding] = fn
+	}
+
+	for i, v := range c.encodingPrecedence {
+		if v == encoding {
+			c.encodingPrecedence = append(c.encodingPrecedence[:i], c.encodingPrecedence[i+1:]...)
 		}
-		return compressor
-	default:
-		return nil
+	}
+	c.encodingPrecedence = append([]string{encoding}, c.encodingPrecedence...)
+}
+
+// isExemptPath checks if a path should be exempted from compression
+func (c *Compressor) isExemptPath(path string) bool {
+	for _, exemptPath := range c.exemptPaths {
+		if pathMatches(path, exemptPath) {
+			return true
+		}
+	}
+	return false
+}
+
+// Handler returns a new middleware that will compress the response.
+func (c *Compressor) Handler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check exempt paths first
+		if c.isExemptPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		encoder, encoding, cleanup := c.selectEncoder(r.Header, w)
+		cw := &compressResponseWriter{
+			ResponseWriter:   w,
+			w:                w,
+			contentTypes:     c.allowedTypes,
+			contentWildcards: c.allowedWildcards,
+			encoding:         encoding,
+			compressible:     false,
+		}
+		if encoder != nil {
+			cw.w = encoder
+		}
+
+		defer cleanup()
+		defer func() {
+			_ = cw.Close()
+		}()
+
+		next.ServeHTTP(cw, r)
+	})
+}
+
+// selectEncoder returns the encoder, the name of the encoder, and a closer function.
+func (c *Compressor) selectEncoder(h http.Header, w io.Writer) (io.Writer, string, func()) {
+	header := h.Get("Accept-Encoding")
+	accepted := strings.Split(strings.ToLower(header), ",")
+
+	for _, name := range c.encodingPrecedence {
+		if matchAcceptEncoding(accepted, name) {
+			// Check if algorithm is allowed
+			var allowed bool
+			switch name {
+			case "gzip":
+				allowed = c.algorithms[config.Gzip]
+			case "deflate":
+				allowed = c.algorithms[config.Deflate]
+			default:
+				allowed = true // Custom encoders are always allowed if added
+			}
+
+			if !allowed {
+				continue
+			}
+
+			if pool, ok := c.pooledEncoders[name]; ok {
+				encoder := pool.Get().(ioResetterWriter)
+				cleanup := func() {
+					pool.Put(encoder)
+				}
+				encoder.Reset(w)
+				return encoder, name, cleanup
+			}
+			if fn, ok := c.encoders[name]; ok {
+				return fn(w, c.level), name, func() {}
+			}
+		}
+	}
+	return nil, "", func() {}
+}
+
+func matchAcceptEncoding(accepted []string, encoding string) bool {
+	for _, v := range accepted {
+		v = strings.TrimSpace(v)
+		if strings.Contains(v, encoding) || v == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+// EncoderFunc is a function that wraps the provided io.Writer with compression.
+type EncoderFunc func(w io.Writer, level int) io.Writer
+
+// Interface for types that allow resetting io.Writers.
+type ioResetterWriter interface {
+	io.Writer
+	Reset(w io.Writer)
+}
+
+type compressResponseWriter struct {
+	http.ResponseWriter
+	w                io.Writer
+	contentTypes     map[string]struct{}
+	contentWildcards map[string]struct{}
+	encoding         string
+	wroteHeader      bool
+	compressible     bool
+	buffer           []byte
+}
+
+func (cw *compressResponseWriter) isCompressible() bool {
+	contentType := cw.Header().Get("Content-Type")
+	contentType, _, _ = strings.Cut(contentType, ";")
+
+	if _, ok := cw.contentTypes[contentType]; ok {
+		return true
+	}
+	if contentType, _, hadSlash := strings.Cut(contentType, "/"); hadSlash {
+		_, ok := cw.contentWildcards[contentType]
+		return ok
+	}
+	return false
+}
+
+func (cw *compressResponseWriter) WriteHeader(code int) {
+	if cw.wroteHeader {
+		cw.ResponseWriter.WriteHeader(code)
+		return
+	}
+	cw.wroteHeader = true
+	defer cw.ResponseWriter.WriteHeader(code)
+
+	if cw.Header().Get("Content-Encoding") != "" {
+		return
+	}
+
+	if !cw.isCompressible() {
+		cw.compressible = false
+		return
+	}
+
+	if cw.encoding != "" {
+		cw.compressible = true
+		cw.Header().Set("Content-Encoding", cw.encoding)
+		cw.Header().Add("Vary", "Accept-Encoding")
+		cw.Header().Del("Content-Length")
 	}
 }
 
-func (w *compressResponseWriter) startCompressionIfNeeded() {
-	contentType := w.Header().Get("Content-Type")
-	if contentType == "" {
-		contentType = http.DetectContentType(w.buffer)
-		w.Header().Set("Content-Type", contentType)
+func (cw *compressResponseWriter) Write(p []byte) (int, error) {
+	if !cw.wroteHeader {
+		cw.WriteHeader(http.StatusOK)
 	}
+	return cw.writer().Write(p)
+}
 
-	shouldCompress := false
-	for mimeType := range w.types {
-		if strings.HasPrefix(strings.ToLower(contentType), mimeType) {
-			shouldCompress = true
-			break
+func (cw *compressResponseWriter) writer() io.Writer {
+	if cw.compressible {
+		return cw.w
+	}
+	return cw.ResponseWriter
+}
+
+type compressFlusher interface {
+	Flush() error
+}
+
+func (cw *compressResponseWriter) Flush() {
+	// Flush any buffered data first
+	if len(cw.buffer) > 0 {
+		if cw.compressible {
+			_, _ = cw.w.Write(cw.buffer)
+		} else {
+			_, _ = cw.ResponseWriter.Write(cw.buffer)
 		}
+		cw.buffer = nil
 	}
 
-	if shouldCompress && len(w.buffer) >= w.minSize {
-		w.compressed = true
-		w.Header().Set("Content-Encoding", string(w.algorithm))
-		w.Header().Set("Vary", "Accept-Encoding")
-		w.Header().Del("Content-Length") // Let the compressor set this
+	if f, ok := cw.writer().(http.Flusher); ok {
+		f.Flush()
+	}
+	if f, ok := cw.writer().(compressFlusher); ok {
+		_ = f.Flush()
+		if f, ok := cw.ResponseWriter.(http.Flusher); ok {
+			f.Flush()
+		}
 	}
 }
 
-func (w *compressResponseWriter) flushBufferToCompressor() (int, error) {
-	totalWritten := len(w.buffer)
-	if w.compressor != nil {
-		_, err := w.compressor.Write(w.buffer)
-		if err != nil {
-			return totalWritten, err
-		}
+func (cw *compressResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := cw.writer().(http.Hijacker); ok {
+		return hj.Hijack()
 	}
-	w.buffer = nil
-	return totalWritten, nil
+	return nil, nil, errors.New("middleware: http.Hijacker is unavailable on the writer")
 }
 
-func (w *compressResponseWriter) Close() error {
-	// Flush any remaining buffer
-	if w.buffer != nil && !w.compressed {
-		// Not compressed, write directly to response
-		_, err := w.ResponseWriter.Write(w.buffer)
-		if err != nil {
-			return err
+func (cw *compressResponseWriter) Push(target string, opts *http.PushOptions) error {
+	if ps, ok := cw.writer().(http.Pusher); ok {
+		return ps.Push(target, opts)
+	}
+	return errors.New("middleware: http.Pusher is unavailable on the writer")
+}
+
+func (cw *compressResponseWriter) Close() error {
+	// Write any remaining buffered data
+	if len(cw.buffer) > 0 {
+		if cw.compressible {
+			_, _ = cw.w.Write(cw.buffer)
+		} else {
+			_, _ = cw.ResponseWriter.Write(cw.buffer)
 		}
-		w.buffer = nil
+		cw.buffer = nil
 	}
 
-	if w.compressor != nil {
-		if err := w.compressor.Close(); err != nil {
-			return err
-		}
+	if c, ok := cw.writer().(io.WriteCloser); ok {
+		return c.Close()
 	}
 	return nil
 }
 
-// Compress creates a compression middleware using standard library algorithms
+func (cw *compressResponseWriter) Unwrap() http.ResponseWriter {
+	return cw.ResponseWriter
+}
+
+func encoderGzip(w io.Writer, level int) io.Writer {
+	gw, err := gzip.NewWriterLevel(w, level)
+	if err != nil {
+		return nil
+	}
+	return gw
+}
+
+func encoderDeflate(w io.Writer, level int) io.Writer {
+	dw, err := flate.NewWriter(w, level)
+	if err != nil {
+		return nil
+	}
+	return dw
+}
+
+// Compress creates a compression middleware using the full config
 func Compress(opts ...config.CompressOption) func(http.Handler) http.Handler {
 	cfg := config.DefaultCompressConfig
 
@@ -146,9 +354,6 @@ func Compress(opts ...config.CompressOption) func(http.Handler) http.Handler {
 
 	if cfg.Level <= 0 {
 		cfg.Level = config.DefaultCompressConfig.Level
-	}
-	if cfg.MinSize <= 0 {
-		cfg.MinSize = config.DefaultCompressConfig.MinSize
 	}
 	if cfg.Types == nil {
 		cfg.Types = config.DefaultCompressConfig.Types
@@ -160,64 +365,14 @@ func Compress(opts ...config.CompressOption) func(http.Handler) http.Handler {
 		cfg.ExemptPaths = config.DefaultCompressConfig.ExemptPaths
 	}
 
-	typeMap := make(map[string]bool)
-	for _, t := range cfg.Types {
-		typeMap[strings.ToLower(t)] = true
-	}
+	compressor := NewCompressor(cfg.Level, cfg.Types...)
+	compressor.exemptPaths = cfg.ExemptPaths
 
-	algorithmMap := make(map[config.CompressionAlgorithm]bool)
+	// Set allowed algorithms
+	compressor.algorithms = make(map[config.CompressionAlgorithm]bool)
 	for _, alg := range cfg.Algorithms {
-		algorithmMap[alg] = true
+		compressor.algorithms[alg] = true
 	}
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range cfg.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
-
-			acceptEncoding := r.Header.Get("Accept-Encoding")
-			if acceptEncoding == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			var selectedAlgorithm config.CompressionAlgorithm
-
-			encodings := strings.Split(acceptEncoding, ",")
-			for _, encoding := range encodings {
-				encoding = strings.TrimSpace(strings.ToLower(encoding))
-
-				if (strings.HasPrefix(encoding, "gzip") || strings.HasPrefix(encoding, "*")) && algorithmMap[config.Gzip] {
-					selectedAlgorithm = config.Gzip
-					break
-				} else if strings.HasPrefix(encoding, "deflate") && algorithmMap[config.Deflate] {
-					selectedAlgorithm = config.Deflate
-					break
-				}
-			}
-
-			if selectedAlgorithm == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			cw := &compressResponseWriter{
-				ResponseWriter: w,
-				algorithm:      selectedAlgorithm,
-				minSize:        cfg.MinSize,
-				types:          typeMap,
-				buffer:         make([]byte, 0, cfg.MinSize),
-			}
-
-			defer func() {
-				_ = cw.Close()
-			}()
-
-			next.ServeHTTP(cw, r)
-		})
-	}
+	return compressor.Handler
 }

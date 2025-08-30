@@ -23,9 +23,6 @@ go.work
 # GoLand
 .idea
 
-# binary
-app-bin
-
 # certs
 cert.pem
 key.pem

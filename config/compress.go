@@ -12,8 +12,6 @@ const (
 type CompressConfig struct {
 	// Level is the compression level (1-9 for gzip/deflate)
 	Level int
-	// MinSize is the minimum response size to compress (defaults to 1024 bytes)
-	MinSize int
 	// Types are MIME types to compress (defaults to common text types)
 	Types []string
 	// Algorithms are compression algorithms to support (defaults to gzip, deflate)
@@ -24,8 +22,7 @@ type CompressConfig struct {
 
 // DefaultCompressConfig contains the default values for compression configuration.
 var DefaultCompressConfig = CompressConfig{
-	Level:   6,
-	MinSize: 1024, // 1KB minimum
+	Level: 6,
 	Types: []string{
 		"text/html",
 		"text/css",
@@ -50,13 +47,6 @@ type CompressOption func(*CompressConfig)
 func WithCompressLevel(level int) CompressOption {
 	return func(c *CompressConfig) {
 		c.Level = level
-	}
-}
-
-// WithCompressMinSize sets the minimum response size to compress.
-func WithCompressMinSize(minSize int) CompressOption {
-	return func(c *CompressConfig) {
-		c.MinSize = minSize
 	}
 }
 

@@ -10,9 +10,6 @@ func TestCompressConfig_DefaultValues(t *testing.T) {
 	if cfg.Level != 6 {
 		t.Errorf("expected default level = 6, got %d", cfg.Level)
 	}
-	if cfg.MinSize != 1024 {
-		t.Errorf("expected default min size = 1024, got %d", cfg.MinSize)
-	}
 	if len(cfg.Types) != 11 {
 		t.Errorf("expected 11 default MIME types, got %d", len(cfg.Types))
 	}
@@ -52,14 +49,6 @@ func TestCompressOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("min size option", func(t *testing.T) {
-		cfg := DefaultCompressConfig
-		WithCompressMinSize(2048)(&cfg)
-		if cfg.MinSize != 2048 {
-			t.Errorf("expected min size = 2048, got %d", cfg.MinSize)
-		}
-	})
-
 	t.Run("types option", func(t *testing.T) {
 		types := []string{"text/html", "application/json", "text/css", "application/xml"}
 		cfg := DefaultCompressConfig
@@ -95,16 +84,12 @@ func TestCompressConfig_MultipleOptions(t *testing.T) {
 
 	cfg := DefaultCompressConfig
 	WithCompressLevel(3)(&cfg)
-	WithCompressMinSize(512)(&cfg)
 	WithCompressTypes(types)(&cfg)
 	WithCompressAlgorithms(algorithms)(&cfg)
 	WithCompressExemptPaths(exemptPaths)(&cfg)
 
 	if cfg.Level != 3 {
 		t.Errorf("expected level = 3, got %d", cfg.Level)
-	}
-	if cfg.MinSize != 512 {
-		t.Errorf("expected min size = 512, got %d", cfg.MinSize)
 	}
 	if !reflect.DeepEqual(cfg.Types, types) {
 		t.Error("expected MIME types to be set correctly")
@@ -159,17 +144,6 @@ func TestCompressConfig_EdgeCases(t *testing.T) {
 			WithCompressLevel(level)(&cfg)
 			if cfg.Level != level {
 				t.Errorf("WithCompressLevel(%d): expected level = %d, got %d", level, level, cfg.Level)
-			}
-		}
-	})
-
-	t.Run("boundary min sizes", func(t *testing.T) {
-		testCases := []int{-1, 0, 1, 1024, 1048576}
-		for _, minSize := range testCases {
-			cfg := DefaultCompressConfig
-			WithCompressMinSize(minSize)(&cfg)
-			if cfg.MinSize != minSize {
-				t.Errorf("WithCompressMinSize(%d): expected min size = %d, got %d", minSize, minSize, cfg.MinSize)
 			}
 		}
 	})

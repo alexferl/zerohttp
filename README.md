@@ -390,7 +390,6 @@ middleware.RateLimit(
 // Compression
 middleware.Compress(
     config.WithCompressLevel(6),
-    config.WithCompressMinSize(1024),
 )
 
 // Security headers with HSTS options
