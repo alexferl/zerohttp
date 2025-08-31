@@ -427,14 +427,13 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			t.Errorf("Expected Content-Type %s, got %s", MIMEApplicationProblem, contentType)
 		}
 
-		// Test custom 404 handler
-		router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			_, err := w.Write([]byte("Custom 404"))
 			if err != nil {
 				t.Fatalf("failed to write response: %v", err)
 			}
-		})
+		}))
 
 		req = httptest.NewRequest("GET", "/nonexistent", nil)
 		w = httptest.NewRecorder()
@@ -469,14 +468,13 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			t.Errorf("Expected Allow header to contain GET and POST, got '%s'", allowHeader)
 		}
 
-		// Test custom method not allowed handler
-		router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			_, err := w.Write([]byte("Custom 405"))
 			if err != nil {
 				t.Fatalf("failed to write response: %v", err)
 			}
-		})
+		}))
 
 		req = httptest.NewRequest("PUT", "/test", nil)
 		w = httptest.NewRecorder()
@@ -618,7 +616,7 @@ func TestUtilityFunctions(t *testing.T) {
 	t.Run("defaultNotFoundHandler", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test", nil)
 		w := httptest.NewRecorder()
-		defaultNotFoundHandler(w, req)
+		defaultNotFoundHandler.ServeHTTP(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("Expected status 404, got %d", w.Code)
@@ -633,7 +631,7 @@ func TestUtilityFunctions(t *testing.T) {
 	t.Run("defaultMethodNotAllowedHandler", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/test", nil)
 		w := httptest.NewRecorder()
-		defaultMethodNotAllowedHandler(w, req)
+		defaultMethodNotAllowedHandler.ServeHTTP(w, req)
 
 		if w.Code != http.StatusMethodNotAllowed {
 			t.Errorf("Expected status 405, got %d", w.Code)
@@ -757,9 +755,9 @@ func TestRouter_StaticFiles(t *testing.T) {
 var testStaticFS embed.FS
 
 func TestRouter_Static(t *testing.T) {
-	t.Run("Static - with custom API prefix", func(t *testing.T) {
+	t.Run("Static - with fallback and custom API prefix", func(t *testing.T) {
 		router := NewRouter()
-		router.Static(testStaticFS, "testdata/static", "/v1/", "/v2/")
+		router.Static(testStaticFS, "testdata/static", true, "/v1/", "/v2/")
 
 		// Test custom API prefix exclusion
 		req := httptest.NewRequest("GET", "/v1/users", nil)
@@ -779,7 +777,7 @@ func TestRouter_Static(t *testing.T) {
 			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
 		}
 
-		// Test that old API prefix doesn't work
+		// Test that old API prefix doesn't work (should fallback to index.html)
 		req = httptest.NewRequest("GET", "/api/users", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -789,9 +787,44 @@ func TestRouter_Static(t *testing.T) {
 		}
 	})
 
-	t.Run("StaticDir - directory serving", func(t *testing.T) {
+	t.Run("Static - without fallback", func(t *testing.T) {
 		router := NewRouter()
-		router.StaticDir("testdata/static")
+		router.Static(testStaticFS, "testdata/static", false)
+
+		// Set custom 404 handler
+		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, err := w.Write([]byte("Custom 404 for missing file"))
+			if err != nil {
+				t.Fatalf("failed to write response: %v", err)
+			}
+		}))
+
+		// Test serving existing file (should work)
+		req := httptest.NewRequest("GET", "/app.js", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for existing asset, got %d", w.Code)
+		}
+
+		// Test missing file (should use custom 404, not fallback to index.html)
+		req = httptest.NewRequest("GET", "/nonexistent", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for missing file, got %d", w.Code)
+		}
+		if w.Body.String() != "Custom 404 for missing file" {
+			t.Errorf("Expected custom 404 message, got '%s'", w.Body.String())
+		}
+	})
+
+	t.Run("StaticDir - with fallback", func(t *testing.T) {
+		router := NewRouter()
+		router.StaticDir("testdata/static", true)
 
 		// Test serving index.html for root
 		req := httptest.NewRequest("GET", "/", nil)
@@ -815,7 +848,7 @@ func TestRouter_Static(t *testing.T) {
 			t.Errorf("Expected status 200 for static asset, got %d", w.Code)
 		}
 
-		// Test Static fallback
+		// Test Static fallback (should serve index.html)
 		req = httptest.NewRequest("GET", "/dashboard", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -829,9 +862,35 @@ func TestRouter_Static(t *testing.T) {
 		}
 	})
 
-	t.Run("StaticDir - with custom API prefixes", func(t *testing.T) {
+	t.Run("StaticDir - without fallback", func(t *testing.T) {
 		router := NewRouter()
-		router.StaticDir("testdata/static", "/custom-api/", "/other-api/")
+		router.StaticDir("testdata/static", false)
+
+		// Set custom 404 handler
+		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, err := w.Write([]byte("Static site 404"))
+			if err != nil {
+				t.Fatalf("failed to write response: %v", err)
+			}
+		}))
+
+		// Test missing file (should use custom 404)
+		req := httptest.NewRequest("GET", "/missing-page", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for missing file, got %d", w.Code)
+		}
+		if w.Body.String() != "Static site 404" {
+			t.Errorf("Expected custom 404 message, got '%s'", w.Body.String())
+		}
+	})
+
+	t.Run("StaticDir - with custom API prefixes and fallback", func(t *testing.T) {
+		router := NewRouter()
+		router.StaticDir("testdata/static", true, "/custom-api/", "/other-api/")
 
 		// Test custom API prefix exclusion
 		req := httptest.NewRequest("GET", "/custom-api/data", nil)

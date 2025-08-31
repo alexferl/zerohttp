@@ -20,10 +20,10 @@ func main() {
 	}))
 
 	// Static handler - serves files from embedded dist folder
-	app.Static(spaFiles, "dist")
+	app.Static(spaFiles, "dist", true)
 
 	// Or for development with custom API prefix:
-	// app.StaticDir("./dist", "/api/v1/")
+	// app.StaticDir("./dist", "/api/v1/", true)
 
 	log.Fatal(app.Start())
 }

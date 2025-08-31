@@ -32,31 +32,31 @@ func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type Router interface {
 	// DELETE registers a handler for HTTP DELETE requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	DELETE(path string, fn http.Handler, mw ...func(http.Handler) http.Handler)
+	DELETE(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
 	// GET registers a handler for HTTP GET requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	GET(path string, fn http.Handler, mw ...func(http.Handler) http.Handler)
+	GET(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
 	// HEAD registers a handler for HTTP HEAD requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	HEAD(path string, fn http.Handler, mw ...func(http.Handler) http.Handler)
+	HEAD(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
 	// OPTIONS registers a handler for HTTP OPTIONS requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	OPTIONS(path string, fn http.Handler, mw ...func(http.Handler) http.Handler)
+	OPTIONS(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
 	// PATCH registers a handler for HTTP PATCH requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	PATCH(path string, fn http.Handler, mw ...func(http.Handler) http.Handler)
+	PATCH(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
 	// POST registers a handler for HTTP POST requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	POST(path string, fn http.Handler, mw ...func(http.Handler) http.Handler)
+	POST(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
 	// PUT registers a handler for HTTP PUT requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	PUT(path string, fn http.Handler, mw ...func(http.Handler) http.Handler)
+	PUT(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
 	// Use adds middleware to the router's global middleware chain.
 	// Middleware is applied to all routes registered after this call.
@@ -68,11 +68,11 @@ type Router interface {
 
 	// NotFound sets a custom handler for 404 Not Found responses.
 	// If not set, a default handler that returns a problem detail response is used.
-	NotFound(h http.HandlerFunc)
+	NotFound(h http.Handler)
 
 	// MethodNotAllowed sets a custom handler for 405 Method Not Allowed responses.
 	// If not set, a default handler that returns a problem detail response is used.
-	MethodNotAllowed(h http.HandlerFunc)
+	MethodNotAllowed(h http.Handler)
 
 	// Files serves static files from embedded FS at the specified prefix.
 	// The prefix is stripped from URLs before looking up files in the embedFS.
@@ -82,13 +82,17 @@ type Router interface {
 	// The prefix is stripped from URLs before looking up files in the directory.
 	FilesDir(prefix, dir string)
 
-	// Static serves a static web application from embedded FS with client-side routing fallback.
-	// Falls back to index.html for non-existent files, except for requests matching apiPrefix patterns which return 404.
-	Static(embedFS embed.FS, distDir string, apiPrefix ...string)
+	// Static serves a static web application from embedded FS with configurable fallback behavior.
+	// If fallback is true, falls back to index.html for non-existent files (SPA behavior).
+	// If fallback is false, uses the custom NotFound handler for missing files.
+	// Requests matching apiPrefix patterns return 404 regardless.
+	Static(embedFS embed.FS, distDir string, fallback bool, apiPrefix ...string)
 
-	// StaticDir serves a static web application from a directory with client-side routing fallback.
-	// Falls back to index.html for non-existent files, except for requests matching apiPrefix patterns which return 404.
-	StaticDir(dir string, apiPrefix ...string)
+	// StaticDir serves a static web application from a directory with configurable fallback behavior.
+	// If fallback is true, falls back to index.html for non-existent files (SPA behavior).
+	// If fallback is false, uses the custom NotFound handler for missing files.
+	// Requests matching apiPrefix patterns return 404 regardless.
+	StaticDir(dir string, fallback bool, apiPrefix ...string)
 
 	// ServeMux returns the underlying http.ServeMux for advanced usage or integration.
 	ServeMux() *http.ServeMux
@@ -130,10 +134,10 @@ type defaultRouter struct {
 	chain []func(http.Handler) http.Handler
 
 	// notFoundHandler is called when no route matches the request path
-	notFoundHandler http.HandlerFunc
+	notFoundHandler http.Handler
 
 	// methodNotAllowedHandler is called when a path exists but the HTTP method is not allowed
-	methodNotAllowedHandler http.HandlerFunc
+	methodNotAllowedHandler http.Handler
 
 	// registeredRoutes tracks which HTTP methods are registered for each path
 	// This is used to distinguish between 404 Not Found and 405 Method Not Allowed
@@ -210,26 +214,26 @@ func (r *defaultRouter) Group(fn func(Router)) {
 
 // DELETE registers a handler for HTTP DELETE requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) DELETE(path string, fn http.Handler, mw ...func(http.Handler) http.Handler) {
-	r.handle(http.MethodDelete, path, fn, mw)
+func (r *defaultRouter) DELETE(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodDelete, path, h, mw)
 }
 
 // GET registers a handler for HTTP GET requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) GET(path string, fn http.Handler, mw ...func(http.Handler) http.Handler) {
-	r.handle(http.MethodGet, path, fn, mw)
+func (r *defaultRouter) GET(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodGet, path, h, mw)
 }
 
 // HEAD registers a handler for HTTP HEAD requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) HEAD(path string, fn http.Handler, mw ...func(http.Handler) http.Handler) {
-	r.handle(http.MethodHead, path, fn, mw)
+func (r *defaultRouter) HEAD(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodHead, path, h, mw)
 }
 
 // OPTIONS registers a handler for HTTP OPTIONS requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) OPTIONS(path string, fn http.Handler, mw ...func(http.Handler) http.Handler) {
-	r.handle(http.MethodOptions, path, fn, mw)
+func (r *defaultRouter) OPTIONS(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodOptions, path, h, mw)
 }
 
 // PATCH registers a handler for HTTP PATCH requests to the specified path.
@@ -240,14 +244,14 @@ func (r *defaultRouter) PATCH(path string, fn http.Handler, mw ...func(http.Hand
 
 // POST registers a handler for HTTP POST requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) POST(path string, fn http.Handler, mw ...func(http.Handler) http.Handler) {
-	r.handle(http.MethodPost, path, fn, mw)
+func (r *defaultRouter) POST(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodPost, path, h, mw)
 }
 
 // PUT registers a handler for HTTP PUT requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) PUT(path string, fn http.Handler, mw ...func(http.Handler) http.Handler) {
-	r.handle(http.MethodPut, path, fn, mw)
+func (r *defaultRouter) PUT(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodPut, path, h, mw)
 }
 
 // NotFound sets a custom handler for 404 Not Found responses.
@@ -255,10 +259,10 @@ func (r *defaultRouter) PUT(path string, fn http.Handler, mw ...func(http.Handle
 //
 // Example:
 //
-//	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+//	router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 //	    http.Error(w, "Custom 404 message", http.StatusNotFound)
-//	})
-func (r *defaultRouter) NotFound(h http.HandlerFunc) {
+//	}))
+func (r *defaultRouter) NotFound(h http.Handler) {
 	r.notFoundHandler = h
 }
 
@@ -268,11 +272,11 @@ func (r *defaultRouter) NotFound(h http.HandlerFunc) {
 //
 // Example:
 //
-//	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+//	router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 //	    allow := w.Header().Get("Allow")
 //	    http.Error(w, fmt.Sprintf("Method not allowed. Allowed: %s", allow), http.StatusMethodNotAllowed)
-//	})
-func (r *defaultRouter) MethodNotAllowed(h http.HandlerFunc) {
+//	}))
+func (r *defaultRouter) MethodNotAllowed(h http.Handler) {
 	r.methodNotAllowedHandler = h
 }
 
@@ -303,29 +307,29 @@ func (r *defaultRouter) FilesDir(prefix, dir string) {
 }
 
 // Static serves a static web application from embedded FS with fallback to index.html.
-func (r *defaultRouter) Static(embedFS embed.FS, distDir string, apiPrefix ...string) {
+func (r *defaultRouter) Static(embedFS embed.FS, distDir string, fallback bool, apiPrefix ...string) {
 	subFS, err := fs.Sub(embedFS, distDir)
 	if err != nil {
 		panic(fmt.Errorf("failed to create sub-filesystem: %w", err))
 	}
 
-	handler := r.createStaticHandler(subFS, apiPrefix)
+	handler := r.createStaticHandler(subFS, fallback, apiPrefix)
 
 	r.mux.Handle("GET /{$}", r.wrap(handler, nil))
 	r.mux.Handle("GET /{path...}", r.wrap(handler, nil))
 }
 
 // StaticDir serves a static web application from a directory with fallback to index.html.
-func (r *defaultRouter) StaticDir(dir string, apiPrefix ...string) {
+func (r *defaultRouter) StaticDir(dir string, fallback bool, apiPrefix ...string) {
 	filesystem := os.DirFS(dir)
-	handler := r.createStaticHandler(filesystem, apiPrefix)
+	handler := r.createStaticHandler(filesystem, fallback, apiPrefix)
 
 	r.mux.Handle("GET /{$}", r.wrap(handler, nil))
 	r.mux.Handle("GET /{path...}", r.wrap(handler, nil))
 }
 
 // createStaticHandler creates an HTTP handler for static routing with API prefix exclusions.
-func (r *defaultRouter) createStaticHandler(filesystem fs.FS, apiPrefixes []string) http.Handler {
+func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, apiPrefixes []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		requestID := req.Header.Get(r.config.RequestID.Header)
@@ -339,7 +343,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, apiPrefixes []stri
 		// Skip API routes - return 404
 		for _, prefix := range apiPrefixes {
 			if strings.HasPrefix(cleanPath, prefix) {
-				r.notFoundHandler(w, req)
+				r.notFoundHandler.ServeHTTP(w, req)
 				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusNotFound, time.Since(start))
 				return
 			}
@@ -347,8 +351,8 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, apiPrefixes []stri
 
 		if file, err := filesystem.Open(strings.TrimPrefix(cleanPath, "/")); err == nil {
 			defer func() {
-				if cerr := file.Close(); cerr != nil {
-					r.logger.Error("Failed to close file", log.F("error", cerr), log.F("path", cleanPath))
+				if cErr := file.Close(); cErr != nil {
+					r.logger.Error("Failed to close file", log.F("error", cErr), log.F("path", cleanPath))
 				}
 			}()
 
@@ -359,10 +363,16 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, apiPrefixes []stri
 			}
 		}
 
-		// File doesn't exist, serve index.html for client-side routing
-		req.URL.Path = "/"
-		http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
-		middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
+		if fallback {
+			// Fallback to index.html for client-side routing
+			req.URL.Path = "/"
+			http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
+			middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
+		} else {
+			// Use custom 404 handler for missing files
+			r.notFoundHandler.ServeHTTP(w, req)
+			middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusNotFound, time.Since(start))
+		}
 	})
 }
 
@@ -465,35 +475,35 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 		if methods, exists := r.registeredRoutes[req.URL.Path]; exists {
 			if !methods[req.Method] {
 				w.Header().Set(HeaderAllow, allowedMethods(methods))
-				r.methodNotAllowedHandler(w, req)
+				r.methodNotAllowedHandler.ServeHTTP(w, req)
 				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusMethodNotAllowed, time.Since(start))
 				return
 			}
 		}
 
-		r.notFoundHandler(w, req)
+		r.notFoundHandler.ServeHTTP(w, req)
 		middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusNotFound, time.Since(start))
 	}
 }
 
 // defaultNotFoundHandler is the default handler for 404 Not Found responses.
 // It returns a problem detail response indicating that the requested resource was not found.
-func defaultNotFoundHandler(w http.ResponseWriter, r *http.Request) {
+var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	problem := NewProblemDetail(http.StatusNotFound, "The requested resource was not found")
 	if err := R.ProblemDetail(w, problem); err != nil {
 		panic(fmt.Errorf("failed to write 404 problem detail: %w", err))
 	}
-}
+})
 
 // defaultMethodNotAllowedHandler is the default handler for 405 Method Not Allowed responses.
 // It returns a problem detail response indicating that the HTTP method is not allowed.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
-func defaultMethodNotAllowedHandler(w http.ResponseWriter, r *http.Request) {
+var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	problem := NewProblemDetail(http.StatusMethodNotAllowed, "The HTTP method is not allowed")
 	if err := R.ProblemDetail(w, problem); err != nil {
 		panic(fmt.Errorf("failed to write 405 problem detail: %w", err))
 	}
-}
+})
 
 // allowedMethods converts a map of HTTP methods to a comma-separated string
 // suitable for the "Allow" header in 405 Method Not Allowed responses.
