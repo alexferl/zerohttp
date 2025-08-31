@@ -32,11 +32,23 @@ const routes = {
                 <strong>Testing:</strong> Try refreshing this page - you should stay on the contact page.
             </div>
         `
+  },
+  '/404': {
+    title: '404 Not Found',
+    content: `
+            <h1>Page Not Found</h1>
+            <p>The page you are looking for does not exist.</p>
+            <div class="route-info">
+                <strong>Current Route:</strong> 404<br>
+                <strong>Note:</strong> This content is shown when the route is not recognized.
+            </div>
+            <p><a href="/" onclick="navigate(event, '/')">Return to Home</a></p>
+        `
   }
 };
 
 function renderRoute(path) {
-  const route = routes[path] || routes['/'];
+  const route = routes[path] || routes['/404'];
   const contentEl = document.getElementById('content');
   const titleEl = document.querySelector('title');
 
