@@ -200,30 +200,24 @@ func TestProblemDetail_Set_ExtensionsInitialization(t *testing.T) {
 		Status: 400,
 	}
 
-	// Verify Extensions starts as nil
 	if p.Extensions != nil {
 		t.Fatal("Expected Extensions to be nil initially")
 	}
 
-	// Call Set - this should initialize Extensions
 	result := p.Set("key", "value")
 
-	// Verify Extensions was initialized
 	if p.Extensions == nil {
 		t.Fatal("Expected Extensions to be initialized after Set")
 	}
 
-	// Verify the value was set correctly
 	if val, ok := p.Extensions["key"]; !ok || val != "value" {
 		t.Errorf("Expected Extensions to contain 'key' with value 'value', got %v", p.Extensions)
 	}
 
-	// Verify method chaining works
 	if result != p {
 		t.Error("Expected Set to return same ProblemDetail instance for chaining")
 	}
 
-	// Test multiple Sets to ensure Extensions remains functional
 	p.Set("another", 123).Set("third", true)
 
 	if len(p.Extensions) != 3 {
@@ -235,7 +229,81 @@ func TestProblemDetail_Set_ExtensionsInitialization(t *testing.T) {
 	}
 }
 
-// Helper function for comparing values in tests
+func TestProblemDetail_Render(t *testing.T) {
+	problem := NewProblemDetail(404, "Not found")
+	problem.Instance = "/users/123"
+	problem.Set("timestamp", "2023-01-01T00:00:00Z")
+
+	w := httptest.NewRecorder()
+
+	err := problem.Render(w)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if w.Code != 404 {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+
+	expectedContentType := MIMEApplicationProblem
+	if ct := w.Header().Get(HeaderContentType); ct != expectedContentType {
+		t.Errorf("expected Content-Type %s, got %s", expectedContentType, ct)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	expected := map[string]any{
+		"title":     "Not Found",
+		"status":    float64(404),
+		"detail":    "Not found",
+		"instance":  "/users/123",
+		"timestamp": "2023-01-01T00:00:00Z",
+	}
+
+	for key, expectedValue := range expected {
+		if actual, exists := result[key]; !exists {
+			t.Errorf("expected field %s to exist", key)
+		} else if actual != expectedValue {
+			t.Errorf("expected %s to be %v, got %v", key, expectedValue, actual)
+		}
+	}
+}
+
+func TestProblemDetail_Render_WithExtensions(t *testing.T) {
+	problem := NewProblemDetail(422, "Validation failed")
+	problem.Set("errors", []string{"name is required", "email is invalid"})
+	problem.Set("code", "VALIDATION_ERROR")
+
+	w := httptest.NewRecorder()
+
+	err := problem.Render(w)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if w.Code != 422 {
+		t.Errorf("expected status 422, got %d", w.Code)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if code, exists := result["code"]; !exists || code != "VALIDATION_ERROR" {
+		t.Errorf("expected code extension to be VALIDATION_ERROR, got %v", result["code"])
+	}
+
+	if errors, exists := result["errors"]; !exists {
+		t.Error("expected errors extension to exist")
+	} else if errorList, ok := errors.([]any); !ok || len(errorList) != 2 {
+		t.Errorf("expected errors to be array of 2 items, got %v", errors)
+	}
+}
+
 func equalValues(a, b any) bool {
 	if slice, ok := b.([]string); ok {
 		aSlice, ok := a.([]any)

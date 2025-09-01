@@ -73,6 +73,13 @@ func (p *ProblemDetail) Set(key string, value any) *ProblemDetail {
 	return p
 }
 
+// Render writes the ProblemDetail as an HTTP response
+func (p *ProblemDetail) Render(w http.ResponseWriter) error {
+	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+	w.WriteHeader(p.Status)
+	return json.NewEncoder(w).Encode(p)
+}
+
 // ValidationError represents a single validation error with optional field location information
 type ValidationError struct {
 	// Detail describes what went wrong with the validation
