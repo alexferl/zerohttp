@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ message }}</h1>
+<p>{{ description }}</p>
+
+<div>
+  <strong>Template Info:</strong>
+  <ul>
+    <li>Rendered using Pongo2 templates</li>
+    <li>Clean template inheritance with {% verbatim %}{% extends %}{% endverbatim %}</li>
+    <li>No conditional base template nonsense!</li>
+  </ul>
+</div>
+{% endblock %}

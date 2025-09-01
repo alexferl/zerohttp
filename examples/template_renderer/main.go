@@ -42,7 +42,7 @@ func main() {
 
 	app.NotFound(zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		data := PageData{
-			Title:       "404 - Not Found",
+			Title:       "404 - Page Not Found",
 			Message:     "Page Not Found",
 			Description: "The page you're looking for doesn't exist.",
 		}
