@@ -18,7 +18,6 @@ type Pongo2Renderer struct {
 }
 
 func NewPongo2Renderer(templateFS embed.FS) *Pongo2Renderer {
-	// Create a custom loader for embed.FS
 	loader := &EmbedFSLoader{fs: templateFS}
 	set := pongo2.NewSet("embedded", loader)
 	return &Pongo2Renderer{set: set}
@@ -30,13 +29,12 @@ func (pr *Pongo2Renderer) Render(w http.ResponseWriter, status int, name string,
 		return err
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(zh.HeaderContentType, zh.MIMETextHTML)
 	w.WriteHeader(status)
 
 	return tpl.ExecuteWriter(ctx, w)
 }
 
-// Custom loader for embed.FS
 type EmbedFSLoader struct {
 	fs embed.FS
 }
@@ -55,7 +53,6 @@ func main() {
 	app := zh.New()
 	app.Use()
 
-	// Home route
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		ctx := pongo2.Context{
 			"title":       "Welcome",
@@ -65,7 +62,6 @@ func main() {
 		return renderer.Render(w, http.StatusOK, "index.html", ctx)
 	}))
 
-	// About route
 	app.GET("/about", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		ctx := pongo2.Context{
 			"title":       "About",
@@ -75,7 +71,6 @@ func main() {
 		return renderer.Render(w, http.StatusOK, "about.html", ctx)
 	}))
 
-	// 404 handler
 	app.NotFound(zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		ctx := pongo2.Context{
 			"title":       "404 - Not Found",
