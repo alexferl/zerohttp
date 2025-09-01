@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div>
+  <h1>404</h1>
+  <h2>{{ message }}</h2>
+  <p>{{ description }}</p>
+
+  <div>
+    <strong>This 404 page was rendered using:</strong><br>
+    <code>{% verbatim %}{% extends "base.html" %}{% endverbatim %}</code> - Clean inheritance!
+  </div>
+
+  <p><a href="/">← Back to Home</a></p>
+</div>
+{% endblock %}

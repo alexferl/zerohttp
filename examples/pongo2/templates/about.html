@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ message }}</h1>
+<p>{{ description }}</p>
+
+<h2>Features</h2>
+<ul>
+  <li>Django-style template inheritance</li>
+  <li>Clean {% verbatim %}{% block %}{% endverbatim %} syntax</li>
+  <li>No template name conflicts</li>
+  <li>Much better than Go's html/template</li>
+</ul>
+{% endblock %}

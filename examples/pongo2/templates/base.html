@@ -1,10 +1,9 @@
-{{define "base.html"}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{.Title}} - My App</title>
+  <title>{{ title }} - My App</title>
 </head>
 <body>
 <nav>
@@ -14,12 +13,7 @@
 </nav>
 
 <div class="container">
-  {{if eq .Title "404 - Page Not Found"}}
-    {{template "404-content" .}}
-  {{else}}
-    {{template "content" .}}
-  {{end}}
+  {% block content %}{% endblock %}
 </div>
 </body>
 </html>
-{{end}}
