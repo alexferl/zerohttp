@@ -110,6 +110,8 @@ func main() {
 }
 ```
 
+> **💡 More Examples:** Check out the [`examples/`](examples/) folder for complete working examples including template rendering, static file serving, middleware usage, advanced configurations and more.
+
 
 ## Response Rendering
 
@@ -124,6 +126,10 @@ zh.Render.Text(w, 200, "Plain text response")
 
 // HTML responses
 zh.Render.HTML(w, 200, "<h1>Welcome</h1>")
+
+// Template rendering with parsed templates
+tmpl := template.Must(template.ParseFS(templatesFS, "templates/*.html"))
+zh.R.Template(w, 200, tmpl, "index.html", zh.M{"title": "Welcome"})
 
 // Binary data
 zh.Render.Blob(w, 200, "image/png", pngData)
@@ -219,7 +225,7 @@ app.Group(func(api zh.Router) {
 
 ## Static File Serving
 
-Serve static files from embedded filesystems or directories:
+Serve static files from embedded filesystems or directories with configurable fallback behavior:
 
 ```go
 //go:embed static
@@ -241,23 +247,53 @@ app.Files("/static/", staticFiles, "static")
 // Serve files from directory (uploads, user content)
 app.FilesDir("/uploads/", "./uploads")
 
-// Serve web application with client-side routing support
-app.Static(appFiles, "dist", "/api/")
+// Serve SPA with client-side routing fallback (fallback=true)
+app.Static(appFiles, "dist", true, "/api/")
+
+// Serve static website with custom 404 handler (fallback=false)
+app.Static(appFiles, "dist", false, "/api/")
 
 // Or serve from directory for development
-// app.StaticDir("./dist", "/api/")
+// app.StaticDir("./dist", true, "/api/")
+// app.StaticDir("./dist", false, "/api/")
 
 log.Fatal(app.Start())
 ```
 
+
 ### Static File Methods
 
-- **`Files()`** - Serves files from embedded FS without fallback
-- **`FilesDir()`** - Serves files from directory without fallback
-- **`Static()`** - Serves web app from embedded FS with index.html fallback for client-side routing
-- **`StaticDir()`** - Serves web app from directory with index.html fallback for client-side routing
+- **`Files(prefix, embedFS, dir)`** - Serves files from embedded FS without fallback (returns 404 for missing files)
+- **`FilesDir(prefix, dir)`** - Serves files from directory without fallback (returns 404 for missing files)
+- **`Static(embedFS, dir, fallback, apiPrefixes...)`** - Serves web app from embedded FS with configurable fallback:
+    - `fallback: true` - Falls back to index.html for missing files (SPA behavior)
+    - `fallback: false` - Uses custom NotFound handler for missing files (static site behavior)
+- **`StaticDir(dir, fallback, apiPrefixes...)`** - Serves web app from directory with configurable fallback behavior
 
-The `Static` methods support API prefix exclusions - requests matching specified prefixes return 404 instead of falling back to index.html, allowing API and static routes to coexist.
+
+### Fallback Behavior
+
+**With `fallback: true` (Single Page Applications):**
+
+- Missing files return `index.html` to support client-side routing
+- Perfect for React, Vue, Angular apps
+
+**With `fallback: false` (Static Websites):**
+
+- Missing files use your custom `NotFound` handler
+- Perfect for traditional static websites with custom 404 pages
+
+
+### API Prefix Exclusions
+
+The `Static` methods support API prefix exclusions - requests matching specified prefixes return 404 instead of falling back to index.html, allowing API and static routes to coexist cleanly:
+
+```go
+// API routes return proper 404s, SPA routes fallback to index.html
+app.Static(appFiles, "dist", true, "/api/", "/auth/", "/uploads/")
+```
+
+This prevents API endpoints from accidentally serving your SPA's index.html when routes don't exist.
 
 
 ## Error Handling
