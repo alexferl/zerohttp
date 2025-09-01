@@ -56,15 +56,14 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) error {
 	if err := r.ParseMultipartForm(maxFormSize); err != nil {
 		problem := zh.NewProblemDetail(400, "Failed to parse form")
 		problem.Set("error", err.Error())
-		return zh.R.ProblemDetail(w, problem)
+		return problem.Render(w)
 	}
 
 	description := r.FormValue("description")
 	files := r.MultipartForm.File["files"]
 
 	if len(files) == 0 {
-		problem := zh.NewProblemDetail(400, "No files uploaded")
-		return zh.R.ProblemDetail(w, problem)
+		return zh.NewProblemDetail(400, "No files uploaded").Render(w)
 	}
 
 	var uploadedFiles []zh.M
@@ -149,8 +148,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) error {
 	filePath := filepath.Join(uploadDir, filename)
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		problem := zh.NewProblemDetail(404, "File not found")
-		return zh.R.ProblemDetail(w, problem)
+		return zh.NewProblemDetail(404, "File not found").Render(w)
 	}
 
 	return zh.R.File(w, r, filePath)

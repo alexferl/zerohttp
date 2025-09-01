@@ -26,6 +26,8 @@ func main() {
 		problem.Type = "https://example.com/probs/not-found"
 		problem.Instance = "/error"
 		return zh.R.ProblemDetail(w, problem)
+		// or use Render on the instance:
+		// return problem.Render(w)
 	}))
 
 	// Default ValidationError example
@@ -35,8 +37,7 @@ func main() {
 			{Detail: "invalid email", Field: "email"},
 		}
 
-		problem := zh.NewValidationProblemDetail("Validation failed", errors)
-		return zh.R.ProblemDetail(w, problem)
+		return zh.NewValidationProblemDetail("Validation failed", errors).Render(w)
 	}))
 
 	// Custom error example
@@ -46,8 +47,7 @@ func main() {
 			{Code: "BAD_EMAIL", Field: "email", Issue: "invalid format"},
 		}
 
-		problem := zh.NewValidationProblemDetail("Custom validation failed", errors)
-		return zh.R.ProblemDetail(w, problem)
+		return zh.NewValidationProblemDetail("Custom validation failed", errors).Render(w)
 	}))
 
 	log.Fatal(app.Start())

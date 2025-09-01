@@ -96,7 +96,6 @@ func main() {
     app.GET("/hello-std", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         w.Header().Set("Content-Type", "application/json")
         w.WriteHeader(http.StatusOK)
-
         response := map[string]string{"message": "Hello from standard library!"}
         json.NewEncoder(w).Encode(response)
     }))
@@ -320,8 +319,8 @@ errors := []zh.ValidationError{
     {Detail: "must be a valid email", Pointer: "#/email"},
     {Detail: "must be at least 8 characters", Field: "password"},
 }
-problem := zh.NewValidationProblemDetail("Validation failed", errors)
-return zh.R.ProblemDetail(w, problem)
+// Using Render shortcut
+return zh.NewValidationProblemDetail("Validation failed", errors).Render(w)
 
 // Using custom error structures
 type CustomError struct {
@@ -333,8 +332,7 @@ type CustomError struct {
 customErrors := []CustomError{
     {Code: "INVALID_EMAIL", Field: "email", Message: "Email format is invalid"},
 }
-problem := zh.NewValidationProblemDetail("Validation failed", customErrors)
-return zh.R.ProblemDetail(w, problem)
+return zh.NewValidationProblemDetail("Validation failed", customErrors).Render(w)
 ```
 
 
