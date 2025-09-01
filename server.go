@@ -257,7 +257,7 @@ func (s *Server) Start() error {
 	if s.server != nil {
 		s.server.Handler = handler
 		go func() {
-			s.logger.Debug("Starting HTTP server...", log.F("addr", s.server.Addr))
+			s.logger.Debug("Starting HTTP server...", log.F("addr", fmt.Sprintf("http://%s", s.server.Addr)))
 			if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTP server error: %w", err)
 			}
@@ -292,7 +292,7 @@ func (s *Server) Start() error {
 		}
 
 		go func() {
-			s.logger.Debug("Starting HTTPS server...", log.F("addr", s.tlsServer.Addr), log.F("cert_file", s.certFile), log.F("key_file", s.keyFile))
+			s.logger.Debug("Starting HTTPS server...", log.F("addr", fmt.Sprintf("https://%s", s.tlsServer.Addr)), log.F("cert_file", s.certFile), log.F("key_file", s.keyFile))
 			if err := s.tlsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTPS server error: %w", err)
 			}
