@@ -1,0 +1,71 @@
+package main
+
+import "context"
+
+// Base layout component
+templ Layout(title string, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ title } - My App</title>
+		<style>
+			body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+			nav { margin-bottom: 20px; }
+			nav a { margin-right: 15px; text-decoration: none; color: #007bff; }
+			nav a:hover { text-decoration: underline; }
+			.container { background: #f8f9fa; padding: 20px; border-radius: 5px; }
+		</style>
+	</head>
+	<body>
+		<nav>
+			<a href="/">Home</a>
+			<a href="/about">About</a>
+		</nav>
+
+		<div class="container">
+			@content
+		</div>
+	</body>
+	</html>
+}
+
+// Home page component
+templ HomePage(message, description string) {
+	@Layout("Welcome", homeContent(message, description))
+}
+
+templ homeContent(message, description string) {
+	<h1>{ message }</h1>
+	<p>{ description }</p>
+
+	<div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+		<strong>Template Info:</strong>
+		<ul>
+			<li>Rendered using Templ</li>
+			<li>Type-safe components with proper composition</li>
+			<li>No template inheritance issues!</li>
+			<li>Full IDE support and autocomplete</li>
+		</ul>
+	</div>
+}
+
+// 404 page component
+templ NotFoundPage(message, description string) {
+	@Layout("404 - Not Found", notFoundContent(message, description))
+}
+
+templ notFoundContent(message, description string) {
+	<div style="text-align: center;">
+		<h1 style="color: #dc3545; font-size: 3em;">404</h1>
+		<h2>{ message }</h2>
+		<p>{ description }</p>
+
+		<div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+			<strong>This 404 page uses clean component composition!</strong>
+		</div>
+
+		<p><a href="/" style="color: #007bff; text-decoration: none;">← Back to Home</a></p>
+	</div>
+}
