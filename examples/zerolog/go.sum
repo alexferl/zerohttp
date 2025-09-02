@@ -1,3 +1,5 @@
+github.com/alexferl/zerohttp v0.4.0 h1:IjCRyB/T3ma3aOtIBe3i2o1Lb2IyR45i7/iLfrSsP1U=
+github.com/alexferl/zerohttp v0.4.0/go.mod h1:iSj8StfN6avuGqA7L8tw5une+NlJl2JM/542ozcgPoc=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=

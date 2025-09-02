@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/a-h/templ v0.3.943
-	github.com/alexferl/zerohttp v0.3.0
+	github.com/alexferl/zerohttp v0.4.0
 )
 
 require (

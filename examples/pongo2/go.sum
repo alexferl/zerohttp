@@ -1,5 +1,5 @@
-github.com/alexferl/zerohttp v0.3.0 h1:mnhsbYz/86+iqrBCa9evfif1Xx0v/xBl900SMijzPes=
-github.com/alexferl/zerohttp v0.3.0/go.mod h1:iSj8StfN6avuGqA7L8tw5une+NlJl2JM/542ozcgPoc=
+github.com/alexferl/zerohttp v0.4.0 h1:IjCRyB/T3ma3aOtIBe3i2o1Lb2IyR45i7/iLfrSsP1U=
+github.com/alexferl/zerohttp v0.4.0/go.mod h1:iSj8StfN6avuGqA7L8tw5une+NlJl2JM/542ozcgPoc=
 github.com/flosch/pongo2/v6 v6.0.0 h1:lsGru8IAzHgIAw6H2m4PCyleO58I40ow6apih0WprMU=
 github.com/flosch/pongo2/v6 v6.0.0/go.mod h1:CuDpFm47R0uGGE7z13/tTlt1Y6zdxvr2RLT5LJhsHEU=
 github.com/kr/pretty v0.2.1 h1:Fmg33tUaq4/8ym9TJN1x7sLJnHVwhP33CNkpYV/7rwI=

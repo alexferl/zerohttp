@@ -8,12 +8,16 @@ import (
 	"github.com/alexferl/zerohttp/config"
 )
 
+var hosts = []string{
+	"example.com",     // Your domain
+	"www.example.com", // Additional domains
+}
+
 func main() {
 	// Create autocert manager for automatic Let's Encrypt certificates
 	manager := zh.NewAutocertManager(
 		"/var/cache/certs", // Certificate cache directory
-		"example.com",      // Your domain
-		"www.example.com",  // Additional domains
+		hosts...,
 	)
 
 	app := zh.New(
@@ -31,5 +35,5 @@ func main() {
 	}))
 
 	// StartAutoTLS handles both HTTP (for ACME challenges + redirects) and HTTPS
-	log.Fatal(app.StartAutoTLS("example.com", "www.example.com"))
+	log.Fatal(app.StartAutoTLS(hosts...))
 }

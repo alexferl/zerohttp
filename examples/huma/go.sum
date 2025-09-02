@@ -1,3 +1,5 @@
+github.com/alexferl/zerohttp v0.4.0 h1:IjCRyB/T3ma3aOtIBe3i2o1Lb2IyR45i7/iLfrSsP1U=
+github.com/alexferl/zerohttp v0.4.0/go.mod h1:iSj8StfN6avuGqA7L8tw5une+NlJl2JM/542ozcgPoc=
 github.com/danielgtaylor/huma/v2 v2.34.1 h1:EmOJAbzEGfy0wAq/QMQ1YKfEMBEfE94xdBRLPBP0gwQ=
 github.com/danielgtaylor/huma/v2 v2.34.1/go.mod h1:ynwJgLk8iGVgoaipi5tgwIQ5yoFNmiu+QdhU7CEEmhk=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
