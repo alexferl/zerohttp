@@ -185,7 +185,8 @@ func (s *Server) ListenAndServe() error {
 
 	s.mu.Unlock()
 
-	s.logger.Info("Starting HTTP server", log.F("addr", s.listener.Addr().String()))
+	s.logger.Info("Starting HTTP server", log.F("addr", fmtHTTPAddr(s.listener.Addr().String())))
+
 	return s.server.Serve(s.listener)
 }
 
@@ -201,8 +202,6 @@ func (s *Server) ListenAndServe() error {
 // This method blocks until the server encounters an error or is shut down.
 // Returns any error encountered while starting or running the TLS server.
 func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
-	s.logger.Debug("ListenAndServeTLS called", log.F("certFile", certFile), log.F("keyFile", keyFile))
-
 	s.mu.Lock()
 
 	if s.tlsServer == nil {
@@ -228,11 +227,10 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	s.mu.Unlock()
 
 	s.logger.Info("Starting HTTPS server",
-		log.F("addr", s.tlsListener.Addr().String()),
+		log.F("addr", fmtHTTPSAddr(s.tlsListener.Addr().String())),
 		log.F("cert_file", certFile),
 		log.F("key_file", keyFile))
 
-	s.logger.Debug("About to call ServeTLS")
 	return s.tlsServer.ServeTLS(s.tlsListener, certFile, keyFile)
 }
 
@@ -257,7 +255,7 @@ func (s *Server) Start() error {
 	if s.server != nil {
 		s.server.Handler = handler
 		go func() {
-			s.logger.Debug("Starting HTTP server...", log.F("addr", fmt.Sprintf("http://%s", s.server.Addr)))
+			s.logger.Info("Starting HTTP server...", log.F("addr", fmtHTTPAddr(s.server.Addr)))
 			if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTP server error: %w", err)
 			}
@@ -292,7 +290,10 @@ func (s *Server) Start() error {
 		}
 
 		go func() {
-			s.logger.Debug("Starting HTTPS server...", log.F("addr", fmt.Sprintf("https://%s", s.tlsServer.Addr)), log.F("cert_file", s.certFile), log.F("key_file", s.keyFile))
+			s.logger.Info("Starting HTTPS server...",
+				log.F("addr", fmtHTTPSAddr(s.tlsServer.Addr)),
+				log.F("cert_file", s.certFile),
+				log.F("key_file", s.keyFile))
 			if err := s.tlsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTPS server error: %w", err)
 			}
@@ -358,7 +359,7 @@ func (s *Server) StartAutoTLS(hosts ...string) error {
 			}
 
 			s.logger.Info("Starting HTTP server for ACME challenges and redirects",
-				log.F("addr", httpServer.Addr))
+				log.F("addr", fmtHTTPAddr(httpServer.Addr)))
 			errCh <- httpServer.ListenAndServe()
 		}()
 	}
@@ -373,7 +374,7 @@ func (s *Server) StartAutoTLS(hosts ...string) error {
 			s.tlsServer.TLSConfig.GetCertificate = s.autocertManager.GetCertificate
 
 			s.logger.Info("Starting HTTPS server with AutoTLS",
-				log.F("addr", s.tlsServer.Addr))
+				log.F("addr", fmtHTTPSAddr(s.tlsServer.Addr)))
 			errCh <- s.tlsServer.ListenAndServeTLS("", "")
 		}()
 	}
@@ -423,12 +424,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.logger.Debug("Shutting down HTTP server")
+			s.logger.Info("Shutting down HTTP server")
 			if err := s.server.Shutdown(ctx); err != nil {
 				s.logger.Error("Error shutting down HTTP server", log.F("error", err))
 				errCh <- err
 			} else {
-				s.logger.Debug("HTTP server shutdown complete")
+				s.logger.Info("HTTP server shutdown complete")
 			}
 		}()
 	}
@@ -437,12 +438,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.logger.Debug("Shutting down HTTPS server")
+			s.logger.Info("Shutting down HTTPS server")
 			if err := s.tlsServer.Shutdown(ctx); err != nil {
 				s.logger.Error("Error shutting down HTTPS server", log.F("error", err))
 				errCh <- err
 			} else {
-				s.logger.Debug("HTTPS server shutdown complete")
+				s.logger.Info("HTTPS server shutdown complete")
 			}
 		}()
 	}
@@ -575,4 +576,12 @@ func NewAutocertManager(cacheDir string, hosts ...string) *autocert.Manager {
 		HostPolicy: autocert.HostWhitelist(hosts...),
 	}
 	return manager
+}
+
+func fmtHTTPAddr(addr string) string {
+	return fmt.Sprintf("http://%s", addr)
+}
+
+func fmtHTTPSAddr(addr string) string {
+	return fmt.Sprintf("https://%s", addr)
 }
