@@ -162,6 +162,20 @@ func TestHandlerFunc(t *testing.T) {
 		}
 	})
 
+	t.Run("headResponseWriter Unwrap", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		hrw := &headResponseWriter{ResponseWriter: recorder}
+
+		// Test that Unwrap returns the underlying ResponseWriter
+		unwrapped, ok := hrw.Unwrap().(*httptest.ResponseRecorder)
+		if !ok {
+			t.Error("Unwrap did not return the underlying ResponseRecorder")
+		}
+		if unwrapped != recorder {
+			t.Error("Unwrap returned a different ResponseWriter")
+		}
+	})
+
 	t.Run("interface compatibility", func(t *testing.T) {
 		var _ http.Handler = HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 			return nil
