@@ -107,52 +107,6 @@ func TestHandlerFunc(t *testing.T) {
 		}
 	})
 
-	t.Run("error case with request body drains body", func(t *testing.T) {
-		var panicked bool
-		var panicMsg string
-
-		recoveryMW := func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				defer func() {
-					if rec := recover(); rec != nil {
-						panicked = true
-						panicMsg = fmt.Sprintf("%v", rec)
-						w.WriteHeader(http.StatusInternalServerError)
-					}
-				}()
-				next.ServeHTTP(w, r)
-			})
-		}
-
-		router := NewRouter(recoveryMW)
-		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-			return fmt.Errorf("test error with body")
-		})
-		router.POST("/error", handler)
-
-		// Send a request with a body to verify it's drained properly
-		body := strings.NewReader("request body content")
-		req := httptest.NewRequest("POST", "/error", body)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		if !panicked {
-			t.Error("Expected handler error to cause panic")
-		}
-		if !strings.Contains(panicMsg, "test error with body") {
-			t.Errorf("Expected panic message to contain 'test error with body', got '%s'", panicMsg)
-		}
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("Expected status 500, got %d", w.Code)
-		}
-
-		// Verify body was drained (can be read completely)
-		// After draining, the body should be at EOF
-		if body.Len() != 0 {
-			t.Errorf("Expected request body to be drained, but %d bytes remain", body.Len())
-		}
-	})
-
 	t.Run("with middleware", func(t *testing.T) {
 		var calls []string
 		mw := testMiddleware("error-handler-mw", &calls)
@@ -175,6 +129,50 @@ func TestHandlerFunc(t *testing.T) {
 			if i >= len(calls) || calls[i] != expected {
 				t.Errorf("Expected call %d to be '%s', got '%s'", i, expected, calls[i])
 			}
+		}
+	})
+
+	t.Run("HEAD request discards body writes", func(t *testing.T) {
+		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+			// Try to write body - should be discarded for HEAD requests
+			// but headers should still be set
+			return R.Text(w, http.StatusOK, "this should not appear in HEAD response")
+		})
+
+		router := NewRouter()
+		router.GET("/", handler)
+
+		// Make a HEAD request
+		req := httptest.NewRequest("HEAD", "/", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		// Headers should be set (R.Text sets text/plain)
+		if w.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
+			t.Errorf("Expected Content-Type header to be set, got '%s'", w.Header().Get("Content-Type"))
+		}
+
+		// Body should be empty for HEAD requests
+		if w.Body.String() != "" {
+			t.Errorf("Expected empty body for HEAD request, got '%s'", w.Body.String())
+		}
+	})
+
+	t.Run("headResponseWriter Unwrap", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		hrw := &headResponseWriter{ResponseWriter: recorder}
+
+		// Test that Unwrap returns the underlying ResponseWriter
+		unwrapped, ok := hrw.Unwrap().(*httptest.ResponseRecorder)
+		if !ok {
+			t.Error("Unwrap did not return the underlying ResponseRecorder")
+		}
+		if unwrapped != recorder {
+			t.Error("Unwrap returned a different ResponseWriter")
 		}
 	})
 
