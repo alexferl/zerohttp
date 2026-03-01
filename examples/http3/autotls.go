@@ -14,12 +14,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
+	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
@@ -28,34 +24,40 @@ import (
 )
 
 var (
-	_ config.HTTP3Server             = (*HTTP3AutocertServer)(nil)
-	_ config.HTTP3ServerWithAutocert = (*HTTP3AutocertServer)(nil)
+	_ config.HTTP3Server             = (*http3AutocertServer)(nil)
+	_ config.HTTP3ServerWithAutocert = (*http3AutocertServer)(nil)
 )
 
-// HTTP3AutocertServer wraps quic-go's http3.Server to implement
+// http3AutocertServer wraps quic-go's http3.Server to implement
 // config.HTTP3ServerWithAutocert interface
-type HTTP3AutocertServer struct {
-	Server *http3.Server
+type http3AutocertServer struct {
+	server *http3.Server
 }
 
-func (s *HTTP3AutocertServer) ListenAndServeTLS(certFile, keyFile string) error {
-	return s.Server.ListenAndServeTLS(certFile, keyFile)
+func (h *http3AutocertServer) ListenAndServeTLS(certFile, keyFile string) error {
+	return h.server.ListenAndServeTLS(certFile, keyFile)
 }
 
-func (s *HTTP3AutocertServer) Shutdown(ctx context.Context) error {
-	return s.Server.Shutdown(ctx)
+func (h *http3AutocertServer) Shutdown(ctx context.Context) error {
+	return h.server.Shutdown(ctx)
 }
 
-func (s *HTTP3AutocertServer) Close() error {
-	return s.Server.Close()
+func (h *http3AutocertServer) Close() error {
+	return nil
 }
 
-func (s *HTTP3AutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
-	if s.Server.TLSConfig == nil {
-		s.Server.TLSConfig = &tls.Config{}
+func (h *http3AutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+	tlsConfig := &tls.Config{
+		GetCertificate: manager.GetCertificate,
+		NextProtos:     []string{"h3"},
 	}
-	s.Server.TLSConfig.GetCertificate = manager.GetCertificate
-	return s.Server.ListenAndServeTLS("", "")
+	h.server.TLSConfig = tlsConfig
+
+	err := h.server.ListenAndServe()
+	if err != nil {
+		log.Printf("[ERROR] HTTP/3 server failed: %v", err)
+	}
+	return err
 }
 
 func main() {
@@ -63,60 +65,44 @@ func main() {
 	const domain = "example.com"
 
 	// Create autocert manager for automatic certificates
-	autocertManager := &autocert.Manager{
+	manager := &autocert.Manager{
 		Cache:      autocert.DirCache("/var/cache/certs"),
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist(domain),
 	}
 
 	// Create zerohttp server with autocert manager
-	srv := zerohttp.New(
-		config.WithAutocertManager(autocertManager),
+	app := zerohttp.New(
+		config.WithAutocertManager(manager),
 	)
 
+	// Add Alt-Svc header to advertise HTTP/3 support
+	app.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Alt-Svc", `h3=":443"; ma=86400`)
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// Add routes
-	srv.GET("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello over %s!\n", r.Proto)
+	app.GET("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("Hello over HTTP/3!\n"))
 	}))
 
 	// Create HTTP/3 server with autocert support
-	h3Server := &HTTP3AutocertServer{
-		Server: &http3.Server{
+	h3Server := &http3AutocertServer{
+		server: &http3.Server{
 			Addr:    ":443",
-			Handler: srv,
+			Handler: app,
 		},
 	}
-
-	// Set the HTTP/3 server
-	srv.SetHTTP3Server(h3Server)
+	app.SetHTTP3Server(h3Server)
 
 	// Start server with AutoTLS (HTTP, HTTPS, and HTTP/3)
-	go func() {
-		fmt.Printf("Starting server with AutoTLS for %s...\n", domain)
-		fmt.Println("HTTP/3 will be available automatically!")
-
-		// This starts:
-		// - HTTP server on :80 (for ACME challenges and redirects)
-		// - HTTPS server on :443 (HTTP/1 and HTTP/2 with AutoTLS)
-		// - HTTP/3 server on :443 (if HTTP3Server implements HTTP3ServerWithAutocert)
-		if err := srv.StartAutoTLS(); err != nil {
-			fmt.Printf("Server error: %v\n", err)
-		}
-	}()
-
-	// Wait for interrupt
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	<-sigCh
-
-	fmt.Println("\nShutting down...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		fmt.Printf("Shutdown error: %v\n", err)
-	}
-
-	fmt.Println("Server stopped")
+	// This starts:
+	// - HTTP server on :80 (for ACME challenges and redirects)
+	// - HTTPS server on :443 (HTTP/1 and HTTP/2 with AutoTLS)
+	// - HTTP/3 server on :443 (if HTTP3Server implements HTTP3ServerWithAutocert)
+	log.Fatal(app.StartAutoTLS())
 }

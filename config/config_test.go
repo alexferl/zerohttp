@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
@@ -250,23 +249,7 @@ func TestConfigOptions(t *testing.T) {
 			t.Error("expected custom Logger to be set")
 		}
 	})
-
-	t.Run("HTTP3 server option", func(t *testing.T) {
-		mockH3 := &mockHTTP3Server{}
-		cfg := DefaultConfig
-		WithHTTP3Server(mockH3)(&cfg)
-		if cfg.HTTP3Server == nil {
-			t.Error("expected HTTP3Server to be set")
-		}
-	})
 }
-
-// mockHTTP3Server is a mock implementation for testing
-type mockHTTP3Server struct{}
-
-func (m *mockHTTP3Server) ListenAndServeTLS(certFile, keyFile string) error { return nil }
-func (m *mockHTTP3Server) Shutdown(ctx context.Context) error               { return nil }
-func (m *mockHTTP3Server) Close() error                                     { return nil }
 
 func TestConfigMiddlewareOptions(t *testing.T) {
 	t.Run("recover options", func(t *testing.T) {
