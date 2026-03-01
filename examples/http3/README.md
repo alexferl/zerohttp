@@ -14,7 +14,7 @@ type HTTP3Server interface {
 }
 ```
 
-This allows you to inject [quic-go/http3](https://github.com/quic-go/quic-go) or any other HTTP/3 implementation without adding dependencies to zerohttp.
+This allows you to inject [quic-go/http3](https://github.com/quic-go/quic-go) or any other HTTP/3 implementation.
 
 ## Setup
 

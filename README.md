@@ -502,8 +502,7 @@ app.StartAutoTLS()
 ## HTTP/3 Support
 
 zerohttp supports HTTP/3 through a pluggable interface. Users can inject their own HTTP/3
-implementation (e.g., [quic-go/http3](https://github.com/quic-go/quic-go)) without adding
-dependencies to the core library.
+implementation (e.g., [quic-go/http3](https://github.com/quic-go/quic-go)).
 
 ### Basic HTTP/3 with TLS certificates
 

@@ -85,16 +85,15 @@ type Config struct {
 	// Default: "" (no key loaded unless specified)
 	KeyFile string
 
-	// AutocertManager is an optional autocert manager for Let's Encrypt certificate management (AutoTLS).
+	// AutocertManager is an optional autocert manager for automatic certificate management (AutoTLS).
 	// Users can inject their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager)
-	// by implementing the AutocertManager interface. This keeps zerohttp dependency-free while
-	// allowing AutoTLS support for those who need it.
+	// by implementing the AutocertManager interface.
 	// Default: nil (AutoTLS not enabled unless set)
 	AutocertManager AutocertManager
 
 	// HTTP3Server is an optional HTTP/3 server instance for handling HTTP/3 traffic over QUIC.
-	// This allows users to inject their own HTTP/3 implementation (e.g., quic-go/http3)
-	// without adding dependencies to zerohttp. The server must implement the HTTP3Server interface.
+	// Users can inject their own HTTP/3 implementation (e.g., quic-go/http3).
+	// The server must implement the HTTP3Server interface.
 	// Default: nil (HTTP/3 not enabled unless set)
 	HTTP3Server HTTP3Server
 }
@@ -292,8 +291,7 @@ func WithAutocertManager(mgr AutocertManager) Option {
 }
 
 // HTTP3Server is the interface that HTTP/3 servers must implement to be used with zerohttp.
-// Users can inject their own HTTP/3 implementation (e.g., github.com/quic-go/quic-go/http3)
-// without adding dependencies to zerohttp.
+// Users can inject their own HTTP/3 implementation (e.g., github.com/quic-go/quic-go/http3).
 //
 // Example usage with quic-go:
 //
