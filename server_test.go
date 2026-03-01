@@ -524,6 +524,20 @@ func TestServer_ListenAndServeTLS(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
+func TestServer_StartTLS_NoServer(t *testing.T) {
+	server := New()
+	server.tlsServer = nil
+
+	err := server.StartTLS("cert.pem", "key.pem")
+	if err == nil {
+		t.Error("expected error when tlsServer is nil")
+	}
+	expectedMsg := "TLS server not configured"
+	if err.Error() != expectedMsg {
+		t.Errorf("expected error '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
 func TestServer_StartTLS(t *testing.T) {
 	server := New()
 	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
