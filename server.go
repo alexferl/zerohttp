@@ -120,6 +120,7 @@ func New(opts ...config.Option) *Server {
 			MaxHeaderBytes: 1 << 20, // 1 MB
 			TLSConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
+				NextProtos: []string{"h2", "http/1.1"},
 			},
 		}
 	}
@@ -218,6 +219,21 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 
 	s.logger.Debug("TLS server is configured, proceeding")
 
+	// Load certificates if provided
+	if certFile != "" && keyFile != "" {
+		s.logger.Debug("Loading TLS certificates", log.F("cert", certFile), log.F("key", keyFile))
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			s.mu.Unlock()
+			s.logger.Error("Failed to load TLS certificates", log.E(err))
+			return fmt.Errorf("failed to load certificates: %w", err)
+		}
+		if s.tlsServer.TLSConfig == nil {
+			s.tlsServer.TLSConfig = &tls.Config{}
+		}
+		s.tlsServer.TLSConfig.Certificates = []tls.Certificate{cert}
+	}
+
 	var err error
 	if s.tlsListener == nil {
 		s.logger.Debug("Creating TLS listener", log.F("addr", s.tlsServer.Addr))
@@ -237,7 +253,8 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 		log.F("cert_file", certFile),
 		log.F("key_file", keyFile))
 
-	return s.tlsServer.ServeTLS(s.tlsListener, certFile, keyFile)
+	// Use Serve (not ServeTLS) since we already have a tls.Listener
+	return s.tlsServer.Serve(s.tlsListener)
 }
 
 // Start begins serving both HTTP and HTTPS traffic concurrently.
@@ -322,7 +339,7 @@ func (s *Server) Start() error {
 // Returns any error encountered while starting or running the TLS server.
 func (s *Server) StartTLS(certFile, keyFile string) error {
 	if s.tlsServer == nil {
-		return nil
+		return fmt.Errorf("TLS server not configured")
 	}
 
 	return s.ListenAndServeTLS(certFile, keyFile)

@@ -33,6 +33,14 @@ func main() {
 		config.WithTLSAddr(":8443"),
 	)
 
+	// Add Alt-Svc header middleware to advertise HTTP/3
+	srv.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Add("Alt-Svc", `h3=":8443"; ma=2592000`)
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// Add routes to zerohttp router
 	srv.GET("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello! Protocol: %s\n", r.Proto)
@@ -53,6 +61,7 @@ func main() {
 		fmt.Println("Starting HTTP/3 server on https://localhost:8443")
 		if err := srv.StartHTTP3("cert.pem", "key.pem"); err != nil {
 			fmt.Printf("HTTP/3 server error: %v\n", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -61,6 +70,7 @@ func main() {
 		fmt.Println("Starting HTTPS server on https://localhost:8443")
 		if err := srv.StartTLS("cert.pem", "key.pem"); err != nil {
 			fmt.Printf("HTTPS server error: %v\n", err)
+			os.Exit(1)
 		}
 	}()
 
