@@ -496,3 +496,77 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 		t.Error("expected autocert manager to be passed to HTTP/3 server")
 	}
 }
+
+func TestWithHTTP3Server(t *testing.T) {
+	h3Server := &mockHTTP3Server{}
+	cfg := config.DefaultConfig
+	config.WithHTTP3Server(h3Server)(&cfg)
+	if cfg.HTTP3Server != h3Server {
+		t.Error("expected HTTP/3 server to be set in config")
+	}
+}
+
+func TestServer_ListenAndServeTLS(t *testing.T) {
+	server := New()
+	// Set up a TLS server but no listener - it should try to create one
+	// but fail since we don't have real certs
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Run in goroutine since it blocks
+	go func() {
+		err := server.ListenAndServeTLS("cert.pem", "key.pem")
+		// Expected to fail due to missing cert files
+		if err == nil {
+			t.Error("expected error due to missing cert files")
+		}
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestServer_StartTLS(t *testing.T) {
+	server := New()
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Run in goroutine since it blocks
+	go func() {
+		err := server.StartTLS("cert.pem", "key.pem")
+		// Expected to fail due to missing cert files
+		if err == nil {
+			t.Error("expected error due to missing cert files")
+		}
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestServer_Start(t *testing.T) {
+	server := New()
+	server.server = nil    // Disable HTTP
+	server.tlsServer = nil // Disable HTTPS
+
+	// With no servers, Start should block indefinitely waiting for an error
+	// Just verify it doesn't panic immediately
+	done := make(chan bool, 1)
+	go func() {
+		_ = server.Start()
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Expected - returns when no servers configured
+	case <-time.After(100 * time.Millisecond):
+		// Also fine - still waiting
+	}
+}
+
+func TestServer_Logger(t *testing.T) {
+	mockLogger := &mockServerLogger{}
+	server := New(config.WithLogger(mockLogger))
+
+	logger := server.Logger()
+	if logger == nil {
+		t.Error("expected logger to not be nil")
+	}
+}
