@@ -107,6 +107,52 @@ func TestHandlerFunc(t *testing.T) {
 		}
 	})
 
+	t.Run("error case with request body drains body", func(t *testing.T) {
+		var panicked bool
+		var panicMsg string
+
+		recoveryMW := func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer func() {
+					if rec := recover(); rec != nil {
+						panicked = true
+						panicMsg = fmt.Sprintf("%v", rec)
+						w.WriteHeader(http.StatusInternalServerError)
+					}
+				}()
+				next.ServeHTTP(w, r)
+			})
+		}
+
+		router := NewRouter(recoveryMW)
+		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+			return fmt.Errorf("test error with body")
+		})
+		router.POST("/error", handler)
+
+		// Send a request with a body to verify it's drained properly
+		body := strings.NewReader("request body content")
+		req := httptest.NewRequest("POST", "/error", body)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if !panicked {
+			t.Error("Expected handler error to cause panic")
+		}
+		if !strings.Contains(panicMsg, "test error with body") {
+			t.Errorf("Expected panic message to contain 'test error with body', got '%s'", panicMsg)
+		}
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status 500, got %d", w.Code)
+		}
+
+		// Verify body was drained (can be read completely)
+		// After draining, the body should be at EOF
+		if body.Len() != 0 {
+			t.Errorf("Expected request body to be drained, but %d bytes remain", body.Len())
+		}
+	})
+
 	t.Run("with middleware", func(t *testing.T) {
 		var calls []string
 		mw := testMiddleware("error-handler-mw", &calls)

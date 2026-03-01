@@ -3,6 +3,7 @@ package zerohttp
 import (
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -22,6 +23,15 @@ type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
 // ServeHTTP implements http.Handler interface
 func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := h(w, r); err != nil {
+		// Drain the request body to prevent HTTP/2 panics.
+		// Go's HTTP/2 server requires that handlers consume the request body
+		// before returning. If the body is not consumed and the handler returns
+		// early or panics, the HTTP/2 server will panic with
+		// "http2: request body closed due to handler exiting".
+		if r.Body != nil {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}
 		panic(fmt.Errorf("handler error: %w", err))
 	}
 }
