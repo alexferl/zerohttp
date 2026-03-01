@@ -1,3 +1,15 @@
+//go:build ignore
+
+// This example demonstrates how to use AutoTLS with Let's Encrypt.
+//
+// To run:
+//  1. Install golang.org/x/crypto: go get golang.org/x/crypto
+//  2. Update the hosts slice with your actual domain(s)
+//  3. Ensure ports 80 and 443 are accessible from the internet
+//  4. Run: go run main.go
+//
+// The first time you run, it will obtain certificates from Let's Encrypt.
+// Subsequent runs will use cached certificates.
 package main
 
 import (
@@ -6,6 +18,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 var hosts = []string{
@@ -15,10 +28,12 @@ var hosts = []string{
 
 func main() {
 	// Create autocert manager for automatic Let's Encrypt certificates
-	manager := zh.NewAutocertManager(
-		"/var/cache/certs", // Certificate cache directory
-		hosts...,
-	)
+	// This requires the golang.org/x/crypto/acme/autocert package
+	manager := &autocert.Manager{
+		Cache:      autocert.DirCache("/var/cache/certs"), // Certificate cache directory
+		Prompt:     autocert.AcceptTOS,                    // Accept Let's Encrypt TOS
+		HostPolicy: autocert.HostWhitelist(hosts...),      // Allowed hosts
+	}
 
 	app := zh.New(
 		config.WithAddr(":80"),              // HTTP port for ACME challenges
@@ -35,5 +50,5 @@ func main() {
 	}))
 
 	// StartAutoTLS handles both HTTP (for ACME challenges + redirects) and HTTPS
-	log.Fatal(app.StartAutoTLS(hosts...))
+	log.Fatal(app.StartAutoTLS())
 }

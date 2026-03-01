@@ -1,4 +1,4 @@
-.PHONY: dev audit cover cover-html fmt lint pre-commit run test tidy update-deps
+.PHONY: dev audit cover cover-html fmt lint pre-commit test tidy update-deps
 
 .DEFAULT: help
 help:
@@ -16,8 +16,6 @@ help:
 	@echo "	run lint checks"
 	@echo "make pre-commit"
 	@echo "	run pre-commit hooks"
-	@echo "make run"
-	@echo "	run application"
 	@echo "make test"
 	@echo "	execute all tests"
 	@echo "make tidy"
@@ -28,7 +26,7 @@ help:
 GOTESTSUM := go run gotest.tools/gotestsum@latest -f testname -- ./... -race -count=1
 TESTFLAGS := -shuffle=on
 COVERFLAGS := -covermode=atomic
-GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
+GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
 
 check-pre-commit:
 ifeq (, $(shell which pre-commit))
@@ -57,9 +55,6 @@ lint:
 
 pre-commit: check-pre-commit
 	pre-commit run --all-files
-
-run:
-	go run ./_examples/simple
 
 test:
 	$(GOTESTSUM) $(TESTFLAGS)

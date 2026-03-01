@@ -23,7 +23,8 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Disabling Default Security](#disabling-default-security)
 - [Available Middlewares](#available-middlewares)
 - [Extensible Interfaces](#extensible-interfaces)
-- [Auto-TLS with Let's Encrypt](#auto-tls-with-lets-encrypt)
+- [Auto-TLS](#auto-tls)
+- [HTTP/3 Support](#http3-support)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
 - [Configuration Reference](#configuration-reference)
@@ -35,7 +36,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 ## Features
 
 - **Lightweight**: Built on Go's standard `net/http` with minimal overhead
-- **Zero Dependencies**: No external dependencies except `golang.org/x/crypto` for AutoTLS
+- **Zero Dependencies**: No external dependencies
 - **Secure by Default**: Automatically applies essential security middlewares out of the box
 - **Response Rendering**: Built-in support for JSON, HTML, text, and file responses
 - **Request Binding**: JSON request body parsing
@@ -43,7 +44,8 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Flexible Routing**: Method-based routing with route groups and parameter support
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
-- **Auto-TLS**: Built-in Let's Encrypt support with automatic certificate management
+- **Auto-TLS**: Pluggable automatic certificate management (e.g., Let's Encrypt, custom ACME providers)
+- **HTTP/3 Support**: Pluggable HTTP/3 support for modern web performance
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
 - **Structured Logging**: Integrated structured logging with customizable fields
@@ -52,8 +54,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 
 ## Requirements
 
-- **Go 1.23 or later**
-- **No external dependencies** (except `golang.org/x/crypto` for AutoTLS features)
+- **Go 1.25 or later**
 
 
 ## Secure by Default
@@ -471,14 +472,102 @@ zh.Bind = &MyBinder{}
 ```
 
 
-## Auto-TLS with Let's Encrypt
+## Auto-TLS
+
+AutoTLS provides automatic certificate management via a pluggable interface. You can use
+[golang.org/x/crypto/acme/autocert](https://pkg.go.dev/golang.org/x/crypto/acme/autocert)
+for Let's Encrypt, or any other provider that implements the `AutocertManager` interface:
 
 ```go
-app := zh.New(
-    config.WithAutocertManager(zh.NewAutocertManager("/tmp/certs", "example.com")),
+import (
+    "golang.org/x/crypto/acme/autocert"
 )
 
-app.StartAutoTLS("example.com", "www.example.com")
+// Create autocert manager (implements config.AutocertManager interface)
+manager := &autocert.Manager{
+    Cache:      autocert.DirCache("/tmp/certs"),
+    Prompt:     autocert.AcceptTOS,
+    HostPolicy: autocert.HostWhitelist("example.com", "www.example.com"),
+}
+
+app := zh.New(
+    config.WithAutocertManager(manager),
+)
+
+// StartAutoTLS starts HTTP (for ACME challenges) and HTTPS servers
+app.StartAutoTLS()
+```
+
+
+## HTTP/3 Support
+
+zerohttp supports HTTP/3 through a pluggable interface. Users can inject their own HTTP/3
+implementation (e.g., [quic-go/http3](https://github.com/quic-go/quic-go)).
+
+### Basic HTTP/3 with TLS certificates
+
+```go
+import "github.com/quic-go/quic-go/http3"
+
+// Create your zerohttp server
+app := zh.New()
+
+// Add routes
+app.GET("/", handler)
+
+// Create HTTP/3 server using quic-go
+h3Server := &http3.Server{
+    Addr:    ":443",
+    Handler: app,
+}
+
+// Inject the HTTP/3 server
+app.SetHTTP3Server(h3Server)
+
+// Start HTTP/3 alongside HTTPS
+go app.StartHTTP3("cert.pem", "key.pem")
+app.StartTLS("cert.pem", "key.pem")
+```
+
+### HTTP/3 with AutoTLS
+
+For automatic Let's Encrypt certificates with HTTP/3, implement the extended interface:
+
+```go
+// HTTP3AutocertServer wraps quic-go to support AutoTLS
+type HTTP3AutocertServer struct {
+    *http3.Server
+}
+
+func (s *HTTP3AutocertServer) ListenAndServeTLS(certFile, keyFile string) error {
+    return s.Server.ListenAndServeTLS(certFile, keyFile)
+}
+
+func (s *HTTP3AutocertServer) Shutdown(ctx context.Context) error {
+    return s.Server.Shutdown(ctx)
+}
+
+func (s *HTTP3AutocertServer) Close() error {
+    return s.Server.Close()
+}
+
+func (s *HTTP3AutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+    s.Server.TLSConfig = &tls.Config{GetCertificate: manager.GetCertificate}
+    return s.Server.ListenAndServeTLS("", "")
+}
+
+// Usage
+manager := &autocert.Manager{
+    Cache:      autocert.DirCache("/var/cache/certs"),
+    Prompt:     autocert.AcceptTOS,
+    HostPolicy: autocert.HostWhitelist("example.com"),
+}
+
+app := zh.New(config.WithAutocertManager(manager))
+app.SetHTTP3Server(&HTTP3AutocertServer{Server: h3Server})
+
+// Starts HTTP, HTTPS, and HTTP/3 with AutoTLS
+app.StartAutoTLS()
 ```
 
 

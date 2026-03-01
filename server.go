@@ -13,7 +13,6 @@ import (
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware"
-	"golang.org/x/crypto/acme/autocert"
 )
 
 // Server represents a zerohttp server instance that wraps Go's standard HTTP server
@@ -53,7 +52,13 @@ type Server struct {
 
 	// autocertManager handles automatic certificate provisioning and renewal
 	// using Let's Encrypt ACME protocol. If set, enables automatic TLS.
-	autocertManager *autocert.Manager
+	// Users must provide their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager).
+	autocertManager config.AutocertManager
+
+	// http3Server is an optional HTTP/3 server for handling HTTP/3 traffic over QUIC.
+	// Users can inject their own implementation (e.g., quic-go/http3) to enable HTTP/3.
+	// If nil, HTTP/3 server will not be started.
+	http3Server config.HTTP3Server
 
 	// logger is the structured logger used by the server and its middleware
 	// for recording HTTP requests, errors, and server lifecycle events.
@@ -128,6 +133,7 @@ func New(opts ...config.Option) *Server {
 		certFile:        cfg.CertFile,
 		keyFile:         cfg.KeyFile,
 		autocertManager: cfg.AutocertManager,
+		http3Server:     cfg.HTTP3Server,
 		logger:          logger,
 	}
 
@@ -326,26 +332,28 @@ func (s *Server) StartTLS(certFile, keyFile string) error {
 // It starts both HTTP (for ACME challenges) and HTTPS servers.
 // The HTTP server redirects to HTTPS and handles ACME challenges.
 //
-// Parameters:
-//   - hosts: Optional list of hostnames for certificate generation. If not provided,
-//     the autocert manager's existing host policy will be used.
+// Users must configure the AutocertManager with their desired host policy before calling
+// this method. For example, using golang.org/x/crypto/acme/autocert:
+//
+//	mgr := &autocert.Manager{
+//	    Cache:      autocert.DirCache("/var/cache/certs"),
+//	    Prompt:     autocert.AcceptTOS,
+//	    HostPolicy: autocert.HostWhitelist("example.com"),
+//	}
+//	srv := zerohttp.New(config.WithAutocertManager(mgr))
+//	srv.StartAutoTLS()
 //
 // The HTTP server handles:
 //   - ACME challenge requests from Let's Encrypt
 //   - Redirects all other HTTP traffic to HTTPS
 //
 // Returns an error if the autocert manager is not configured or if any server fails to start.
-func (s *Server) StartAutoTLS(hosts ...string) error {
+func (s *Server) StartAutoTLS() error {
 	if s.autocertManager == nil {
 		return fmt.Errorf("autocert manager not configured")
 	}
 
-	// Configure hosts if provided
-	if len(hosts) > 0 {
-		s.autocertManager.HostPolicy = autocert.HostWhitelist(hosts...)
-	}
-
-	s.logger.Info("Starting server with AutoTLS...", log.F("hosts", hosts))
+	s.logger.Info("Starting server with AutoTLS...")
 
 	errCh := make(chan error, 2)
 
@@ -379,6 +387,16 @@ func (s *Server) StartAutoTLS(hosts ...string) error {
 		}()
 	}
 
+	// Start HTTP/3 server with autocert if supported
+	if s.http3Server != nil {
+		if h3Autocert, ok := s.http3Server.(config.HTTP3ServerWithAutocert); ok {
+			go func() {
+				s.logger.Info("Starting HTTP/3 server with AutoTLS")
+				errCh <- h3Autocert.ListenAndServeTLSWithAutocert(s.autocertManager)
+			}()
+		}
+	}
+
 	return <-errCh
 }
 
@@ -403,6 +421,57 @@ func (s *Server) createHTTPSRedirectHandler() http.Handler {
 	})
 }
 
+// ListenAndServeHTTP3 starts the HTTP/3 server with the specified certificate files.
+// HTTP/3 requires TLS and uses the provided certificate and key files for encryption.
+// If the HTTP/3 server is not configured, this method logs a debug message and returns nil without error.
+//
+// Parameters:
+//   - certFile: Path to the TLS certificate file in PEM format
+//   - keyFile: Path to the TLS private key file in PEM format
+//
+// This method blocks until the server encounters an error or is shut down.
+// Returns any error encountered while starting or running the HTTP/3 server.
+func (s *Server) ListenAndServeHTTP3(certFile, keyFile string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.http3Server == nil {
+		s.logger.Debug("HTTP/3 server not configured, skipping")
+		return nil
+	}
+
+	s.logger.Info("Starting HTTP/3 server",
+		log.F("cert_file", certFile),
+		log.F("key_file", keyFile))
+
+	return s.http3Server.ListenAndServeTLS(certFile, keyFile)
+}
+
+// StartHTTP3 starts only the HTTP/3 server with the specified certificate files.
+// This is a convenience method for starting just HTTP/3 without HTTP or HTTPS.
+// If the HTTP/3 server is not configured, this method returns nil without error.
+//
+// Parameters:
+//   - certFile: Path to the TLS certificate file in PEM format
+//   - keyFile: Path to the TLS private key file in PEM format
+//
+// This is equivalent to calling ListenAndServeHTTP3 directly.
+// Returns any error encountered while starting or running the HTTP/3 server.
+func (s *Server) StartHTTP3(certFile, keyFile string) error {
+	return s.ListenAndServeHTTP3(certFile, keyFile)
+}
+
+// SetHTTP3Server sets the HTTP/3 server instance. This can be used to inject
+// an HTTP/3 implementation (e.g., quic-go/http3) after creating the server.
+//
+// Parameters:
+//   - server: An HTTP/3 server instance implementing the config.HTTP3Server interface
+func (s *Server) SetHTTP3Server(server config.HTTP3Server) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.http3Server = server
+}
+
 // Shutdown gracefully shuts down both HTTP and HTTPS servers without interrupting
 // any active connections. It waits for active connections to finish or for the
 // provided context to be cancelled.
@@ -418,7 +487,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 
 	if s.server != nil && s.listener != nil {
 		wg.Add(1)
@@ -444,6 +513,20 @@ func (s *Server) Shutdown(ctx context.Context) error {
 				errCh <- err
 			} else {
 				s.logger.Info("HTTPS server shutdown complete")
+			}
+		}()
+	}
+
+	if s.http3Server != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.logger.Info("Shutting down HTTP/3 server")
+			if err := s.http3Server.Shutdown(ctx); err != nil {
+				s.logger.Error("Error shutting down HTTP/3 server", log.F("error", err))
+				errCh <- err
+			} else {
+				s.logger.Info("HTTP/3 server shutdown complete")
 			}
 		}()
 	}
@@ -486,6 +569,14 @@ func (s *Server) Close() error {
 		s.logger.Debug("Closing HTTPS listener")
 		if err := s.tlsListener.Close(); err != nil {
 			s.logger.Error("Error closing HTTPS listener", log.F("error", err))
+			lastErr = err
+		}
+	}
+
+	if s.http3Server != nil {
+		s.logger.Debug("Closing HTTP/3 server")
+		if err := s.http3Server.Close(); err != nil {
+			s.logger.Error("Error closing HTTP/3 server", log.F("error", err))
 			lastErr = err
 		}
 	}
@@ -549,33 +640,6 @@ func (s *Server) ListenerTLSAddr() string {
 // structured logging capabilities with fields and different log levels.
 func (s *Server) Logger() log.Logger {
 	return s.logger
-}
-
-// NewAutocertManager creates a new autocert manager with the given cache directory and hosts.
-// The manager handles automatic certificate provisioning and renewal using Let's Encrypt's ACME protocol.
-//
-// Parameters:
-//   - cacheDir: Directory path where certificates and ACME account information will be cached.
-//     This directory should be persistent across server restarts.
-//   - hosts: List of hostnames for which certificates should be automatically obtained.
-//     Only requests for these hosts will be served with auto-generated certificates.
-//
-// The returned manager is configured to:
-//   - Accept Let's Encrypt Terms of Service automatically
-//   - Use directory-based caching for certificates
-//   - Restrict certificate generation to the specified hosts
-//
-// Example usage:
-//
-//	manager := NewAutocertManager("/var/cache/certs", "example.com", "www.example.com")
-//	server := zerohttp.New(config.WithAutocertManager(manager))
-func NewAutocertManager(cacheDir string, hosts ...string) *autocert.Manager {
-	manager := &autocert.Manager{
-		Cache:      autocert.DirCache(cacheDir),
-		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(hosts...),
-	}
-	return manager
 }
 
 func fmtHTTPAddr(addr string) string {

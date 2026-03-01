@@ -2,10 +2,12 @@ package zerohttp
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -170,7 +172,7 @@ func TestServer_StartAutoTLS_NoManager(t *testing.T) {
 	server := New()
 	server.autocertManager = nil
 
-	err := server.StartAutoTLS("example.com")
+	err := server.StartAutoTLS()
 	if err == nil {
 		t.Fatal("Expected error when autocert manager is nil")
 	}
@@ -219,29 +221,6 @@ func TestServer_Shutdown_NoServers(t *testing.T) {
 	}
 }
 
-func TestNewAutocertManager(t *testing.T) {
-	cacheDir := "/tmp/autocert"
-	hosts := []string{"example.com", "www.example.com"}
-
-	manager := NewAutocertManager(cacheDir, hosts...)
-
-	if manager == nil {
-		t.Fatal("Expected autocert manager to be created")
-	}
-
-	if manager.Cache == nil {
-		t.Error("Expected cache to be set")
-	}
-
-	if manager.Prompt == nil {
-		t.Error("Expected prompt to be set")
-	}
-
-	if manager.HostPolicy == nil {
-		t.Error("Expected host policy to be set")
-	}
-}
-
 func TestServer_ConcurrentAccess(t *testing.T) {
 	server := New()
 
@@ -258,5 +237,336 @@ func TestServer_ConcurrentAccess(t *testing.T) {
 	// Wait for all goroutines
 	for range 10 {
 		<-done
+	}
+}
+
+// mockAutocertManager is a mock implementation for testing
+type mockAutocertManager struct {
+	getCertificateCalled bool
+	httpHandlerCalled    bool
+}
+
+func (m *mockAutocertManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	m.getCertificateCalled = true
+	return nil, nil
+}
+
+func (m *mockAutocertManager) HTTPHandler(fallback http.Handler) http.Handler {
+	m.httpHandlerCalled = true
+	return fallback
+}
+
+func TestServer_StartAutoTLS_WithManager(t *testing.T) {
+	mgr := &mockAutocertManager{}
+	server := New(config.WithAutocertManager(mgr))
+
+	// Verify manager was set (compare using concrete type assertion)
+	if server.autocertManager == nil {
+		t.Error("expected autocert manager to be set on server")
+	}
+}
+
+// mockHTTP3Server is a mock implementation of HTTP3Server for testing
+type mockHTTP3Server struct {
+	mu                      sync.Mutex
+	listenAndServeTLSCalled bool
+	shutdownCalled          bool
+	closeCalled             bool
+	certFile                string
+	keyFile                 string
+}
+
+func (m *mockHTTP3Server) ListenAndServeTLS(certFile, keyFile string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.listenAndServeTLSCalled = true
+	m.certFile = certFile
+	m.keyFile = keyFile
+	return nil
+}
+
+func (m *mockHTTP3Server) Shutdown(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.shutdownCalled = true
+	return nil
+}
+
+func (m *mockHTTP3Server) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closeCalled = true
+	return nil
+}
+
+func (m *mockHTTP3Server) wasListenAndServeTLSCalled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listenAndServeTLSCalled
+}
+
+func (m *mockHTTP3Server) getCertFile() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.certFile
+}
+
+func (m *mockHTTP3Server) getKeyFile() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.keyFile
+}
+
+func (m *mockHTTP3Server) wasShutdownCalled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.shutdownCalled
+}
+
+func (m *mockHTTP3Server) wasCloseCalled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.closeCalled
+}
+
+func TestServer_SetHTTP3Server(t *testing.T) {
+	server := New()
+	h3Server := &mockHTTP3Server{}
+
+	server.SetHTTP3Server(h3Server)
+
+	if server.http3Server != h3Server {
+		t.Error("expected HTTP/3 server to be set")
+	}
+}
+
+func TestServer_ListenAndServeHTTP3_NoServer(t *testing.T) {
+	mockLogger := &mockServerLogger{}
+	server := New(config.WithLogger(mockLogger))
+	// http3Server is nil by default
+
+	err := server.ListenAndServeHTTP3("cert.pem", "key.pem")
+	if err != nil {
+		t.Errorf("expected no error when HTTP/3 server is nil, got %v", err)
+	}
+
+	// Should log debug message about skipping
+	found := false
+	for _, entry := range mockLogger.logs {
+		if entry.level == "debug" && strings.Contains(entry.message, "HTTP/3 server not configured") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected debug log about skipping HTTP/3 server")
+	}
+}
+
+func TestServer_ListenAndServeHTTP3_WithServer(t *testing.T) {
+	server := New()
+	h3Server := &mockHTTP3Server{}
+	server.SetHTTP3Server(h3Server)
+
+	// Run in goroutine since it would block
+	go func() {
+		err := server.ListenAndServeHTTP3("cert.pem", "key.pem")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}()
+
+	// Give it a moment to be called
+	time.Sleep(10 * time.Millisecond)
+
+	if !h3Server.wasListenAndServeTLSCalled() {
+		t.Error("expected ListenAndServeTLS to be called on HTTP/3 server")
+	}
+	if h3Server.getCertFile() != "cert.pem" {
+		t.Errorf("expected certFile = 'cert.pem', got '%s'", h3Server.getCertFile())
+	}
+	if h3Server.getKeyFile() != "key.pem" {
+		t.Errorf("expected keyFile = 'key.pem', got '%s'", h3Server.getKeyFile())
+	}
+}
+
+func TestServer_StartHTTP3(t *testing.T) {
+	server := New()
+	h3Server := &mockHTTP3Server{}
+	server.SetHTTP3Server(h3Server)
+
+	// Run in goroutine since it would block
+	go func() {
+		err := server.StartHTTP3("cert.pem", "key.pem")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+
+	if !h3Server.wasListenAndServeTLSCalled() {
+		t.Error("expected StartHTTP3 to call ListenAndServeTLS")
+	}
+}
+
+func TestServer_Shutdown_WithHTTP3(t *testing.T) {
+	server := New()
+	h3Server := &mockHTTP3Server{}
+	server.SetHTTP3Server(h3Server)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := server.Shutdown(ctx)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	if !h3Server.wasShutdownCalled() {
+		t.Error("expected Shutdown to be called on HTTP/3 server")
+	}
+}
+
+func TestServer_Close_WithHTTP3(t *testing.T) {
+	server := New()
+	h3Server := &mockHTTP3Server{}
+	server.SetHTTP3Server(h3Server)
+
+	err := server.Close()
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	if !h3Server.wasCloseCalled() {
+		t.Error("expected Close to be called on HTTP/3 server")
+	}
+}
+
+// mockHTTP3ServerWithAutocert implements both HTTP3Server and HTTP3ServerWithAutocert
+type mockHTTP3ServerWithAutocert struct {
+	mockHTTP3Server
+	mu                                  sync.Mutex
+	listenAndServeTLSWithAutocertCalled bool
+	autocertManager                     config.AutocertManager
+}
+
+func (m *mockHTTP3ServerWithAutocert) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.listenAndServeTLSWithAutocertCalled = true
+	m.autocertManager = manager
+	return nil
+}
+
+func (m *mockHTTP3ServerWithAutocert) wasListenAndServeTLSWithAutocertCalled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listenAndServeTLSWithAutocertCalled
+}
+
+func (m *mockHTTP3ServerWithAutocert) getAutocertManager() config.AutocertManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.autocertManager
+}
+
+func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
+	mgr := &mockAutocertManager{}
+	h3Server := &mockHTTP3ServerWithAutocert{}
+
+	server := New(config.WithAutocertManager(mgr))
+	server.SetHTTP3Server(h3Server)
+
+	// Run StartAutoTLS in a goroutine since it blocks
+	go func() {
+		// Suppress the error since we're just testing the setup
+		_ = server.StartAutoTLS()
+	}()
+
+	// Give it a moment to start
+	time.Sleep(50 * time.Millisecond)
+
+	// The HTTP/3 server with autocert support should have been detected and started
+	if !h3Server.wasListenAndServeTLSWithAutocertCalled() {
+		t.Error("expected ListenAndServeTLSWithAutocert to be called on HTTP/3 server with autocert support")
+	}
+
+	if h3Server.getAutocertManager() != mgr {
+		t.Error("expected autocert manager to be passed to HTTP/3 server")
+	}
+}
+
+func TestWithHTTP3Server(t *testing.T) {
+	h3Server := &mockHTTP3Server{}
+	cfg := config.DefaultConfig
+	config.WithHTTP3Server(h3Server)(&cfg)
+	if cfg.HTTP3Server != h3Server {
+		t.Error("expected HTTP/3 server to be set in config")
+	}
+}
+
+func TestServer_ListenAndServeTLS(t *testing.T) {
+	server := New()
+	// Set up a TLS server but no listener - it should try to create one
+	// but fail since we don't have real certs
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Run in goroutine since it blocks
+	go func() {
+		err := server.ListenAndServeTLS("cert.pem", "key.pem")
+		// Expected to fail due to missing cert files
+		if err == nil {
+			t.Error("expected error due to missing cert files")
+		}
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestServer_StartTLS(t *testing.T) {
+	server := New()
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Run in goroutine since it blocks
+	go func() {
+		err := server.StartTLS("cert.pem", "key.pem")
+		// Expected to fail due to missing cert files
+		if err == nil {
+			t.Error("expected error due to missing cert files")
+		}
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestServer_Start(t *testing.T) {
+	server := New()
+	server.server = nil    // Disable HTTP
+	server.tlsServer = nil // Disable HTTPS
+
+	// With no servers, Start should block indefinitely waiting for an error
+	// Just verify it doesn't panic immediately
+	done := make(chan bool, 1)
+	go func() {
+		_ = server.Start()
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Expected - returns when no servers configured
+	case <-time.After(100 * time.Millisecond):
+		// Also fine - still waiting
+	}
+}
+
+func TestServer_Logger(t *testing.T) {
+	mockLogger := &mockServerLogger{}
+	server := New(config.WithLogger(mockLogger))
+
+	logger := server.Logger()
+	if logger == nil {
+		t.Error("expected logger to not be nil")
 	}
 }
