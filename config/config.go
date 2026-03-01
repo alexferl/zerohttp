@@ -297,9 +297,10 @@ func WithAutocertManager(mgr AutocertManager) Option {
 //
 //	import "github.com/quic-go/quic-go/http3"
 //
-//	h3Server := &http3.Server{Addr: ":443", Handler: router}
-//	srv := zerohttp.New(config.WithHTTP3Server(h3Server))
-//	srv.StartHTTP3("cert.pem", "key.pem")
+//	app := zerohttp.New()
+//	h3Server := &http3.Server{Addr: ":443", Handler: app}
+//	app.SetHTTP3Server(h3Server)
+//	app.StartHTTP3("cert.pem", "key.pem")
 type HTTP3Server interface {
 	// ListenAndServeTLS starts the HTTP/3 server with the provided certificate and key.
 	// Certificate files are in PEM format.
@@ -326,12 +327,4 @@ type HTTP3ServerWithAutocert interface {
 	// certificate management using the provided autocert manager.
 	// The manager's GetCertificate function is used to obtain TLS certificates.
 	ListenAndServeTLSWithAutocert(manager AutocertManager) error
-}
-
-// WithHTTP3Server sets a custom HTTP/3 server instance.
-// The server must implement the HTTP3Server interface.
-func WithHTTP3Server(server HTTP3Server) Option {
-	return func(c *Config) {
-		c.HTTP3Server = server
-	}
 }

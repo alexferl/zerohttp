@@ -552,11 +552,15 @@ func (s *HTTP3AutocertServer) Close() error {
 }
 
 func (s *HTTP3AutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
-    s.Server.TLSConfig = &tls.Config{GetCertificate: manager.GetCertificate}
-    return s.Server.ListenAndServeTLS("", "")
+    if s.Server.TLSConfig == nil {
+        s.Server.TLSConfig = &tls.Config{}
+    }
+    s.Server.TLSConfig.GetCertificate = manager.GetCertificate
+    // Required for HTTP/3 protocol negotiation
+    s.Server.TLSConfig.NextProtos = []string{"h3"}
+    return s.Server.ListenAndServe()
 }
 
-// Usage
 manager := &autocert.Manager{
     Cache:      autocert.DirCache("/var/cache/certs"),
     Prompt:     autocert.AcceptTOS,
@@ -564,6 +568,15 @@ manager := &autocert.Manager{
 }
 
 app := zh.New(config.WithAutocertManager(manager))
+
+// Add Alt-Svc header to advertise HTTP/3 support
+app.Use(func(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Add("Alt-Svc", `h3=":443"; ma=86400`)
+        next.ServeHTTP(w, r)
+    })
+})
+
 app.SetHTTP3Server(&HTTP3AutocertServer{Server: h3Server})
 
 // Starts HTTP, HTTPS, and HTTP/3 with AutoTLS

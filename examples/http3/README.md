@@ -55,37 +55,51 @@ go run github.com/quic-go/quic-go/example/client@latest https://localhost:8443
 For automatic HTTPS certificates, implement the `HTTP3ServerWithAutocert` interface:
 
 ```go
-// Wrap quic-go's server to add autocert support
-type HTTP3AutocertServer struct {
-    *http3.Server
+// http3AutocertServer wraps quic-go's http3.Server to implement
+// config.HTTP3ServerWithAutocert interface
+type http3AutocertServer struct {
+    server *http3.Server
 }
 
-func (s *HTTP3AutocertServer) ListenAndServeTLS(certFile, keyFile string) error {
-    return s.Server.ListenAndServeTLS(certFile, keyFile)
+func (h *http3AutocertServer) ListenAndServeTLS(certFile, keyFile string) error {
+    return h.server.ListenAndServeTLS(certFile, keyFile)
 }
 
-func (s *HTTP3AutocertServer) ListenAndServeTLSWithAutocert(manager *autocert.Manager) error {
-    if s.Server.TLSConfig == nil {
-        s.Server.TLSConfig = &tls.Config{}
+func (h *http3AutocertServer) Shutdown(ctx context.Context) error {
+    return h.server.Shutdown(ctx)
+}
+
+func (h *http3AutocertServer) Close() error {
+    return nil
+}
+
+func (h *http3AutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+    tlsConfig := &tls.Config{
+        GetCertificate: manager.GetCertificate,
+        NextProtos:     []string{"h3"},
     }
-    s.Server.TLSConfig.GetCertificate = manager.GetCertificate
-    return s.Server.ListenAndServeTLS("", "")
+    h.server.TLSConfig = tlsConfig
+    return h.server.ListenAndServe()
 }
 
 // Usage with AutoTLS
-manager := autocert.NewManager(autocert.DirCache("/var/cache/certs"), autocert.HostWhitelist("example.com"))
-
-h3Server := &HTTP3AutocertServer{
-    Server: &http3.Server{Addr: ":443", Handler: router},
+manager := &autocert.Manager{
+    Cache:      autocert.DirCache("/var/cache/certs"),
+    Prompt:     autocert.AcceptTOS,
+    HostPolicy: autocert.HostWhitelist("example.com"),
 }
 
-srv := zerohttp.New(
+app := zerohttp.New(
     config.WithAutocertManager(manager),
-    config.WithHTTP3Server(h3Server),
 )
 
+h3Server := &http3AutocertServer{
+    server: &http3.Server{Addr: ":443", Handler: app},
+}
+app.SetHTTP3Server(h3Server)
+
 // Starts HTTP, HTTPS, and HTTP/3 all with AutoTLS
-srv.StartAutoTLS("example.com")
+log.Fatal(app.StartAutoTLS())
 ```
 
 ## Key Points

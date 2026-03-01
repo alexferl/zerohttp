@@ -497,15 +497,6 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 	}
 }
 
-func TestWithHTTP3Server(t *testing.T) {
-	h3Server := &mockHTTP3Server{}
-	cfg := config.DefaultConfig
-	config.WithHTTP3Server(h3Server)(&cfg)
-	if cfg.HTTP3Server != h3Server {
-		t.Error("expected HTTP/3 server to be set in config")
-	}
-}
-
 func TestServer_ListenAndServeTLS(t *testing.T) {
 	server := New()
 	// Set up a TLS server but no listener - it should try to create one
