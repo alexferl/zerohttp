@@ -1,14 +1,28 @@
 package config
 
 import (
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/alexferl/zerohttp/log"
-	"golang.org/x/crypto/acme/autocert"
 )
+
+// mockAutocertManager is a mock implementation of AutocertManager for testing
+type mockAutocertManager struct {
+	cacheDir string
+	hosts    []string
+}
+
+func (m *mockAutocertManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return nil, nil
+}
+
+func (m *mockAutocertManager) HTTPHandler(fallback http.Handler) http.Handler {
+	return fallback
+}
 
 func TestDefaultConfigValues(t *testing.T) {
 	cfg := DefaultConfig
@@ -208,24 +222,22 @@ func TestConfigOptions(t *testing.T) {
 	})
 
 	t.Run("autocert manager", func(t *testing.T) {
-		manager := &autocert.Manager{
-			Cache:      autocert.DirCache("/tmp/test-certs"),
-			Prompt:     autocert.AcceptTOS,
-			HostPolicy: autocert.HostWhitelist("example.com"),
+		manager := &mockAutocertManager{
+			cacheDir: "/tmp/test-certs",
+			hosts:    []string{"example.com"},
 		}
 		cfg := DefaultConfig
 		WithAutocertManager(manager)(&cfg)
 		if cfg.AutocertManager != manager {
 			t.Error("expected custom AutocertManager to be set")
 		}
-		if cfg.AutocertManager.Cache == nil {
-			t.Error("expected autocert manager to have cache configured")
+		// Verify the mock manager was set correctly
+		mock := cfg.AutocertManager.(*mockAutocertManager)
+		if mock.cacheDir != "/tmp/test-certs" {
+			t.Errorf("expected cacheDir = /tmp/test-certs, got %s", mock.cacheDir)
 		}
-		if cfg.AutocertManager.Prompt == nil {
-			t.Error("expected autocert manager to have prompt configured")
-		}
-		if cfg.AutocertManager.HostPolicy == nil {
-			t.Error("expected autocert manager to have host policy configured")
+		if len(mock.hosts) != 1 || mock.hosts[0] != "example.com" {
+			t.Errorf("expected hosts = [example.com], got %v", mock.hosts)
 		}
 	})
 

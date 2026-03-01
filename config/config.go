@@ -1,11 +1,12 @@
 package config
 
 import (
+	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 
 	"github.com/alexferl/zerohttp/log"
-	"golang.org/x/crypto/acme/autocert"
 )
 
 // Config holds server and middleware configuration options for zerohttp.
@@ -84,9 +85,18 @@ type Config struct {
 	// Default: "" (no key loaded unless specified)
 	KeyFile string
 
-	// AutocertManager is an optional autocert.Manager for Let's Encrypt certificate management (AutoTLS).
+	// AutocertManager is an optional autocert manager for Let's Encrypt certificate management (AutoTLS).
+	// Users can inject their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager)
+	// by implementing the AutocertManager interface. This keeps zerohttp dependency-free while
+	// allowing AutoTLS support for those who need it.
 	// Default: nil (AutoTLS not enabled unless set)
-	AutocertManager *autocert.Manager
+	AutocertManager AutocertManager
+
+	// HTTP3Server is an optional HTTP/3 server instance for handling HTTP/3 traffic over QUIC.
+	// This allows users to inject their own HTTP/3 implementation (e.g., quic-go/http3)
+	// without adding dependencies to zerohttp. The server must implement the HTTP3Server interface.
+	// Default: nil (HTTP/3 not enabled unless set)
+	HTTP3Server HTTP3Server
 }
 
 // DefaultConfig contains all default values used by Config.
@@ -249,9 +259,81 @@ func WithKeyFile(path string) Option {
 	}
 }
 
-// WithAutocertManager sets an autocert.Manager for automatic TLS certificate management.
-func WithAutocertManager(mgr *autocert.Manager) Option {
+// AutocertManager is the interface for automatic TLS certificate management.
+// Users can implement this interface or use golang.org/x/crypto/acme/autocert.Manager
+// which satisfies this interface.
+//
+// Example with autocert:
+//
+//	import "golang.org/x/crypto/acme/autocert"
+//
+//	mgr := &autocert.Manager{
+//	    Cache:      autocert.DirCache("/var/cache/certs"),
+//	    Prompt:     autocert.AcceptTOS,
+//	    HostPolicy: autocert.HostWhitelist("example.com"),
+//	}
+//	srv := zerohttp.New(config.WithAutocertManager(mgr))
+type AutocertManager interface {
+	// GetCertificate returns a TLS certificate for the given client hello.
+	// This is called by the TLS server during the handshake.
+	GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error)
+
+	// HTTPHandler wraps the given handler to handle ACME HTTP-01 challenges.
+	// Non-challenge requests are passed through to the wrapped handler.
+	HTTPHandler(fallback http.Handler) http.Handler
+}
+
+// WithAutocertManager sets an autocert manager for automatic TLS certificate management.
+// The manager must implement the AutocertManager interface.
+func WithAutocertManager(mgr AutocertManager) Option {
 	return func(c *Config) {
 		c.AutocertManager = mgr
+	}
+}
+
+// HTTP3Server is the interface that HTTP/3 servers must implement to be used with zerohttp.
+// Users can inject their own HTTP/3 implementation (e.g., github.com/quic-go/quic-go/http3)
+// without adding dependencies to zerohttp.
+//
+// Example usage with quic-go:
+//
+//	import "github.com/quic-go/quic-go/http3"
+//
+//	h3Server := &http3.Server{Addr: ":443", Handler: router}
+//	srv := zerohttp.New(config.WithHTTP3Server(h3Server))
+//	srv.StartHTTP3("cert.pem", "key.pem")
+type HTTP3Server interface {
+	// ListenAndServeTLS starts the HTTP/3 server with the provided certificate and key.
+	// Certificate files are in PEM format.
+	ListenAndServeTLS(certFile, keyFile string) error
+
+	// Shutdown gracefully shuts down the HTTP/3 server.
+	Shutdown(ctx context.Context) error
+
+	// Close immediately closes the HTTP/3 server.
+	Close() error
+}
+
+// HTTP3ServerWithAutocert is an optional interface for HTTP/3 servers that support
+// automatic certificate management via autocert.Manager. If an HTTP/3 server
+// implements this interface, it will be used by StartAutoTLS to configure
+// HTTP/3 with Let's Encrypt certificates.
+//
+// quic-go's http3.Server implements this interface when configured with a TLSConfig
+// containing the autocert GetCertificate function.
+type HTTP3ServerWithAutocert interface {
+	HTTP3Server
+
+	// ListenAndServeTLSWithAutocert starts the HTTP/3 server with automatic
+	// certificate management using the provided autocert manager.
+	// The manager's GetCertificate function is used to obtain TLS certificates.
+	ListenAndServeTLSWithAutocert(manager AutocertManager) error
+}
+
+// WithHTTP3Server sets a custom HTTP/3 server instance.
+// The server must implement the HTTP3Server interface.
+func WithHTTP3Server(server HTTP3Server) Option {
+	return func(c *Config) {
+		c.HTTP3Server = server
 	}
 }
