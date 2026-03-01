@@ -3,7 +3,6 @@ package zerohttp
 import (
 	"embed"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -22,18 +21,31 @@ type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
 
 // ServeHTTP implements http.Handler interface
 func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// For HEAD requests, wrap the response writer to discard body writes.
+	// This prevents HTTP/2 "request body closed" errors when handlers
+	// (like templ) try to write during HEAD requests.
+	if r.Method == http.MethodHead {
+		w = &headResponseWriter{ResponseWriter: w}
+	}
+
 	if err := h(w, r); err != nil {
-		// Drain the request body to prevent HTTP/2 panics.
-		// Go's HTTP/2 server requires that handlers consume the request body
-		// before returning. If the body is not consumed and the handler returns
-		// early or panics, the HTTP/2 server will panic with
-		// "http2: request body closed due to handler exiting".
-		if r.Body != nil {
-			_, _ = io.Copy(io.Discard, r.Body)
-			_ = r.Body.Close()
-		}
 		panic(fmt.Errorf("handler error: %w", err))
 	}
+}
+
+// headResponseWriter wraps a ResponseWriter and discards body writes for HEAD requests
+type headResponseWriter struct {
+	http.ResponseWriter
+}
+
+func (h *headResponseWriter) Write(p []byte) (int, error) {
+	// Discard body writes for HEAD requests
+	return len(p), nil
+}
+
+// Unwrap allows middleware to access the underlying ResponseWriter
+func (h *headResponseWriter) Unwrap() http.ResponseWriter {
+	return h.ResponseWriter
 }
 
 // Router interface defines the contract for HTTP routing operations.
