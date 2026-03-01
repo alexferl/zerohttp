@@ -4,3 +4,8 @@ coverage:
   precision: 2
   ignore:
     - "examples"
+  status:
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
