@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -521,6 +522,41 @@ func TestServer_Close_WithHTTP3(t *testing.T) {
 	}
 }
 
+// mockHTTP3ServerWithError is a mock that can return an error
+type mockHTTP3ServerWithError struct {
+	mu        sync.Mutex
+	certFile  string
+	keyFile   string
+	shouldErr bool
+	errMsg    string
+}
+
+func (m *mockHTTP3ServerWithError) ListenAndServeTLS(certFile, keyFile string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.certFile = certFile
+	m.keyFile = keyFile
+	if m.shouldErr {
+		return fmt.Errorf("%s", m.errMsg)
+	}
+	// Block until context is done to simulate running server
+	select {}
+}
+
+func (m *mockHTTP3ServerWithError) Shutdown(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockHTTP3ServerWithError) Close() error {
+	return nil
+}
+
+func (m *mockHTTP3ServerWithError) getCertFile() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.certFile
+}
+
 // mockHTTP3ServerWithAutocert implements both HTTP3Server and HTTP3ServerWithAutocert
 type mockHTTP3ServerWithAutocert struct {
 	mockHTTP3Server
@@ -576,7 +612,7 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 }
 
 func TestServer_StartAutoTLS_WithHTTP3NoAutocert(t *testing.T) {
-	// Test HTTP/3 server that does NOT support autocert (lines 438-446, no autocert path)
+	// Test HTTP/3 server that does NOT support autocert
 	mgr := &mockAutocertManager{}
 	h3Server := &mockHTTP3Server{} // This doesn't implement HTTP3ServerWithAutocert
 
@@ -685,7 +721,7 @@ func TestServer_ListenAndServe_WithListener(t *testing.T) {
 }
 
 func TestServer_ListenAndServe_CreatesListener(t *testing.T) {
-	// Test the path where ListenAndServe creates its own listener (lines 191-198)
+	// Test the path where ListenAndServe creates its own listener
 	server := New()
 	server.server = &http.Server{Addr: "127.0.0.1:0"}
 	server.listener = nil // Force creation of new listener
@@ -720,7 +756,7 @@ func TestServer_ListenAndServe_CreatesListener(t *testing.T) {
 }
 
 func TestServer_ListenAndServeTLS_WithWebTransport(t *testing.T) {
-	// Test WebTransport startup in ListenAndServeTLS (lines 264-273)
+	// Test WebTransport startup in ListenAndServeTLS
 	server := New()
 	mockWT := &mockWebTransportServer{}
 	server.SetWebTransportServer(mockWT)
@@ -843,8 +879,56 @@ func TestServer_ListenAndServeTLS_NoTLSConfig(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
+func TestServer_ListenAndServeTLS_HTTP3Error(t *testing.T) {
+	// Test HTTP/3 error logging path
+	server := New()
+	mockH3 := &mockHTTP3ServerWithError{shouldErr: true, errMsg: "h3 error"}
+	server.SetHTTP3Server(mockH3)
+
+	certFile := "/tmp/test_cert_h3_err.pem"
+	keyFile := "/tmp/test_key_h3_err.pem"
+
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
+		t.Skipf("Cannot write cert file: %v", err)
+	}
+	defer func() { _ = os.Remove(certFile) }()
+
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
+		t.Skipf("Cannot write key file: %v", err)
+	}
+	defer func() { _ = os.Remove(keyFile) }()
+
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Start server - it should still work even if HTTP/3 errors
+	done := make(chan error, 1)
+	go func() {
+		done <- server.ListenAndServeTLS(certFile, keyFile)
+	}()
+
+	// Give HTTP/3 time to fail
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify HTTP/3 was started (even though it errors)
+	if mockH3.getCertFile() != certFile {
+		t.Errorf("expected cert file %q, got %q", certFile, mockH3.getCertFile())
+	}
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for ListenAndServeTLS to return")
+	}
+}
+
 func TestServer_Start_WithCertLoading(t *testing.T) {
-	// Test the cert loading path in Start() (lines 323-332)
+	// Test the cert loading path in Start()
 	server := New()
 	server.server = nil // Disable HTTP server
 
@@ -876,6 +960,53 @@ func TestServer_Start_WithCertLoading(t *testing.T) {
 		// Expected - returns due to error
 	case <-time.After(100 * time.Millisecond):
 		// Also acceptable
+	}
+}
+
+func TestServer_Start_HTTP3Error(t *testing.T) {
+	// Test HTTP/3 error logging path in Start()
+	server := New()
+	server.server = nil // Disable HTTP
+
+	mockH3 := &mockHTTP3ServerWithError{shouldErr: true, errMsg: "h3 start error"}
+	server.SetHTTP3Server(mockH3)
+
+	certFile := "/tmp/test_cert_h3_start.pem"
+	keyFile := "/tmp/test_key_h3_start.pem"
+
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
+		t.Skipf("Cannot write cert file: %v", err)
+	}
+	defer func() { _ = os.Remove(certFile) }()
+
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
+		t.Skipf("Cannot write key file: %v", err)
+	}
+	defer func() { _ = os.Remove(keyFile) }()
+
+	server.certFile = certFile
+	server.keyFile = keyFile
+
+	// Start should work even if HTTP/3 errors
+	done := make(chan bool, 1)
+	go func() {
+		_ = server.Start()
+		done <- true
+	}()
+
+	// Give HTTP/3 time to fail
+	time.Sleep(100 * time.Millisecond)
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for Start to return")
 	}
 }
 
