@@ -860,7 +860,7 @@ func TestServer_ListenAndServeTLS_WithHTTP3(t *testing.T) {
 }
 
 func TestServer_ListenAndServeTLS_NoTLSConfig(t *testing.T) {
-	// Test the path where TLSConfig is nil initially (line 238-241)
+	// Test the path where TLSConfig is nil initially
 	server := New()
 	server.tlsServer = &http.Server{
 		Addr:      "127.0.0.1:0",
