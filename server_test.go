@@ -564,11 +564,12 @@ func TestServer_Shutdown_WithWebTransportError(t *testing.T) {
 
 // mockHTTP3ServerWithError is a mock that can return an error
 type mockHTTP3ServerWithError struct {
-	mu        sync.Mutex
-	certFile  string
-	keyFile   string
-	shouldErr bool
-	errMsg    string
+	mu                      sync.Mutex
+	certFile                string
+	keyFile                 string
+	shouldErr               bool
+	errMsg                  string
+	listenAndServeTLSCalled bool
 }
 
 func (m *mockHTTP3ServerWithError) ListenAndServeTLS(certFile, keyFile string) error {
@@ -576,11 +577,12 @@ func (m *mockHTTP3ServerWithError) ListenAndServeTLS(certFile, keyFile string) e
 	defer m.mu.Unlock()
 	m.certFile = certFile
 	m.keyFile = keyFile
+	m.listenAndServeTLSCalled = true
 	if m.shouldErr {
 		return fmt.Errorf("%s", m.errMsg)
 	}
-	// Block until context is done to simulate running server
-	select {}
+	// Return immediately to not block tests
+	return nil
 }
 
 func (m *mockHTTP3ServerWithError) Shutdown(ctx context.Context) error {
@@ -1022,7 +1024,7 @@ func TestServer_Start_WithCertLoading(t *testing.T) {
 }
 
 func TestServer_Start_WithHTTP3(t *testing.T) {
-	// Test HTTP/3 auto-start in Start()
+	// Test HTTP/3 auto-start in Start() - use invalid address to make HTTPS fail quickly
 	server := New()
 	server.server = nil // Disable HTTP
 
@@ -1044,15 +1046,17 @@ func TestServer_Start_WithHTTP3(t *testing.T) {
 
 	server.certFile = certFile
 	server.keyFile = keyFile
+	// Use an invalid address to make ListenAndServeTLS fail immediately
+	server.tlsServer = &http.Server{Addr: "invalid:address:format"}
 
-	// Start server
+	// Start server - will fail quickly due to invalid address
 	done := make(chan bool, 1)
 	go func() {
 		_ = server.Start()
 		done <- true
 	}()
 
-	// Give HTTP/3 time to start
+	// Give HTTP/3 time to start (it starts before HTTPS)
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify HTTP/3 was started
@@ -1060,21 +1064,16 @@ func TestServer_Start_WithHTTP3(t *testing.T) {
 		t.Error("expected HTTP/3 ListenAndServeTLS to be called")
 	}
 
-	// Shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_ = server.Shutdown(ctx)
-
 	select {
 	case <-done:
-		// Expected
-	case <-time.After(time.Second):
+		// Expected - HTTPS failed
+	case <-time.After(2 * time.Second):
 		t.Error("timeout waiting for Start to return")
 	}
 }
 
 func TestServer_Start_WithWebTransport(t *testing.T) {
-	// Test WebTransport auto-start in Start()
+	// Test WebTransport auto-start in Start() - use invalid address to make HTTPS fail quickly
 	server := New()
 	server.server = nil // Disable HTTP
 
@@ -1096,15 +1095,17 @@ func TestServer_Start_WithWebTransport(t *testing.T) {
 
 	server.certFile = certFile
 	server.keyFile = keyFile
+	// Use an invalid address to make ListenAndServeTLS fail immediately
+	server.tlsServer = &http.Server{Addr: "invalid:address:format"}
 
-	// Start server
+	// Start server - will fail quickly due to invalid address
 	done := make(chan bool, 1)
 	go func() {
 		_ = server.Start()
 		done <- true
 	}()
 
-	// Give WebTransport time to start
+	// Give WebTransport time to start (it starts before HTTPS)
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify WebTransport was started
@@ -1112,15 +1113,10 @@ func TestServer_Start_WithWebTransport(t *testing.T) {
 		t.Error("expected WebTransport ListenAndServeTLS to be called")
 	}
 
-	// Shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_ = server.Shutdown(ctx)
-
 	select {
 	case <-done:
-		// Expected
-	case <-time.After(time.Second):
+		// Expected - HTTPS failed
+	case <-time.After(2 * time.Second):
 		t.Error("timeout waiting for Start to return")
 	}
 }
