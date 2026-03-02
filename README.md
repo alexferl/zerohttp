@@ -644,11 +644,15 @@ The functional options pattern provides structured configuration for all aspects
 
 - `config.WithAddr()` - HTTP server address
 - `config.WithTLSAddr()` - HTTPS server address
-- `config.WithServer()` - HTTP server settings
-- `config.WithTLSServer()` - HTTPS server settings
-- `config.WithListener()`/`config.WithTLSListener()` - Custom listeners
-- `config.WithCertFile()`/`config.WithKeyFile()` - TLS certificate files
+- `config.WithServer()` - Custom HTTP server instance
+- `config.WithTLSServer()` - Custom HTTPS server instance
+- `config.WithListener()` - Custom HTTP listener
+- `config.WithTLSListener()` - Custom HTTPS listener
+- `config.WithCertFile()` - TLS certificate file path
+- `config.WithKeyFile()` - TLS key file path
 - `config.WithAutocertManager()` - Let's Encrypt integration
+- `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
+- `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
 
 
 ### Middleware Configuration

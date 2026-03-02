@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
@@ -396,5 +397,40 @@ func TestMultipleOptionsApplication(t *testing.T) {
 	}
 	if cfg.KeyFile != "custom.key" {
 		t.Errorf("expected KeyFile = custom.key, got %s", cfg.KeyFile)
+	}
+}
+
+// mockHTTP3Server is a mock implementation of HTTP3Server for testing
+type mockHTTP3Server struct{}
+
+func (m *mockHTTP3Server) ListenAndServeTLS(certFile, keyFile string) error { return nil }
+func (m *mockHTTP3Server) Shutdown(ctx context.Context) error               { return nil }
+func (m *mockHTTP3Server) Close() error                                     { return nil }
+
+func TestWithHTTP3Server(t *testing.T) {
+	cfg := DefaultConfig
+	mockServer := &mockHTTP3Server{}
+
+	WithHTTP3Server(mockServer)(&cfg)
+
+	if cfg.HTTP3Server == nil {
+		t.Error("expected HTTP3Server to be set")
+	}
+}
+
+// mockWebTransportServer is a mock implementation of WebTransportServer for testing
+type mockWebTransportServer struct{}
+
+func (m *mockWebTransportServer) ListenAndServeTLS(certFile, keyFile string) error { return nil }
+func (m *mockWebTransportServer) Close() error                                     { return nil }
+
+func TestWithWebTransportServer(t *testing.T) {
+	cfg := DefaultConfig
+	mockServer := &mockWebTransportServer{}
+
+	WithWebTransportServer(mockServer)(&cfg)
+
+	if cfg.WebTransportServer == nil {
+		t.Error("expected WebTransportServer to be set")
 	}
 }
