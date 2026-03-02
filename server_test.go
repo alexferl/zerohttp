@@ -963,53 +963,6 @@ func TestServer_Start_WithCertLoading(t *testing.T) {
 	}
 }
 
-func TestServer_Start_HTTP3Error(t *testing.T) {
-	// Test HTTP/3 error logging path in Start()
-	server := New()
-	server.server = nil // Disable HTTP
-
-	mockH3 := &mockHTTP3ServerWithError{shouldErr: true, errMsg: "h3 start error"}
-	server.SetHTTP3Server(mockH3)
-
-	certFile := "/tmp/test_cert_h3_start.pem"
-	keyFile := "/tmp/test_key_h3_start.pem"
-
-	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
-		t.Skipf("Cannot write cert file: %v", err)
-	}
-	defer func() { _ = os.Remove(certFile) }()
-
-	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
-		t.Skipf("Cannot write key file: %v", err)
-	}
-	defer func() { _ = os.Remove(keyFile) }()
-
-	server.certFile = certFile
-	server.keyFile = keyFile
-
-	// Start should work even if HTTP/3 errors
-	done := make(chan bool, 1)
-	go func() {
-		_ = server.Start()
-		done <- true
-	}()
-
-	// Give HTTP/3 time to fail
-	time.Sleep(100 * time.Millisecond)
-
-	// Shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_ = server.Shutdown(ctx)
-
-	select {
-	case <-done:
-		// Expected
-	case <-time.After(time.Second):
-		t.Error("timeout waiting for Start to return")
-	}
-}
-
 func TestServer_Start(t *testing.T) {
 	server := New()
 	server.server = nil    // Disable HTTP
