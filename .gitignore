@@ -24,8 +24,7 @@ go.work.sum
 # GoLand
 .idea
 
-# certs
-cert.pem
-key.pem
+# certificates
+*.pem
 
 uploads
