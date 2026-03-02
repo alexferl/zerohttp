@@ -427,7 +427,7 @@ func (s *Server) StartAutoTLS() error {
 
 	s.logger.Info("Starting server with AutoTLS...")
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 4)
 
 	// Start HTTP server for ACME challenges and redirects
 	if s.server != nil {
@@ -465,6 +465,16 @@ func (s *Server) StartAutoTLS() error {
 			go func() {
 				s.logger.Info("Starting HTTP/3 server with AutoTLS")
 				errCh <- h3Autocert.ListenAndServeTLSWithAutocert(s.autocertManager)
+			}()
+		}
+	}
+
+	// Start WebTransport server with autocert if supported
+	if s.webTransportServer != nil {
+		if wtAutocert, ok := s.webTransportServer.(config.WebTransportServerWithAutocert); ok {
+			go func() {
+				s.logger.Info("Starting WebTransport server with AutoTLS")
+				errCh <- wtAutocert.ListenAndServeTLSWithAutocert(s.autocertManager)
 			}()
 		}
 	}
