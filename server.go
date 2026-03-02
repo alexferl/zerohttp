@@ -260,6 +260,18 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 		log.F("cert_file", certFile),
 		log.F("key_file", keyFile))
 
+	// Start HTTP/3 server in background if configured
+	if s.http3Server != nil {
+		go func() {
+			s.logger.Info("Starting HTTP/3 server",
+				log.F("cert_file", certFile),
+				log.F("key_file", keyFile))
+			if err := s.http3Server.ListenAndServeTLS(certFile, keyFile); err != nil {
+				s.logger.Error("HTTP/3 server error", log.E(err))
+			}
+		}()
+	}
+
 	// Start WebTransport server in background if configured
 	if s.webTransportServer != nil {
 		go func() {
@@ -338,6 +350,18 @@ func (s *Server) Start() error {
 				log.F("key_file", s.keyFile))
 			if err := s.tlsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTPS server error: %w", err)
+			}
+		}()
+	}
+
+	// Start HTTP/3 server if configured and we have TLS
+	if s.http3Server != nil && shouldStartTLS {
+		go func() {
+			s.logger.Info("Starting HTTP/3 server...",
+				log.F("cert_file", s.certFile),
+				log.F("key_file", s.keyFile))
+			if err := s.http3Server.ListenAndServeTLS(s.certFile, s.keyFile); err != nil {
+				s.logger.Error("HTTP/3 server error", log.E(err))
 			}
 		}()
 	}
@@ -512,6 +536,9 @@ func (s *Server) StartHTTP3(certFile, keyFile string) error {
 // SetHTTP3Server sets the HTTP/3 server instance. This can be used to inject
 // an HTTP/3 implementation (e.g., quic-go/http3) after creating the server.
 //
+// The HTTP/3 server will be started automatically when ListenAndServeTLS or StartTLS
+// is called. You don't need to call ListenAndServeTLS on the HTTP/3 server yourself.
+//
 // Parameters:
 //   - server: An HTTP/3 server instance implementing the config.HTTP3Server interface
 func (s *Server) SetHTTP3Server(server config.HTTP3Server) {
@@ -579,20 +606,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}()
 	}
 
-	if s.http3Server != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			s.logger.Info("Shutting down HTTP/3 server")
-			if err := s.http3Server.Shutdown(ctx); err != nil {
-				s.logger.Error("Error shutting down HTTP/3 server", log.F("error", err))
-				errCh <- err
-			} else {
-				s.logger.Info("HTTP/3 server shutdown complete")
-			}
-		}()
-	}
-
+	// Shutdown WebTransport first since it depends on HTTP/3
 	if s.webTransportServer != nil {
 		wg.Add(1)
 		go func() {
@@ -603,6 +617,20 @@ func (s *Server) Shutdown(ctx context.Context) error {
 				errCh <- err
 			} else {
 				s.logger.Info("WebTransport server closed")
+			}
+		}()
+	}
+
+	if s.http3Server != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.logger.Info("Shutting down HTTP/3 server")
+			if err := s.http3Server.Shutdown(ctx); err != nil {
+				s.logger.Error("Error shutting down HTTP/3 server", log.F("error", err))
+				errCh <- err
+			} else {
+				s.logger.Info("HTTP/3 server shutdown complete")
 			}
 		}()
 	}

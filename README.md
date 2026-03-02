@@ -526,8 +526,7 @@ h3Server := &http3.Server{
 // Inject the HTTP/3 server
 app.SetHTTP3Server(h3Server)
 
-// Start HTTP/3 alongside HTTPS
-go app.StartHTTP3("cert.pem", "key.pem")
+// Start HTTPS - HTTP/3 starts automatically!
 app.StartTLS("cert.pem", "key.pem")
 ```
 

@@ -767,6 +767,62 @@ func TestServer_ListenAndServeTLS_WithWebTransport(t *testing.T) {
 	}
 }
 
+func TestServer_ListenAndServeTLS_WithHTTP3(t *testing.T) {
+	// Test HTTP/3 startup in ListenAndServeTLS
+	server := New()
+	mockH3 := &mockHTTP3Server{}
+	server.SetHTTP3Server(mockH3)
+
+	certFile := "/tmp/test_cert_h3.pem"
+	keyFile := "/tmp/test_key_h3.pem"
+
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
+		t.Skipf("Cannot write cert file: %v", err)
+	}
+	defer func() { _ = os.Remove(certFile) }()
+
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
+		t.Skipf("Cannot write key file: %v", err)
+	}
+	defer func() { _ = os.Remove(keyFile) }()
+
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Start server in goroutine
+	done := make(chan error, 1)
+	go func() {
+		done <- server.ListenAndServeTLS(certFile, keyFile)
+	}()
+
+	// Give server time to start HTTP/3
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify HTTP/3 was started
+	if !mockH3.wasListenAndServeTLSCalled() {
+		t.Error("expected HTTP/3 ListenAndServeTLS to be called")
+	}
+
+	// Verify correct cert/key files were passed
+	if mockH3.getCertFile() != certFile {
+		t.Errorf("expected cert file %q, got %q", certFile, mockH3.getCertFile())
+	}
+	if mockH3.getKeyFile() != keyFile {
+		t.Errorf("expected key file %q, got %q", keyFile, mockH3.getKeyFile())
+	}
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for ListenAndServeTLS to return")
+	}
+}
+
 func TestServer_ListenAndServeTLS_NoTLSConfig(t *testing.T) {
 	// Test the path where TLSConfig is nil initially (line 238-241)
 	server := New()
