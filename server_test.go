@@ -522,6 +522,46 @@ func TestServer_Close_WithHTTP3(t *testing.T) {
 	}
 }
 
+func TestServer_Shutdown_WithHTTP3Error(t *testing.T) {
+	// Test HTTP/3 shutdown error logging path
+	server := New()
+	h3Server := &mockHTTP3ServerWithShutdownError{}
+	server.SetHTTP3Server(h3Server)
+
+	// Need a listener for proper shutdown
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// Error is logged and also returned via errCh
+	err := server.Shutdown(ctx)
+	if err == nil {
+		t.Error("expected shutdown error")
+	}
+}
+
+func TestServer_Shutdown_WithWebTransportError(t *testing.T) {
+	// Test WebTransport close error logging path
+	server := New()
+	wtServer := &mockWebTransportServerWithCloseError{}
+	server.SetWebTransportServer(wtServer)
+
+	// Need a listener for proper shutdown
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// Error is logged and also returned via errCh
+	err := server.Shutdown(ctx)
+	if err == nil {
+		t.Error("expected close error")
+	}
+}
+
 // mockHTTP3ServerWithError is a mock that can return an error
 type mockHTTP3ServerWithError struct {
 	mu        sync.Mutex
@@ -555,6 +595,24 @@ func (m *mockHTTP3ServerWithError) getCertFile() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.certFile
+}
+
+// mockHTTP3ServerWithShutdownError returns an error on Shutdown
+type mockHTTP3ServerWithShutdownError struct {
+	mockHTTP3Server
+}
+
+func (m *mockHTTP3ServerWithShutdownError) Shutdown(ctx context.Context) error {
+	return fmt.Errorf("shutdown error")
+}
+
+// mockWebTransportServerWithCloseError returns an error on Close
+type mockWebTransportServerWithCloseError struct {
+	mockWebTransportServer
+}
+
+func (m *mockWebTransportServerWithCloseError) Close() error {
+	return fmt.Errorf("close error")
 }
 
 // mockHTTP3ServerWithAutocert implements both HTTP3Server and HTTP3ServerWithAutocert
@@ -963,6 +1021,110 @@ func TestServer_Start_WithCertLoading(t *testing.T) {
 	}
 }
 
+func TestServer_Start_WithHTTP3(t *testing.T) {
+	// Test HTTP/3 auto-start in Start()
+	server := New()
+	server.server = nil // Disable HTTP
+
+	mockH3 := &mockHTTP3Server{}
+	server.SetHTTP3Server(mockH3)
+
+	certFile := "/tmp/test_cert_h3_start.pem"
+	keyFile := "/tmp/test_key_h3_start.pem"
+
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
+		t.Skipf("Cannot write cert file: %v", err)
+	}
+	defer func() { _ = os.Remove(certFile) }()
+
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
+		t.Skipf("Cannot write key file: %v", err)
+	}
+	defer func() { _ = os.Remove(keyFile) }()
+
+	server.certFile = certFile
+	server.keyFile = keyFile
+
+	// Start server
+	done := make(chan bool, 1)
+	go func() {
+		_ = server.Start()
+		done <- true
+	}()
+
+	// Give HTTP/3 time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify HTTP/3 was started
+	if !mockH3.wasListenAndServeTLSCalled() {
+		t.Error("expected HTTP/3 ListenAndServeTLS to be called")
+	}
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for Start to return")
+	}
+}
+
+func TestServer_Start_WithWebTransport(t *testing.T) {
+	// Test WebTransport auto-start in Start()
+	server := New()
+	server.server = nil // Disable HTTP
+
+	mockWT := &mockWebTransportServer{}
+	server.SetWebTransportServer(mockWT)
+
+	certFile := "/tmp/test_cert_wt_start.pem"
+	keyFile := "/tmp/test_key_wt_start.pem"
+
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
+		t.Skipf("Cannot write cert file: %v", err)
+	}
+	defer func() { _ = os.Remove(certFile) }()
+
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
+		t.Skipf("Cannot write key file: %v", err)
+	}
+	defer func() { _ = os.Remove(keyFile) }()
+
+	server.certFile = certFile
+	server.keyFile = keyFile
+
+	// Start server
+	done := make(chan bool, 1)
+	go func() {
+		_ = server.Start()
+		done <- true
+	}()
+
+	// Give WebTransport time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify WebTransport was started
+	if !mockWT.wasListenAndServeTLSCalled() {
+		t.Error("expected WebTransport ListenAndServeTLS to be called")
+	}
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for Start to return")
+	}
+}
+
 func TestServer_Start(t *testing.T) {
 	server := New()
 	server.server = nil    // Disable HTTP
@@ -1061,27 +1223,6 @@ func TestServer_Close_WithWebTransport(t *testing.T) {
 
 	if !mockWT.closeCalled {
 		t.Error("Expected WebTransport server Close to be called")
-	}
-}
-
-func TestServer_Start_WithWebTransport(t *testing.T) {
-	// Create a temporary cert file for testing
-	certFile := "/tmp/test_cert.pem"
-	keyFile := "/tmp/test_key.pem"
-
-	server := New(
-		config.WithCertFile(certFile),
-		config.WithKeyFile(keyFile),
-	)
-
-	mockWT := &mockWebTransportServer{}
-	server.SetWebTransportServer(mockWT)
-
-	// The Start method will try to start the WebTransport server
-	// but we can't easily test the full lifecycle without real certs
-	// Just verify the server is configured correctly
-	if server.webTransportServer != mockWT {
-		t.Error("Expected WebTransport server to be configured")
 	}
 }
 
