@@ -3,6 +3,7 @@ package zerohttp
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,55 @@ import (
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
 )
+
+const testCertPEM = `-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUIDs/2QUFXaOYCjjcMnewtycJdJowDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDMwMjE1NTA0OVoXDTI2MDMw
+MzE1NTA0OVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAmiK+7HVK42Gk9eqX+e817mKN0USk2Uf9hbbec/b6PcJz
+8h/MUS3ZChPAyV3rtQQUoPECE8twl3xClmTS/zI4zdVCu5D6TfDXh9svIfZcApi9
+gsvfSkHUItCkeknFBvb14ssxEYDlxdWH+KhKRl7eHV96GXdKCT+fMmw0u6hzoG4X
+Z19U+radt5FeYeNlUlzh2JuZA5NEYtPZov6P4qogc4Irdx0JWHa+cNJpM8nF8VHq
+/afEm4uayUfJzmDj4KYzqUDRRBQsgtbnmztFgrE0kTGLGQtamEevypVgma1fBXUi
++aMn11FRLe6/l5iFLgqcV4/HS+oNDm6xOiN9lGcYWQIDAQABo1MwUTAdBgNVHQ4E
+FgQUbyRgX50ORFrxQmjL7r1yHYwXS+owHwYDVR0jBBgwFoAUbyRgX50ORFrxQmjL
+7r1yHYwXS+owDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAHtPH
+MS/2DTXs6p6Jf/3ptxR5siG3jY1qGITTMGeUFX8VkiUb6+ZDd2jBzs1QXXIfUzpj
+NYG5+Gm5FHiDfiZsfjZFrWqqgS1KSY3mVmzKluZVf0/soQsnV8mwoV71I1IYAs3k
+DHkPu15cya6dOTm34yd/3t64EB6UrFkkB8r6Ylkik7Zql9AvMJVT9tjMQX+chbJm
+424dI43JAerY8hpYUBAzQenk4w/MoRLUa4Lthu1IQJ8eZLcKwoPnTorLh8o8GUZ2
+2C00A+tQVGp8nkuxn+H6UfEB0469cVmvtgSdGxc/GZ49B/u3t0Zq2ZzEH/mcVzc5
+LQWCo/jnIFbvhjdZrQ==
+-----END CERTIFICATE-----`
+
+const testKeyPEM = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCaIr7sdUrjYaT1
+6pf57zXuYo3RRKTZR/2Ftt5z9vo9wnPyH8xRLdkKE8DJXeu1BBSg8QITy3CXfEKW
+ZNL/MjjN1UK7kPpN8NeH2y8h9lwCmL2Cy99KQdQi0KR6ScUG9vXiyzERgOXF1Yf4
+qEpGXt4dX3oZd0oJP58ybDS7qHOgbhdnX1T6tp23kV5h42VSXOHYm5kDk0Ri09mi
+/o/iqiBzgit3HQlYdr5w0mkzycXxUer9p8Sbi5rJR8nOYOPgpjOpQNFEFCyC1ueb
+O0WCsTSRMYsZC1qYR6/KlWCZrV8FdSL5oyfXUVEt7r+XmIUuCpxXj8dL6g0ObrE6
+I32UZxhZAgMBAAECggEABk0Ok0XJu5EjsFpoX1MmOCIvBDurRgclf+x9fE3fxbvP
+59lhLb3jMiBj2I+GedpKehhUIolF52lw4utI/V35GMADt/15oAtNEkyVaQzkTsZd
+8+1/6a4WfRxcpvOiUnIw09ZE4Z9sdTmREwsVKzqIV7jOGeGopQdk64elIblFjcy2
+FwYjAu4qsRwz1bcYZsLrLBswOA2AUakWI7lDYskXZVhmskzsrFdW5eRntvit+PjR
+UQ8zlKUAU3TJTMZ2SoAMeBfaLeejMAXSnNO7xt7tpsFzjxjNEspKBzeUHzHiJ9eN
+zLxUVTXGu5BeXBcipflYDUs6jfnMRVnnl7eHtvLQkQKBgQDOoHGA8aw+DHggg6CQ
+jsp+MiZJXm/Ste7nbu6XBdHJgsxtSKxQMY8WwC+byCYOkJVMLVGHY1tV5vJoYD/P
+nlY17MW9B+UCr9N9PIwzRdRSEPKn9dNAmoPh2iDIGztkvlC4kuyBu96db3XDx2CX
+SvEJvwSkKvFFzBf3u2o2dk8mkQKBgQC+92B9OvxvYmR1pL6V839I7b4ak+4Biits
+jdIE37a/RFa1+vkg5dTqZmvrqbxNhp61WjHwdPb5v0pbAqFafpkj7qO8JV1Lg/c1
+IdfHcfWGBfmaz5NKiSSU7dRYBFPF6rjPCgzLukiUlb7BytgUAKaMKy3zfNxT3Sqk
+2ATOuNoJSQKBgQCprpJnXI+hCOZhdRaXf9uEVLSiTb4w4J0HS079kJbeD97G5AY1
+eO1TtpGiMXQnQ86HFzQ7pXktCxIIavocCqArenxMJr6HPVLFJsLPnEmm9yn+il5o
+UDt7boC7M7nLmop5eJZmV5yR1yVzmDiXJcDZyxcJpgYq1lbcZvjrLq8DMQKBgEYG
+sHs7hhXSHsSFBN43zBUSGQPl+wDVidbkqn7fCkRY6vMQdQp7PPg3Vpu0QjirhMc7
+q9RhD6/FVZ7J+CEXC1EB0UjM6skmOyBgqJ+aSk47IqyCMaDDaYazL4qXC6En0V0a
+clbCmJrjzm+B0nqDQo9jxhXjU2ftUhXgoOKtJkcBAoGBAKw7d/V/XzdZakiFajz7
+xzKGQgvxYl3wxq3D3J3tQR3KsZ4ueGmATp7F/AkpBJdk1TJFDdWr9/OsdPyNiIcu
+VrZYW+DzdGqEaVYWCIzyw6CykDvUG9eq3AgHJK3Li87o0jJ9GvvOX1YuiE7/FHY3
+O6lBO0Onq9vJGuITYJtl/t+6
+-----END PRIVATE KEY-----`
 
 // Mock logger for testing
 type mockServerLogger struct {
@@ -597,6 +647,126 @@ func TestServer_StartTLS(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
+func TestServer_ListenAndServe_WithListener(t *testing.T) {
+	server := New()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	server.listener = listener
+
+	// Start server in goroutine
+	done := make(chan error, 1)
+	go func() {
+		done <- server.ListenAndServe()
+	}()
+
+	// Give server a moment to start
+	time.Sleep(10 * time.Millisecond)
+
+	// Shutdown to stop the server
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err = server.Shutdown(ctx)
+	if err != nil {
+		t.Errorf("unexpected error during shutdown: %v", err)
+	}
+
+	// Wait for ListenAndServe to return
+	select {
+	case err := <-done:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			t.Errorf("unexpected error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for ListenAndServe to return")
+	}
+}
+
+func TestServer_ListenAndServe_CreatesListener(t *testing.T) {
+	// Test the path where ListenAndServe creates its own listener (lines 191-198)
+	server := New()
+	server.server = &http.Server{Addr: "127.0.0.1:0"}
+	server.listener = nil // Force creation of new listener
+
+	// Start server in goroutine
+	done := make(chan error, 1)
+	go func() {
+		done <- server.ListenAndServe()
+	}()
+
+	// Give server a moment to start
+	time.Sleep(20 * time.Millisecond)
+
+	// Verify listener was created (use the public method to avoid race)
+	if server.ListenerAddr() == "" {
+		t.Error("expected listener to be created")
+	}
+
+	// Shutdown to stop the server
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_ = server.Shutdown(ctx)
+
+	// Wait for ListenAndServe to return
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for ListenAndServe to return")
+	}
+}
+
+func TestServer_ListenAndServeTLS_WithWebTransport(t *testing.T) {
+	// Test WebTransport startup in ListenAndServeTLS (lines 264-273)
+	server := New()
+	mockWT := &mockWebTransportServer{}
+	server.SetWebTransportServer(mockWT)
+
+	certFile := "/tmp/test_cert_wt.pem"
+	keyFile := "/tmp/test_key_wt.pem"
+
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
+		t.Skipf("Cannot write cert file: %v", err)
+	}
+	defer func() { _ = os.Remove(certFile) }()
+
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
+		t.Skipf("Cannot write key file: %v", err)
+	}
+	defer func() { _ = os.Remove(keyFile) }()
+
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Start server in goroutine
+	done := make(chan error, 1)
+	go func() {
+		done <- server.ListenAndServeTLS(certFile, keyFile)
+	}()
+
+	// Give server time to start WebTransport
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify WebTransport was started
+	if !mockWT.wasListenAndServeTLSCalled() {
+		t.Error("expected WebTransport ListenAndServeTLS to be called")
+	}
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for ListenAndServeTLS to return")
+	}
+}
+
 func TestServer_ListenAndServeTLS_NoTLSConfig(t *testing.T) {
 	// Test the path where TLSConfig is nil initially (line 238-241)
 	server := New()
@@ -622,37 +792,15 @@ func TestServer_Start_WithCertLoading(t *testing.T) {
 	server := New()
 	server.server = nil // Disable HTTP server
 
-	// Create temp cert files
-	certContent := `-----BEGIN CERTIFICATE-----
-MIIBkTCB+wIJAKHBfpegPjMCMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnVu
-dXNlZDAeFw0yNDAxMDEwMDAwMDBaFw0yNTAxMDEwMDAwMDBaMBExDzANBgNVBAMM
-BnVudXNlZDBcMA0GCSqGSIb3DQEBAQUAA0sAMEgCQQC5kzmkCRnEGOrWNwux5M2g
-LH8EEzOdhpPUzGHe0KVyzpXPhBo9kKLjKsCw2y8wT2AakxATgFd5wq0E9lh+BFgJ
-AgMBAAGjUDBOMB0GA1UdDgQWBBQI0fKlBJhcG7lW9A0L7VH6GhLmaTAfBgNVHSME
-GDAWgBQI0fKlBJhcG7lW9A0L7VH6GhLmaTAMBgNVHRMEBTADAQH/MA0GCSqGSIb3
-DQEBCwUAA0EAL6AJ+nqKdDqFAzHyZ6P7jdxwF4M6H1gHjLV8y/hrtWJl7lF+IFDh
-t6H5uwKr8AaL8K1vJcH8BfS/z/XHUg==
------END CERTIFICATE-----`
-
-	keyContent := `-----BEGIN RSA PRIVATE KEY-----
-MIIBOQIBAAJBALmTOaQJGcQY6tY3C7HkzaAsfwQTM52Gk9TMYd7QpXLOlc+EGj2Q
-ouMqwLDbLzBPYBqTEBOAV3nCrQT2WH4EWAkCAwEAAQJAFHgP6f26mKYd1V7cHb6S
-aKZgGHO+R/Exxmjr8vL4C0+lFG8Eht7Chh0L5gBh6Dfz5LFh9GGlA+fFqxhr7gQH
-AQIhAOnDFf7DzKXBIJOH28L6DP7qLCzR4QYsIyFCihX2HQChAiEAy9zXfdZkZQTx
-xqHqO8l0d5jocnnL0r4g0G5p1Vj4ZJkCIQCz5rC0xL6V5q5v5q5v5q5v5q5v5q5v
-5q5v5q5v5q5v5QIgJpqudZ2KyfW3x9Yh8gJzvHpC0vU1HGAnhZ3rHmjXc1sCIQCy
-C8z7V6z9DWx5D3JKxL9e1rNv8jLBfR6U+VxQn+HRXg==
------END RSA PRIVATE KEY-----`
-
 	certFile := "/tmp/test_cert_start.pem"
 	keyFile := "/tmp/test_key_start.pem"
 
-	if err := os.WriteFile(certFile, []byte(certContent), 0o644); err != nil {
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
 		t.Skipf("Cannot write cert file: %v", err)
 	}
 	defer func() { _ = os.Remove(certFile) }()
 
-	if err := os.WriteFile(keyFile, []byte(keyContent), 0o600); err != nil {
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
 		t.Skipf("Cannot write key file: %v", err)
 	}
 	defer func() { _ = os.Remove(keyFile) }()
@@ -708,6 +856,7 @@ func TestServer_Logger(t *testing.T) {
 
 // mockWebTransportServer is a mock implementation of config.WebTransportServer for testing
 type mockWebTransportServer struct {
+	mu                      sync.Mutex
 	listenAndServeTLSCalled bool
 	closeCalled             bool
 	certFile                string
@@ -715,13 +864,23 @@ type mockWebTransportServer struct {
 }
 
 func (m *mockWebTransportServer) ListenAndServeTLS(certFile, keyFile string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.listenAndServeTLSCalled = true
 	m.certFile = certFile
 	m.keyFile = keyFile
 	return nil
 }
 
+func (m *mockWebTransportServer) wasListenAndServeTLSCalled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listenAndServeTLSCalled
+}
+
 func (m *mockWebTransportServer) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.closeCalled = true
 	return nil
 }
