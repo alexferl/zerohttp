@@ -96,6 +96,14 @@ type Config struct {
 	// The server must implement the HTTP3Server interface.
 	// Default: nil (HTTP/3 not enabled unless set)
 	HTTP3Server HTTP3Server
+
+	// WebTransportServer is an optional WebTransport server for handling WebTransport sessions.
+	// Users can inject their own implementation (e.g., quic-go/webtransport-go).
+	// The server must implement the WebTransportServer interface.
+	// If nil, WebTransport support will not be enabled.
+	// The server will be started automatically when ListenAndServeTLS or Start is called.
+	// Default: nil
+	WebTransportServer WebTransportServer
 }
 
 // DefaultConfig contains all default values used by Config.
@@ -327,4 +335,57 @@ type HTTP3ServerWithAutocert interface {
 	// certificate management using the provided autocert manager.
 	// The manager's GetCertificate function is used to obtain TLS certificates.
 	ListenAndServeTLSWithAutocert(manager AutocertManager) error
+}
+
+// WebTransportServer is the interface that WebTransport servers must implement
+// to be used with zerohttp. Users can inject their own WebTransport implementation
+// (e.g., github.com/quic-go/webtransport-go).
+//
+// Example usage with webtransport-go:
+//
+//	import "github.com/quic-go/webtransport-go"
+//
+//	app := zerohttp.New()
+//	wtServer := &webtransport.Server{
+//	    H3: &http3.Server{Addr: ":443", Handler: app},
+//	}
+//	app.SetWebTransportServer(wtServer)
+//	app.ListenAndServeTLS("cert.pem", "key.pem") // wtServer starts automatically
+type WebTransportServer interface {
+	// ListenAndServeTLS starts the WebTransport server with the provided certificate and key.
+	// Certificate files are in PEM format.
+	ListenAndServeTLS(certFile, keyFile string) error
+
+	// Close immediately closes the WebTransport server.
+	Close() error
+}
+
+// WithHTTP3Server sets a custom HTTP/3 server instance.
+func WithHTTP3Server(server HTTP3Server) Option {
+	return func(c *Config) {
+		c.HTTP3Server = server
+	}
+}
+
+// WithWebTransportServer sets a custom WebTransport server instance.
+// WebTransport runs over HTTP/3 and provides low-latency, bidirectional communication.
+//
+// The WebTransport server will be started automatically when ListenAndServeTLS or Start
+// is called on the zerohttp server. You don't need to call ListenAndServeTLS on the
+// WebTransport server yourself.
+//
+// Example:
+//
+//	import "github.com/quic-go/webtransport-go"
+//
+//	app := zerohttp.New()
+//	wtServer := &webtransport.Server{
+//	    H3: &http3.Server{Addr: ":443", Handler: app},
+//	}
+//	app.SetWebTransportServer(wtServer)
+//	app.ListenAndServeTLS("cert.pem", "key.pem") // wtServer starts automatically
+func WithWebTransportServer(server WebTransportServer) Option {
+	return func(c *Config) {
+		c.WebTransportServer = server
+	}
 }

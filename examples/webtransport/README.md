@@ -52,7 +52,11 @@ go run main.go
 WebTransport runs exclusively over HTTP/3 (QUIC). The server uses:
 
 - **HTTP/3 Server (UDP port 8443)** - Handles both regular HTTP requests and WebTransport connections
-- The `webtransport.Server` manages the HTTP/3 lifecycle
+- **WebTransport Server** - Managed by zerohttp, started automatically when you call `app.ListenAndServeTLS()`
+
+The integration is pluggable - zerohttp doesn't import webtransport-go directly. Instead, it defines
+a `WebTransportServer` interface that `*webtransport.Server` automatically satisfies. This keeps
+the dependency optional for users who don't need WebTransport.
 
 ### WebTransport Handler
 
@@ -120,24 +124,42 @@ func handleSession(sess *webtransport.Session) {
    webtransport.ConfigureHTTP3Server(h3)
    ```
 
-3. **Register Handlers and Start Server**
+3. **Create zerohttp App with Routes**
    ```go
-   http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+   app := zerohttp.New()
+
+   // Regular HTTP endpoint
+   app.GET("/", func(w http.ResponseWriter, r *http.Request) {
        w.Header().Set("Content-Type", "text/html")
        w.Write([]byte(html))
    })
 
-   http.HandleFunc("/wt", func(w http.ResponseWriter, r *http.Request) {
+   // WebTransport endpoint
+   app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
        sess, err := wtServer.Upgrade(w, r)
        if err != nil {
            w.WriteHeader(http.StatusInternalServerError)
            return
        }
        go handleSession(sess)
-   })
-
-   wtServer.ListenAndServeTLS(certFile, keyFile)
+   }))
    ```
+
+4. **Set Handler and Start Server**
+   ```go
+   // Set zerohttp as the HTTP/3 handler
+   h3.Handler = app
+
+   // Set the WebTransport server - zerohttp will start it automatically
+   app.SetWebTransportServer(wtServer)
+
+   // Just call app.ListenAndServeTLS - WebTransport starts automatically!
+   app.ListenAndServeTLS(certFile, keyFile)
+   ```
+
+   **Note:** With zerohttp, you don't need to call `wtServer.ListenAndServeTLS()` directly.
+   Just set the WebTransport server with `app.SetWebTransportServer()` and then call
+   `app.ListenAndServeTLS()`. The WebTransport server will be started automatically.
 
 ## Production Considerations
 

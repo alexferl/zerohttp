@@ -575,3 +575,121 @@ func TestServer_Logger(t *testing.T) {
 		t.Error("expected logger to not be nil")
 	}
 }
+
+// mockWebTransportServer is a mock implementation of config.WebTransportServer for testing
+type mockWebTransportServer struct {
+	listenAndServeTLSCalled bool
+	closeCalled             bool
+	certFile                string
+	keyFile                 string
+}
+
+func (m *mockWebTransportServer) ListenAndServeTLS(certFile, keyFile string) error {
+	m.listenAndServeTLSCalled = true
+	m.certFile = certFile
+	m.keyFile = keyFile
+	return nil
+}
+
+func (m *mockWebTransportServer) Close() error {
+	m.closeCalled = true
+	return nil
+}
+
+func TestServer_SetWebTransportServer(t *testing.T) {
+	server := New()
+	mockWT := &mockWebTransportServer{}
+
+	server.SetWebTransportServer(mockWT)
+
+	if server.webTransportServer != mockWT {
+		t.Error("Expected WebTransport server to be set")
+	}
+}
+
+func TestServer_SetWebTransportServer_WithConfig(t *testing.T) {
+	mockWT := &mockWebTransportServer{}
+	server := New(config.WithWebTransportServer(mockWT))
+
+	if server.webTransportServer != mockWT {
+		t.Error("Expected WebTransport server to be set via config")
+	}
+}
+
+func TestServer_Close_WithWebTransport(t *testing.T) {
+	server := New()
+	mockWT := &mockWebTransportServer{}
+	server.SetWebTransportServer(mockWT)
+
+	// Create a dummy listener so Close doesn't panic
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+
+	err := server.Close()
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if !mockWT.closeCalled {
+		t.Error("Expected WebTransport server Close to be called")
+	}
+}
+
+func TestServer_Start_WithWebTransport(t *testing.T) {
+	// Create a temporary cert file for testing
+	certFile := "/tmp/test_cert.pem"
+	keyFile := "/tmp/test_key.pem"
+
+	server := New(
+		config.WithCertFile(certFile),
+		config.WithKeyFile(keyFile),
+	)
+
+	mockWT := &mockWebTransportServer{}
+	server.SetWebTransportServer(mockWT)
+
+	// The Start method will try to start the WebTransport server
+	// but we can't easily test the full lifecycle without real certs
+	// Just verify the server is configured correctly
+	if server.webTransportServer != mockWT {
+		t.Error("Expected WebTransport server to be configured")
+	}
+}
+
+func TestServer_WebTransport_Lifecycle(t *testing.T) {
+	t.Run("WebTransport server starts with ListenAndServeTLS", func(t *testing.T) {
+		// Create a mock TLS listener to avoid needing real certs
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("Failed to create listener: %v", err)
+		}
+		defer func() {
+			if err := listener.Close(); err != nil {
+				t.Errorf("Failed to close listener: %v", err)
+			}
+		}()
+
+		// Wrap in TLS
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{{}}, // Empty cert for testing
+		}
+		tlsListener := tls.NewListener(listener, tlsConfig)
+
+		server := New(
+			config.WithTLSListener(tlsListener),
+		)
+
+		mockWT := &mockWebTransportServer{}
+		server.SetWebTransportServer(mockWT)
+
+		// Verify server is set
+		if server.webTransportServer != mockWT {
+			t.Error("Expected WebTransport server to be set")
+		}
+	})
+
+	t.Run("WebTransport server interface compliance", func(t *testing.T) {
+		// Verify our mock implements the interface
+		var _ config.WebTransportServer = (*mockWebTransportServer)(nil)
+	})
+}

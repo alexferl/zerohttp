@@ -259,12 +259,14 @@ func TestRouter_HTTPMethods(t *testing.T) {
 	router.PATCH("/patch", testHandler("patch"))
 	router.POST("/post", testHandler("post"))
 	router.PUT("/put", testHandler("put"))
+	router.CONNECT("/connect", testHandler("connect"))
 
 	tests := []struct {
 		method string
 		path   string
 		body   string
 	}{
+		{"CONNECT", "/connect", "connect"},
 		{"DELETE", "/delete", "delete"},
 		{"GET", "/get", "get"},
 		{"HEAD", "/head", ""},
@@ -982,4 +984,97 @@ func TestRouter_ServeMux(t *testing.T) {
 	if w.Body.String() != "direct handler" {
 		t.Errorf("Expected 'direct handler', got '%s'", w.Body.String())
 	}
+}
+
+func TestRouter_CONNECT_WebTransport(t *testing.T) {
+	t.Run("CONNECT handler registration", func(t *testing.T) {
+		router := NewRouter()
+
+		handlerCalled := false
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handlerCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		router.CONNECT("/wt", handler)
+
+		req := httptest.NewRequest(http.MethodConnect, "/wt", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if !handlerCalled {
+			t.Error("CONNECT handler was not called")
+		}
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+	})
+
+	t.Run("CONNECT with middleware", func(t *testing.T) {
+		router := NewRouter()
+
+		var calls []string
+		mw := func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls = append(calls, "middleware")
+				next.ServeHTTP(w, r)
+			})
+		}
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls = append(calls, "handler")
+			w.WriteHeader(http.StatusOK)
+		})
+
+		router.CONNECT("/wt", handler, mw)
+
+		req := httptest.NewRequest(http.MethodConnect, "/wt", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if len(calls) != 2 || calls[0] != "middleware" || calls[1] != "handler" {
+			t.Errorf("Expected [middleware, handler], got %v", calls)
+		}
+	})
+
+	t.Run("CONNECT route not found", func(t *testing.T) {
+		router := NewRouter()
+
+		req := httptest.NewRequest(http.MethodConnect, "/not-registered", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404 for unregistered CONNECT route, got %d", w.Code)
+		}
+	})
+
+	t.Run("CONNECT WebTransport-like upgrade", func(t *testing.T) {
+		router := NewRouter()
+
+		upgradeCalled := false
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodConnect {
+				t.Errorf("Expected CONNECT method, got %s", r.Method)
+			}
+			upgradeCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		router.CONNECT("/wt", handler)
+
+		req := httptest.NewRequest(http.MethodConnect, "/wt", nil)
+		req.Header.Set("Upgrade", "webtransport")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if !upgradeCalled {
+			t.Error("CONNECT handler was not called for WebTransport upgrade")
+		}
+	})
 }

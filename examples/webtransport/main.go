@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 	"github.com/quic-go/quic-go/http3"
 	webtransport "github.com/quic-go/webtransport-go"
 )
@@ -17,12 +19,18 @@ import (
 func main() {
 	certFile, keyFile := "localhost+2.pem", "localhost+2-key.pem"
 
-	// Create HTTP/3 server with TLS config
+	// Create zerohttp app first (we need it as the handler)
+	app := zh.New(
+		config.WithDisableDefaultMiddlewares(),
+	)
+
+	// Create HTTP/3 server with zerohttp as the handler
 	h3 := &http3.Server{
 		Addr: ":8443",
 		TLSConfig: &tls.Config{
 			NextProtos: []string{"h3"},
 		},
+		Handler: app,
 	}
 
 	// Create WebTransport server
@@ -31,30 +39,35 @@ func main() {
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 
-	// Wire WebTransport into HTTP/3 server (REQUIRED)
+	// Wire WebTransport into HTTP/3 server
 	webtransport.ConfigureHTTP3Server(h3)
 
+	// Set WebTransport server - zerohttp will start it automatically
+	app.SetWebTransportServer(wtServer)
+
 	// Serve the HTML client
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		w.Header().Set("Content-Type", "text/html")
 		w.Header().Add("Alt-Svc", `h3=":8443"; ma=86400`)
 		w.Write([]byte(clientHTML))
-	})
+		return nil
+	}))
 
-	// WebTransport endpoint
-	http.HandleFunc("/wt", func(w http.ResponseWriter, r *http.Request) {
+	// WebTransport endpoint - register CONNECT handler
+	app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sess, err := wtServer.Upgrade(w, r)
 		if err != nil {
-			log.Printf("upgrade error: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		go handleSession(sess)
-	})
+	}))
 
 	log.Println("Starting WebTransport server on https://localhost:8443")
 	log.Println("Open https://localhost:8443 in your browser to test")
-	if err := wtServer.ListenAndServeTLS(certFile, keyFile); err != nil {
+
+	// Just call app.ListenAndServeTLS - WebTransport server starts automatically!
+	if err := app.ListenAndServeTLS(certFile, keyFile); err != nil {
 		log.Fatal(err)
 	}
 }
