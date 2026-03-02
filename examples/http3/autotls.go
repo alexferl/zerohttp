@@ -1,14 +1,5 @@
 //go:build ignore
 
-// This example demonstrates HTTP/3 with Let's Encrypt AutoTLS.
-//
-// To run:
-//  1. Install quic-go: go get github.com/quic-go/quic-go
-//  2. Update the domain below to your actual domain
-//  3. Ensure port 443 is accessible from the internet
-//  4. Run: go run autotls.go
-//
-// The server will obtain certificates from Let's Encrypt automatically.
 package main
 
 import (

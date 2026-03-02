@@ -1,16 +1,5 @@
 //go:build ignore
 
-// This example demonstrates how to use HTTP/3 with zerohttp.
-// It uses github.com/quic-go/quic-go/http3 for HTTP/3 support.
-//
-// To run this example:
-//  1. Install quic-go: go get github.com/quic-go/quic-go
-//  2. Generate TLS certificates: openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes
-//  3. Run: go run main.go
-//
-// To test HTTP/3:
-//   - Use a browser that supports HTTP/3 (Chrome, Firefox, Safari)
-//   - Or use: curl --http3 -k https://localhost:8443
 package main
 
 import (
@@ -23,6 +12,8 @@ import (
 )
 
 func main() {
+	certFile, keyFile := "localhost+2.pem", "localhost+2-key.pem"
+
 	// Create zerohttp server with TLS
 	app := zerohttp.New(
 		config.WithTLSAddr(":8443"),
@@ -52,12 +43,12 @@ func main() {
 	// Start HTTP/3 server in a goroutine
 	go func() {
 		log.Println("Starting HTTP/3 server on https://localhost:8443")
-		if err := app.StartHTTP3("cert.pem", "key.pem"); err != nil {
+		if err := app.StartHTTP3(certFile, keyFile); err != nil {
 			log.Fatalf("HTTP/3 server error: %v", err)
 		}
 	}()
 
 	// Start HTTPS server for HTTP/1 and HTTP/2 (blocking)
 	log.Println("Starting HTTPS server on https://localhost:8443")
-	log.Fatal(app.StartTLS("cert.pem", "key.pem"))
+	log.Fatal(app.StartTLS(certFile, keyFile))
 }

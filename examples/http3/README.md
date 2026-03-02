@@ -23,10 +23,13 @@ This allows you to inject [quic-go/http3](https://github.com/quic-go/quic-go) or
 go get github.com/quic-go/quic-go
 ```
 
-2. Generate self-signed TLS certificates:
+2. Install mkcert and generate certificates:
 ```bash
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes
+brew install mkcert
+mkcert -install
+mkcert localhost 127.0.0.1 ::1
 ```
+This creates: `localhost+2.pem` and `localhost+2-key.pem`
 
 3. Run the server:
 ```bash
