@@ -40,15 +40,8 @@ func main() {
 	}
 	app.SetHTTP3Server(h3Server)
 
-	// Start HTTP/3 server in a goroutine
-	go func() {
-		log.Println("Starting HTTP/3 server on https://localhost:8443")
-		if err := app.StartHTTP3(certFile, keyFile); err != nil {
-			log.Fatalf("HTTP/3 server error: %v", err)
-		}
-	}()
-
-	// Start HTTPS server for HTTP/1 and HTTP/2 (blocking)
+	// Start HTTPS server - HTTP/3 starts automatically!
 	log.Println("Starting HTTPS server on https://localhost:8443")
+	log.Println("HTTP/3 will be available on the same port")
 	log.Fatal(app.StartTLS(certFile, keyFile))
 }
