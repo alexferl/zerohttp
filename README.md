@@ -25,6 +25,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Extensible Interfaces](#extensible-interfaces)
 - [Auto-TLS](#auto-tls)
 - [HTTP/3 Support](#http3-support)
+- [WebTransport Support](#webtransport-support)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
 - [Configuration Reference](#configuration-reference)
@@ -46,6 +47,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
 - **Auto-TLS**: Pluggable automatic certificate management (e.g., Let's Encrypt, custom ACME providers)
 - **HTTP/3 Support**: Pluggable HTTP/3 support for modern web performance
+- **WebTransport Support**: Pluggable WebTransport for low-latency bidirectional communication
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
 - **Structured Logging**: Integrated structured logging with customizable fields
@@ -529,59 +531,46 @@ go app.StartHTTP3("cert.pem", "key.pem")
 app.StartTLS("cert.pem", "key.pem")
 ```
 
-### HTTP/3 with AutoTLS
 
-For automatic Let's Encrypt certificates with HTTP/3, implement the extended interface:
+## WebTransport Support
+
+WebTransport provides low-latency, bidirectional communication over HTTP/3:
 
 ```go
-// HTTP3AutocertServer wraps quic-go to support AutoTLS
-type HTTP3AutocertServer struct {
-    *http3.Server
-}
+import (
+    "github.com/quic-go/quic-go/http3"
+    webtransport "github.com/quic-go/webtransport-go"
+)
 
-func (s *HTTP3AutocertServer) ListenAndServeTLS(certFile, keyFile string) error {
-    return s.Server.ListenAndServeTLS(certFile, keyFile)
-}
+app := zh.New()
 
-func (s *HTTP3AutocertServer) Shutdown(ctx context.Context) error {
-    return s.Server.Shutdown(ctx)
-}
+// Create HTTP/3 server
+h3 := &http3.Server{Addr: ":8443", Handler: app}
 
-func (s *HTTP3AutocertServer) Close() error {
-    return s.Server.Close()
+// Create WebTransport server
+wtServer := &webtransport.Server{
+    H3:          h3,
+    CheckOrigin: func(r *http.Request) bool { return true },
 }
+webtransport.ConfigureHTTP3Server(h3)
 
-func (s *HTTP3AutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
-    if s.Server.TLSConfig == nil {
-        s.Server.TLSConfig = &tls.Config{}
+// Set WebTransport server - zerohttp starts it automatically
+app.SetWebTransportServer(wtServer)
+
+// Register WebTransport endpoint
+app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    sess, err := wtServer.Upgrade(w, r)
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        return
     }
-    s.Server.TLSConfig.GetCertificate = manager.GetCertificate
-    // Required for HTTP/3 protocol negotiation
-    s.Server.TLSConfig.NextProtos = []string{"h3"}
-    return s.Server.ListenAndServe()
-}
+    go handleSession(sess) // Handle streams/datagrams
+}))
 
-manager := &autocert.Manager{
-    Cache:      autocert.DirCache("/var/cache/certs"),
-    Prompt:     autocert.AcceptTOS,
-    HostPolicy: autocert.HostWhitelist("example.com"),
-}
-
-app := zh.New(config.WithAutocertManager(manager))
-
-// Add Alt-Svc header to advertise HTTP/3 support
-app.Use(func(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Add("Alt-Svc", `h3=":443"; ma=86400`)
-        next.ServeHTTP(w, r)
-    })
-})
-
-app.SetHTTP3Server(&HTTP3AutocertServer{Server: h3Server})
-
-// Starts HTTP, HTTPS, and HTTP/3 with AutoTLS
-app.StartAutoTLS()
+app.ListenAndServeTLS("cert.pem", "key.pem")
 ```
+
+> **💡 Complete Example:** See [`examples/webtransport/`](examples/webtransport/) for a full working server with HTML client.
 
 
 ## Health Checks
@@ -655,11 +644,15 @@ The functional options pattern provides structured configuration for all aspects
 
 - `config.WithAddr()` - HTTP server address
 - `config.WithTLSAddr()` - HTTPS server address
-- `config.WithServer()` - HTTP server settings
-- `config.WithTLSServer()` - HTTPS server settings
-- `config.WithListener()`/`config.WithTLSListener()` - Custom listeners
-- `config.WithCertFile()`/`config.WithKeyFile()` - TLS certificate files
+- `config.WithServer()` - Custom HTTP server instance
+- `config.WithTLSServer()` - Custom HTTPS server instance
+- `config.WithListener()` - Custom HTTP listener
+- `config.WithTLSListener()` - Custom HTTPS listener
+- `config.WithCertFile()` - TLS certificate file path
+- `config.WithKeyFile()` - TLS key file path
 - `config.WithAutocertManager()` - Let's Encrypt integration
+- `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
+- `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
 
 
 ### Middleware Configuration

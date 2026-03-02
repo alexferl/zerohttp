@@ -28,3 +28,6 @@ go.work.sum
 *.pem
 
 uploads
+
+# coverage
+coverage.html

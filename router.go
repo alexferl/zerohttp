@@ -80,6 +80,11 @@ type Router interface {
 	// Additional middleware can be provided that will be applied only to this route.
 	PUT(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
 
+	// CONNECT registers a handler for HTTP CONNECT requests to the specified path.
+	// Additional middleware can be provided that will be applied only to this route.
+	// CONNECT is typically used for WebSocket and WebTransport upgrades.
+	CONNECT(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+
 	// Use adds middleware to the router's global middleware chain.
 	// Middleware is applied to all routes registered after this call.
 	Use(mw ...func(http.Handler) http.Handler)
@@ -274,6 +279,13 @@ func (r *defaultRouter) POST(path string, h http.Handler, mw ...func(http.Handle
 // Additional route-specific middleware can be provided.
 func (r *defaultRouter) PUT(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
 	r.handle(http.MethodPut, path, h, mw)
+}
+
+// CONNECT registers a handler for HTTP CONNECT requests to the specified path.
+// Additional route-specific middleware can be provided.
+// CONNECT is typically used for WebSocket and WebTransport upgrades.
+func (r *defaultRouter) CONNECT(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodConnect, path, h, mw)
 }
 
 // NotFound sets a custom handler for 404 Not Found responses.

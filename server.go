@@ -60,6 +60,12 @@ type Server struct {
 	// If nil, HTTP/3 server will not be started.
 	http3Server config.HTTP3Server
 
+	// webTransportServer is an optional WebTransport server for handling WebTransport sessions.
+	// Users can inject their own implementation (e.g., quic-go/webtransport-go) to enable WebTransport.
+	// If nil, WebTransport support will not be enabled.
+	// The server will be started automatically when ListenAndServeTLS or Start is called.
+	webTransportServer config.WebTransportServer
+
 	// logger is the structured logger used by the server and its middleware
 	// for recording HTTP requests, errors, and server lifecycle events.
 	logger log.Logger
@@ -126,16 +132,17 @@ func New(opts ...config.Option) *Server {
 	}
 
 	s := &Server{
-		Router:          router,
-		server:          server,
-		listener:        cfg.Listener,
-		tlsServer:       tlsServer,
-		tlsListener:     cfg.TLSListener,
-		certFile:        cfg.CertFile,
-		keyFile:         cfg.KeyFile,
-		autocertManager: cfg.AutocertManager,
-		http3Server:     cfg.HTTP3Server,
-		logger:          logger,
+		Router:             router,
+		server:             server,
+		listener:           cfg.Listener,
+		tlsServer:          tlsServer,
+		tlsListener:        cfg.TLSListener,
+		certFile:           cfg.CertFile,
+		keyFile:            cfg.KeyFile,
+		autocertManager:    cfg.AutocertManager,
+		http3Server:        cfg.HTTP3Server,
+		webTransportServer: cfg.WebTransportServer,
+		logger:             logger,
 	}
 
 	if s.server != nil {
@@ -253,6 +260,18 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 		log.F("cert_file", certFile),
 		log.F("key_file", keyFile))
 
+	// Start WebTransport server in background if configured
+	if s.webTransportServer != nil {
+		go func() {
+			s.logger.Info("Starting WebTransport server",
+				log.F("cert_file", certFile),
+				log.F("key_file", keyFile))
+			if err := s.webTransportServer.ListenAndServeTLS(certFile, keyFile); err != nil {
+				s.logger.Error("WebTransport server error", log.E(err))
+			}
+		}()
+	}
+
 	// Use Serve (not ServeTLS) since we already have a tls.Listener
 	return s.tlsServer.Serve(s.tlsListener)
 }
@@ -319,6 +338,18 @@ func (s *Server) Start() error {
 				log.F("key_file", s.keyFile))
 			if err := s.tlsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTPS server error: %w", err)
+			}
+		}()
+	}
+
+	// Start WebTransport server if configured and we have TLS
+	if s.webTransportServer != nil && shouldStartTLS {
+		go func() {
+			s.logger.Info("Starting WebTransport server...",
+				log.F("cert_file", s.certFile),
+				log.F("key_file", s.keyFile))
+			if err := s.webTransportServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil {
+				s.logger.Error("WebTransport server error", log.E(err))
 			}
 		}()
 	}
@@ -489,6 +520,20 @@ func (s *Server) SetHTTP3Server(server config.HTTP3Server) {
 	s.http3Server = server
 }
 
+// SetWebTransportServer sets the WebTransport server instance. This can be used to inject
+// a WebTransport implementation (e.g., quic-go/webtransport-go) after creating the server.
+//
+// The WebTransport server will be started automatically when ListenAndServeTLS or Start
+// is called. You don't need to call ListenAndServeTLS on the WebTransport server yourself.
+//
+// Parameters:
+//   - server: A WebTransport server instance implementing the config.WebTransportServer interface
+func (s *Server) SetWebTransportServer(server config.WebTransportServer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.webTransportServer = server
+}
+
 // Shutdown gracefully shuts down both HTTP and HTTPS servers without interrupting
 // any active connections. It waits for active connections to finish or for the
 // provided context to be cancelled.
@@ -548,6 +593,20 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}()
 	}
 
+	if s.webTransportServer != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.logger.Info("Closing WebTransport server")
+			if err := s.webTransportServer.Close(); err != nil {
+				s.logger.Error("Error closing WebTransport server", log.F("error", err))
+				errCh <- err
+			} else {
+				s.logger.Info("WebTransport server closed")
+			}
+		}()
+	}
+
 	wg.Wait()
 	close(errCh)
 
@@ -594,6 +653,14 @@ func (s *Server) Close() error {
 		s.logger.Debug("Closing HTTP/3 server")
 		if err := s.http3Server.Close(); err != nil {
 			s.logger.Error("Error closing HTTP/3 server", log.F("error", err))
+			lastErr = err
+		}
+	}
+
+	if s.webTransportServer != nil {
+		s.logger.Debug("Closing WebTransport server")
+		if err := s.webTransportServer.Close(); err != nil {
+			s.logger.Error("Error closing WebTransport server", log.F("error", err))
 			lastErr = err
 		}
 	}
