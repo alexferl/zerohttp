@@ -47,6 +47,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
 - **HTTP/2 & HTTP/3**: Automatic HTTP/2 support for TLS; optional HTTP/3 via pluggable interface
+- **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, and WebTransport - bring your own implementations
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
 - **Structured Logging**: Integrated structured logging with customizable fields
@@ -483,6 +484,42 @@ These features require external dependencies and are opt-in:
 - **WebTransport** - Low-latency bidirectional communication over HTTP/3
 
 Each feature uses a pluggable interface pattern - you bring your own implementation.
+
+### Interface Overview
+
+zerohttp defines minimal interfaces for each pluggable feature. Implement these interfaces
+or use existing implementations from the Go ecosystem:
+
+```go
+// AutocertManager - Automatic certificate management
+interface {
+    GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error)
+    HTTPHandler(fallback http.Handler) http.Handler
+}
+
+// HTTP3Server - HTTP/3 over QUIC support
+interface {
+    ListenAndServeTLS(certFile, keyFile string) error
+    Shutdown(ctx context.Context) error
+    Close() error
+}
+
+// WebTransportServer - WebTransport over HTTP/3
+interface {
+    ListenAndServeTLS(certFile, keyFile string) error
+    Close() error
+}
+```
+
+All pluggable features are configured via functional options:
+
+```go
+app := zh.New(
+    config.WithAutocertManager(myCertManager),
+    config.WithHTTP3Server(myH3Server),
+    config.WithWebTransportServer(myWTServer),
+)
+```
 
 ### Auto-TLS
 
