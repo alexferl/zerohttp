@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -57,8 +56,11 @@ func (w *webtransportAutocertServer) ListenAndServeTLSWithAutocert(manager confi
 	}
 
 	// webtransport.Server.ListenAndServe uses the H3's TLSConfig
-	log.Printf("[WebTransport] Starting with AutoTLS on %s", w.server.H3.Addr)
-	return w.server.ListenAndServe()
+	err := w.server.ListenAndServe()
+	if err != nil {
+		log.Printf("[ERROR] WebTransport server failed: %v", err)
+	}
+	return err
 }
 
 func main() {
@@ -146,16 +148,9 @@ func handleSession(sess *webtransport.Session) {
 		for {
 			msg, err := sess.ReceiveDatagram(context.Background())
 			if err != nil {
-				log.Printf("[WebTransport] Datagram receive error: %v", err)
 				return
 			}
-			log.Printf("[WebTransport] Received datagram: %s", string(msg))
-			err = sess.SendDatagram(append([]byte("Echo: "), msg...))
-			if err != nil {
-				log.Printf("[WebTransport] Datagram send error: %v", err)
-			} else {
-				log.Printf("[WebTransport] Datagram echo sent")
-			}
+			sess.SendDatagram(append([]byte("Echo: "), msg...))
 		}
 	}()
 
@@ -166,32 +161,16 @@ func handleSession(sess *webtransport.Session) {
 			return
 		}
 		go func(str *webtransport.Stream) {
-			defer func() {
-				log.Printf("[WebTransport] Closing stream")
-				str.Close()
-			}()
+			defer str.Close()
 			buf := make([]byte, 1024)
 			for {
 				n, err := str.Read(buf)
 				if n > 0 {
 					msg := string(buf[:n])
 					response := fmt.Sprintf("[%s] Echo: %s", time.Now().Format("15:04:05"), msg)
-					log.Printf("[WebTransport] Received stream message: %s, sending echo: %s", msg, response)
-					_, writeErr := str.Write([]byte(response))
-					if writeErr != nil {
-						log.Printf("[WebTransport] Error writing to stream: %v", writeErr)
-						return
-					}
-					log.Printf("[WebTransport] Echo sent successfully, waiting a bit before closing...")
-					// Small delay to ensure client receives data before we close
-					time.Sleep(100 * time.Millisecond)
+					str.Write([]byte(response))
 				}
 				if err != nil {
-					if err == io.EOF {
-						log.Printf("[WebTransport] Client closed stream (EOF)")
-					} else {
-						log.Printf("[WebTransport] Stream read error: %v", err)
-					}
 					return
 				}
 			}
