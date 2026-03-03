@@ -56,9 +56,9 @@ func (w *webtransportAutocertServer) ListenAndServeTLSWithAutocert(manager confi
 		NextProtos:     []string{"h3"},
 	}
 
-	// http3.Server.ListenAndServe uses the TLSConfig we just set
+	// webtransport.Server.ListenAndServe uses the H3's TLSConfig
 	log.Printf("[WebTransport] Starting with AutoTLS on %s", w.server.H3.Addr)
-	return w.server.H3.ListenAndServe()
+	return w.server.ListenAndServe()
 }
 
 func main() {
