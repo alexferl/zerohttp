@@ -987,6 +987,79 @@ func TestStartAutoTLS_WarmUpTimeout(t *testing.T) {
 	}
 }
 
+// emptyHostnamesManager returns empty hostnames slice
+type emptyHostnamesManager struct {
+	mockAutocertManager
+}
+
+func (m *emptyHostnamesManager) Hostnames() []string {
+	return []string{}
+}
+
+// TestStartAutoTLS_EmptyHostnames verifies warm-up goroutine handles empty hostnames
+func TestStartAutoTLS_EmptyHostnames(t *testing.T) {
+	mgr := &emptyHostnamesManager{}
+	h3Server := &mockHTTP3ServerWithAutocert{}
+
+	server := New(
+		config.WithAutocertManager(mgr),
+		config.WithTLSAddr("localhost:0"),
+		config.WithAddr("localhost:0"),
+	)
+	server.SetHTTP3Server(h3Server)
+
+	go func() {
+		_ = server.StartAutoTLS()
+	}()
+
+	// Give time for warm-up goroutine to run and return early
+	time.Sleep(200 * time.Millisecond)
+
+	// HTTP/3 should not have started since warm-up returned early due to empty hostnames
+	// The certReady channel was never signaled, so HTTP/3 is still blocked
+	if h3Server.wasListenAndServeTLSWithAutocertCalled() {
+		t.Error("HTTP/3 should not have started with empty hostnames")
+	}
+}
+
+// TestStartAutoTLS_NoHTTPServer verifies httpReady is closed when no HTTP server
+func TestStartAutoTLS_NoHTTPServer(t *testing.T) {
+	mgr := &mockAutocertManager{}
+	h3Server := &mockHTTP3ServerWithAutocert{}
+
+	server := New(
+		config.WithAutocertManager(mgr),
+		config.WithTLSAddr("localhost:0"),
+		// No config.WithAddr - no HTTP server
+	)
+	server.SetHTTP3Server(h3Server)
+
+	// Manually set server to nil to simulate no HTTP server
+	server.server = nil
+
+	go func() {
+		_ = server.StartAutoTLS()
+	}()
+
+	// Give time for startup - warm-up should proceed even without HTTP server
+	time.Sleep(200 * time.Millisecond)
+
+	// HTTP/3 should still start via TLS handshake path
+	conn, err := tls.Dial("tcp", server.ListenerTLSAddr(), &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err == nil {
+		_ = conn.Close()
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// HTTP/3 should have started
+	if !h3Server.wasListenAndServeTLSWithAutocertCalled() {
+		t.Error("HTTP/3 should have started via GetCertificate path")
+	}
+}
+
 func TestServer_ListenAndServeTLS(t *testing.T) {
 	server := New()
 	// Set up a TLS server but no listener - it should try to create one
