@@ -25,6 +25,10 @@ func (m *mockAutocertManager) HTTPHandler(fallback http.Handler) http.Handler {
 	return fallback
 }
 
+func (m *mockAutocertManager) Hostnames() []string {
+	return m.hosts
+}
+
 func TestDefaultConfigValues(t *testing.T) {
 	cfg := DefaultConfig
 	if cfg.Addr != "localhost:8080" {

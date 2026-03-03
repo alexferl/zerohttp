@@ -428,6 +428,11 @@ func (s *Server) StartAutoTLS() error {
 	s.logger.Info("Starting server with AutoTLS...")
 
 	errCh := make(chan error, 4)
+	httpReady := make(chan struct{})
+
+	if s.server == nil {
+		close(httpReady)
+	}
 
 	// Start HTTP server for ACME challenges and redirects
 	if s.server != nil {
@@ -438,13 +443,28 @@ func (s *Server) StartAutoTLS() error {
 				Handler: s.autocertManager.HTTPHandler(s.createHTTPSRedirectHandler()),
 			}
 
+			ln, err := net.Listen("tcp", httpServer.Addr)
+			if err != nil {
+				s.logger.Error("Failed to bind HTTP listener", log.E(err))
+				errCh <- err
+				return
+			}
+
 			s.logger.Info("Starting HTTP server for ACME challenges and redirects",
 				log.F("addr", fmtHTTPAddr(httpServer.Addr)))
-			errCh <- httpServer.ListenAndServe()
+			close(httpReady)
+			errCh <- httpServer.Serve(ln)
 		}()
 	}
 
-	certReady := make(chan struct{}, 1)
+	certReady := make(chan struct{})
+	var certOnce sync.Once
+	signalCertReady := func() {
+		certOnce.Do(func() {
+			s.logger.Info("AutoTLS certificate is ready")
+			close(certReady)
+		})
+	}
 
 	// Start HTTPS server with autocert
 	if s.tlsServer != nil {
@@ -457,10 +477,7 @@ func (s *Server) StartAutoTLS() error {
 				cert, err := s.autocertManager.GetCertificate(hello)
 				if err == nil {
 					// Signal that cert is ready (first successful retrieval)
-					select {
-					case certReady <- struct{}{}:
-					default:
-					}
+					signalCertReady()
 				}
 				return cert, err
 			}
@@ -469,8 +486,51 @@ func (s *Server) StartAutoTLS() error {
 				log.F("addr", fmtHTTPSAddr(s.tlsServer.Addr)))
 			errCh <- s.tlsServer.ListenAndServeTLS("", "")
 		}()
-	} else {
-		close(certReady)
+	}
+
+	// Warm-up goroutine: proactively fetch certificate for HTTP/3/WebTransport
+	if s.http3Server != nil || s.webTransportServer != nil {
+		go func() {
+			<-httpReady
+			hostnames := s.autocertManager.Hostnames()
+			if len(hostnames) == 0 {
+				s.logger.Error("AutocertManager returned no hostnames, cannot warm up certificate")
+				return
+			}
+
+			hello := &tls.ClientHelloInfo{ServerName: hostnames[0]}
+
+			// Attempt immediately before starting the ticker loop
+			// so a cached cert on restart doesn't incur a 2-second delay
+			cert, err := s.autocertManager.GetCertificate(hello)
+			if err == nil && cert != nil {
+				signalCertReady()
+				return
+			}
+			s.logger.Debug("Certificate not yet ready on first attempt, starting poll loop...", log.E(err))
+
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			timeout := time.After(5 * time.Minute)
+
+			for {
+				select {
+				case <-ticker.C:
+					cert, err := s.autocertManager.GetCertificate(hello)
+					if err != nil {
+						s.logger.Debug("Certificate not yet ready, retrying...", log.E(err))
+						continue
+					}
+					if cert != nil {
+						signalCertReady()
+						return
+					}
+				case <-timeout:
+					s.logger.Error("Timed out waiting for AutoTLS certificate")
+					return
+				}
+			}
+		}()
 	}
 
 	// Start HTTP/3 server with autocert if supported (after cert is ready)
