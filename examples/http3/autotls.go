@@ -18,7 +18,18 @@ import (
 var (
 	_ config.HTTP3Server             = (*http3AutocertServer)(nil)
 	_ config.HTTP3ServerWithAutocert = (*http3AutocertServer)(nil)
+	_ config.AutocertManager         = (*autocertManagerWrapper)(nil)
 )
+
+// autocertManagerWrapper wraps autocert.Manager to implement config.AutocertManager
+type autocertManagerWrapper struct {
+	*autocert.Manager
+	hostnames []string
+}
+
+func (a *autocertManagerWrapper) Hostnames() []string {
+	return a.hostnames
+}
 
 // http3AutocertServer wraps quic-go's http3.Server to implement
 // config.HTTP3ServerWithAutocert interface
@@ -67,11 +78,17 @@ func main() {
 		HostPolicy: autocert.HostWhitelist(*domain),
 	}
 
+	// Wrap the manager to implement config.AutocertManager
+	wrappedManager := &autocertManagerWrapper{
+		Manager:   manager,
+		hostnames: []string{*domain},
+	}
+
 	// Create zerohttp server with autocert manager
 	app := zerohttp.New(
 		config.WithAddr(":80"),
 		config.WithTLSAddr(":443"),
-		config.WithAutocertManager(manager),
+		config.WithAutocertManager(wrappedManager),
 	)
 
 	// Add Alt-Svc header to advertise HTTP/3 support

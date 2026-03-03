@@ -21,7 +21,18 @@ import (
 var (
 	_ config.WebTransportServer             = (*webtransportAutocertServer)(nil)
 	_ config.WebTransportServerWithAutocert = (*webtransportAutocertServer)(nil)
+	_ config.AutocertManager                = (*autocertManagerWrapper)(nil)
 )
+
+// autocertManagerWrapper wraps autocert.Manager to implement config.AutocertManager
+type autocertManagerWrapper struct {
+	*autocert.Manager
+	hostnames []string
+}
+
+func (a *autocertManagerWrapper) Hostnames() []string {
+	return a.hostnames
+}
 
 // webtransportAutocertServer wraps quic-go's webtransport.Server to implement
 // config.WebTransportServerWithAutocert interface
@@ -67,12 +78,18 @@ func main() {
 		HostPolicy: autocert.HostWhitelist(*domain),
 	}
 
+	// Wrap the manager to implement config.AutocertManager
+	wrappedMgr := &autocertManagerWrapper{
+		Manager:   mgr,
+		hostnames: []string{*domain},
+	}
+
 	// Create zerohttp app with autocert manager
 	app := zh.New(
 		config.WithDisableDefaultMiddlewares(),
 		config.WithAddr(":80"),     // HTTP port for ACME challenges
 		config.WithTLSAddr(":443"), // HTTPS port
-		config.WithAutocertManager(mgr),
+		config.WithAutocertManager(wrappedMgr),
 	)
 
 	// Create HTTP/3 server
