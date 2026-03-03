@@ -327,7 +327,8 @@ type mockAutocertManager struct {
 
 func (m *mockAutocertManager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	m.getCertificateCalled = true
-	return nil, nil
+	// Return a dummy cert to simulate successful certificate retrieval
+	return &tls.Certificate{}, nil
 }
 
 func (m *mockAutocertManager) HTTPHandler(fallback http.Handler) http.Handler {
@@ -649,7 +650,11 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
-	server := New(config.WithAutocertManager(mgr))
+	// Use unique port to avoid conflicts with other tests
+	server := New(
+		config.WithAutocertManager(mgr),
+		config.WithTLSAddr("localhost:18443"),
+	)
 	server.SetHTTP3Server(h3Server)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -659,6 +664,18 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 	}()
 
 	// Give it a moment to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Trigger GetCertificate by making a TLS connection
+	// This signals the certReady channel so HTTP/3 can start
+	conn, err := tls.Dial("tcp", "localhost:18443", &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err == nil {
+		_ = conn.Close()
+	}
+
+	// Give HTTP/3 time to start after cert signal
 	time.Sleep(50 * time.Millisecond)
 
 	// The HTTP/3 server with autocert support should have been detected and started
@@ -721,7 +738,11 @@ func TestServer_StartAutoTLS_WithWebTransportAutocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	wtServer := &mockWebTransportServerWithAutocert{}
 
-	server := New(config.WithAutocertManager(mgr))
+	// Use unique port to avoid conflicts with other tests
+	server := New(
+		config.WithAutocertManager(mgr),
+		config.WithTLSAddr("localhost:28443"),
+	)
 	server.SetWebTransportServer(wtServer)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -731,6 +752,18 @@ func TestServer_StartAutoTLS_WithWebTransportAutocert(t *testing.T) {
 	}()
 
 	// Give it a moment to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Trigger GetCertificate by making a TLS connection
+	// This signals the certReady channel so WebTransport can start
+	conn, err := tls.Dial("tcp", "localhost:28443", &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if err == nil {
+		_ = conn.Close()
+	}
+
+	// Give WebTransport time to start after cert signal
 	time.Sleep(50 * time.Millisecond)
 
 	// The WebTransport server with autocert support should have the autocert method called

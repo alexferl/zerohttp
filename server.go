@@ -444,6 +444,8 @@ func (s *Server) StartAutoTLS() error {
 		}()
 	}
 
+	certReady := make(chan struct{}, 1)
+
 	// Start HTTPS server with autocert
 	if s.tlsServer != nil {
 		go func() {
@@ -451,28 +453,44 @@ func (s *Server) StartAutoTLS() error {
 			if s.tlsServer.TLSConfig == nil {
 				s.tlsServer.TLSConfig = &tls.Config{}
 			}
-			s.tlsServer.TLSConfig.GetCertificate = s.autocertManager.GetCertificate
+			s.tlsServer.TLSConfig.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				cert, err := s.autocertManager.GetCertificate(hello)
+				if err == nil {
+					// Signal that cert is ready (first successful retrieval)
+					select {
+					case certReady <- struct{}{}:
+					default:
+					}
+				}
+				return cert, err
+			}
 
 			s.logger.Info("Starting HTTPS server with AutoTLS",
 				log.F("addr", fmtHTTPSAddr(s.tlsServer.Addr)))
 			errCh <- s.tlsServer.ListenAndServeTLS("", "")
 		}()
+	} else {
+		close(certReady)
 	}
 
-	// Start HTTP/3 server with autocert if supported
+	// Start HTTP/3 server with autocert if supported (after cert is ready)
 	if s.http3Server != nil {
 		if h3Autocert, ok := s.http3Server.(config.HTTP3ServerWithAutocert); ok {
 			go func() {
+				s.logger.Info("Waiting for certificate before starting HTTP/3...")
+				<-certReady
 				s.logger.Info("Starting HTTP/3 server with AutoTLS")
 				errCh <- h3Autocert.ListenAndServeTLSWithAutocert(s.autocertManager)
 			}()
 		}
 	}
 
-	// Start WebTransport server with autocert if supported
+	// Start WebTransport server with autocert if supported (after cert is ready)
 	if s.webTransportServer != nil {
 		if wtAutocert, ok := s.webTransportServer.(config.WebTransportServerWithAutocert); ok {
 			go func() {
+				s.logger.Info("Waiting for certificate before starting WebTransport...")
+				<-certReady
 				s.logger.Info("Starting WebTransport server with AutoTLS")
 				errCh <- wtAutocert.ListenAndServeTLSWithAutocert(s.autocertManager)
 			}()
