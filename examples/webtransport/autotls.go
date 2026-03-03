@@ -1,22 +1,5 @@
 //go:build ignore
 
-// WebTransport with AutoTLS Example
-//
-// This example shows how to use WebTransport with automatic TLS certificate
-// management via Let's Encrypt (autocert).
-//
-// Requirements:
-// - A publicly accessible domain name
-// - Ports 80 and 443 open for HTTP and HTTPS
-//
-// Usage:
-//
-//	go run autotls.go -domain=your-domain.com
-//
-// The server will:
-// - Obtain and renew certificates automatically from Let's Encrypt
-// - Serve HTTP on port 80 (redirects to HTTPS + ACME challenges)
-// - Serve HTTPS on port 443 with WebTransport support
 package main
 
 import (
@@ -87,6 +70,8 @@ func main() {
 	// Create zerohttp app with autocert manager
 	app := zh.New(
 		config.WithDisableDefaultMiddlewares(),
+		config.WithAddr(":80"),     // HTTP port for ACME challenges
+		config.WithTLSAddr(":443"), // HTTPS port
 		config.WithAutocertManager(mgr),
 	)
 
