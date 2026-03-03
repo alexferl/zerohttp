@@ -55,8 +55,8 @@ func (w *webtransportAutocertServer) ListenAndServeTLSWithAutocert(manager confi
 		NextProtos:     []string{"h3"},
 	}
 
-	// ListenAndServe on the HTTP/3 server (WebTransport runs over it)
-	err := w.server.H3.ListenAndServe()
+	// webtransport.Server.ListenAndServe uses the H3's TLSConfig
+	err := w.server.ListenAndServe()
 	if err != nil {
 		log.Printf("[ERROR] WebTransport server failed: %v", err)
 	}
