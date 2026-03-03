@@ -15,6 +15,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Request Binding](#request-binding)
 - [Middleware](#middleware)
 - [Route Groups](#route-groups)
+- [Path Parameters](#path-parameters)
 - [Static File Serving](#static-file-serving)
     - [Static File Methods](#static-file-methods)
 - [Error Handling](#error-handling)
@@ -281,6 +282,50 @@ app.Group(func(api zh.Router) {
     api.DELETE("/users/{id}", deleteUser)
 })
 ```
+
+
+## Path Parameters
+
+Type-safe path parameter extraction with generic support:
+
+```go
+// Basic string extraction
+app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    id := zh.Param(r, "id")  // Returns string
+    return zh.R.JSON(w, 200, zh.M{"user_id": id})
+}))
+
+// Typed extraction with error handling
+app.GET("/items/{itemID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    itemID, err := zh.ParamAs[int](r, "itemID")
+    if err != nil {
+        return zh.R.ProblemDetail(w, zh.NewProblemDetail(400, "Invalid itemID"))
+    }
+    return zh.R.JSON(w, 200, zh.M{"item_id": itemID})
+}))
+
+// Multiple parameters
+app.GET("/users/{userID}/posts/{postID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    userID, _ := zh.ParamAs[int](r, "userID")
+    postID, _ := zh.ParamAs[int](r, "postID")
+    return zh.R.JSON(w, 200, zh.M{"user_id": userID, "post_id": postID})
+}))
+
+// With default value (returns default if param missing or invalid)
+app.GET("/products/{category}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    category := zh.ParamOrDefault(r, "category", "all")
+    return zh.R.JSON(w, 200, zh.M{"category": category})
+}))
+```
+
+**Available Functions:**
+
+- `Param(r, "name")` - Extract parameter as string
+- `ParamAs[T](r, "name")` - Extract and convert to type T (int, int64, uint, float64, bool, etc.)
+- `ParamAsOrDefault[T](r, "name", defaultVal)` - Extract with fallback value
+- `ParamOrDefault(r, "name", "default")` - String extraction with fallback
+
+**Supported Types:** `string`, `int`, `int8`, `int16`, `int32`, `int64`, `uint`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`, `bool`
 
 
 ## Static File Serving
