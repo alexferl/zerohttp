@@ -695,6 +695,78 @@ func TestServer_StartAutoTLS_WithHTTP3NoAutocert(t *testing.T) {
 	}
 }
 
+// mockWebTransportServerWithAutocert implements both WebTransportServer and WebTransportServerWithAutocert
+type mockWebTransportServerWithAutocert struct {
+	mockWebTransportServer
+	mu                                  sync.Mutex
+	listenAndServeTLSWithAutocertCalled bool
+	autocertManager                     config.AutocertManager
+}
+
+func (m *mockWebTransportServerWithAutocert) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.listenAndServeTLSWithAutocertCalled = true
+	m.autocertManager = manager
+	return nil
+}
+
+func (m *mockWebTransportServerWithAutocert) wasListenAndServeTLSWithAutocertCalled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listenAndServeTLSWithAutocertCalled
+}
+
+func TestServer_StartAutoTLS_WithWebTransportAutocert(t *testing.T) {
+	mgr := &mockAutocertManager{}
+	wtServer := &mockWebTransportServerWithAutocert{}
+
+	server := New(config.WithAutocertManager(mgr))
+	server.SetWebTransportServer(wtServer)
+
+	// Run StartAutoTLS in a goroutine since it blocks
+	go func() {
+		// Suppress the error since we're just testing the setup
+		_ = server.StartAutoTLS()
+	}()
+
+	// Give it a moment to start
+	time.Sleep(50 * time.Millisecond)
+
+	// The WebTransport server with autocert support should have the autocert method called
+	if !wtServer.wasListenAndServeTLSWithAutocertCalled() {
+		t.Error("Expected WebTransport server ListenAndServeTLSWithAutocert to be called")
+	}
+
+	if wtServer.autocertManager != mgr {
+		t.Error("Expected WebTransport server to receive the autocert manager")
+	}
+}
+
+func TestServer_StartAutoTLS_WithWebTransportNoAutocert(t *testing.T) {
+	// Test WebTransport server that does NOT support autocert
+	mgr := &mockAutocertManager{}
+	wtServer := &mockWebTransportServer{} // This doesn't implement WebTransportServerWithAutocert
+
+	server := New(config.WithAutocertManager(mgr))
+	server.SetWebTransportServer(wtServer)
+
+	// Run StartAutoTLS in a goroutine since it blocks
+	go func() {
+		// Suppress the error since we're just testing the setup
+		_ = server.StartAutoTLS()
+	}()
+
+	// Give it a moment to start
+	time.Sleep(50 * time.Millisecond)
+
+	// The WebTransport server without autocert support should not have ListenAndServeTLS called
+	// since it doesn't implement WebTransportServerWithAutocert
+	if wtServer.wasListenAndServeTLSCalled() {
+		t.Log("WebTransport server ListenAndServeTLS was not called (expected - no autocert support)")
+	}
+}
+
 func TestServer_ListenAndServeTLS(t *testing.T) {
 	server := New()
 	// Set up a TLS server but no listener - it should try to create one

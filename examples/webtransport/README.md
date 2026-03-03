@@ -14,7 +14,18 @@ A complete WebTransport echo server using zerohttp with HTTP/3 support.
 - [mkcert](https://github.com/FiloSottile/mkcert) for local HTTPS certificates
 - Chrome, Firefox, or Safari with WebTransport support
 
-## Setup
+## Examples
+
+This directory contains two examples:
+
+- **`main.go`** - WebTransport with local certificates (for development)
+- **`autotls.go`** - WebTransport with Let's Encrypt AutoTLS (for production)
+
+---
+
+## Development Setup (main.go)
+
+Use this for local development with self-signed certificates.
 
 ### 1. Install mkcert
 
@@ -161,13 +172,92 @@ func handleSession(sess *webtransport.Session) {
    Just set the WebTransport server with `app.SetWebTransportServer()` and then call
    `app.ListenAndServeTLS()`. The WebTransport server will be started automatically.
 
-## Production Considerations
+## Production Setup (autotls.go)
 
-- Replace mkcert certificates with proper ones from Let's Encrypt
-- Implement proper origin checking in `CheckOrigin`
+For production with automatic Let's Encrypt certificates:
+
+```bash
+go run autotls.go -domain=your-domain.com
+```
+
+### Requirements
+
+- A publicly accessible domain name
+- Ports 80 and 443 open and accessible from the internet
+- The domain must resolve to the server's IP address
+
+### How It Works
+
+The `autotls.go` example uses `golang.org/x/crypto/acme/autocert` for automatic certificate management:
+
+1. **Certificate Acquisition**: On first start, the server obtains a certificate from Let's Encrypt
+2. **Auto-Renewal**: Certificates are automatically renewed before expiry
+3. **HTTP Challenge**: The ACME HTTP-01 challenge is handled on port 80
+4. **WebTransport**: Runs on port 443 with the auto-obtained certificate
+
+### Key Differences from Development Setup
+
+The `autotls.go` example uses a wrapper to implement the `WebTransportServerWithAutocert` interface:
+
+```go
+// Wrapper implements config.WebTransportServerWithAutocert
+type webtransportAutocertServer struct {
+    server *webtransport.Server
+}
+
+func (w *webtransportAutocertServer) ListenAndServeTLS(certFile, keyFile string) error {
+    return w.server.ListenAndServeTLS(certFile, keyFile)
+}
+
+func (w *webtransportAutocertServer) Close() error {
+    return w.server.Close()
+}
+
+func (w *webtransportAutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+    // Configure TLS with autocert on the underlying HTTP/3 server
+    w.server.H3.TLSConfig = &tls.Config{
+        GetCertificate: manager.GetCertificate,
+        NextProtos:     []string{"h3"},
+    }
+    return w.server.H3.ListenAndServe()
+}
+```
+
+Then use the wrapper with zerohttp:
+
+```go
+// Create autocert manager
+mgr := &autocert.Manager{
+    Cache:      autocert.DirCache("/var/cache/certs"),
+    Prompt:     autocert.AcceptTOS,
+    HostPolicy: autocert.HostWhitelist("your-domain.com"),
+}
+
+// Create zerohttp app with autocert manager
+app := zh.New(
+    config.WithAutocertManager(mgr),
+)
+
+// Create HTTP/3 and WebTransport servers
+h3 := &http3.Server{Addr: ":443", Handler: app}
+wt := &webtransport.Server{H3: h3, CheckOrigin: ...}
+webtransport.ConfigureHTTP3Server(h3)
+
+// Wrap the server to enable AutoTLS support
+wtServer := &webtransportAutocertServer{server: wt}
+app.SetWebTransportServer(wtServer)
+
+// Start with AutoTLS - WebTransport starts automatically!
+app.StartAutoTLS()
+```
+
+### Production Considerations
+
+- Implement proper origin checking in `CheckOrigin` (don't allow all origins)
 - Add rate limiting for WebTransport connections
 - Consider connection limits per client
 - Use structured logging for session events
+- Store certificates in a persistent location (not `/tmp`)
 
 ## Resources
 

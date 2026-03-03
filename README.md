@@ -23,9 +23,10 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Disabling Default Security](#disabling-default-security)
 - [Available Middlewares](#available-middlewares)
 - [Extensible Interfaces](#extensible-interfaces)
-- [Auto-TLS](#auto-tls)
-- [HTTP/3 Support](#http3-support)
-- [WebTransport Support](#webtransport-support)
+- [Pluggable Features](#pluggable-features)
+    - [Auto-TLS](#auto-tls)
+    - [HTTP/3 Support](#http3-support)
+    - [WebTransport Support](#webtransport-support)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
 - [Configuration Reference](#configuration-reference)
@@ -45,9 +46,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Flexible Routing**: Method-based routing with route groups and parameter support
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
-- **Auto-TLS**: Pluggable automatic certificate management (e.g., Let's Encrypt, custom ACME providers)
-- **HTTP/3 Support**: Pluggable HTTP/3 support for modern web performance
-- **WebTransport Support**: Pluggable WebTransport for low-latency bidirectional communication
+- **HTTP/2 & HTTP/3**: Automatic HTTP/2 support for TLS; optional HTTP/3 via pluggable interface
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
 - **Structured Logging**: Integrated structured logging with customizable fields
@@ -474,7 +473,18 @@ zh.Bind = &MyBinder{}
 ```
 
 
-## Auto-TLS
+## Pluggable Features
+
+zerohttp provides several pluggable features that extend the core functionality through interfaces.
+These features require external dependencies and are opt-in:
+
+- **Auto-TLS** - Automatic certificate management (e.g., Let's Encrypt)
+- **HTTP/3** - HTTP/3 support over QUIC (HTTP/2 is enabled by default for TLS)
+- **WebTransport** - Low-latency bidirectional communication over HTTP/3
+
+Each feature uses a pluggable interface pattern - you bring your own implementation.
+
+### Auto-TLS
 
 AutoTLS provides automatic certificate management via a pluggable interface. You can use
 [golang.org/x/crypto/acme/autocert](https://pkg.go.dev/golang.org/x/crypto/acme/autocert)
@@ -501,12 +511,12 @@ app.StartAutoTLS()
 ```
 
 
-## HTTP/3 Support
+### HTTP/3 Support
 
 zerohttp supports HTTP/3 through a pluggable interface. Users can inject their own HTTP/3
 implementation (e.g., [quic-go/http3](https://github.com/quic-go/quic-go)).
 
-### Basic HTTP/3 with TLS certificates
+#### Basic HTTP/3 with TLS certificates
 
 ```go
 import "github.com/quic-go/quic-go/http3"
@@ -531,7 +541,7 @@ app.StartTLS("cert.pem", "key.pem")
 ```
 
 
-## WebTransport Support
+### WebTransport Support
 
 WebTransport provides low-latency, bidirectional communication over HTTP/3:
 

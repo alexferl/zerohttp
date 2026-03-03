@@ -360,6 +360,19 @@ type WebTransportServer interface {
 	Close() error
 }
 
+// WebTransportServerWithAutocert is an optional interface for WebTransport servers that support
+// automatic certificate management via autocert.Manager. If a WebTransport server
+// implements this interface, it will be used by StartAutoTLS to configure
+// WebTransport with Let's Encrypt certificates.
+type WebTransportServerWithAutocert interface {
+	WebTransportServer
+
+	// ListenAndServeTLSWithAutocert starts the WebTransport server with automatic
+	// certificate management using the provided autocert manager.
+	// The manager's GetCertificate function is used to obtain TLS certificates.
+	ListenAndServeTLSWithAutocert(manager AutocertManager) error
+}
+
 // WithHTTP3Server sets a custom HTTP/3 server instance.
 func WithHTTP3Server(server HTTP3Server) Option {
 	return func(c *Config) {
