@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"flag"
 	"log"
 	"net/http"
 
@@ -52,18 +53,24 @@ func (h *http3AutocertServer) ListenAndServeTLSWithAutocert(manager config.Autoc
 }
 
 func main() {
-	// Your domain must be publicly accessible on port 443 for Let's Encrypt
-	const domain = "example.com"
+	domain := flag.String("domain", "", "Domain name for Let's Encrypt certificate (required)")
+	flag.Parse()
+
+	if *domain == "" {
+		log.Fatal("Please provide a domain name with -domain flag")
+	}
 
 	// Create autocert manager for automatic certificates
 	manager := &autocert.Manager{
 		Cache:      autocert.DirCache("/var/cache/certs"),
 		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(domain),
+		HostPolicy: autocert.HostWhitelist(*domain),
 	}
 
 	// Create zerohttp server with autocert manager
 	app := zerohttp.New(
+		config.WithAddr(":80"),
+		config.WithTLSAddr(":443"),
 		config.WithAutocertManager(manager),
 	)
 
