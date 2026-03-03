@@ -288,6 +288,11 @@ type AutocertManager interface {
 	// HTTPHandler wraps the given handler to handle ACME HTTP-01 challenges.
 	// Non-challenge requests are passed through to the wrapped handler.
 	HTTPHandler(fallback http.Handler) http.Handler
+
+	// Hostnames returns the list of hostnames configured for this manager.
+	// This is used to proactively fetch certificates before starting HTTP/3.
+	// Must return at least one hostname.
+	Hostnames() []string
 }
 
 // WithAutocertManager sets an autocert manager for automatic TLS certificate management.
