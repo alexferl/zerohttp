@@ -41,7 +41,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Zero Dependencies**: No external dependencies
 - **Secure by Default**: Automatically applies essential security middlewares out of the box
 - **Response Rendering**: Built-in support for JSON, HTML, text, and file responses
-- **Request Binding**: JSON request body parsing
+- **Request Binding**: JSON, form, and multipart form parsing with struct tag binding
 - **Problem Details**: RFC 9457 Problem Details for HTTP APIs error responses
 - **Flexible Routing**: Method-based routing with route groups and parameter support
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
@@ -152,7 +152,9 @@ zh.Render.ProblemDetail(w, problem)
 
 ## Request Binding
 
-Simple JSON request parsing with validation:
+Structured request parsing with validation for JSON, form data, and multipart forms:
+
+### JSON Binding
 
 ```go
 app.POST("/api/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
@@ -174,9 +176,65 @@ app.POST("/api/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Reques
 }))
 ```
 
+### Form Binding
+
+```go
+app.POST("/login", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    var form struct {
+        Username string   `form:"username"`
+        Password string   `form:"password"`
+        Remember bool     `form:"remember"`
+        Tags     []string `form:"tags"`       // Supports slices
+    }
+
+    // Bind application/x-www-form-urlencoded or query parameters
+    if err := zh.Bind.Form(r, &form); err != nil {
+        return zh.NewProblemDetail(400, err.Error()).Render(w)
+    }
+
+    // Process form data...
+    return zh.R.JSON(w, 200, zh.M{"user": form.Username})
+}))
+```
+
+### Multipart Form Binding (File Uploads)
+
+```go
+app.POST("/upload", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    var form struct {
+        Description string            `form:"description"`
+        Document    *zh.FileHeader    `form:"document"`    // Single file
+        Images      []*zh.FileHeader  `form:"images"`      // Multiple files
+    }
+
+    // Bind multipart/form-data with file uploads
+    // maxMemory controls how much is stored in memory vs temp files
+    if err := zh.Bind.MultipartForm(r, &form, 32<<20); err != nil {
+        return zh.NewProblemDetail(400, err.Error()).Render(w)
+    }
+
+    // Access uploaded files
+    if form.Document != nil {
+        file, err := form.Document.Open()
+        if err != nil {
+            return err
+        }
+        defer file.Close()
+
+        // Process file...
+    }
+
+    return zh.R.JSON(w, 200, zh.M{
+        "description": form.Description,
+        "files":       len(form.Images),
+    })
+}))
+```
+
 **Short alias available**: Use `zh.B` instead of `zh.Bind` for convenience.
 
-The binder uses `json.Decoder` with `DisallowUnknownFields()` for stricter validation.
+The JSON binder uses `json.Decoder` with `DisallowUnknownFields()` for stricter validation.
+Form binding supports automatic type conversion for int, uint, float, bool, and slice types.
 
 ## Middleware
 
@@ -467,6 +525,16 @@ func (b *MyBinder) JSON(r io.Reader, dst any) error {
     decoder := json.NewDecoder(r)
     decoder.UseNumber() // Use json.Number instead of float64
     return decoder.Decode(dst)
+}
+
+func (b *MyBinder) Form(r *http.Request, dst any) error {
+    // Custom form binding logic
+    return nil
+}
+
+func (b *MyBinder) MultipartForm(r *http.Request, dst any, maxMemory int64) error {
+    // Custom multipart form binding logic
+    return nil
 }
 
 // Replace default

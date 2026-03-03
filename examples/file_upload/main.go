@@ -19,6 +19,12 @@ const (
 	maxFormSize = 32 << 20 // 32 MB total
 )
 
+// UploadForm represents the multipart form structure
+type UploadForm struct {
+	Description string           `form:"description"`
+	Files       []*zh.FileHeader `form:"files"`
+}
+
 func main() {
 	app := zh.New(
 		config.WithRequestBodySizeOptions(
@@ -53,23 +59,30 @@ func uploadFormHandler(w http.ResponseWriter, r *http.Request) error {
 }
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) error {
-	if err := r.ParseMultipartForm(maxFormSize); err != nil {
+	var form UploadForm
+
+	// Use the new Bind.MultipartForm method
+	if err := zh.B.MultipartForm(r, &form, maxFormSize); err != nil {
 		problem := zh.NewProblemDetail(400, "Failed to parse form")
 		problem.Set("error", err.Error())
 		return problem.Render(w)
 	}
 
-	description := r.FormValue("description")
-	files := r.MultipartForm.File["files"]
-
-	if len(files) == 0 {
+	if len(form.Files) == 0 {
 		return zh.NewProblemDetail(400, "No files uploaded").Render(w)
 	}
 
 	var uploadedFiles []zh.M
 	var errors []string
 
-	for _, fileHeader := range files {
+	for _, fileHeader := range form.Files {
+		// Check file size
+		if fileHeader.Size > maxFileSize {
+			errors = append(errors, fmt.Sprintf("%s: file too large", fileHeader.Filename))
+			continue
+		}
+
+		// Open the file using FileHeader.Open()
 		file, err := fileHeader.Open()
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("%s: %v", fileHeader.Filename, err))
@@ -78,17 +91,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) error {
 
 		// Use anonymous function to handle defer properly in loop
 		func() {
-			defer func() {
-				if err := file.Close(); err != nil {
-					errors = append(errors, fmt.Sprintf("%s: failed to close - %v", fileHeader.Filename, err))
-				}
-			}()
-
-			// Check file size
-			if fileHeader.Size > maxFileSize {
-				errors = append(errors, fmt.Sprintf("%s: file too large", fileHeader.Filename))
-				return
-			}
+			defer func() { _ = file.Close() }()
 
 			filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), fileHeader.Filename)
 			destPath := filepath.Join(uploadDir, filename)
@@ -101,19 +104,19 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) error {
 
 			_, err = io.Copy(dest, file)
 			if err != nil {
-				_ = dest.Close()        // Try to close before cleanup
-				_ = os.Remove(destPath) // Remove failed upload
+				_ = dest.Close()
+				_ = os.Remove(destPath)
 				errors = append(errors, fmt.Sprintf("%s: copy failed", fileHeader.Filename))
 				return
 			}
 
 			if err := dest.Close(); err != nil {
-				_ = os.Remove(destPath) // Remove on close failure
+				_ = os.Remove(destPath)
 				errors = append(errors, fmt.Sprintf("%s: failed to close destination - %v", fileHeader.Filename, err))
 				return
 			}
 
-			// Success - file saved successfully, add to results
+			// Success - file saved successfully
 			uploadedFiles = append(uploadedFiles, zh.M{
 				"filename":     filename,
 				"original":     fileHeader.Filename,
@@ -124,9 +127,9 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	response := zh.M{
-		"message":     fmt.Sprintf("Uploaded %d of %d files", len(uploadedFiles), len(files)),
+		"message":     fmt.Sprintf("Uploaded %d of %d files", len(uploadedFiles), len(form.Files)),
 		"files":       uploadedFiles,
-		"description": description,
+		"description": form.Description,
 	}
 
 	if len(errors) > 0 {
