@@ -1035,13 +1035,18 @@ The functional options pattern provides structured configuration for all aspects
 - `config.WithTLSListener()` - Custom HTTPS listener
 - `config.WithCertFile()` - TLS certificate file path
 - `config.WithKeyFile()` - TLS key file path
+- `config.WithPreShutdownHook()` - Hook to run before server shutdown
+- `config.WithShutdownHook()` - Hook to run concurrently with server shutdown
+- `config.WithPostShutdownHook()` - Hook to run after server shutdown
 - `config.WithAutocertManager()` - Let's Encrypt integration
 - `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
 - `config.WithWebSocketUpgrader()` - WebSocket upgrader (e.g., gorilla/websocket)
 - `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
-- `config.WithPreShutdownHook()` - Hook to run before server shutdown
-- `config.WithShutdownHook()` - Hook to run concurrently with server shutdown
-- `config.WithPostShutdownHook()` - Hook to run after server shutdown
+
+
+### Logging
+
+- `config.WithLogger()` - Custom logger instance
 
 
 ### Middleware Configuration
@@ -1053,8 +1058,3 @@ The functional options pattern provides structured configuration for all aspects
 - `config.WithRequestBodySizeOptions()` - Request body size limits
 - `config.WithSecurityHeadersOptions()` - Security header configuration options
 - `config.WithRequestLoggerOptions()` - Request logging configuration
-
-
-### Logging
-
-- `config.WithLogger()` - Custom logger instance
