@@ -1,0 +1,251 @@
+package middleware
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"net/http"
+	"strings"
+
+	"github.com/alexferl/zerohttp/config"
+)
+
+// CSRFContextKey is the key type for CSRF token in context
+type CSRFContextKey string
+
+const (
+	// csrfTokenContextKey is the context key for the CSRF token
+	csrfTokenContextKey CSRFContextKey = "csrf_token"
+	// defaultTokenLength is the length of the random token in bytes
+	defaultTokenLength = 32
+)
+
+// CSRF returns middleware that provides CSRF protection using the double-submit cookie pattern
+func CSRF(opts ...config.CSRFOption) func(http.Handler) http.Handler {
+	cfg := config.DefaultCSRFConfig
+
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	if cfg.CookieName == "" {
+		cfg.CookieName = config.DefaultCSRFConfig.CookieName
+	}
+	if cfg.CookieMaxAge == 0 {
+		cfg.CookieMaxAge = config.DefaultCSRFConfig.CookieMaxAge
+	}
+	if cfg.CookiePath == "" {
+		cfg.CookiePath = config.DefaultCSRFConfig.CookiePath
+	}
+	if cfg.TokenLookup == "" {
+		cfg.TokenLookup = config.DefaultCSRFConfig.TokenLookup
+	}
+	if cfg.ExemptMethods == nil {
+		cfg.ExemptMethods = config.DefaultCSRFConfig.ExemptMethods
+	}
+	if cfg.ExemptPaths == nil {
+		cfg.ExemptPaths = config.DefaultCSRFConfig.ExemptPaths
+	}
+
+	// HMAC key is required - fail fast if not provided
+	if len(cfg.HMACKey) == 0 {
+		panic("CSRF: HMACKey is required. Set a fixed key with config.WithCSRFHMACKey([]byte(\"your-secret-32-bytes!!\")) " +
+			"or load from environment variables. Using a random key would invalidate all tokens on server restart.")
+	}
+	hmacKey := cfg.HMACKey
+
+	exemptMethodMap := make(map[string]bool)
+	for _, method := range cfg.ExemptMethods {
+		exemptMethodMap[strings.ToUpper(method)] = true
+	}
+
+	lookupSource, lookupName := parseTokenLookup(cfg.TokenLookup)
+
+	errorHandler := cfg.ErrorHandler
+	if errorHandler == nil {
+		errorHandler = defaultCSRFErrorHandler
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for _, exemptPath := range cfg.ExemptPaths {
+				if pathMatches(r.URL.Path, exemptPath) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			if exemptMethodMap[strings.ToUpper(r.Method)] {
+				cookie, err := r.Cookie(cfg.CookieName)
+				var token string
+				if err != nil || cookie.Value == "" || !validateTokenFormat(cookie.Value) {
+					token = generateToken(hmacKey)
+					setCSRFCookie(w, cfg, token)
+				} else {
+					token = cookie.Value
+				}
+
+				ctx := r.Context()
+				ctx = context.WithValue(ctx, csrfTokenContextKey, token)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			cookie, err := r.Cookie(cfg.CookieName)
+			if err != nil || cookie.Value == "" {
+				errorHandler(w, r)
+				return
+			}
+
+			requestToken := extractToken(r, lookupSource, lookupName)
+			if requestToken == "" {
+				errorHandler(w, r)
+				return
+			}
+
+			cookieToken := cookie.Value
+			if !compareTokens(cookieToken, requestToken, hmacKey) {
+				errorHandler(w, r)
+				return
+			}
+
+			newToken := generateToken(hmacKey)
+			setCSRFCookie(w, cfg, newToken)
+
+			ctx := r.Context()
+			ctx = context.WithValue(ctx, csrfTokenContextKey, newToken)
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// GetCSRFToken retrieves the CSRF token from the request context
+// Returns empty string if no token is present
+func GetCSRFToken(r *http.Request) string {
+	token, ok := r.Context().Value(csrfTokenContextKey).(string)
+	if !ok {
+		return ""
+	}
+	return token
+}
+
+// generateToken creates a new signed CSRF token
+func generateToken(key []byte) string {
+	tokenBytes := make([]byte, defaultTokenLength)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return ""
+	}
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write(tokenBytes)
+	signature := mac.Sum(nil)
+
+	combined := append(tokenBytes, signature...)
+	return base64.RawURLEncoding.EncodeToString(combined)
+}
+
+// validateTokenFormat checks if the token has a valid format (proper base64 and signature length)
+func validateTokenFormat(token string) bool {
+	data, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return false
+	}
+
+	// Must have token bytes + signature
+	if len(data) < defaultTokenLength+sha256.Size {
+		return false
+	}
+
+	return true
+}
+
+// compareTokens compares two tokens using constant-time comparison
+func compareTokens(cookieToken, requestToken string, key []byte) bool {
+	// First do a string comparison to avoid base64 decoding if tokens don't match
+	if subtle.ConstantTimeCompare([]byte(cookieToken), []byte(requestToken)) != 1 {
+		return false
+	}
+
+	data, err := base64.RawURLEncoding.DecodeString(cookieToken)
+	if err != nil {
+		return false
+	}
+
+	if len(data) < defaultTokenLength+sha256.Size {
+		return false
+	}
+
+	tokenBytes := data[:defaultTokenLength]
+	signature := data[defaultTokenLength:]
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write(tokenBytes)
+	expectedMAC := mac.Sum(nil)
+
+	return subtle.ConstantTimeCompare(signature, expectedMAC) == 1
+}
+
+// parseTokenLookup parses the token lookup string into source and name
+func parseTokenLookup(lookup string) (source, name string) {
+	parts := strings.SplitN(lookup, ":", 2)
+	if len(parts) != 2 {
+		return "header", "X-CSRF-Token"
+	}
+	return strings.ToLower(parts[0]), parts[1]
+}
+
+// extractToken extracts the CSRF token from the request based on source and name
+func extractToken(r *http.Request, source, name string) string {
+	switch source {
+	case "header":
+		return r.Header.Get(name)
+	case "form":
+		contentType := r.Header.Get("Content-Type")
+		if strings.HasPrefix(contentType, "multipart/form-data") {
+			if err := r.ParseMultipartForm(32 << 20); err != nil {
+				return ""
+			}
+			if r.MultipartForm != nil {
+				values := r.MultipartForm.Value[name]
+				if len(values) > 0 {
+					return values[0]
+				}
+			}
+			return ""
+		}
+		if err := r.ParseForm(); err != nil {
+			return ""
+		}
+		return r.FormValue(name)
+	case "query":
+		return r.URL.Query().Get(name)
+	default:
+		return r.Header.Get(name)
+	}
+}
+
+// setCSRFCookie sets the CSRF cookie on the response
+func setCSRFCookie(w http.ResponseWriter, cfg config.CSRFConfig, token string) {
+	cookie := &http.Cookie{
+		Name:     cfg.CookieName,
+		Value:    token,
+		MaxAge:   cfg.CookieMaxAge,
+		Domain:   cfg.CookieDomain,
+		Path:     cfg.CookiePath,
+		Secure:   cfg.CookieSecure,
+		HttpOnly: true,
+		SameSite: cfg.CookieSameSite,
+	}
+	http.SetCookie(w, cookie)
+}
+
+// defaultCSRFErrorHandler is the default handler for CSRF validation failures
+func defaultCSRFErrorHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	_, _ = w.Write([]byte("CSRF token invalid or missing"))
+}
