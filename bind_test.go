@@ -1179,6 +1179,138 @@ func TestBindEmbeddedStruct_WithFiles(t *testing.T) {
 	}
 }
 
+func TestBindValues_UnexportedFields(t *testing.T) {
+	type WithUnexported struct {
+		Name    string `form:"name"`
+		ignored string `form:"ignored"` // Unexported field should be skipped
+	}
+
+	values := url.Values{
+		"name":    []string{"John"},
+		"ignored": []string{"should not bind"},
+	}
+
+	var result WithUnexported
+	err := bindValues(values, &result, "form", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Name != "John" {
+		t.Errorf("expected Name='John', got %q", result.Name)
+	}
+	if result.ignored != "" {
+		t.Errorf("expected ignored to remain empty, got %q", result.ignored)
+	}
+}
+
+func TestBindEmbeddedStruct_UnexportedField(t *testing.T) {
+	type Inner struct {
+		visible string // Unexported within embedded struct
+		Value   string `form:"value"`
+	}
+
+	type Container struct {
+		Inner
+		Name string `form:"name"`
+	}
+
+	values := url.Values{
+		"name":  []string{"container"},
+		"value": []string{"inner_value"},
+	}
+
+	var result Container
+	err := bindValues(values, &result, "form", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Name != "container" {
+		t.Errorf("expected Name='container', got %q", result.Name)
+	}
+	if result.Value != "inner_value" {
+		t.Errorf("expected Value='inner_value', got %q", result.Value)
+	}
+}
+
+func TestBindEmbeddedStruct_IgnoredField(t *testing.T) {
+	type Inner struct {
+		Ignored string `form:"-"`
+		Value   string `form:"value"`
+	}
+
+	type Container struct {
+		Inner
+	}
+
+	values := url.Values{
+		"ignored": []string{"should_not_set"},
+		"value":   []string{"actual_value"},
+	}
+
+	var result Container
+	err := bindValues(values, &result, "form", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Ignored != "" {
+		t.Errorf("expected Ignored to remain empty, got %q", result.Ignored)
+	}
+	if result.Value != "actual_value" {
+		t.Errorf("expected Value='actual_value', got %q", result.Value)
+	}
+}
+
+func TestBindValues_EmptyTagName(t *testing.T) {
+	type NoTag struct {
+		UserName string // Will use snake_case: user_name
+	}
+
+	values := url.Values{
+		"user_name": []string{"johndoe"},
+	}
+
+	var result NoTag
+	err := bindValues(values, &result, "form", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.UserName != "johndoe" {
+		t.Errorf("expected UserName='johndoe', got %q", result.UserName)
+	}
+}
+
+func TestBindEmbeddedStruct_ErrorPropagation(t *testing.T) {
+	// Test that errors from nested embedded structs propagate correctly
+	type DeepNested struct {
+		Value int `form:"value"`
+	}
+
+	type Middle struct {
+		DeepNested
+	}
+
+	type Container struct {
+		Middle
+	}
+
+	values := url.Values{
+		"value": []string{"not_a_number"},
+	}
+
+	var result Container
+	err := bindValues(values, &result, "form", false)
+	if err == nil {
+		t.Fatal("expected error for invalid int conversion in nested embedded struct")
+	}
+	if !strings.Contains(err.Error(), "invalid integer") {
+		t.Errorf("expected 'invalid integer' error, got %v", err)
+	}
+}
+
 func TestFileHeader_ReadAll_OpenError(t *testing.T) {
 	// Create a FileHeader with no internal file reference
 	fh := &FileHeader{
