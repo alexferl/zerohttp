@@ -28,6 +28,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Pluggable Features](#pluggable-features)
     - [Auto-TLS](#auto-tls)
     - [HTTP/3 Support](#http3-support)
+    - [WebSocket Support](#websocket-support)
     - [WebTransport Support](#webtransport-support)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
@@ -50,7 +51,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
 - **HTTP/2 & HTTP/3**: Automatic HTTP/2 support for TLS; optional HTTP/3 via pluggable interface
-- **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, and WebTransport - bring your own implementations
+- **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, WebSocket, and WebTransport - bring your own implementations
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
 - **Structured Logging**: Integrated structured logging with customizable fields
@@ -792,6 +793,79 @@ app.StartTLS("cert.pem", "key.pem")
 ```
 
 
+### WebSocket Support
+
+WebSocket provides real-time bidirectional communication over TCP. zerohttp supports WebSocket
+through a pluggable interface - you bring your own WebSocket library (e.g., [gorilla/websocket](https://github.com/gorilla/websocket),
+[nhooyr/websocket](https://github.com/nhooyr/websocket)).
+
+```go
+import (
+    "github.com/gorilla/websocket"
+    zh "github.com/alexferl/zerohttp"
+    "github.com/alexferl/zerohttp/config"
+)
+
+// Wrap gorilla/websocket to implement config.WebSocketUpgrader
+type myUpgrader struct {
+    upgrader *websocket.Upgrader
+}
+
+func (m *myUpgrader) Upgrade(w http.ResponseWriter, r *http.Request) (config.WebSocketConn, error) {
+    conn, err := m.upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        return nil, err
+    }
+    return &myConn{conn: conn}, nil
+}
+
+type myConn struct {
+    conn *websocket.Conn
+}
+
+func (c *myConn) ReadMessage() (int, []byte, error)  { return c.conn.ReadMessage() }
+func (c *myConn) WriteMessage(mt int, data []byte) error { return c.conn.WriteMessage(mt, data) }
+func (c *myConn) Close() error                        { return c.conn.Close() }
+func (c *myConn) RemoteAddr() net.Addr               { return c.conn.RemoteAddr() }
+
+func main() {
+    // Create server with WebSocket support
+    gupgrader := &websocket.Upgrader{
+        CheckOrigin: func(r *http.Request) bool { return true },
+    }
+
+    app := zh.New(
+        config.WithWebSocketUpgrader(&myUpgrader{upgrader: gupgrader}),
+    )
+
+    // WebSocket endpoint
+    app.GET("/ws", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+        ws, err := app.WebSocketUpgrader().Upgrade(w, r)
+        if err != nil {
+            return err
+        }
+        defer ws.Close()
+
+        // Echo loop
+        for {
+            mt, msg, err := ws.ReadMessage()
+            if err != nil {
+                break
+            }
+            if err := ws.WriteMessage(mt, msg); err != nil {
+                break
+            }
+        }
+        return nil
+    }))
+
+    app.ListenAndServe()
+}
+```
+
+> **💡 Complete Example:** See [`examples/websocket/`](examples/websocket/) for a full working server with HTML client.
+
+
 ### WebTransport Support
 
 WebTransport provides low-latency, bidirectional communication over HTTP/3:
@@ -961,12 +1035,18 @@ The functional options pattern provides structured configuration for all aspects
 - `config.WithTLSListener()` - Custom HTTPS listener
 - `config.WithCertFile()` - TLS certificate file path
 - `config.WithKeyFile()` - TLS key file path
-- `config.WithAutocertManager()` - Let's Encrypt integration
-- `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
-- `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
 - `config.WithPreShutdownHook()` - Hook to run before server shutdown
 - `config.WithShutdownHook()` - Hook to run concurrently with server shutdown
 - `config.WithPostShutdownHook()` - Hook to run after server shutdown
+- `config.WithAutocertManager()` - Let's Encrypt integration
+- `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
+- `config.WithWebSocketUpgrader()` - WebSocket upgrader (e.g., gorilla/websocket)
+- `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
+
+
+### Logging
+
+- `config.WithLogger()` - Custom logger instance
 
 
 ### Middleware Configuration
@@ -978,8 +1058,3 @@ The functional options pattern provides structured configuration for all aspects
 - `config.WithRequestBodySizeOptions()` - Request body size limits
 - `config.WithSecurityHeadersOptions()` - Security header configuration options
 - `config.WithRequestLoggerOptions()` - Request logging configuration
-
-
-### Logging
-
-- `config.WithLogger()` - Custom logger instance

@@ -3,25 +3,12 @@ package config
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 
 	"github.com/alexferl/zerohttp/log"
 )
-
-// ShutdownHook is a function called during server shutdown.
-// The context passed to the hook will be cancelled when the shutdown
-// timeout is reached or if the parent context is cancelled.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-type ShutdownHook func(ctx context.Context) error
-
-// ShutdownHookConfig configures a shutdown hook.
-type ShutdownHookConfig struct {
-	Name string
-	Hook ShutdownHook
-}
 
 // Config holds server and middleware configuration options for zerohttp.
 type Config struct {
@@ -32,6 +19,49 @@ type Config struct {
 	// TLSAddr is the address for the HTTPS server to listen on.
 	// Default: "localhost:8443"
 	TLSAddr string
+
+	// Server is the HTTP server instance for plain (non-TLS) traffic.
+	// Default: preconfigured server listening on "localhost:8080"
+	Server *http.Server
+
+	// Listener allows specifying a custom net.Listener for HTTP traffic (optional).
+	// Default: nil (system default listener will be created)
+	Listener net.Listener
+
+	// TLSServer is the HTTPS server instance for encrypted traffic.
+	// Default: preconfigured server listening on "localhost:8443"
+	TLSServer *http.Server
+
+	// TLSListener allows specifying a custom net.Listener for HTTPS traffic (optional).
+	// Default: nil (system default listener will be created)
+	TLSListener net.Listener
+
+	// CertFile is the file path to the TLS certificate (PEM) when serving HTTPS.
+	// Default: "" (no certificate loaded unless specified)
+	CertFile string
+
+	// KeyFile is the file path to the TLS private key (PEM) when serving HTTPS.
+	// Default: "" (no key loaded unless specified)
+	KeyFile string
+
+	// Logger is the logger instance used by the server and middlewares.
+	// Default: nil (a default logger will be created if nil)
+	Logger log.Logger
+
+	// PreShutdownHooks are hooks that execute sequentially before server shutdown begins.
+	// These run before any servers start shutting down.
+	// Default: nil
+	PreShutdownHooks []ShutdownHookConfig
+
+	// ShutdownHooks are hooks that execute concurrently with server shutdown.
+	// These run alongside the HTTP/HTTPS/HTTP3 server shutdown.
+	// Default: nil
+	ShutdownHooks []ShutdownHookConfig
+
+	// PostShutdownHooks are hooks that execute sequentially after all servers are shut down.
+	// These run after all servers have completed shutdown.
+	// Default: nil
+	PostShutdownHooks []ShutdownHookConfig
 
 	// DisableDefaultMiddlewares disables all built-in default middlewares when true.
 	// Default: false (default middlewares are enabled)
@@ -71,34 +101,6 @@ type Config struct {
 	// SecurityHeaders holds the built configuration for the security headers middleware.
 	SecurityHeaders SecurityHeadersConfig
 
-	// Logger is the logger instance used by the server and middlewares.
-	// Default: nil (a default logger will be created if nil)
-	Logger log.Logger
-
-	// Server is the HTTP server instance for plain (non-TLS) traffic.
-	// Default: preconfigured server listening on "localhost:8080"
-	Server *http.Server
-
-	// Listener allows specifying a custom net.Listener for HTTP traffic (optional).
-	// Default: nil (system default listener will be created)
-	Listener net.Listener
-
-	// TLSServer is the HTTPS server instance for encrypted traffic.
-	// Default: preconfigured server listening on "localhost:8443"
-	TLSServer *http.Server
-
-	// TLSListener allows specifying a custom net.Listener for HTTPS traffic (optional).
-	// Default: nil (system default listener will be created)
-	TLSListener net.Listener
-
-	// CertFile is the file path to the TLS certificate (PEM) when serving HTTPS.
-	// Default: "" (no certificate loaded unless specified)
-	CertFile string
-
-	// KeyFile is the file path to the TLS private key (PEM) when serving HTTPS.
-	// Default: "" (no key loaded unless specified)
-	KeyFile string
-
 	// AutocertManager is an optional autocert manager for automatic certificate management (AutoTLS).
 	// Users can inject their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager)
 	// by implementing the AutocertManager interface.
@@ -111,6 +113,12 @@ type Config struct {
 	// Default: nil (HTTP/3 not enabled unless set)
 	HTTP3Server HTTP3Server
 
+	// WebSocketUpgrader is an optional handler for WebSocket upgrades.
+	// Users can set their own upgrader (e.g., wrapping gorilla/websocket).
+	// If nil, WebSocket is not available but users can still handle
+	// upgrades manually in their handlers.
+	WebSocketUpgrader WebSocketUpgrader
+
 	// WebTransportServer is an optional WebTransport server for handling WebTransport sessions.
 	// Users can inject their own implementation (e.g., quic-go/webtransport-go).
 	// The server must implement the WebTransportServer interface.
@@ -118,21 +126,6 @@ type Config struct {
 	// The server will be started automatically when ListenAndServeTLS or Start is called.
 	// Default: nil
 	WebTransportServer WebTransportServer
-
-	// PreShutdownHooks are hooks that execute sequentially before server shutdown begins.
-	// These run before any servers start shutting down.
-	// Default: nil
-	PreShutdownHooks []ShutdownHookConfig
-
-	// ShutdownHooks are hooks that execute concurrently with server shutdown.
-	// These run alongside the HTTP/HTTPS/HTTP3 server shutdown.
-	// Default: nil
-	ShutdownHooks []ShutdownHookConfig
-
-	// PostShutdownHooks are hooks that execute sequentially after all servers are shut down.
-	// These run after all servers have completed shutdown.
-	// Default: nil
-	PostShutdownHooks []ShutdownHookConfig
 }
 
 // DefaultConfig contains all default values used by Config.
@@ -183,6 +176,10 @@ func (c *Config) Build() {
 // Option is a function that sets a field in Config.
 type Option func(*Config)
 
+// ============================================================================
+// Server Address Options
+// ============================================================================
+
 // WithAddr sets the HTTP server address.
 func WithAddr(addr string) Option {
 	return func(c *Config) {
@@ -196,6 +193,123 @@ func WithTLSAddr(addr string) Option {
 		c.TLSAddr = addr
 	}
 }
+
+// ============================================================================
+// Server Instance Options
+// ============================================================================
+
+// WithServer sets a custom HTTP server instance.
+func WithServer(server *http.Server) Option {
+	return func(c *Config) {
+		c.Server = server
+	}
+}
+
+// WithTLSServer sets a custom HTTPS server instance.
+func WithTLSServer(server *http.Server) Option {
+	return func(c *Config) {
+		c.TLSServer = server
+	}
+}
+
+// WithListener sets a custom network listener for HTTP traffic.
+func WithListener(listener net.Listener) Option {
+	return func(c *Config) {
+		c.Listener = listener
+	}
+}
+
+// WithTLSListener sets a custom network listener for HTTPS traffic.
+func WithTLSListener(listener net.Listener) Option {
+	return func(c *Config) {
+		c.TLSListener = listener
+	}
+}
+
+// ============================================================================
+// Logging Options
+// ============================================================================
+
+// WithLogger sets a custom logger instance.
+func WithLogger(logger log.Logger) Option {
+	return func(c *Config) {
+		c.Logger = logger
+	}
+}
+
+// ============================================================================
+// Shutdown Hook Options
+// ============================================================================
+
+// ShutdownHook is a function called during server shutdown.
+// The context passed to the hook will be cancelled when the shutdown
+// timeout is reached or if the parent context is cancelled.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+type ShutdownHook func(ctx context.Context) error
+
+// ShutdownHookConfig configures a shutdown hook.
+type ShutdownHookConfig struct {
+	Name string
+	Hook ShutdownHook
+}
+
+// WithPreShutdownHook registers a hook to run before server shutdown begins.
+// Pre-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	zerohttp.New(zerohttp.WithPreShutdownHook("health", func(ctx context.Context) error {
+//	    health.SetUnhealthy()
+//	    return nil
+//	}))
+func WithPreShutdownHook(name string, hook ShutdownHook) Option {
+	return func(c *Config) {
+		c.PreShutdownHooks = append(c.PreShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
+	}
+}
+
+// WithShutdownHook registers a hook to run concurrently with server shutdown.
+// Shutdown hooks execute concurrently alongside server shutdown.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	zerohttp.New(zerohttp.WithShutdownHook("close-db", func(ctx context.Context) error {
+//	    return db.Close()
+//	}))
+func WithShutdownHook(name string, hook ShutdownHook) Option {
+	return func(c *Config) {
+		c.ShutdownHooks = append(c.ShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
+	}
+}
+
+// WithPostShutdownHook registers a hook to run after servers are shut down.
+// Post-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	zerohttp.New(zerohttp.WithPostShutdownHook("cleanup", func(ctx context.Context) error {
+//	    return os.RemoveAll("/tmp/app-*")
+//	}))
+func WithPostShutdownHook(name string, hook ShutdownHook) Option {
+	return func(c *Config) {
+		c.PostShutdownHooks = append(c.PostShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
+	}
+}
+
+// ============================================================================
+// Middleware Options
+// ============================================================================
 
 // WithDisableDefaultMiddlewares disables all built-in default middlewares.
 func WithDisableDefaultMiddlewares() Option {
@@ -246,40 +360,9 @@ func WithSecurityHeadersOptions(opts ...SecurityHeadersOption) Option {
 	}
 }
 
-// WithLogger sets a custom logger instance.
-func WithLogger(logger log.Logger) Option {
-	return func(c *Config) {
-		c.Logger = logger
-	}
-}
-
-// WithServer sets a custom HTTP server instance.
-func WithServer(server *http.Server) Option {
-	return func(c *Config) {
-		c.Server = server
-	}
-}
-
-// WithListener sets a custom network listener for HTTP traffic.
-func WithListener(listener net.Listener) Option {
-	return func(c *Config) {
-		c.Listener = listener
-	}
-}
-
-// WithTLSServer sets a custom HTTPS server instance.
-func WithTLSServer(server *http.Server) Option {
-	return func(c *Config) {
-		c.TLSServer = server
-	}
-}
-
-// WithTLSListener sets a custom network listener for HTTPS traffic.
-func WithTLSListener(listener net.Listener) Option {
-	return func(c *Config) {
-		c.TLSListener = listener
-	}
-}
+// ============================================================================
+// TLS Certificate Options
+// ============================================================================
 
 // WithCertFile sets the file path to the TLS certificate.
 func WithCertFile(path string) Option {
@@ -332,6 +415,10 @@ func WithAutocertManager(mgr AutocertManager) Option {
 	}
 }
 
+// ============================================================================
+// HTTP/3 Options
+// ============================================================================
+
 // HTTP3Server is the interface that HTTP/3 servers must implement to be used with zerohttp.
 // Users can inject their own HTTP/3 implementation (e.g., github.com/quic-go/quic-go/http3).
 //
@@ -371,6 +458,127 @@ type HTTP3ServerWithAutocert interface {
 	ListenAndServeTLSWithAutocert(manager AutocertManager) error
 }
 
+// WithHTTP3Server sets a custom HTTP/3 server instance.
+func WithHTTP3Server(server HTTP3Server) Option {
+	return func(c *Config) {
+		c.HTTP3Server = server
+	}
+}
+
+// ============================================================================
+// WebSocket Options
+// ============================================================================
+
+// WebSocketConn represents a WebSocket connection.
+// This is a minimal interface that can be implemented by wrapping
+// any WebSocket library (e.g., gorilla/websocket, nhooyr/websocket).
+type WebSocketConn interface {
+	// ReadMessage reads a message from the connection.
+	// Returns message type (text=1, binary=2), payload, and error.
+	ReadMessage() (int, []byte, error)
+
+	// WriteMessage writes a message to the connection.
+	// messageType is 1 for text, 2 for binary.
+	WriteMessage(messageType int, data []byte) error
+
+	// Close closes the connection gracefully.
+	Close() error
+
+	// RemoteAddr returns the remote network address.
+	RemoteAddr() net.Addr
+}
+
+// WebSocketUpgrader handles upgrading HTTP connections to WebSocket.
+// Users provide their own implementation using their preferred WebSocket library.
+type WebSocketUpgrader interface {
+	// Upgrade upgrades the HTTP connection to WebSocket.
+	// The implementation is responsible for the RFC 6455 handshake
+	// and returning a WebSocketConn.
+	Upgrade(w http.ResponseWriter, r *http.Request) (WebSocketConn, error)
+}
+
+// CloseCode represents a WebSocket close code as defined in RFC 6455.
+type CloseCode int
+
+// WebSocket close code constants.
+const (
+	CloseNormalClosure           CloseCode = 1000
+	CloseGoingAway               CloseCode = 1001
+	CloseProtocolError           CloseCode = 1002
+	CloseUnsupportedData         CloseCode = 1003
+	CloseNoStatusReceived        CloseCode = 1005
+	CloseAbnormalClosure         CloseCode = 1006
+	CloseInvalidFramePayloadData CloseCode = 1007
+	ClosePolicyViolation         CloseCode = 1008
+	CloseMessageTooBig           CloseCode = 1009
+	CloseMandatoryExtension      CloseCode = 1010
+	CloseInternalServerErr       CloseCode = 1011
+	CloseServiceRestart          CloseCode = 1012
+	CloseTryAgainLater           CloseCode = 1013
+	CloseBadGateway              CloseCode = 1014
+	CloseTLSHandshake            CloseCode = 1015
+)
+
+// CloseError represents a WebSocket close error.
+type CloseError struct {
+	Code   int
+	Reason string
+}
+
+// Error implements the error interface.
+func (e *CloseError) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("websocket: close %d %s", e.Code, e.Reason)
+	}
+	return fmt.Sprintf("websocket: close %d", e.Code)
+}
+
+// MessageType represents the type of WebSocket message.
+type MessageType int
+
+// WebSocket message type constants as defined in RFC 6455.
+const (
+	TextMessage   MessageType = 1
+	BinaryMessage MessageType = 2
+	CloseMessage  MessageType = 8
+	PingMessage   MessageType = 9
+	PongMessage   MessageType = 10
+)
+
+// WithWebSocketUpgrader sets a WebSocket upgrader.
+// Users bring their own WebSocket library and implement the WebSocketUpgrader interface,
+// or use a thin wrapper around their preferred library.
+//
+// Example with gorilla/websocket:
+//
+//	import "github.com/gorilla/websocket"
+//
+//	upgrader := &websocket.Upgrader{
+//	    CheckOrigin: func(r *http.Request) bool { return true },
+//	}
+//
+//	app := zerohttp.New(
+//	    zerohttp.WithWebSocketUpgrader(&myUpgrader{upgrader}),
+//	)
+//
+//	app.GET("/ws", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+//	    ws, err := app.WebSocketUpgrader().Upgrade(w, r)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    defer ws.Close()
+//	    // ... handle connection ...
+//	}))
+func WithWebSocketUpgrader(upgrader WebSocketUpgrader) Option {
+	return func(c *Config) {
+		c.WebSocketUpgrader = upgrader
+	}
+}
+
+// ============================================================================
+// WebTransport Options
+// ============================================================================
+
 // WebTransportServer is the interface that WebTransport servers must implement
 // to be used with zerohttp. Users can inject their own WebTransport implementation
 // (e.g., github.com/quic-go/webtransport-go).
@@ -407,13 +615,6 @@ type WebTransportServerWithAutocert interface {
 	ListenAndServeTLSWithAutocert(manager AutocertManager) error
 }
 
-// WithHTTP3Server sets a custom HTTP/3 server instance.
-func WithHTTP3Server(server HTTP3Server) Option {
-	return func(c *Config) {
-		c.HTTP3Server = server
-	}
-}
-
 // WithWebTransportServer sets a custom WebTransport server instance.
 // WebTransport runs over HTTP/3 and provides low-latency, bidirectional communication.
 //
@@ -434,57 +635,5 @@ func WithHTTP3Server(server HTTP3Server) Option {
 func WithWebTransportServer(server WebTransportServer) Option {
 	return func(c *Config) {
 		c.WebTransportServer = server
-	}
-}
-
-// WithPreShutdownHook registers a hook to run before server shutdown begins.
-// Pre-shutdown hooks execute sequentially in registration order.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	zerohttp.New(zerohttp.WithPreShutdownHook("health", func(ctx context.Context) error {
-//	    health.SetUnhealthy()
-//	    return nil
-//	}))
-func WithPreShutdownHook(name string, hook ShutdownHook) Option {
-	return func(c *Config) {
-		c.PreShutdownHooks = append(c.PreShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
-	}
-}
-
-// WithShutdownHook registers a hook to run concurrently with server shutdown.
-// Shutdown hooks execute concurrently alongside server shutdown.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	zerohttp.New(zerohttp.WithShutdownHook("close-db", func(ctx context.Context) error {
-//	    return db.Close()
-//	}))
-func WithShutdownHook(name string, hook ShutdownHook) Option {
-	return func(c *Config) {
-		c.ShutdownHooks = append(c.ShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
-	}
-}
-
-// WithPostShutdownHook registers a hook to run after servers are shut down.
-// Post-shutdown hooks execute sequentially in registration order.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	zerohttp.New(zerohttp.WithPostShutdownHook("cleanup", func(ctx context.Context) error {
-//	    return os.RemoveAll("/tmp/app-*")
-//	}))
-func WithPostShutdownHook(name string, hook ShutdownHook) Option {
-	return func(c *Config) {
-		c.PostShutdownHooks = append(c.PostShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
 	}
 }
