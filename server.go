@@ -50,22 +50,6 @@ type Server struct {
 	// Used when serving HTTPS traffic with certificate files.
 	keyFile string
 
-	// autocertManager handles automatic certificate provisioning and renewal
-	// using Let's Encrypt ACME protocol. If set, enables automatic TLS.
-	// Users must provide their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager).
-	autocertManager config.AutocertManager
-
-	// http3Server is an optional HTTP/3 server for handling HTTP/3 traffic over QUIC.
-	// Users can inject their own implementation (e.g., quic-go/http3) to enable HTTP/3.
-	// If nil, HTTP/3 server will not be started.
-	http3Server config.HTTP3Server
-
-	// webTransportServer is an optional WebTransport server for handling WebTransport sessions.
-	// Users can inject their own implementation (e.g., quic-go/webtransport-go) to enable WebTransport.
-	// If nil, WebTransport support will not be enabled.
-	// The server will be started automatically when ListenAndServeTLS or Start is called.
-	webTransportServer config.WebTransportServer
-
 	// logger is the structured logger used by the server and its middleware
 	// for recording HTTP requests, errors, and server lifecycle events.
 	logger log.Logger
@@ -78,6 +62,27 @@ type Server struct {
 
 	// postShutdownHooks execute sequentially after all servers are shut down.
 	postShutdownHooks []config.ShutdownHookConfig
+
+	// autocertManager handles automatic certificate provisioning and renewal
+	// using Let's Encrypt ACME protocol. If set, enables automatic TLS.
+	// Users must provide their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager).
+	autocertManager config.AutocertManager
+
+	// http3Server is an optional HTTP/3 server for handling HTTP/3 traffic over QUIC.
+	// Users can inject their own implementation (e.g., quic-go/http3) to enable HTTP/3.
+	// If nil, HTTP/3 server will not be started.
+	http3Server config.HTTP3Server
+
+	// webSocketUpgrader is an optional WebSocket upgrader for handling WebSocket connections.
+	// Users provide their own implementation using their preferred WebSocket library.
+	// If nil, WebSocket is not available but users can still handle upgrades manually.
+	webSocketUpgrader config.WebSocketUpgrader
+
+	// webTransportServer is an optional WebTransport server for handling WebTransport sessions.
+	// Users can inject their own implementation (e.g., quic-go/webtransport-go) to enable WebTransport.
+	// If nil, WebTransport support will not be enabled.
+	// The server will be started automatically when ListenAndServeTLS or Start is called.
+	webTransportServer config.WebTransportServer
 
 	// mu protects concurrent access to server fields during startup,
 	// shutdown, and configuration operations.
@@ -151,6 +156,7 @@ func New(opts ...config.Option) *Server {
 		autocertManager:    cfg.AutocertManager,
 		http3Server:        cfg.HTTP3Server,
 		webTransportServer: cfg.WebTransportServer,
+		webSocketUpgrader:  cfg.WebSocketUpgrader,
 		logger:             logger,
 		preShutdownHooks:   cfg.PreShutdownHooks,
 		shutdownHooks:      cfg.ShutdownHooks,
@@ -572,25 +578,110 @@ func (s *Server) StartAutoTLS() error {
 	return <-errCh
 }
 
-// createHTTPSRedirectHandler creates an HTTP handler that redirects all requests
-// to their HTTPS equivalent. This handler is used by the HTTP server when
-// running in AutoTLS mode to ensure all traffic is encrypted.
+// ListenerAddr returns the network address that the HTTP server is listening on.
+// If a listener is configured, it returns the listener's actual address.
+// If no listener is configured but a server is configured, it returns the server's configured address.
+// If neither is configured, it returns an empty string.
 //
-// The redirect preserves the original request path and query parameters.
-// Returns an http.Handler that performs permanent redirects (301) to HTTPS.
-func (s *Server) createHTTPSRedirectHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Build HTTPS URL by copying the URL and changing scheme
-		target := *r.URL
-		target.Scheme = "https"
-		target.Host = r.Host
+// This method is thread-safe and can be called concurrently.
+// The returned address includes both host and port (e.g., "127.0.0.1:8080").
+func (s *Server) ListenerAddr() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-		httpsURL := target.String()
-		s.logger.Debug("Redirecting HTTP to HTTPS",
-			log.F("from", r.URL.String()),
-			log.F("to", httpsURL))
-		http.Redirect(w, r, httpsURL, http.StatusMovedPermanently)
-	})
+	if s.listener != nil {
+		return s.listener.Addr().String()
+	}
+
+	if s.server != nil {
+		return s.server.Addr
+	}
+
+	return ""
+}
+
+// ListenerTLSAddr returns the network address that the HTTPS server is listening on.
+// If a TLS listener is configured, it returns the listener's actual address.
+// If no TLS listener is configured but a TLS server is configured, it returns the server's configured address.
+// If neither is configured, it returns an empty string.
+//
+// This method is thread-safe and can be called concurrently.
+// The returned address includes both host and port (e.g., "127.0.0.1:8443").
+func (s *Server) ListenerTLSAddr() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.tlsListener != nil {
+		return s.tlsListener.Addr().String()
+	}
+
+	if s.tlsServer != nil {
+		return s.tlsServer.Addr
+	}
+
+	return ""
+}
+
+// Logger returns the structured logger instance used by the server.
+// This logger is used for recording HTTP requests, errors, server lifecycle events,
+// and can be used by application code for consistent logging.
+//
+// The returned logger implements the log.Logger interface and provides
+// structured logging capabilities with fields and different log levels.
+func (s *Server) Logger() log.Logger {
+	return s.logger
+}
+
+// RegisterPreShutdownHook registers a hook to run before server shutdown begins.
+// Pre-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	app.RegisterPreShutdownHook("health", func(ctx context.Context) error {
+//	    health.SetUnhealthy()
+//	    return nil
+//	})
+func (s *Server) RegisterPreShutdownHook(name string, hook config.ShutdownHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.preShutdownHooks = append(s.preShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+}
+
+// RegisterShutdownHook registers a hook to run concurrently with server shutdown.
+// Shutdown hooks execute concurrently alongside server shutdown.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	app.RegisterShutdownHook("close-db", func(ctx context.Context) error {
+//	    return db.Close()
+//	})
+func (s *Server) RegisterShutdownHook(name string, hook config.ShutdownHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shutdownHooks = append(s.shutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+}
+
+// RegisterPostShutdownHook registers a hook to run after servers are shut down.
+// Post-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	app.RegisterPostShutdownHook("cleanup", func(ctx context.Context) error {
+//	    return os.RemoveAll("/tmp/app-*")
+//	})
+func (s *Server) RegisterPostShutdownHook(name string, hook config.ShutdownHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.postShutdownHooks = append(s.postShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
 }
 
 // ListenAndServeHTTP3 starts the HTTP/3 server with the specified certificate files.
@@ -645,6 +736,49 @@ func (s *Server) SetHTTP3Server(server config.HTTP3Server) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.http3Server = server
+}
+
+// SetWebSocketUpgrader sets the WebSocket upgrader instance. This can be used to inject
+// a WebSocket implementation (e.g., gorilla/websocket, nhooyr/websocket) after creating the server.
+//
+// The WebSocket upgrader provides the Upgrade method for handling WebSocket connections.
+// Users bring their own WebSocket library and implement the WebSocketUpgrader interface,
+// or use a thin wrapper around their preferred library.
+//
+// Example with gorilla/websocket:
+//
+//	import "github.com/gorilla/websocket"
+//
+//	upgrader := &websocket.Upgrader{
+//	    CheckOrigin: func(r *http.Request) bool { return true },
+//	}
+//
+//	app := zerohttp.New()
+//	app.SetWebSocketUpgrader(&myUpgrader{upgrader})
+//
+//	app.GET("/ws", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+//	    ws, err := app.WebSocketUpgrader().Upgrade(w, r)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    defer ws.Close()
+//	    // ... handle connection ...
+//	}))
+//
+// Parameters:
+//   - upgrader: A WebSocket upgrader instance implementing the config.WebSocketUpgrader interface
+func (s *Server) SetWebSocketUpgrader(upgrader config.WebSocketUpgrader) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.webSocketUpgrader = upgrader
+}
+
+// WebSocketUpgrader returns the configured WebSocket upgrader (if any).
+// Returns nil if no WebSocket upgrader has been configured.
+func (s *Server) WebSocketUpgrader() config.WebSocketUpgrader {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.webSocketUpgrader
 }
 
 // SetWebTransportServer sets the WebTransport server instance. This can be used to inject
@@ -774,6 +908,79 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// Close immediately closes all server listeners, terminating any active connections.
+// Unlike Shutdown, this method does not wait for connections to finish gracefully.
+// It closes both HTTP and HTTPS listeners concurrently.
+//
+// This method is thread-safe and can be called multiple times safely.
+// Returns the last error encountered while closing listeners, or nil if successful.
+func (s *Server) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.logger.Debug("Closing server listeners...")
+	var lastErr error
+
+	if s.listener != nil {
+		s.logger.Debug("Closing HTTP listener")
+		if err := s.listener.Close(); err != nil {
+			s.logger.Error("Error closing HTTP listener", log.F("error", err))
+			lastErr = err
+		}
+	}
+
+	if s.tlsListener != nil {
+		s.logger.Debug("Closing HTTPS listener")
+		if err := s.tlsListener.Close(); err != nil {
+			s.logger.Error("Error closing HTTPS listener", log.F("error", err))
+			lastErr = err
+		}
+	}
+
+	if s.http3Server != nil {
+		s.logger.Debug("Closing HTTP/3 server")
+		if err := s.http3Server.Close(); err != nil {
+			s.logger.Error("Error closing HTTP/3 server", log.F("error", err))
+			lastErr = err
+		}
+	}
+
+	if s.webTransportServer != nil {
+		s.logger.Debug("Closing WebTransport server")
+		if err := s.webTransportServer.Close(); err != nil {
+			s.logger.Error("Error closing WebTransport server", log.F("error", err))
+			lastErr = err
+		}
+	}
+
+	if lastErr == nil {
+		s.logger.Debug("All listeners closed successfully")
+	}
+
+	return lastErr
+}
+
+// createHTTPSRedirectHandler creates an HTTP handler that redirects all requests
+// to their HTTPS equivalent. This handler is used by the HTTP server when
+// running in AutoTLS mode to ensure all traffic is encrypted.
+//
+// The redirect preserves the original request path and query parameters.
+// Returns an http.Handler that performs permanent redirects (301) to HTTPS.
+func (s *Server) createHTTPSRedirectHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Build HTTPS URL by copying the URL and changing scheme
+		target := *r.URL
+		target.Scheme = "https"
+		target.Host = r.Host
+
+		httpsURL := target.String()
+		s.logger.Debug("Redirecting HTTP to HTTPS",
+			log.F("from", r.URL.String()),
+			log.F("to", httpsURL))
+		http.Redirect(w, r, httpsURL, http.StatusMovedPermanently)
+	})
+}
+
 // runPreShutdownHooks executes pre-shutdown hooks sequentially in registration order.
 func (s *Server) runPreShutdownHooks(ctx context.Context) error {
 	s.mu.RLock()
@@ -864,164 +1071,6 @@ func (s *Server) runPostShutdownHooks(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// Close immediately closes all server listeners, terminating any active connections.
-// Unlike Shutdown, this method does not wait for connections to finish gracefully.
-// It closes both HTTP and HTTPS listeners concurrently.
-//
-// This method is thread-safe and can be called multiple times safely.
-// Returns the last error encountered while closing listeners, or nil if successful.
-func (s *Server) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.logger.Debug("Closing server listeners...")
-	var lastErr error
-
-	if s.listener != nil {
-		s.logger.Debug("Closing HTTP listener")
-		if err := s.listener.Close(); err != nil {
-			s.logger.Error("Error closing HTTP listener", log.F("error", err))
-			lastErr = err
-		}
-	}
-
-	if s.tlsListener != nil {
-		s.logger.Debug("Closing HTTPS listener")
-		if err := s.tlsListener.Close(); err != nil {
-			s.logger.Error("Error closing HTTPS listener", log.F("error", err))
-			lastErr = err
-		}
-	}
-
-	if s.http3Server != nil {
-		s.logger.Debug("Closing HTTP/3 server")
-		if err := s.http3Server.Close(); err != nil {
-			s.logger.Error("Error closing HTTP/3 server", log.F("error", err))
-			lastErr = err
-		}
-	}
-
-	if s.webTransportServer != nil {
-		s.logger.Debug("Closing WebTransport server")
-		if err := s.webTransportServer.Close(); err != nil {
-			s.logger.Error("Error closing WebTransport server", log.F("error", err))
-			lastErr = err
-		}
-	}
-
-	if lastErr == nil {
-		s.logger.Debug("All listeners closed successfully")
-	}
-
-	return lastErr
-}
-
-// ListenerAddr returns the network address that the HTTP server is listening on.
-// If a listener is configured, it returns the listener's actual address.
-// If no listener is configured but a server is configured, it returns the server's configured address.
-// If neither is configured, it returns an empty string.
-//
-// This method is thread-safe and can be called concurrently.
-// The returned address includes both host and port (e.g., "127.0.0.1:8080").
-func (s *Server) ListenerAddr() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.listener != nil {
-		return s.listener.Addr().String()
-	}
-
-	if s.server != nil {
-		return s.server.Addr
-	}
-
-	return ""
-}
-
-// ListenerTLSAddr returns the network address that the HTTPS server is listening on.
-// If a TLS listener is configured, it returns the listener's actual address.
-// If no TLS listener is configured but a TLS server is configured, it returns the server's configured address.
-// If neither is configured, it returns an empty string.
-//
-// This method is thread-safe and can be called concurrently.
-// The returned address includes both host and port (e.g., "127.0.0.1:8443").
-func (s *Server) ListenerTLSAddr() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.tlsListener != nil {
-		return s.tlsListener.Addr().String()
-	}
-
-	if s.tlsServer != nil {
-		return s.tlsServer.Addr
-	}
-
-	return ""
-}
-
-// Logger returns the structured logger instance used by the server.
-// This logger is used for recording HTTP requests, errors, server lifecycle events,
-// and can be used by application code for consistent logging.
-//
-// The returned logger implements the log.Logger interface and provides
-// structured logging capabilities with fields and different log levels.
-func (s *Server) Logger() log.Logger {
-	return s.logger
-}
-
-// RegisterPreShutdownHook registers a hook to run before server shutdown begins.
-// Pre-shutdown hooks execute sequentially in registration order.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	app.RegisterPreShutdownHook("health", func(ctx context.Context) error {
-//	    health.SetUnhealthy()
-//	    return nil
-//	})
-func (s *Server) RegisterPreShutdownHook(name string, hook config.ShutdownHook) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.preShutdownHooks = append(s.preShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
-}
-
-// RegisterShutdownHook registers a hook to run concurrently with server shutdown.
-// Shutdown hooks execute concurrently alongside server shutdown.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	app.RegisterShutdownHook("close-db", func(ctx context.Context) error {
-//	    return db.Close()
-//	})
-func (s *Server) RegisterShutdownHook(name string, hook config.ShutdownHook) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.shutdownHooks = append(s.shutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
-}
-
-// RegisterPostShutdownHook registers a hook to run after servers are shut down.
-// Post-shutdown hooks execute sequentially in registration order.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	app.RegisterPostShutdownHook("cleanup", func(ctx context.Context) error {
-//	    return os.RemoveAll("/tmp/app-*")
-//	})
-func (s *Server) RegisterPostShutdownHook(name string, hook config.ShutdownHook) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.postShutdownHooks = append(s.postShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
 }
 
 func fmtHTTPAddr(addr string) string {
