@@ -1216,14 +1216,20 @@ func TestBindEmbeddedStruct_UnexportedField(t *testing.T) {
 	}
 
 	values := url.Values{
-		"name":  []string{"container"},
-		"value": []string{"inner_value"},
+		"name":    []string{"container"},
+		"value":   []string{"inner_value"},
+		"visible": []string{"should_not_bind"},
 	}
 
 	var result Container
 	err := bindValues(values, &result, "form", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// visible is unexported so it should not be bound
+	if result.visible != "" {
+		t.Errorf("expected visible to remain empty (unexported), got %q", result.visible)
 	}
 
 	if result.Name != "container" {
