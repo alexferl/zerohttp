@@ -593,3 +593,57 @@ func TestShutdownHookContextCancellation(t *testing.T) {
 		t.Errorf("Expected context.Canceled error, got %v", err)
 	}
 }
+
+// mockWebSocketConn is a mock implementation of WebSocketConn for testing
+type mockWebSocketConn struct{}
+
+func (m *mockWebSocketConn) ReadMessage() (int, []byte, error)      { return 0, nil, nil }
+func (m *mockWebSocketConn) WriteMessage(mt int, data []byte) error { return nil }
+func (m *mockWebSocketConn) Close() error                           { return nil }
+func (m *mockWebSocketConn) RemoteAddr() net.Addr                   { return nil }
+
+// mockWebSocketUpgrader is a mock implementation of WebSocketUpgrader for testing
+type mockWebSocketUpgrader struct{}
+
+func (m *mockWebSocketUpgrader) Upgrade(w http.ResponseWriter, r *http.Request) (WebSocketConn, error) {
+	return &mockWebSocketConn{}, nil
+}
+
+func TestWithWebSocketUpgrader(t *testing.T) {
+	cfg := DefaultConfig
+	mockUpgrader := &mockWebSocketUpgrader{}
+
+	WithWebSocketUpgrader(mockUpgrader)(&cfg)
+
+	if cfg.WebSocketUpgrader == nil {
+		t.Error("expected WebSocketUpgrader to be set")
+	}
+}
+
+func TestCloseError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  CloseError
+		want string
+	}{
+		{
+			name: "with reason",
+			err:  CloseError{Code: 1000, Reason: "normal closure"},
+			want: "websocket: close 1000 normal closure",
+		},
+		{
+			name: "without reason",
+			err:  CloseError{Code: 1001},
+			want: "websocket: close 1001",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.err.Error()
+			if got != tt.want {
+				t.Errorf("CloseError.Error() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
