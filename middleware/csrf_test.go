@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +15,108 @@ import (
 )
 
 var testHMACKey = []byte("test-key-for-csrf-middleware-32!!")
+
+func TestCSRF_MissingHMACKeyPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("Expected panic for missing HMACKey, but did not panic")
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "HMACKey is required") {
+			t.Errorf("Expected panic message to contain 'HMACKey is required', got: %v", r)
+		}
+	}()
+
+	// This should panic
+	_ = CSRF()
+}
+
+func TestCSRF_ValidateTokenFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		token    string
+		expected bool
+	}{
+		{
+			name:     "valid token",
+			token:    generateToken(testHMACKey),
+			expected: true,
+		},
+		{
+			name:     "invalid base64",
+			token:    "!!!invalid-base64!!!",
+			expected: false,
+		},
+		{
+			name:     "too short",
+			token:    base64.RawURLEncoding.EncodeToString([]byte("short")),
+			expected: false,
+		},
+		{
+			name:     "empty string",
+			token:    "",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := validateTokenFormat(tt.token)
+			if result != tt.expected {
+				t.Errorf("validateTokenFormat(%q) = %v, want %v", tt.token, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCSRF_DefaultValues(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Test with explicit zero values to trigger default code paths
+	csrf := CSRF(
+		config.WithCSRFHMACKey(testHMACKey),
+		config.WithCSRFCookieName(""),
+		config.WithCSRFCookieMaxAge(0),
+		config.WithCSRFCookiePath(""),
+		config.WithCSRFTokenLookup(""),
+		config.WithCSRFExemptMethods(nil),
+		config.WithCSRFExemptPaths(nil),
+	)(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	csrf.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rr.Code)
+	}
+
+	// Verify defaults were applied by checking cookie
+	cookies := rr.Result().Cookies()
+	var csrfCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "csrf_token" {
+			csrfCookie = c
+			break
+		}
+	}
+
+	if csrfCookie == nil {
+		t.Fatal("Expected csrf_token cookie with default name")
+	}
+
+	if csrfCookie.Path != "/" {
+		t.Errorf("Expected default path /, got %s", csrfCookie.Path)
+	}
+
+	if csrfCookie.MaxAge != 86400 {
+		t.Errorf("Expected default max-age 86400, got %d", csrfCookie.MaxAge)
+	}
+}
 
 func TestCSRF_TokenGeneration(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -307,6 +411,49 @@ func TestCSRF_FormTokenLookup(t *testing.T) {
 
 	req2 := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(formData.Encode()))
 	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
+
+	rr2 := httptest.NewRecorder()
+	csrf.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", rr2.Code)
+	}
+}
+
+func TestCSRF_MultipartFormTokenLookup(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	csrf := CSRF(
+		config.WithCSRFHMACKey(testHMACKey),
+		config.WithCSRFTokenLookup("form:csrf_token"),
+	)(handler)
+
+	// Get token
+	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr1 := httptest.NewRecorder()
+	csrf.ServeHTTP(rr1, req1)
+
+	cookies := rr1.Result().Cookies()
+	var token string
+	for _, c := range cookies {
+		if c.Name == "csrf_token" {
+			token = c.Value
+			break
+		}
+	}
+
+	// Build multipart form with token
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("csrf_token", token)
+	_ = writer.WriteField("message", "hello")
+	_ = writer.Close()
+
+	req2 := httptest.NewRequest(http.MethodPost, "/", &body)
+	req2.Header.Set("Content-Type", writer.FormDataContentType())
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 
 	rr2 := httptest.NewRecorder()
