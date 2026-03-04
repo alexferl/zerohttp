@@ -27,9 +27,14 @@ go.work.sum
 # certificates
 *.pem
 
+# cookies
+cookies.txt
+
+# static files dir
+static
+
+# uploads dir
 uploads
 
 # coverage
 coverage.html
-
-static
