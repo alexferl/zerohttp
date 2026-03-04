@@ -9,7 +9,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/alexferl/zerohttp"
+	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/crypto/acme/autocert"
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// Create zerohttp server with autocert manager
-	app := zerohttp.New(
+	app := zh.New(
 		config.WithAddr(":80"),
 		config.WithTLSAddr(":443"),
 		config.WithAutocertManager(wrappedManager),
@@ -100,9 +100,10 @@ func main() {
 	})
 
 	// Add routes
-	app.GET("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("Hello over HTTP/3!\n"))
+		_, err := w.Write([]byte("Hello over HTTP/3!\n"))
+		return err
 	}))
 
 	// Create HTTP/3 server with autocert support

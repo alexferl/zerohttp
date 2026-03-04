@@ -137,22 +137,23 @@ func handleSession(sess *webtransport.Session) {
 
 3. **Create zerohttp App with Routes**
    ```go
-   app := zerohttp.New()
+   app := zh.New()
 
    // Regular HTTP endpoint
-   app.GET("/", func(w http.ResponseWriter, r *http.Request) {
+   app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
        w.Header().Set("Content-Type", "text/html")
-       w.Write([]byte(html))
-   })
+       _, err := w.Write([]byte(html))
+       return err
+   }))
 
    // WebTransport endpoint
-   app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+   app.CONNECT("/wt", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
        sess, err := wtServer.Upgrade(w, r)
        if err != nil {
-           w.WriteHeader(http.StatusInternalServerError)
-           return
+           return err
        }
        go handleSession(sess)
+       return nil
    }))
    ```
 
