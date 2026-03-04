@@ -31,6 +31,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
     - [WebTransport Support](#webtransport-support)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
+- [Graceful Shutdown](#graceful-shutdown)
 - [Configuration Reference](#configuration-reference)
     - [Server Configuration](#server-configuration)
     - [Middleware Configuration](#middleware-configuration)
@@ -895,6 +896,57 @@ app.Use(middleware.CircuitBreaker(
 The circuit breaker operates in three states: **Closed** (normal), **Open** (blocked), and **Half-Open** (testing recovery). It prevents cascading failures when downstream services are unavailable.
 
 
+## Graceful Shutdown
+
+zerohttp provides graceful shutdown hooks for cleanup tasks during server shutdown. Hooks are called during `Shutdown()` and allow you to perform cleanup like closing database connections, flushing logs, and notifying external systems.
+
+**⚠️ Important:** Hooks **must** respect context cancellation by checking `ctx.Done()`. If a hook blocks without respecting the context, shutdown will hang.
+
+```go
+app := zh.New(
+    // Pre-shutdown: run before servers start shutting down (sequential)
+    config.WithPreShutdownHook("health", func(ctx context.Context) error {
+        // Mark service as unhealthy to stop receiving traffic
+        health.SetUnhealthy()
+        return nil
+    }),
+
+    // Shutdown: run concurrently with server shutdown
+    config.WithShutdownHook("flush-logs", func(ctx context.Context) error {
+        return logger.Flush()
+    }),
+    config.WithShutdownHook("close-db", func(ctx context.Context) error {
+        // Always check context cancellation for long operations
+        select {
+        case <-ctx.Done():
+            return ctx.Err()
+        default:
+            return db.Close()
+        }
+    }),
+
+    // Post-shutdown: run after all servers are stopped (sequential)
+    config.WithPostShutdownHook("cleanup", func(ctx context.Context) error {
+        return os.RemoveAll("/tmp/app-*")
+    }),
+)
+
+// Hooks can also be registered programmatically
+app.RegisterShutdownHook("metrics", func(ctx context.Context) error {
+    return metrics.Push(ctx, gateway)
+})
+```
+
+### Hook Execution Order
+
+1. **Pre-shutdown hooks** - Execute sequentially in registration order
+2. **Server shutdown** - HTTP/HTTPS/HTTP3 servers shut down concurrently
+3. **Shutdown hooks** - Execute concurrently alongside server shutdown
+4. **Post-shutdown hooks** - Execute sequentially in registration order
+
+Hook errors are logged but do not stop the shutdown process. Context errors (`context.Canceled` or `context.DeadlineExceeded`) from pre-shutdown hooks will abort shutdown early.
+
+
 ## Configuration Reference
 
 The functional options pattern provides structured configuration for all aspects of the server:
@@ -912,6 +964,9 @@ The functional options pattern provides structured configuration for all aspects
 - `config.WithAutocertManager()` - Let's Encrypt integration
 - `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
 - `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
+- `config.WithPreShutdownHook()` - Hook to run before server shutdown
+- `config.WithShutdownHook()` - Hook to run concurrently with server shutdown
+- `config.WithPostShutdownHook()` - Hook to run after server shutdown
 
 
 ### Middleware Configuration
