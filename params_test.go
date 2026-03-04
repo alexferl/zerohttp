@@ -630,22 +630,6 @@ func TestParamAs_InvalidValues(t *testing.T) {
 	}
 }
 
-func TestPAlias(t *testing.T) {
-	mux := http.NewServeMux()
-	var got string
-	mux.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
-		got = P.Param(r, "id")
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/users/123", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if got != "123" {
-		t.Errorf("P.Param() = %q, want %q", got, "123")
-	}
-}
-
 func TestDefaultParamsExtractor(t *testing.T) {
 	t.Run("Param method", func(t *testing.T) {
 		mux := http.NewServeMux()

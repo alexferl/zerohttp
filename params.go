@@ -9,9 +9,6 @@ import (
 // Params is the default params extractor instance used by the package
 var Params = &defaultParamsExtractor{}
 
-// P is a short alias for Params for convenience
-var P = Params
-
 // ParamType is a type constraint for supported path parameter types.
 // Supported types: string, int, int8, int16, int32, int64,
 // uint, uint8, uint16, uint32, uint64, float32, float64, bool
