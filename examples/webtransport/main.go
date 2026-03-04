@@ -54,13 +54,13 @@ func main() {
 	}))
 
 	// WebTransport endpoint - register CONNECT handler
-	app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.CONNECT("/wt", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		sess, err := wtServer.Upgrade(w, r)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return err
 		}
 		go handleSession(sess)
+		return nil
 	}))
 
 	log.Println("Starting WebTransport server on https://localhost:8443")

@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/alexferl/zerohttp"
+	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
 	"github.com/quic-go/quic-go/http3"
 )
@@ -15,7 +15,7 @@ func main() {
 	certFile, keyFile := "localhost+2.pem", "localhost+2-key.pem"
 
 	// Create zerohttp server with TLS
-	app := zerohttp.New(
+	app := zh.New(
 		config.WithTLSAddr(":8443"),
 	)
 
@@ -28,9 +28,10 @@ func main() {
 	})
 
 	// Add routes
-	app.GET("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("Hello over HTTP/3!\n"))
+		_, err := w.Write([]byte("Hello over HTTP/3!\n"))
+		return err
 	}))
 
 	// Create HTTP/3 server using quic-go

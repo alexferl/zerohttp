@@ -122,13 +122,13 @@ func main() {
 	}))
 
 	// WebTransport endpoint - register CONNECT handler
-	app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.CONNECT("/wt", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		sess, err := wt.Upgrade(w, r)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return err
 		}
 		go handleSession(sess)
+		return nil
 	}))
 
 	log.Printf("Starting WebTransport server with AutoTLS on https://%s", *domain)
