@@ -385,6 +385,26 @@ func TestParamAs_Types(t *testing.T) {
 			},
 		},
 		{
+			name:      "int16 type",
+			pattern:   "/items/{id}",
+			path:      "/items/1000",
+			paramName: "id",
+			expected:  int16(1000),
+			fn: func(r *http.Request, n string) (any, error) {
+				return ParamAs[int16](r, n)
+			},
+		},
+		{
+			name:      "int32 type",
+			pattern:   "/items/{id}",
+			path:      "/items/100000",
+			paramName: "id",
+			expected:  int32(100000),
+			fn: func(r *http.Request, n string) (any, error) {
+				return ParamAs[int32](r, n)
+			},
+		},
+		{
 			name:      "uint type",
 			pattern:   "/items/{count}",
 			path:      "/items/50",
@@ -392,6 +412,46 @@ func TestParamAs_Types(t *testing.T) {
 			expected:  uint(50),
 			fn: func(r *http.Request, n string) (any, error) {
 				return ParamAs[uint](r, n)
+			},
+		},
+		{
+			name:      "uint8 type",
+			pattern:   "/items/{count}",
+			path:      "/items/200",
+			paramName: "count",
+			expected:  uint8(200),
+			fn: func(r *http.Request, n string) (any, error) {
+				return ParamAs[uint8](r, n)
+			},
+		},
+		{
+			name:      "uint16 type",
+			pattern:   "/items/{count}",
+			path:      "/items/5000",
+			paramName: "count",
+			expected:  uint16(5000),
+			fn: func(r *http.Request, n string) (any, error) {
+				return ParamAs[uint16](r, n)
+			},
+		},
+		{
+			name:      "uint32 type",
+			pattern:   "/items/{count}",
+			path:      "/items/100000",
+			paramName: "count",
+			expected:  uint32(100000),
+			fn: func(r *http.Request, n string) (any, error) {
+				return ParamAs[uint32](r, n)
+			},
+		},
+		{
+			name:      "uint64 type",
+			pattern:   "/items/{id}",
+			path:      "/items/9223372036854775807",
+			paramName: "id",
+			expected:  uint64(9223372036854775807),
+			fn: func(r *http.Request, n string) (any, error) {
+				return ParamAs[uint64](r, n)
 			},
 		},
 		{
@@ -428,4 +488,213 @@ func TestParamAs_Types(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParamAs_InvalidValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		wantErr string
+		fn      func(*http.Request) error
+	}{
+		{
+			name:    "invalid int8",
+			path:    "/val/999",
+			wantErr: `parameter "val": invalid int8`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[int8](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid int16",
+			path:    "/val/99999",
+			wantErr: `parameter "val": invalid int16`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[int16](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid int32",
+			path:    "/val/9999999999",
+			wantErr: `parameter "val": invalid int32`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[int32](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid int64",
+			path:    "/val/9999999999999999999",
+			wantErr: `parameter "val": invalid int64`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[int64](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid uint",
+			path:    "/val/abc",
+			wantErr: `parameter "val": invalid uint`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[uint](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid uint8",
+			path:    "/val/999",
+			wantErr: `parameter "val": invalid uint8`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[uint8](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid uint16",
+			path:    "/val/999999",
+			wantErr: `parameter "val": invalid uint16`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[uint16](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid uint32",
+			path:    "/val/99999999999",
+			wantErr: `parameter "val": invalid uint32`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[uint32](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid uint64",
+			path:    "/val/abc",
+			wantErr: `parameter "val": invalid uint64`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[uint64](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid float32",
+			path:    "/val/abc",
+			wantErr: `parameter "val": invalid float32`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[float32](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid float64",
+			path:    "/val/abc",
+			wantErr: `parameter "val": invalid float64`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[float64](r, "val")
+				return err
+			},
+		},
+		{
+			name:    "invalid bool",
+			path:    "/val/maybe",
+			wantErr: `parameter "val": invalid bool`,
+			fn: func(r *http.Request) error {
+				_, err := ParamAs[bool](r, "val")
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			var gotErr error
+			mux.HandleFunc("/val/{val}", func(w http.ResponseWriter, r *http.Request) {
+				gotErr = tt.fn(r)
+			})
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if gotErr == nil {
+				t.Errorf("expected error, got nil")
+				return
+			}
+			if got := gotErr.Error(); got[:len(tt.wantErr)] != tt.wantErr {
+				t.Errorf("error = %q, want prefix %q", got, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPAlias(t *testing.T) {
+	mux := http.NewServeMux()
+	var got string
+	mux.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		got = P.Param(r, "id")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/users/123", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if got != "123" {
+		t.Errorf("P.Param() = %q, want %q", got, "123")
+	}
+}
+
+func TestDefaultParamsExtractor(t *testing.T) {
+	t.Run("Param method", func(t *testing.T) {
+		mux := http.NewServeMux()
+		extractor := &defaultParamsExtractor{}
+		var got string
+		mux.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+			got = extractor.Param(r, "id")
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/users/456", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		if got != "456" {
+			t.Errorf("Param() = %q, want %q", got, "456")
+		}
+	})
+
+	t.Run("ParamOrDefault method with value", func(t *testing.T) {
+		mux := http.NewServeMux()
+		extractor := &defaultParamsExtractor{}
+		var got string
+		mux.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+			got = extractor.ParamOrDefault(r, "id", "default")
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/users/789", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		if got != "789" {
+			t.Errorf("ParamOrDefault() = %q, want %q", got, "789")
+		}
+	})
+
+	t.Run("ParamOrDefault method with default", func(t *testing.T) {
+		mux := http.NewServeMux()
+		extractor := &defaultParamsExtractor{}
+		var got string
+		mux.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
+			got = extractor.ParamOrDefault(r, "id", "default")
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/users", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		if got != "default" {
+			t.Errorf("ParamOrDefault() = %q, want %q", got, "default")
+		}
+	})
 }

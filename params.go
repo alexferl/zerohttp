@@ -56,7 +56,7 @@ func (p *defaultParamsExtractor) ParamOrDefault(r *http.Request, name, defaultVa
 // uint, uint8, uint16, uint32, uint64, float32, float64, bool
 func ParamAs[T ParamType](r *http.Request, name string) (T, error) {
 	var zero T
-	val := r.PathValue(name)
+	val := Params.Param(r, name)
 	if val == "" {
 		return zero, fmt.Errorf("parameter %q not found", name)
 	}
