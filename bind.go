@@ -37,6 +37,12 @@ type Binder interface {
 	// before being written to temp files (similar to http.Request.ParseMultipartForm).
 	// File uploads are bound to fields of type FileHeader or []FileHeader.
 	MultipartForm(r *http.Request, dst any, maxMemory int64) error
+
+	// Query binds query parameters from the request URL to a destination struct.
+	// Uses `query` struct tags for field mapping. Fields without tags are mapped
+	// using snake_case conversion of the field name.
+	// Returns an error if binding fails due to type mismatch.
+	Query(r *http.Request, dst any) error
 }
 
 // defaultBinder implements the Binder interface with standard decoding
@@ -91,7 +97,7 @@ func (b *defaultBinder) Form(r *http.Request, dst any) error {
 	if err := r.ParseForm(); err != nil {
 		return fmt.Errorf("parse form: %w", err)
 	}
-	return bindValues(r.Form, dst, false)
+	return bindValues(r.Form, dst, "form", false)
 }
 
 // MultipartForm parses multipart form data including file uploads.
@@ -105,7 +111,7 @@ func (b *defaultBinder) MultipartForm(r *http.Request, dst any, maxMemory int64)
 	}
 
 	// Bind form values first
-	if err := bindValues(r.MultipartForm.Value, dst, true); err != nil {
+	if err := bindValues(r.MultipartForm.Value, dst, "form", true); err != nil {
 		return err
 	}
 
@@ -113,8 +119,17 @@ func (b *defaultBinder) MultipartForm(r *http.Request, dst any, maxMemory int64)
 	return BindMultipartFormFiles(r, dst)
 }
 
-// bindValues binds url.Values to a struct, optionally handling file uploads.
-func bindValues(values url.Values, dst any, allowFiles bool) error {
+// Query binds query parameters from the request URL to a destination struct.
+// Uses `query` struct tags for field mapping. Fields without tags are mapped
+// using snake_case conversion of the field name.
+// Returns an error if binding fails due to type mismatch.
+func (b *defaultBinder) Query(r *http.Request, dst any) error {
+	return bindValues(r.URL.Query(), dst, "query", false)
+}
+
+// bindValues binds url.Values to a struct using the specified tag name.
+// The tagName parameter specifies which struct tag to use (e.g., "form", "query").
+func bindValues(values url.Values, dst any, tagName string, allowFiles bool) error {
 	v := reflect.ValueOf(dst)
 	if v.Kind() != reflect.Ptr || v.IsNil() {
 		return fmt.Errorf("destination must be a non-nil pointer")
@@ -131,13 +146,21 @@ func bindValues(values url.Values, dst any, allowFiles bool) error {
 		field := v.Field(i)
 		fieldType := t.Field(i)
 
-		// Skip unexported fields
+		// Handle embedded structs - inline their fields
+		if fieldType.Anonymous && field.Kind() == reflect.Struct {
+			if err := bindEmbeddedStruct(values, field, tagName, allowFiles); err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Skip unexported fields (for non-embedded fields)
 		if !field.CanSet() {
 			continue
 		}
 
-		// Get form tag
-		tag := fieldType.Tag.Get("form")
+		// Get the tag value
+		tag := fieldType.Tag.Get(tagName)
 		if tag == "-" {
 			continue
 		}
@@ -147,31 +170,80 @@ func bindValues(values url.Values, dst any, allowFiles bool) error {
 			tag = camelToSnake(fieldType.Name)
 		}
 
-		// Handle embedded structs
+		// Check for file uploads first (only in multipart mode)
+		if allowFiles {
+			handled, err := bindFileField(field)
+			if err != nil {
+				return err
+			}
+			if handled {
+				continue
+			}
+		}
+
+		// Get value(s) from url.Values
+		fieldValues, exists := values[tag]
+		if !exists || len(fieldValues) == 0 {
+			continue
+		}
+
+		if err := setFieldValue(field, fieldValues); err != nil {
+			return fmt.Errorf("field %s: %w", fieldType.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// bindEmbeddedStruct binds values to an embedded struct's fields directly.
+// This avoids the reflection issues with getting an interface from embedded struct fields.
+func bindEmbeddedStruct(values url.Values, structField reflect.Value, tagName string, allowFiles bool) error {
+	structType := structField.Type()
+
+	for j := 0; j < structField.NumField(); j++ {
+		field := structField.Field(j)
+		fieldType := structType.Field(j)
+
+		// Skip unexported fields
+		if !field.CanSet() {
+			continue
+		}
+
+		// Handle nested embedded structs recursively
 		if fieldType.Anonymous && field.Kind() == reflect.Struct {
-			if err := bindValues(values, field.Addr().Interface(), allowFiles); err != nil {
+			if err := bindEmbeddedStruct(values, field, tagName, allowFiles); err != nil {
 				return err
 			}
 			continue
 		}
 
+		// Get the tag value
+		tag := fieldType.Tag.Get(tagName)
+		if tag == "-" {
+			continue
+		}
+		if tag == "" {
+			tag = camelToSnake(fieldType.Name)
+		}
+
 		// Check for file uploads first (only in multipart mode)
 		if allowFiles {
-			if handled, err := bindFileField(field, tag); handled {
-				if err != nil {
-					return err
-				}
+			handled, err := bindFileField(field)
+			if err != nil {
+				return err
+			}
+			if handled {
 				continue
 			}
 		}
 
-		// Get form value(s)
-		formValues, exists := values[tag]
-		if !exists || len(formValues) == 0 {
+		// Get value(s) from url.Values
+		fieldValues, exists := values[tag]
+		if !exists || len(fieldValues) == 0 {
 			continue
 		}
 
-		if err := setFieldValue(field, formValues); err != nil {
+		if err := setFieldValue(field, fieldValues); err != nil {
 			return fmt.Errorf("field %s: %w", fieldType.Name, err)
 		}
 	}
@@ -181,7 +253,7 @@ func bindValues(values url.Values, dst any, allowFiles bool) error {
 
 // bindFileField attempts to bind a file upload to a field.
 // Returns true if the field was handled as a file field.
-func bindFileField(field reflect.Value, tag string) (bool, error) {
+func bindFileField(field reflect.Value) (bool, error) {
 	// Check if it's a FileHeader field
 	switch field.Type() {
 	case reflect.TypeOf(&FileHeader{}):
@@ -235,6 +307,10 @@ func setFieldValue(field reflect.Value, values []string) error {
 		return setSliceValue(field, values)
 
 	case reflect.Ptr:
+		// If value is empty, leave pointer as nil (optional parameter)
+		if values[0] == "" {
+			return nil
+		}
 		if field.IsNil() {
 			field.Set(reflect.New(field.Type().Elem()))
 		}
