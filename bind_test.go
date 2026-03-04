@@ -2,6 +2,7 @@ package zerohttp
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -278,7 +279,7 @@ func TestBinder_Form_InvalidDestination(t *testing.T) {
 
 			var err error
 			if tt.dst == nil {
-				err = bindValues(url.Values{"name": []string{"test"}}, tt.dst, false)
+				err = bindValues(url.Values{"name": []string{"test"}}, tt.dst, "form", false)
 			} else {
 				err = B.Form(req, tt.dst)
 			}
@@ -544,7 +545,7 @@ func TestBindValues_EmbeddedStruct(t *testing.T) {
 	}
 
 	var result Container
-	err := bindValues(values, &result, false)
+	err := bindValues(values, &result, "form", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -571,7 +572,7 @@ func TestBindValues_PointerFields(t *testing.T) {
 	}
 
 	var result WithPointers
-	err := bindValues(values, &result, false)
+	err := bindValues(values, &result, "form", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -597,7 +598,7 @@ func TestBindValues_IntSlice(t *testing.T) {
 	}
 
 	var result WithIntSlice
-	err := bindValues(values, &result, false)
+	err := bindValues(values, &result, "form", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -632,4 +633,666 @@ type testMultipartStruct struct {
 	Age         int           `form:"age"`
 	Document    *FileHeader   `form:"document"`
 	Attachments []*FileHeader `form:"attachments"`
+}
+
+// Query binding test structs
+type testQueryStruct struct {
+	Page     int      `query:"page"`
+	Limit    int      `query:"limit"`
+	Search   string   `query:"search"`
+	Active   bool     `query:"active"`
+	Tags     []string `query:"tags"`
+	Category string   `query:"category"`
+	Ignored  string   `query:"-"`
+}
+
+type testQueryEmbedded struct {
+	Page  int `query:"page"`
+	Limit int `query:"limit"`
+}
+
+type testQueryContainer struct {
+	testQueryEmbedded
+	Search string `query:"search"`
+}
+
+type testQueryPointers struct {
+	Name   *string `query:"name"`
+	Age    *int    `query:"age"`
+	Active *bool   `query:"active"`
+}
+
+type testQuerySlices struct {
+	IDs     []int     `query:"ids"`
+	Scores  []float64 `query:"scores"`
+	Enabled []bool    `query:"enabled"`
+}
+
+func TestBinder_Query(t *testing.T) {
+	tests := []struct {
+		name       string
+		query      string
+		wantError  bool
+		expected   func(t *testing.T, result *testQueryStruct)
+		errContain string
+	}{
+		{
+			name:      "basic fields",
+			query:     "page=1&limit=20&search=hello",
+			wantError: false,
+			expected: func(t *testing.T, result *testQueryStruct) {
+				if result.Page != 1 {
+					t.Errorf("expected Page=1, got %d", result.Page)
+				}
+				if result.Limit != 20 {
+					t.Errorf("expected Limit=20, got %d", result.Limit)
+				}
+				if result.Search != "hello" {
+					t.Errorf("expected Search='hello', got %q", result.Search)
+				}
+			},
+		},
+		{
+			name:      "boolean field",
+			query:     "active=true",
+			wantError: false,
+			expected: func(t *testing.T, result *testQueryStruct) {
+				if !result.Active {
+					t.Errorf("expected Active=true, got %v", result.Active)
+				}
+			},
+		},
+		{
+			name:      "slice values",
+			query:     "tags=go&tags=web&tags=api",
+			wantError: false,
+			expected: func(t *testing.T, result *testQueryStruct) {
+				expected := []string{"go", "web", "api"}
+				if len(result.Tags) != len(expected) {
+					t.Errorf("expected %d tags, got %d", len(expected), len(result.Tags))
+					return
+				}
+				for i, tag := range result.Tags {
+					if tag != expected[i] {
+						t.Errorf("expected tag[%d]=%q, got %q", i, expected[i], tag)
+					}
+				}
+			},
+		},
+		{
+			name:      "ignored field",
+			query:     "ignored=shouldnotset",
+			wantError: false,
+			expected: func(t *testing.T, result *testQueryStruct) {
+				if result.Ignored != "" {
+					t.Errorf("expected Ignored to be empty, got %q", result.Ignored)
+				}
+			},
+		},
+		{
+			name:      "empty query",
+			query:     "",
+			wantError: false,
+			expected: func(t *testing.T, result *testQueryStruct) {
+				if result.Page != 0 {
+					t.Errorf("expected Page=0, got %d", result.Page)
+				}
+				if result.Search != "" {
+					t.Errorf("expected Search='', got %q", result.Search)
+				}
+			},
+		},
+		{
+			name:       "invalid integer",
+			query:      "page=abc",
+			wantError:  true,
+			errContain: "invalid integer",
+		},
+		{
+			name:       "invalid boolean",
+			query:      "active=notabool",
+			wantError:  true,
+			errContain: "invalid boolean",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/?"+tt.query, nil)
+
+			var result testQueryStruct
+			err := B.Query(req, &result)
+
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("expected error but got none")
+				}
+				if tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+					t.Errorf("expected error to contain %q, got %v", tt.errContain, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			tt.expected(t, &result)
+		})
+	}
+}
+
+func TestBinder_Query_EmbeddedStruct(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/?page=2&limit=50&search=test", nil)
+
+	var result testQueryContainer
+	err := B.Query(req, &result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Page != 2 {
+		t.Errorf("expected Page=2, got %d", result.Page)
+	}
+	if result.Limit != 50 {
+		t.Errorf("expected Limit=50, got %d", result.Limit)
+	}
+	if result.Search != "test" {
+		t.Errorf("expected Search='test', got %q", result.Search)
+	}
+}
+
+func TestBinder_Query_PointerFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected func(t *testing.T, result *testQueryPointers)
+	}{
+		{
+			name:  "all fields provided",
+			query: "name=John&age=30&active=true",
+			expected: func(t *testing.T, result *testQueryPointers) {
+				if result.Name == nil || *result.Name != "John" {
+					t.Errorf("expected Name='John', got %v", result.Name)
+				}
+				if result.Age == nil || *result.Age != 30 {
+					t.Errorf("expected Age=30, got %v", result.Age)
+				}
+				if result.Active == nil || *result.Active != true {
+					t.Errorf("expected Active=true, got %v", result.Active)
+				}
+			},
+		},
+		{
+			name:  "some fields missing",
+			query: "name=Jane",
+			expected: func(t *testing.T, result *testQueryPointers) {
+				if result.Name == nil || *result.Name != "Jane" {
+					t.Errorf("expected Name='Jane', got %v", result.Name)
+				}
+				if result.Age != nil {
+					t.Errorf("expected Age=nil, got %v", result.Age)
+				}
+				if result.Active != nil {
+					t.Errorf("expected Active=nil, got %v", result.Active)
+				}
+			},
+		},
+		{
+			name:  "empty values are nil for pointers",
+			query: "name=&age=",
+			expected: func(t *testing.T, result *testQueryPointers) {
+				// Per design doc: empty string = not provided for pointers
+				if result.Name != nil {
+					t.Errorf("expected Name=nil for empty value, got %q", *result.Name)
+				}
+				if result.Age != nil {
+					t.Errorf("expected Age=nil for empty value, got %d", *result.Age)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/?"+tt.query, nil)
+
+			var result testQueryPointers
+			err := B.Query(req, &result)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			tt.expected(t, &result)
+		})
+	}
+}
+
+func TestBinder_Query_SliceTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected func(t *testing.T, result *testQuerySlices)
+	}{
+		{
+			name:  "int slice",
+			query: "ids=1&ids=2&ids=3",
+			expected: func(t *testing.T, result *testQuerySlices) {
+				expected := []int{1, 2, 3}
+				if len(result.IDs) != len(expected) {
+					t.Fatalf("expected %d IDs, got %d", len(expected), len(result.IDs))
+				}
+				for i, id := range result.IDs {
+					if id != expected[i] {
+						t.Errorf("expected IDs[%d]=%d, got %d", i, expected[i], id)
+					}
+				}
+			},
+		},
+		{
+			name:  "float64 slice",
+			query: "scores=95.5&scores=87.2&scores=100",
+			expected: func(t *testing.T, result *testQuerySlices) {
+				expected := []float64{95.5, 87.2, 100}
+				if len(result.Scores) != len(expected) {
+					t.Fatalf("expected %d scores, got %d", len(expected), len(result.Scores))
+				}
+				for i, score := range result.Scores {
+					if score != expected[i] {
+						t.Errorf("expected Scores[%d]=%f, got %f", i, expected[i], score)
+					}
+				}
+			},
+		},
+		{
+			name:  "bool slice",
+			query: "enabled=true&enabled=false&enabled=1",
+			expected: func(t *testing.T, result *testQuerySlices) {
+				expected := []bool{true, false, true}
+				if len(result.Enabled) != len(expected) {
+					t.Fatalf("expected %d enabled values, got %d", len(expected), len(result.Enabled))
+				}
+				for i, val := range result.Enabled {
+					if val != expected[i] {
+						t.Errorf("expected Enabled[%d]=%v, got %v", i, expected[i], val)
+					}
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/?"+tt.query, nil)
+
+			var result testQuerySlices
+			err := B.Query(req, &result)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			tt.expected(t, &result)
+		})
+	}
+}
+
+func TestBinder_Query_ImplicitSnakeCase(t *testing.T) {
+	type ImplicitNaming struct {
+		UserName   string `query:"user_name"`
+		FirstName  string // should map to first_name
+		LastName   string // should map to last_name
+		HTTPMethod string // should map to h_t_t_p_method
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?user_name=johndoe&first_name=John&last_name=Doe&h_t_t_p_method=GET", nil)
+
+	var result ImplicitNaming
+	err := B.Query(req, &result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.UserName != "johndoe" {
+		t.Errorf("expected UserName='johndoe', got %q", result.UserName)
+	}
+	if result.FirstName != "John" {
+		t.Errorf("expected FirstName='John', got %q", result.FirstName)
+	}
+	if result.LastName != "Doe" {
+		t.Errorf("expected LastName='Doe', got %q", result.LastName)
+	}
+	if result.HTTPMethod != "GET" {
+		t.Errorf("expected HTTPMethod='GET', got %q", result.HTTPMethod)
+	}
+}
+
+func TestBinder_Query_InvalidDestination(t *testing.T) {
+	tests := []struct {
+		name string
+		dst  interface{}
+	}{
+		{
+			name: "nil pointer",
+			dst:  nil,
+		},
+		{
+			name: "non-pointer",
+			dst:  testQueryStruct{},
+		},
+		{
+			name: "pointer to non-struct",
+			dst:  new(string),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/?page=1", nil)
+
+			var err error
+			if tt.dst == nil {
+				err = bindValues(req.URL.Query(), tt.dst, "query", false)
+			} else {
+				err = B.Query(req, tt.dst)
+			}
+
+			if err == nil {
+				t.Fatal("expected error but got none")
+			}
+		})
+	}
+}
+
+func TestBinder_Query_URLEncodedValues(t *testing.T) {
+	type URLValues struct {
+		Search string `query:"search"`
+		Path   string `query:"path"`
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?search=hello%20world&path=%2Ffoo%2Fbar", nil)
+
+	var result URLValues
+	err := B.Query(req, &result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Search != "hello world" {
+		t.Errorf("expected Search='hello world', got %q", result.Search)
+	}
+	if result.Path != "/foo/bar" {
+		t.Errorf("expected Path='/foo/bar', got %q", result.Path)
+	}
+}
+
+func TestBindEmbeddedStruct_NestedEmbedded(t *testing.T) {
+	type DeepNested struct {
+		Deep string `form:"deep"`
+	}
+	type Nested struct {
+		DeepNested
+		Middle string `form:"middle"`
+	}
+	type Container struct {
+		Nested
+		Top string `form:"top"`
+	}
+
+	values := url.Values{
+		"top":    []string{"top_value"},
+		"middle": []string{"middle_value"},
+		"deep":   []string{"deep_value"},
+	}
+
+	var result Container
+	err := bindValues(values, &result, "form", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Top != "top_value" {
+		t.Errorf("expected Top='top_value', got %q", result.Top)
+	}
+	if result.Middle != "middle_value" {
+		t.Errorf("expected Middle='middle_value', got %q", result.Middle)
+	}
+	if result.Deep != "deep_value" {
+		t.Errorf("expected Deep='deep_value', got %q", result.Deep)
+	}
+}
+
+func TestBindSliceValue_InvalidElement(t *testing.T) {
+	type WithIntSlice struct {
+		IDs []int `form:"ids"`
+	}
+
+	values := url.Values{
+		"ids": []string{"1", "not_a_number", "3"},
+	}
+
+	var result WithIntSlice
+	err := bindValues(values, &result, "form", false)
+	if err == nil {
+		t.Fatal("expected error for invalid slice element")
+	}
+	if !strings.Contains(err.Error(), "invalid integer") {
+		t.Errorf("expected error to contain 'invalid integer', got %v", err)
+	}
+}
+
+func TestBindSliceValue_InvalidFloatSlice(t *testing.T) {
+	type WithFloatSlice struct {
+		Scores []float64 `form:"scores"`
+	}
+
+	values := url.Values{
+		"scores": []string{"1.5", "invalid", "3.5"},
+	}
+
+	var result WithFloatSlice
+	err := bindValues(values, &result, "form", false)
+	if err == nil {
+		t.Fatal("expected error for invalid float slice element")
+	}
+}
+
+func TestBindSliceValue_InvalidBoolSlice(t *testing.T) {
+	type WithBoolSlice struct {
+		Flags []bool `form:"flags"`
+	}
+
+	values := url.Values{
+		"flags": []string{"true", "not_a_bool", "false"},
+	}
+
+	var result WithBoolSlice
+	err := bindValues(values, &result, "form", false)
+	if err == nil {
+		t.Fatal("expected error for invalid bool slice element")
+	}
+}
+
+func TestBindFileField_NonPointerFileHeader(t *testing.T) {
+	type WithNonPointerFileHeader struct {
+		Document FileHeader `form:"document"`
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("name", "Test")
+	fileWriter, _ := writer.CreateFormFile("document", "test.txt")
+	_, _ = fileWriter.Write([]byte("content"))
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	var result WithNonPointerFileHeader
+	err := B.MultipartForm(req, &result, 32<<20)
+	if err == nil {
+		t.Fatal("expected error for non-pointer FileHeader")
+	}
+	if !strings.Contains(err.Error(), "must be a pointer") {
+		t.Errorf("expected error to contain 'must be a pointer', got %v", err)
+	}
+}
+
+func TestBindEmbeddedStruct_WithFiles(t *testing.T) {
+	type FileContainer struct {
+		Name     string      `form:"name"`
+		Document *FileHeader `form:"document"`
+	}
+
+	type Wrapper struct {
+		FileContainer
+		Extra string `form:"extra"`
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("name", "TestName")
+	_ = writer.WriteField("extra", "ExtraValue")
+	fileWriter, _ := writer.CreateFormFile("document", "embedded.txt")
+	_, _ = fileWriter.Write([]byte("embedded content"))
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	var result Wrapper
+	err := B.MultipartForm(req, &result, 32<<20)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Name != "TestName" {
+		t.Errorf("expected Name='TestName', got %q", result.Name)
+	}
+	if result.Extra != "ExtraValue" {
+		t.Errorf("expected Extra='ExtraValue', got %q", result.Extra)
+	}
+	if result.Document == nil {
+		t.Fatal("expected Document to be set")
+	}
+	if result.Document.Filename != "embedded.txt" {
+		t.Errorf("expected Filename='embedded.txt', got %q", result.Document.Filename)
+	}
+}
+
+func TestFileHeader_ReadAll_OpenError(t *testing.T) {
+	// Create a FileHeader with no internal file reference
+	fh := &FileHeader{
+		Filename: "test.txt",
+		Size:     5,
+		file:     nil, // Simulate closed/unavailable file
+	}
+
+	_, err := fh.ReadAll()
+	if err == nil {
+		t.Fatal("expected error when file is not available")
+	}
+	if !strings.Contains(err.Error(), "no longer available") {
+		t.Errorf("expected 'no longer available' error, got %v", err)
+	}
+}
+
+func TestBinder_Form_ParseFormError(t *testing.T) {
+	// Create a request with invalid content type that causes ParseForm to fail
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not=valid"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = &errReader{}
+
+	var result testFormStruct
+	err := B.Form(req, &result)
+	if err == nil {
+		t.Fatal("expected error for invalid form data")
+	}
+}
+
+// errReader simulates a read error
+type errReader struct{}
+
+func (e *errReader) Read(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("read error")
+}
+
+func (e *errReader) Close() error {
+	return nil
+}
+
+func TestBinder_MultipartForm_ParseError(t *testing.T) {
+	// Request with malformed multipart data
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not valid multipart"))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=xyz")
+
+	var result testMultipartStruct
+	err := B.MultipartForm(req, &result, 32<<20)
+	if err == nil {
+		t.Fatal("expected error for invalid multipart form")
+	}
+}
+
+func TestBinder_MultipartForm_NoFormData(t *testing.T) {
+	// Create a request that parses but has no multipart form
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("name", "test")
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Manually parse then nil out the MultipartForm
+	_ = req.ParseMultipartForm(32 << 20)
+	req.MultipartForm = nil
+
+	var result testMultipartStruct
+	err := B.MultipartForm(req, &result, 32<<20)
+	if err == nil {
+		t.Fatal("expected error when MultipartForm is nil")
+	}
+}
+
+func TestBindFilesToStruct_NoMultipartForm(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	err := BindMultipartFormFiles(req, &testMultipartStruct{})
+	if err != nil {
+		t.Errorf("expected no error when no multipart form, got %v", err)
+	}
+}
+
+func TestBindFilesToStruct_InvalidDestination(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	fileWriter, _ := writer.CreateFormFile("test", "file.txt")
+	_, _ = fileWriter.Write([]byte("content"))
+	_ = writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	_ = req.ParseMultipartForm(32 << 20)
+
+	tests := []struct {
+		name string
+		dst  interface{}
+	}{
+		{
+			name: "non-pointer",
+			dst:  testMultipartStruct{},
+		},
+		{
+			name: "pointer to non-struct",
+			dst:  new(string),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := BindMultipartFormFiles(req, tt.dst)
+			if err == nil {
+				t.Fatal("expected error but got none")
+			}
+		})
+	}
 }

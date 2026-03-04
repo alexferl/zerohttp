@@ -13,9 +13,10 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Quick Start](#quick-start)
 - [Response Rendering](#response-rendering)
 - [Request Binding](#request-binding)
+- [Path Parameters](#path-parameters)
+- [Query Parameters](#query-parameters)
 - [Middleware](#middleware)
 - [Route Groups](#route-groups)
-- [Path Parameters](#path-parameters)
 - [Static File Serving](#static-file-serving)
     - [Static File Methods](#static-file-methods)
 - [Error Handling](#error-handling)
@@ -42,7 +43,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Zero Dependencies**: No external dependencies
 - **Secure by Default**: Automatically applies essential security middlewares out of the box
 - **Response Rendering**: Built-in support for JSON, HTML, text, and file responses
-- **Request Binding**: JSON, form, and multipart form parsing with struct tag binding
+- **Request Binding**: JSON, form, multipart form, and query parameter parsing with struct tag binding
 - **Problem Details**: RFC 9457 Problem Details for HTTP APIs error responses
 - **Flexible Routing**: Method-based routing with route groups and parameter support
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
@@ -237,6 +238,144 @@ app.POST("/upload", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 The JSON binder uses `json.Decoder` with `DisallowUnknownFields()` for stricter validation.
 Form binding supports automatic type conversion for int, uint, float, bool, and slice types.
 
+## Path Parameters
+
+Type-safe path parameter extraction with generic support:
+
+```go
+// Basic string extraction
+app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    id := zh.Param(r, "id")  // Returns string
+    return zh.R.JSON(w, 200, zh.M{"user_id": id})
+}))
+
+// Typed extraction with error handling
+app.GET("/items/{itemID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    itemID, err := zh.ParamAs[int](r, "itemID")
+    if err != nil {
+        return zh.R.ProblemDetail(w, zh.NewProblemDetail(400, "Invalid itemID"))
+    }
+    return zh.R.JSON(w, 200, zh.M{"item_id": itemID})
+}))
+
+// Multiple parameters
+app.GET("/users/{userID}/posts/{postID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    userID, _ := zh.ParamAs[int](r, "userID")
+    postID, _ := zh.ParamAs[int](r, "postID")
+    return zh.R.JSON(w, 200, zh.M{"user_id": userID, "post_id": postID})
+}))
+
+// With default value (returns default if param missing or invalid)
+app.GET("/products/{category}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    category := zh.ParamOrDefault(r, "category", "all")
+    return zh.R.JSON(w, 200, zh.M{"category": category})
+}))
+```
+
+**Available Functions:**
+
+- `Param(r, "name")` - Extract parameter as string
+- `ParamAs[T](r, "name")` - Extract and convert to type T (int, int64, uint, float64, bool, etc.)
+- `ParamAsOrDefault[T](r, "name", defaultVal)` - Extract with fallback value
+- `ParamOrDefault(r, "name", "default")` - String extraction with fallback
+
+**Supported Types:** `string`, `int`, `int8`, `int16`, `int32`, `int64`, `uint`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`, `bool`
+
+
+## Query Parameters
+
+Structured query parameter binding with struct tags and type-safe extraction:
+
+```go
+// Struct-based binding
+app.GET("/search", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    var req struct {
+        Query    string   `query:"q"`
+        Category string   `query:"category"`
+        Tags     []string `query:"tags"`      // Supports multiple values
+        Page     int      `query:"page"`
+        Limit    int      `query:"limit"`
+        IsActive *bool    `query:"is_active"` // Pointer = optional
+    }
+
+    if err := zh.Bind.Query(r, &req); err != nil {
+        return zh.NewProblemDetail(400, err.Error()).Render(w)
+    }
+
+    // Set defaults
+    if req.Page < 1 {
+        req.Page = 1
+    }
+    if req.Limit < 1 {
+        req.Limit = 20
+    }
+
+    return zh.R.JSON(w, 200, zh.M{
+        "query":    req.Query,
+        "category": req.Category,
+        "tags":     req.Tags,
+        "page":     req.Page,
+    })
+}))
+
+// Embedded structs for reusable pagination
+type Pagination struct {
+    Page  int `query:"page"`
+    Limit int `query:"limit"`
+}
+
+type ListRequest struct {
+    Pagination        // Embeds page, limit fields
+    Search string `query:"search"`
+}
+
+app.GET("/items", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    var req ListRequest
+    if err := zh.B.Query(r, &req); err != nil {
+        return err
+    }
+    return zh.R.JSON(w, 200, req)
+}))
+```
+
+### Individual Parameter Extraction
+
+For simple cases, extract individual parameters with type conversion:
+
+```go
+app.GET("/extract", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    // Extract with type conversion and error handling
+    userID, err := zh.QueryParamAs[int](r, "user_id")
+    if err != nil {
+        return zh.NewProblemDetail(400, "Invalid user_id").Render(w)
+    }
+
+    // Extract with default value
+    page := zh.QueryParamAsOrDefault(r, "page", 1)
+    limit := zh.QueryParamAsOrDefault(r, "limit", 20)
+
+    // Simple string extraction
+    sort := zh.QueryParam(r, "sort") // Empty string if missing
+
+    return zh.R.JSON(w, 200, zh.M{
+        "user_id": userID,
+        "page":    page,
+        "limit":   limit,
+        "sort":    sort,
+    })
+}))
+```
+
+**Available Functions:**
+
+- `Bind.Query(r, &dst)` - Bind all query params to struct with `query` tags
+- `QueryParam(r, "name")` - Extract parameter as string
+- `QueryParamAs[T](r, "name")` - Extract and convert to type T
+- `QueryParamAsOrDefault[T](r, "name", defaultVal)` - Extract with fallback
+
+**Supported Types:** Same as Path Parameters - all primitives, slices, and pointers
+
+
 ## Middleware
 
 zerohttp includes a comprehensive set of built-in middlewares:
@@ -282,50 +421,6 @@ app.Group(func(api zh.Router) {
     api.DELETE("/users/{id}", deleteUser)
 })
 ```
-
-
-## Path Parameters
-
-Type-safe path parameter extraction with generic support:
-
-```go
-// Basic string extraction
-app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    id := zh.Param(r, "id")  // Returns string
-    return zh.R.JSON(w, 200, zh.M{"user_id": id})
-}))
-
-// Typed extraction with error handling
-app.GET("/items/{itemID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    itemID, err := zh.ParamAs[int](r, "itemID")
-    if err != nil {
-        return zh.R.ProblemDetail(w, zh.NewProblemDetail(400, "Invalid itemID"))
-    }
-    return zh.R.JSON(w, 200, zh.M{"item_id": itemID})
-}))
-
-// Multiple parameters
-app.GET("/users/{userID}/posts/{postID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    userID, _ := zh.ParamAs[int](r, "userID")
-    postID, _ := zh.ParamAs[int](r, "postID")
-    return zh.R.JSON(w, 200, zh.M{"user_id": userID, "post_id": postID})
-}))
-
-// With default value (returns default if param missing or invalid)
-app.GET("/products/{category}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    category := zh.ParamOrDefault(r, "category", "all")
-    return zh.R.JSON(w, 200, zh.M{"category": category})
-}))
-```
-
-**Available Functions:**
-
-- `Param(r, "name")` - Extract parameter as string
-- `ParamAs[T](r, "name")` - Extract and convert to type T (int, int64, uint, float64, bool, etc.)
-- `ParamAsOrDefault[T](r, "name", defaultVal)` - Extract with fallback value
-- `ParamOrDefault(r, "name", "default")` - String extraction with fallback
-
-**Supported Types:** `string`, `int`, `int8`, `int16`, `int32`, `int64`, `uint`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`, `bool`
 
 
 ## Static File Serving
@@ -579,6 +674,11 @@ func (b *MyBinder) Form(r *http.Request, dst any) error {
 
 func (b *MyBinder) MultipartForm(r *http.Request, dst any, maxMemory int64) error {
     // Custom multipart form binding logic
+    return nil
+}
+
+func (b *MyBinder) Query(r *http.Request, dst any) error {
+    // Custom query parameter binding logic
     return nil
 }
 
