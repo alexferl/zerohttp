@@ -9,6 +9,20 @@ import (
 	"github.com/alexferl/zerohttp/log"
 )
 
+// ShutdownHook is a function called during server shutdown.
+// The context passed to the hook will be cancelled when the shutdown
+// timeout is reached or if the parent context is cancelled.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+type ShutdownHook func(ctx context.Context) error
+
+// ShutdownHookConfig configures a shutdown hook.
+type ShutdownHookConfig struct {
+	Name string
+	Hook ShutdownHook
+}
+
 // Config holds server and middleware configuration options for zerohttp.
 type Config struct {
 	// Addr is the address for the HTTP server to listen on.
@@ -104,6 +118,21 @@ type Config struct {
 	// The server will be started automatically when ListenAndServeTLS or Start is called.
 	// Default: nil
 	WebTransportServer WebTransportServer
+
+	// PreShutdownHooks are hooks that execute sequentially before server shutdown begins.
+	// These run before any servers start shutting down.
+	// Default: nil
+	PreShutdownHooks []ShutdownHookConfig
+
+	// ShutdownHooks are hooks that execute concurrently with server shutdown.
+	// These run alongside the HTTP/HTTPS/HTTP3 server shutdown.
+	// Default: nil
+	ShutdownHooks []ShutdownHookConfig
+
+	// PostShutdownHooks are hooks that execute sequentially after all servers are shut down.
+	// These run after all servers have completed shutdown.
+	// Default: nil
+	PostShutdownHooks []ShutdownHookConfig
 }
 
 // DefaultConfig contains all default values used by Config.
@@ -405,5 +434,57 @@ func WithHTTP3Server(server HTTP3Server) Option {
 func WithWebTransportServer(server WebTransportServer) Option {
 	return func(c *Config) {
 		c.WebTransportServer = server
+	}
+}
+
+// WithPreShutdownHook registers a hook to run before server shutdown begins.
+// Pre-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	zerohttp.New(zerohttp.WithPreShutdownHook("health", func(ctx context.Context) error {
+//	    health.SetUnhealthy()
+//	    return nil
+//	}))
+func WithPreShutdownHook(name string, hook ShutdownHook) Option {
+	return func(c *Config) {
+		c.PreShutdownHooks = append(c.PreShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
+	}
+}
+
+// WithShutdownHook registers a hook to run concurrently with server shutdown.
+// Shutdown hooks execute concurrently alongside server shutdown.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	zerohttp.New(zerohttp.WithShutdownHook("close-db", func(ctx context.Context) error {
+//	    return db.Close()
+//	}))
+func WithShutdownHook(name string, hook ShutdownHook) Option {
+	return func(c *Config) {
+		c.ShutdownHooks = append(c.ShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
+	}
+}
+
+// WithPostShutdownHook registers a hook to run after servers are shut down.
+// Post-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	zerohttp.New(zerohttp.WithPostShutdownHook("cleanup", func(ctx context.Context) error {
+//	    return os.RemoveAll("/tmp/app-*")
+//	}))
+func WithPostShutdownHook(name string, hook ShutdownHook) Option {
+	return func(c *Config) {
+		c.PostShutdownHooks = append(c.PostShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
 	}
 }

@@ -70,6 +70,15 @@ type Server struct {
 	// for recording HTTP requests, errors, and server lifecycle events.
 	logger log.Logger
 
+	// preShutdownHooks execute sequentially before server shutdown begins.
+	preShutdownHooks []config.ShutdownHookConfig
+
+	// shutdownHooks execute concurrently with server shutdown.
+	shutdownHooks []config.ShutdownHookConfig
+
+	// postShutdownHooks execute sequentially after all servers are shut down.
+	postShutdownHooks []config.ShutdownHookConfig
+
 	// mu protects concurrent access to server fields during startup,
 	// shutdown, and configuration operations.
 	mu sync.RWMutex
@@ -143,6 +152,9 @@ func New(opts ...config.Option) *Server {
 		http3Server:        cfg.HTTP3Server,
 		webTransportServer: cfg.WebTransportServer,
 		logger:             logger,
+		preShutdownHooks:   cfg.PreShutdownHooks,
+		shutdownHooks:      cfg.ShutdownHooks,
+		postShutdownHooks:  cfg.PostShutdownHooks,
 	}
 
 	if s.server != nil {
@@ -659,12 +671,29 @@ func (s *Server) SetWebTransportServer(server config.WebTransportServer) {
 //
 // The shutdown process runs concurrently for both servers. If any server
 // encounters an error during shutdown, that error is returned.
+// Shutdown hooks are executed during the shutdown process:
+//   - Pre-shutdown hooks run sequentially before server shutdown begins
+//   - Shutdown hooks run concurrently with server shutdown
+//   - Post-shutdown hooks run sequentially after all servers are shut down
+//
 // Returns the first error encountered during shutdown, or nil if successful.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
 
+	// Execute pre-shutdown hooks sequentially
+	if err := s.runPreShutdownHooks(ctx); err != nil {
+		s.logger.Error("Pre-shutdown hook error", log.E(err))
+		// Return context errors as they indicate shutdown was cancelled
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+	}
+
+	// Start shutdown hooks concurrently and wait for them
+	hookWg, hookErrCh := s.startShutdownHooks(ctx)
+
 	var wg sync.WaitGroup
-	errCh := make(chan error, 3)
+	errCh := make(chan error, 4)
 
 	if s.server != nil && s.listener != nil {
 		wg.Add(1)
@@ -726,6 +755,15 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	wg.Wait()
 	close(errCh)
 
+	// Wait for shutdown hooks to complete
+	hookWg.Wait()
+	close(hookErrCh)
+
+	// Execute post-shutdown hooks sequentially
+	if err := s.runPostShutdownHooks(ctx); err != nil {
+		s.logger.Error("Post-shutdown hook error", log.E(err))
+	}
+
 	for err := range errCh {
 		if err != nil {
 			return err
@@ -733,6 +771,98 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 
 	s.logger.Info("Server shutdown complete")
+	return nil
+}
+
+// runPreShutdownHooks executes pre-shutdown hooks sequentially in registration order.
+func (s *Server) runPreShutdownHooks(ctx context.Context) error {
+	s.mu.RLock()
+	hooks := s.preShutdownHooks
+	s.mu.RUnlock()
+
+	if len(hooks) == 0 {
+		return nil
+	}
+
+	s.logger.Debug("Running pre-shutdown hooks", log.F("count", len(hooks)))
+
+	for _, hook := range hooks {
+		select {
+		case <-ctx.Done():
+			s.logger.Warn("Pre-shutdown hook aborted due to context cancellation", log.F("hook", hook.Name))
+			return ctx.Err()
+		default:
+		}
+
+		s.logger.Debug("Running pre-shutdown hook", log.F("hook", hook.Name))
+		if err := hook.Hook(ctx); err != nil {
+			s.logger.Error("Pre-shutdown hook failed", log.F("hook", hook.Name), log.E(err))
+			// Continue with other hooks despite error
+		}
+	}
+
+	return nil
+}
+
+// startShutdownHooks starts shutdown hooks concurrently and returns a WaitGroup and error channel.
+// The caller must wait on the returned WaitGroup and then close the error channel.
+func (s *Server) startShutdownHooks(ctx context.Context) (*sync.WaitGroup, chan error) {
+	s.mu.RLock()
+	hooks := s.shutdownHooks
+	s.mu.RUnlock()
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(hooks))
+
+	if len(hooks) == 0 {
+		return &wg, errCh
+	}
+
+	s.logger.Debug("Starting shutdown hooks", log.F("count", len(hooks)))
+
+	for _, hook := range hooks {
+		wg.Add(1)
+		go func(h config.ShutdownHookConfig) {
+			defer wg.Done()
+
+			s.logger.Debug("Running shutdown hook", log.F("hook", h.Name))
+			if err := h.Hook(ctx); err != nil {
+				s.logger.Error("Shutdown hook failed", log.F("hook", h.Name), log.E(err))
+				errCh <- err
+			}
+		}(hook)
+	}
+
+	return &wg, errCh
+}
+
+// runPostShutdownHooks executes post-shutdown hooks sequentially in registration order.
+func (s *Server) runPostShutdownHooks(ctx context.Context) error {
+	s.mu.RLock()
+	hooks := s.postShutdownHooks
+	s.mu.RUnlock()
+
+	if len(hooks) == 0 {
+		return nil
+	}
+
+	s.logger.Debug("Running post-shutdown hooks", log.F("count", len(hooks)))
+
+	for _, hook := range hooks {
+		select {
+		case <-ctx.Done():
+			s.logger.Warn("Post-shutdown hook aborted due to context cancellation", log.F("hook", hook.Name))
+			return ctx.Err()
+		default:
+		}
+
+		s.logger.Debug("Running post-shutdown hook", log.F("hook", hook.Name))
+		if err := hook.Hook(ctx); err != nil {
+			s.logger.Error("Post-shutdown hook failed", log.F("hook", hook.Name), log.E(err))
+			// Continue with other hooks despite error
+		}
+	}
+
 	return nil
 }
 
@@ -840,6 +970,58 @@ func (s *Server) ListenerTLSAddr() string {
 // structured logging capabilities with fields and different log levels.
 func (s *Server) Logger() log.Logger {
 	return s.logger
+}
+
+// RegisterPreShutdownHook registers a hook to run before server shutdown begins.
+// Pre-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	app.RegisterPreShutdownHook("health", func(ctx context.Context) error {
+//	    health.SetUnhealthy()
+//	    return nil
+//	})
+func (s *Server) RegisterPreShutdownHook(name string, hook config.ShutdownHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.preShutdownHooks = append(s.preShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+}
+
+// RegisterShutdownHook registers a hook to run concurrently with server shutdown.
+// Shutdown hooks execute concurrently alongside server shutdown.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	app.RegisterShutdownHook("close-db", func(ctx context.Context) error {
+//	    return db.Close()
+//	})
+func (s *Server) RegisterShutdownHook(name string, hook config.ShutdownHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shutdownHooks = append(s.shutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+}
+
+// RegisterPostShutdownHook registers a hook to run after servers are shut down.
+// Post-shutdown hooks execute sequentially in registration order.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, shutdown will hang.
+//
+// Example:
+//
+//	app.RegisterPostShutdownHook("cleanup", func(ctx context.Context) error {
+//	    return os.RemoveAll("/tmp/app-*")
+//	})
+func (s *Server) RegisterPostShutdownHook(name string, hook config.ShutdownHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.postShutdownHooks = append(s.postShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
 }
 
 func fmtHTTPAddr(addr string) string {
