@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/alexferl/zerohttp/log"
 )
@@ -112,6 +113,12 @@ type Config struct {
 	// The server must implement the HTTP3Server interface.
 	// Default: nil (HTTP/3 not enabled unless set)
 	HTTP3Server HTTP3Server
+
+	// SSEProvider is an optional handler for Server-Sent Events connections.
+	// Users can set their own provider (e.g., wrapping a custom SSE library).
+	// If nil, SSE is not available but users can still handle SSE manually in their handlers.
+	// Default: nil
+	SSEProvider SSEProvider
 
 	// WebSocketUpgrader is an optional handler for WebSocket upgrades.
 	// Users can set their own upgrader (e.g., wrapping gorilla/websocket).
@@ -462,6 +469,77 @@ type HTTP3ServerWithAutocert interface {
 func WithHTTP3Server(server HTTP3Server) Option {
 	return func(c *Config) {
 		c.HTTP3Server = server
+	}
+}
+
+// ============================================================================
+// SSE Options
+// ============================================================================
+
+// SSEConnection represents an active Server-Sent Events connection.
+// Users can implement this interface with their own SSE library, or use
+// the built-in EventStream implementation.
+type SSEConnection interface {
+	// Send writes an event to the client.
+	// Returns error if the connection is closed or write fails.
+	Send(event SSEEvent) error
+
+	// SendComment sends a comment (heartbeat/keepalive).
+	// Comments are ignored by the client but keep connections alive through proxies.
+	SendComment(comment string) error
+
+	// Close signals the SSE connection is done.
+	// No further events should be sent after Close.
+	Close() error
+
+	// SetRetry sets the default reconnection time for this connection.
+	// Affects subsequent events without explicit Retry value.
+	SetRetry(d time.Duration) error
+}
+
+// SSEProvider creates SSE connections from HTTP requests.
+// Implement this to provide custom SSE implementations.
+type SSEProvider interface {
+	// NewSSE creates a new SSE connection from the request/response.
+	// Returns error if headers were already sent or SSE is not supported.
+	NewSSE(w http.ResponseWriter, r *http.Request) (SSEConnection, error)
+}
+
+// SSEEvent represents a single SSE event
+type SSEEvent struct {
+	ID    string
+	Name  string
+	Data  []byte
+	Retry time.Duration
+}
+
+// WithSSEProvider sets a custom SSE provider for Server-Sent Events connections.
+// Users bring their own SSE library and implement the SSEProvider interface,
+// or use a thin wrapper around their preferred library.
+//
+// Example with built-in stdlib provider:
+//
+//	app := zerohttp.New(
+//	    config.WithSSEProvider(zh.NewDefaultProvider()),
+//	)
+//
+//	app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+//	    provider := app.SSEProvider()
+//	    if provider == nil {
+//	        return fmt.Errorf("SSE not configured")
+//	    }
+//
+//	    sse, err := provider.NewSSE(w, r)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    defer sse.Close()
+//
+//	    // Stream events...
+//	}))
+func WithSSEProvider(provider SSEProvider) Option {
+	return func(c *Config) {
+		c.SSEProvider = provider
 	}
 }
 

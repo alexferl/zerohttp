@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/alexferl/zerohttp/log"
 )
@@ -617,6 +618,32 @@ func TestWithWebSocketUpgrader(t *testing.T) {
 
 	if cfg.WebSocketUpgrader == nil {
 		t.Error("expected WebSocketUpgrader to be set")
+	}
+}
+
+// mockSSEConnection is a mock implementation of SSEConnection for testing
+type mockSSEConnection struct{}
+
+func (m *mockSSEConnection) Send(event SSEEvent) error        { return nil }
+func (m *mockSSEConnection) SendComment(comment string) error { return nil }
+func (m *mockSSEConnection) Close() error                     { return nil }
+func (m *mockSSEConnection) SetRetry(d time.Duration) error   { return nil }
+
+// mockSSEProvider is a mock implementation of SSEProvider for testing
+type mockSSEProvider struct{}
+
+func (m *mockSSEProvider) NewSSE(w http.ResponseWriter, r *http.Request) (SSEConnection, error) {
+	return &mockSSEConnection{}, nil
+}
+
+func TestWithSSEProvider(t *testing.T) {
+	cfg := DefaultConfig
+	mockProvider := &mockSSEProvider{}
+
+	WithSSEProvider(mockProvider)(&cfg)
+
+	if cfg.SSEProvider == nil {
+		t.Error("expected SSEProvider to be set")
 	}
 }
 

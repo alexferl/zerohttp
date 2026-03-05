@@ -28,6 +28,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Pluggable Features](#pluggable-features)
     - [Auto-TLS](#auto-tls)
     - [HTTP/3 Support](#http3-support)
+    - [SSE Support](#sse-support)
     - [WebSocket Support](#websocket-support)
     - [WebTransport Support](#webtransport-support)
 - [Health Checks](#health-checks)
@@ -51,7 +52,8 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
 - **HTTP/2 & HTTP/3**: Automatic HTTP/2 support for TLS; optional HTTP/3 via pluggable interface
-- **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, WebSocket, and WebTransport - bring your own implementations
+- **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, WebSocket, WebTransport, and SSE - bring your own implementations
+- **Server-Sent Events**: Built-in SSE support with event replay and broadcast hub for real-time server-to-client streaming
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
 - **Structured Logging**: Integrated structured logging with customizable fields
@@ -793,6 +795,38 @@ app.StartTLS("cert.pem", "key.pem")
 ```
 
 
+### SSE Support
+
+Server-Sent Events (SSE) provides real-time unidirectional server-to-client streaming over HTTP.
+zerohttp includes a built-in stdlib implementation with support for event replay and broadcast hubs.
+
+```go
+import (
+    "time"
+
+    zh "github.com/alexferl/zerohttp"
+    "github.com/alexferl/zerohttp/config"
+)
+
+func main() {
+    app := zh.New(config.WithSSEProvider(zh.NewDefaultProvider()))
+
+    app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+        stream, err := app.SSEProvider().NewSSE(w, r)
+        if err != nil { return err }
+        defer stream.Close()
+
+        for i := 0; i < 10; i++ {
+            stream.Send(zh.SSEEvent{Name: "message", Data: []byte("hello")})
+            time.Sleep(1 * time.Second)
+        }
+        return nil
+    }))
+```
+
+See [`examples/sse/`](examples/sse/) for a complete example with event replay and broadcast hub.
+
+
 ### WebSocket Support
 
 WebSocket provides real-time bidirectional communication over TCP. zerohttp supports WebSocket
@@ -876,32 +910,35 @@ import (
     webtransport "github.com/quic-go/webtransport-go"
 )
 
-app := zh.New()
+func main() {
+    app := zh.New()
 
-// Create HTTP/3 server
-h3 := &http3.Server{Addr: ":8443", Handler: app}
+    // Create HTTP/3 server
+    h3 := &http3.Server{Addr: ":8443", Handler: app}
 
-// Create WebTransport server
-wtServer := &webtransport.Server{
-    H3:          h3,
-    CheckOrigin: func(r *http.Request) bool { return true },
-}
-webtransport.ConfigureHTTP3Server(h3)
-
-// Set WebTransport server - zerohttp starts it automatically
-app.SetWebTransportServer(wtServer)
-
-// Register WebTransport endpoint
-app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    sess, err := wtServer.Upgrade(w, r)
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-        return
+    // Create WebTransport server
+    wtServer := &webtransport.Server{
+        H3:          h3,
+        CheckOrigin: func(r *http.Request) bool { return true },
     }
-    go handleSession(sess) // Handle streams/datagrams
-}))
+    webtransport.ConfigureHTTP3Server(h3)
 
-app.ListenAndServeTLS("cert.pem", "key.pem")
+    // Set WebTransport server - zerohttp starts it automatically
+    app.SetWebTransportServer(wtServer)
+
+    // Register WebTransport endpoint
+    app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        sess, err := wtServer.Upgrade(w, r)
+        if err != nil {
+            w.WriteHeader(http.StatusInternalServerError)
+            return
+        }
+        go handleSession(sess) // Handle streams/datagrams
+    }))
+
+    app.ListenAndServeTLS("cert.pem", "key.pem")
+}
+
 ```
 
 > **💡 Complete Example:** See [`examples/webtransport/`](examples/webtransport/) for a full working server with HTML client.
@@ -1040,6 +1077,7 @@ The functional options pattern provides structured configuration for all aspects
 - `config.WithPostShutdownHook()` - Hook to run after server shutdown
 - `config.WithAutocertManager()` - Let's Encrypt integration
 - `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
+- `config.WithSSEProvider()` - SSE provider for server-sent events
 - `config.WithWebSocketUpgrader()` - WebSocket upgrader (e.g., gorilla/websocket)
 - `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
 
