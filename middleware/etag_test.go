@@ -409,8 +409,8 @@ func TestETag_NotModified_StrongVsWeak(t *testing.T) {
 	zhtest.AssertWith(t, rec2).Status(http.StatusNotModified)
 }
 
-func TestDefaultETag(t *testing.T) {
-	handler := DefaultETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestETag_DefaultConfig(t *testing.T) {
+	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -419,7 +419,7 @@ func TestDefaultETag(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Header().Get("ETag") == "" {
-		t.Error("expected ETag header from DefaultETag")
+		t.Error("expected ETag header")
 	}
 }
 

@@ -443,11 +443,6 @@ func ETag(opts ...config.ETagOption) func(http.Handler) http.Handler {
 	}
 }
 
-// DefaultETag returns ETag middleware with sensible defaults (FNV-1a, weak ETags)
-func DefaultETag() func(http.Handler) http.Handler {
-	return ETag()
-}
-
 // GenerateFileETag generates an ETag for a file based on its modification time and size.
 // This is much more efficient than hashing the file content, especially for large files.
 // The format is: W/"mtime-size" (weak ETag) or "mtime-size" (strong ETag)
