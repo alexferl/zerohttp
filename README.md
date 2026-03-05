@@ -1,4 +1,4 @@
-# zerohttp [![Go Report Card](https://goreportcard.com/badge/github.com/alexferl/zerohttp)](https://goreportcard.com/report/github.com/alexferl/zerohttp) [![codecov](https://codecov.io/gh/alexferl/zerohttp/branch/master/graph/badge.svg)](https://codecov.io/gh/alexferl/zerohttp)
+# zerohttp [![Go Report Card](https://goreportcard.com/badge/github.com/alexferl/zerohttp)](https://goreportcard.com/report/github.com/alexferl/zerohttp) [![Coverage Status](https://coveralls.io/repos/github/alexferl/zerohttp/badge.svg?branch=master)](https://coveralls.io/github/alexferl/zerohttp?branch=master)
 
 **⚠️ This is a pre-v1 release - APIs may change as we work toward a stable v1.0.**
 
