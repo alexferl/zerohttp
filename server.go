@@ -73,6 +73,11 @@ type Server struct {
 	// If nil, HTTP/3 server will not be started.
 	http3Server config.HTTP3Server
 
+	// sseProvider is an optional SSE provider for handling Server-Sent Events connections.
+	// Users can inject their own implementation or use the built-in stdlib provider.
+	// If nil, SSE is not available but users can still handle SSE manually in their handlers.
+	sseProvider config.SSEProvider
+
 	// webSocketUpgrader is an optional WebSocket upgrader for handling WebSocket connections.
 	// Users provide their own implementation using their preferred WebSocket library.
 	// If nil, WebSocket is not available but users can still handle upgrades manually.
@@ -157,6 +162,7 @@ func New(opts ...config.Option) *Server {
 		http3Server:        cfg.HTTP3Server,
 		webTransportServer: cfg.WebTransportServer,
 		webSocketUpgrader:  cfg.WebSocketUpgrader,
+		sseProvider:        cfg.SSEProvider,
 		logger:             logger,
 		preShutdownHooks:   cfg.PreShutdownHooks,
 		shutdownHooks:      cfg.ShutdownHooks,
@@ -736,6 +742,40 @@ func (s *Server) SetHTTP3Server(server config.HTTP3Server) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.http3Server = server
+}
+
+// SetSSEProvider sets the SSE provider instance. This can be used to inject
+// an SSE implementation after creating the server.
+//
+// Users can implement their own SSE provider or use the built-in stdlib provider:
+//
+//	app := zerohttp.New()
+//	app.SetSSEProvider(zh.NewDefaultProvider())
+//
+//	app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+//	    provider := app.SSEProvider()
+//	    sse, err := provider.NewSSE(w, r)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    defer sse.Close()
+//	    // ... stream events ...
+//	}))
+//
+// Parameters:
+//   - provider: An SSE provider instance implementing the config.SSEProvider interface
+func (s *Server) SetSSEProvider(provider config.SSEProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sseProvider = provider
+}
+
+// SSEProvider returns the configured SSE provider (if any).
+// Returns nil if no SSE provider has been configured.
+func (s *Server) SSEProvider() config.SSEProvider {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sseProvider
 }
 
 // SetWebSocketUpgrader sets the WebSocket upgrader instance. This can be used to inject
