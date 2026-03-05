@@ -15,7 +15,7 @@ func main() {
 	app := zh.New()
 
 	// Apply ETag middleware to all routes
-	app.Use(middleware.DefaultETag())
+	app.Use(middleware.ETag())
 
 	// Create sample static files
 	if err := createSampleFiles(); err != nil {
