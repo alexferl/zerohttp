@@ -2,12 +2,15 @@ package zerohttp
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestNewProblemDetail(t *testing.T) {
-	problem := NewProblemDetail(404, "Not found")
+	problem := NewProblemDetail(http.StatusNotFound, "Not found")
 
 	if problem.Type != "" {
 		t.Errorf("expected empty Type, got %s", problem.Type)
@@ -17,7 +20,7 @@ func TestNewProblemDetail(t *testing.T) {
 		t.Errorf("expected title 'Not Found', got %s", problem.Title)
 	}
 
-	if problem.Status != 404 {
+	if problem.Status != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", problem.Status)
 	}
 
@@ -57,28 +60,28 @@ func TestProblemDetail_MarshalJSON(t *testing.T) {
 		{
 			"all fields",
 			&ProblemDetail{
-				Type: "https://example.com/error", Title: "Error", Status: 400,
+				Type: "https://example.com/error", Title: "Error", Status: http.StatusBadRequest,
 				Detail: "Bad request", Instance: "/test",
 				Extensions: map[string]any{"code": "ERR001"},
 			},
 			map[string]any{
-				"type": "https://example.com/error", "title": "Error", "status": float64(400),
+				"type": "https://example.com/error", "title": "Error", "status": float64(http.StatusBadRequest),
 				"detail": "Bad request", "instance": "/test", "code": "ERR001",
 			},
 		},
 		{
 			"required only",
-			&ProblemDetail{Title: "Error", Status: 500},
-			map[string]any{"title": "Error", "status": float64(500)},
+			&ProblemDetail{Title: "Error", Status: http.StatusInternalServerError},
+			map[string]any{"title": "Error", "status": float64(http.StatusInternalServerError)},
 		},
 		{
 			"with extensions",
 			&ProblemDetail{
-				Title: "Bad Request", Status: 400,
+				Title: "Bad Request", Status: http.StatusBadRequest,
 				Extensions: map[string]any{"errors": []string{"field required"}},
 			},
 			map[string]any{
-				"title": "Bad Request", "status": float64(400),
+				"title": "Bad Request", "status": float64(http.StatusBadRequest),
 				"errors": []string{"field required"},
 			},
 		},
@@ -108,7 +111,7 @@ func TestProblemDetail_MarshalJSON(t *testing.T) {
 }
 
 func TestRenderer_ProblemDetail(t *testing.T) {
-	problem := NewProblemDetail(404, "Not found")
+	problem := NewProblemDetail(http.StatusNotFound, "Not found")
 	problem.Instance = "/users/123"
 	problem.Set("timestamp", "2023-01-01T00:00:00Z")
 
@@ -118,31 +121,14 @@ func TestRenderer_ProblemDetail(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if w.Code != 404 {
-		t.Errorf("expected status 404, got %d", w.Code)
-	}
-
-	if ct := w.Header().Get(HeaderContentType); ct != MIMEApplicationProblem {
-		t.Errorf("expected Content-Type %s, got %s", MIMEApplicationProblem, ct)
-	}
-
-	var result map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-
-	expected := map[string]any{
-		"title": "Not Found", "status": float64(404), "detail": "Not found",
-		"instance": "/users/123", "timestamp": "2023-01-01T00:00:00Z",
-	}
-
-	for key, expectedValue := range expected {
-		if actual, exists := result[key]; !exists {
-			t.Errorf("expected field %s to exist", key)
-		} else if actual != expectedValue {
-			t.Errorf("expected %s to be %v, got %v", key, expectedValue, actual)
-		}
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotFound).
+		Header(HeaderContentType, MIMEApplicationProblem).
+		JSONPathEqual("title", "Not Found").
+		JSONPathEqual("status", float64(http.StatusNotFound)).
+		JSONPathEqual("detail", "Not found").
+		JSONPathEqual("instance", "/users/123").
+		JSONPathEqual("timestamp", "2023-01-01T00:00:00Z")
 }
 
 func TestNewValidationProblemDetail(t *testing.T) {
@@ -153,7 +139,7 @@ func TestNewValidationProblemDetail(t *testing.T) {
 
 	problem := NewValidationProblemDetail("Validation failed", errs)
 
-	if problem.Status != 422 {
+	if problem.Status != http.StatusUnprocessableEntity {
 		t.Errorf("expected status 422, got %d", problem.Status)
 	}
 
@@ -197,7 +183,7 @@ func TestNewValidationProblemDetail_Custom(t *testing.T) {
 func TestProblemDetail_Set_ExtensionsInitialization(t *testing.T) {
 	p := &ProblemDetail{
 		Title:  "Test Error",
-		Status: 400,
+		Status: http.StatusBadRequest,
 	}
 
 	if p.Extensions != nil {
@@ -230,7 +216,7 @@ func TestProblemDetail_Set_ExtensionsInitialization(t *testing.T) {
 }
 
 func TestProblemDetail_Render(t *testing.T) {
-	problem := NewProblemDetail(404, "Not found")
+	problem := NewProblemDetail(http.StatusNotFound, "Not found")
 	problem.Instance = "/users/123"
 	problem.Set("timestamp", "2023-01-01T00:00:00Z")
 
@@ -241,39 +227,18 @@ func TestProblemDetail_Render(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if w.Code != 404 {
-		t.Errorf("expected status 404, got %d", w.Code)
-	}
-
-	expectedContentType := MIMEApplicationProblem
-	if ct := w.Header().Get(HeaderContentType); ct != expectedContentType {
-		t.Errorf("expected Content-Type %s, got %s", expectedContentType, ct)
-	}
-
-	var result map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	expected := map[string]any{
-		"title":     "Not Found",
-		"status":    float64(404),
-		"detail":    "Not found",
-		"instance":  "/users/123",
-		"timestamp": "2023-01-01T00:00:00Z",
-	}
-
-	for key, expectedValue := range expected {
-		if actual, exists := result[key]; !exists {
-			t.Errorf("expected field %s to exist", key)
-		} else if actual != expectedValue {
-			t.Errorf("expected %s to be %v, got %v", key, expectedValue, actual)
-		}
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotFound).
+		Header(HeaderContentType, MIMEApplicationProblem).
+		JSONPathEqual("title", "Not Found").
+		JSONPathEqual("status", float64(http.StatusNotFound)).
+		JSONPathEqual("detail", "Not found").
+		JSONPathEqual("instance", "/users/123").
+		JSONPathEqual("timestamp", "2023-01-01T00:00:00Z")
 }
 
 func TestProblemDetail_Render_WithExtensions(t *testing.T) {
-	problem := NewProblemDetail(422, "Validation failed")
+	problem := NewProblemDetail(http.StatusUnprocessableEntity, "Validation failed")
 	problem.Set("errors", []string{"name is required", "email is invalid"})
 	problem.Set("code", "VALIDATION_ERROR")
 
@@ -284,17 +249,14 @@ func TestProblemDetail_Render_WithExtensions(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if w.Code != 422 {
-		t.Errorf("expected status 422, got %d", w.Code)
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusUnprocessableEntity).
+		Header(HeaderContentType, MIMEApplicationProblem).
+		JSONPathEqual("code", "VALIDATION_ERROR")
 
 	var result map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
-	}
-
-	if code, exists := result["code"]; !exists || code != "VALIDATION_ERROR" {
-		t.Errorf("expected code extension to be VALIDATION_ERROR, got %v", result["code"])
 	}
 
 	if errors, exists := result["errors"]; !exists {

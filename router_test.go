@@ -10,6 +10,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func testMiddleware(name string, calls *[]string) func(http.Handler) http.Handler {
@@ -33,20 +34,15 @@ func TestHandlerFunc(t *testing.T) {
 	t.Run("success case", func(t *testing.T) {
 		router := NewRouter()
 		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-			return R.JSON(w, 200, M{"message": "success"})
+			return R.JSON(w, http.StatusOK, M{"message": "success"})
 		})
 		router.GET("/test", handler)
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-		if !strings.Contains(w.Body.String(), "success") {
-			t.Errorf("Expected response to contain 'success', got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK).BodyContains("success")
 	})
 
 	t.Run("error case", func(t *testing.T) {
@@ -72,7 +68,7 @@ func TestHandlerFunc(t *testing.T) {
 		})
 		router.GET("/error", handler)
 
-		req := httptest.NewRequest("GET", "/error", nil)
+		req := httptest.NewRequest(http.MethodGet, "/error", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -82,9 +78,7 @@ func TestHandlerFunc(t *testing.T) {
 		if !strings.Contains(panicMsg, "test error") {
 			t.Errorf("Expected panic message to contain 'test error', got '%s'", panicMsg)
 		}
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("Expected status 500, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 	})
 
 	t.Run("no error", func(t *testing.T) {
@@ -95,16 +89,13 @@ func TestHandlerFunc(t *testing.T) {
 		})
 		router.GET("/noerror", handler)
 
-		req := httptest.NewRequest("GET", "/noerror", nil)
+		req := httptest.NewRequest(http.MethodGet, "/noerror", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-		if w.Body.String() != "no error" {
-			t.Errorf("Expected body 'no error', got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			Body("no error")
 	})
 
 	t.Run("with middleware", func(t *testing.T) {
@@ -113,11 +104,11 @@ func TestHandlerFunc(t *testing.T) {
 		router := NewRouter(mw)
 		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 			calls = append(calls, "handler")
-			return R.Text(w, 200, "middleware test")
+			return R.Text(w, http.StatusOK, "middleware test")
 		})
 		router.GET("/middleware", handler)
 
-		req := httptest.NewRequest("GET", "/middleware", nil)
+		req := httptest.NewRequest(http.MethodGet, "/middleware", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -143,23 +134,14 @@ func TestHandlerFunc(t *testing.T) {
 		router.GET("/", handler)
 
 		// Make a HEAD request
-		req := httptest.NewRequest("HEAD", "/", nil)
+		req := httptest.NewRequest(http.MethodHead, "/", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-
-		// Headers should be set (R.Text sets text/plain)
-		if w.Header().Get("Content-Type") != "text/plain; charset=utf-8" {
-			t.Errorf("Expected Content-Type header to be set, got '%s'", w.Header().Get("Content-Type"))
-		}
-
-		// Body should be empty for HEAD requests
-		if w.Body.String() != "" {
-			t.Errorf("Expected empty body for HEAD request, got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			Header(HeaderContentType, MIMETextPlain).
+			BodyEmpty()
 	})
 
 	t.Run("headResponseWriter Unwrap", func(t *testing.T) {
@@ -182,18 +164,16 @@ func TestHandlerFunc(t *testing.T) {
 		})
 
 		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-			return R.Text(w, 200, "interface test")
+			return R.Text(w, http.StatusOK, "interface test")
 		})
 		mux := http.NewServeMux()
 		mux.Handle("/interface", handler)
 
-		req := httptest.NewRequest("GET", "/interface", nil)
+		req := httptest.NewRequest(http.MethodGet, "/interface", nil)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 }
 
@@ -230,22 +210,15 @@ func TestNewRouter(t *testing.T) {
 		router := NewRouter(middleware1, middleware2)
 		router.GET("/test", testHandler("response"))
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 
 		expectedCalls := []string{"mw1", "mw2"}
 		if len(calls) != len(expectedCalls) {
 			t.Errorf("Expected %d middleware calls, got %d", len(expectedCalls), len(calls))
-		}
-		for i, expected := range expectedCalls {
-			if i >= len(calls) || calls[i] != expected {
-				t.Errorf("Expected middleware call %d to be %s, got %s", i, expected, calls[i])
-			}
 		}
 	})
 }
@@ -266,14 +239,14 @@ func TestRouter_HTTPMethods(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{"CONNECT", "/connect", "connect"},
-		{"DELETE", "/delete", "delete"},
-		{"GET", "/get", "get"},
-		{"HEAD", "/head", ""},
-		{"OPTIONS", "/options", "options"},
-		{"PATCH", "/patch", "patch"},
-		{"POST", "/post", "post"},
-		{"PUT", "/put", "put"},
+		{http.MethodConnect, "/connect", "connect"},
+		{http.MethodDelete, "/delete", "delete"},
+		{http.MethodGet, "/get", "get"},
+		{http.MethodHead, "/head", ""},
+		{http.MethodOptions, "/options", "options"},
+		{http.MethodPatch, "/patch", "patch"},
+		{http.MethodPost, "/post", "post"},
+		{http.MethodPut, "/put", "put"},
 	}
 
 	for _, tt := range tests {
@@ -282,19 +255,12 @@ func TestRouter_HTTPMethods(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
-			if w.Code != http.StatusOK {
-				t.Errorf("Expected status 200, got %d", w.Code)
-			}
-
-			body := w.Body.String()
-			if tt.method == "HEAD" {
-				if body != "" {
-					t.Logf("Note: HEAD request body was '%s' but this may be expected", body)
-				}
+			if tt.method == http.MethodHead {
+				zhtest.AssertWith(t, w).Status(http.StatusOK)
 			} else {
-				if body != tt.body {
-					t.Errorf("Expected body '%s', got '%s'", tt.body, body)
-				}
+				zhtest.AssertWith(t, w).
+					Status(http.StatusOK).
+					Body(tt.body)
 			}
 		})
 	}
@@ -309,13 +275,11 @@ func TestRouter_Middleware(t *testing.T) {
 		router := NewRouter(globalMw)
 		router.GET("/test", testHandler("response"), routeMw1, routeMw2)
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 
 		expectedCalls := []string{"global", "route1", "route2"}
 		if len(calls) != len(expectedCalls) {
@@ -332,7 +296,7 @@ func TestRouter_Middleware(t *testing.T) {
 		router.Use(mw2, mw3)
 		router.GET("/test", testHandler("response"))
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -370,7 +334,7 @@ func TestRouter_Middleware(t *testing.T) {
 		router.Use(mw1, mw2)
 		router.GET("/test", handler)
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -397,20 +361,22 @@ func TestRouter_Groups(t *testing.T) {
 			api.GET("/group/test", testHandler("group response"))
 		})
 
-		req := httptest.NewRequest("GET", "/group/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/group/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-		if w.Body.String() != "group response" {
-			t.Errorf("Expected 'group response', got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			Body("group response")
 
 		expectedCalls := []string{"global", "group"}
 		if len(calls) != len(expectedCalls) {
 			t.Errorf("Expected %d middleware calls, got %d", len(expectedCalls), len(calls))
+		}
+		for i, expected := range expectedCalls {
+			if i >= len(calls) || calls[i] != expected {
+				t.Errorf("Expected middleware call %d to be %s, got %s", i, expected, calls[i])
+			}
 		}
 	})
 
@@ -428,7 +394,7 @@ func TestRouter_Groups(t *testing.T) {
 		})
 
 		// Test outside route
-		req := httptest.NewRequest("GET", "/outside", nil)
+		req := httptest.NewRequest(http.MethodGet, "/outside", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -442,7 +408,7 @@ func TestRouter_Groups(t *testing.T) {
 		// Reset and test inside route
 		globalCalls = nil
 		groupCalls = nil
-		req = httptest.NewRequest("GET", "/inside", nil)
+		req = httptest.NewRequest(http.MethodGet, "/inside", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -460,18 +426,13 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		router := NewRouter()
 		router.GET("/exists", testHandler("exists"))
 
-		req := httptest.NewRequest("GET", "/nonexistent", nil)
+		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404, got %d", w.Code)
-		}
-
-		contentType := w.Header().Get("Content-Type")
-		if contentType != MIMEApplicationProblem {
-			t.Errorf("Expected Content-Type %s, got %s", MIMEApplicationProblem, contentType)
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Header(HeaderContentType, MIMEApplicationProblem)
 
 		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
@@ -481,16 +442,13 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			}
 		}))
 
-		req = httptest.NewRequest("GET", "/nonexistent", nil)
+		req = httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404, got %d", w.Code)
-		}
-		if w.Body.String() != "Custom 404" {
-			t.Errorf("Expected 'Custom 404', got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Body("Custom 404")
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {
@@ -498,19 +456,17 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		router.GET("/test", testHandler("get"))
 		router.POST("/test", testHandler("post"))
 
-		req := httptest.NewRequest("PUT", "/test", nil)
+		req := httptest.NewRequest(http.MethodPut, "/test", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status 405, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
 
 		allowHeader := w.Header().Get("Allow")
 		if allowHeader == "" {
 			t.Error("Expected Allow header to be set")
 		}
-		if !strings.Contains(allowHeader, "GET") || !strings.Contains(allowHeader, "POST") {
+		if !strings.Contains(allowHeader, http.MethodGet) || !strings.Contains(allowHeader, http.MethodPost) {
 			t.Errorf("Expected Allow header to contain GET and POST, got '%s'", allowHeader)
 		}
 
@@ -522,16 +478,13 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			}
 		}))
 
-		req = httptest.NewRequest("PUT", "/test", nil)
+		req = httptest.NewRequest(http.MethodPut, "/test", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status 405, got %d", w.Code)
-		}
-		if w.Body.String() != "Custom 405" {
-			t.Errorf("Expected 'Custom 405', got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusMethodNotAllowed).
+			Body("Custom 405")
 	})
 }
 
@@ -566,23 +519,14 @@ func TestRouter_Configuration(t *testing.T) {
 		router.SetConfig(customConfig)
 
 		// Test 404 response uses custom config
-		req := httptest.NewRequest("GET", "/nonexistent", nil)
+		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404, got %d", w.Code)
-		}
-
-		customRequestID := w.Header().Get("X-Custom-Request-Id")
-		if customRequestID != "custom-id-12345" {
-			t.Errorf("Expected custom request ID 'custom-id-12345', got '%s'", customRequestID)
-		}
-
-		defaultRequestID := w.Header().Get("X-Request-Id")
-		if defaultRequestID != "" {
-			t.Errorf("Expected no default request ID header, got '%s'", defaultRequestID)
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Header("X-Custom-Request-Id", "custom-id-12345").
+			HeaderNotExists("X-Request-Id")
 	})
 }
 
@@ -591,16 +535,13 @@ func TestRouter_EdgeCases(t *testing.T) {
 		router := NewRouter()
 		router.GET("/", testHandler("root"))
 
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-		if w.Body.String() != "root" {
-			t.Errorf("Expected 'root', got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			Body("root")
 	})
 
 	t.Run("complex paths", func(t *testing.T) {
@@ -620,16 +561,13 @@ func TestRouter_EdgeCases(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.path, func(t *testing.T) {
-				req := httptest.NewRequest("GET", tt.path, nil)
+				req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 				w := httptest.NewRecorder()
 				router.ServeHTTP(w, req)
 
-				if w.Code != http.StatusOK {
-					t.Errorf("Expected status 200, got %d", w.Code)
-				}
-				if w.Body.String() != tt.expected {
-					t.Errorf("Expected '%s', got '%s'", tt.expected, w.Body.String())
-				}
+				zhtest.AssertWith(t, w).
+					Status(http.StatusOK).
+					Body(tt.expected)
 			})
 		}
 	})
@@ -642,7 +580,7 @@ func TestRouter_EdgeCases(t *testing.T) {
 		results := make(chan string, numRequests)
 		for range numRequests {
 			go func() {
-				req := httptest.NewRequest("GET", "/test", nil)
+				req := httptest.NewRequest(http.MethodGet, "/test", nil)
 				w := httptest.NewRecorder()
 				router.ServeHTTP(w, req)
 				results <- w.Body.String()
@@ -660,40 +598,40 @@ func TestRouter_EdgeCases(t *testing.T) {
 
 func TestUtilityFunctions(t *testing.T) {
 	t.Run("defaultNotFoundHandler", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 		defaultNotFoundHandler.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404, got %d", w.Code)
-		}
-
-		contentType := w.Header().Get("Content-Type")
-		if contentType != MIMEApplicationProblem {
-			t.Errorf("Expected Content-Type %s, got %s", MIMEApplicationProblem, contentType)
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Header(HeaderContentType, MIMEApplicationProblem)
 	})
 
 	t.Run("defaultMethodNotAllowedHandler", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/test", nil)
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
 		w := httptest.NewRecorder()
 		defaultMethodNotAllowedHandler.ServeHTTP(w, req)
 
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status 405, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusMethodNotAllowed).
+			Header(HeaderContentType, MIMEApplicationProblem)
+	})
 
-		contentType := w.Header().Get("Content-Type")
-		if contentType != MIMEApplicationProblem {
-			t.Errorf("Expected Content-Type %s, got %s", MIMEApplicationProblem, contentType)
-		}
+	t.Run("defaultNotFoundHandler", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		defaultNotFoundHandler.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Header(HeaderContentType, MIMEApplicationProblem)
 	})
 
 	t.Run("allowedMethods", func(t *testing.T) {
 		methods := map[string]bool{
-			"GET":  true,
-			"POST": true,
-			"PUT":  true,
+			http.MethodGet:  true,
+			http.MethodPost: true,
+			http.MethodPut:  true,
 		}
 		result := allowedMethods(methods)
 
@@ -719,40 +657,31 @@ func TestRouter_StaticFiles(t *testing.T) {
 		router.Files("/static/", testFilesFS, "testdata/files")
 
 		// Test serving a file
-		req := httptest.NewRequest("GET", "/static/test.txt", nil)
+		req := httptest.NewRequest(http.MethodGet, "/static/test.txt", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-
-		expected := "test file content"
-		if strings.TrimSpace(w.Body.String()) != expected {
-			t.Errorf("Expected '%s', got '%s'", expected, strings.TrimSpace(w.Body.String()))
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			BodyContains("test file content")
 
 		// Test 404 for non-existent file
-		req = httptest.NewRequest("GET", "/static/nonexistent.txt", nil)
+		req = httptest.NewRequest(http.MethodGet, "/static/nonexistent.txt", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for non-existent file, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 	})
 
 	t.Run("Files - with trailing slash", func(t *testing.T) {
 		router := NewRouter()
 		router.Files("/assets", testFilesFS, "testdata/files") // No trailing slash
 
-		req := httptest.NewRequest("GET", "/assets/test.txt", nil)
+		req := httptest.NewRequest(http.MethodGet, "/assets/test.txt", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 
 	t.Run("FilesDir - directory serving", func(t *testing.T) {
@@ -760,40 +689,31 @@ func TestRouter_StaticFiles(t *testing.T) {
 		router.FilesDir("/files/", "testdata/files")
 
 		// Test serving a file
-		req := httptest.NewRequest("GET", "/files/test.txt", nil)
+		req := httptest.NewRequest(http.MethodGet, "/files/test.txt", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-
-		expected := "test file content"
-		if strings.TrimSpace(w.Body.String()) != expected {
-			t.Errorf("Expected '%s', got '%s'", expected, strings.TrimSpace(w.Body.String()))
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			BodyContains("test file content")
 
 		// Test 404 for non-existent file
-		req = httptest.NewRequest("GET", "/files/nonexistent.txt", nil)
+		req = httptest.NewRequest(http.MethodGet, "/files/nonexistent.txt", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for non-existent file, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 	})
 
 	t.Run("FilesDir - without trailing slash", func(t *testing.T) {
 		router := NewRouter()
 		router.FilesDir("/downloads", "testdata/files") // No trailing slash
 
-		req := httptest.NewRequest("GET", "/downloads/test.txt", nil)
+		req := httptest.NewRequest(http.MethodGet, "/downloads/test.txt", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 }
 
@@ -806,31 +726,25 @@ func TestRouter_Static(t *testing.T) {
 		router.Static(testStaticFS, "testdata/static", true, "/v1/", "/v2/")
 
 		// Test custom API prefix exclusion
-		req := httptest.NewRequest("GET", "/v1/users", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/users", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 
 		// Test second custom API prefix exclusion
-		req = httptest.NewRequest("GET", "/v2/users", nil)
+		req = httptest.NewRequest(http.MethodGet, "/v2/users", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 
 		// Test that old API prefix doesn't work (should fallback to index.html)
-		req = httptest.NewRequest("GET", "/api/users", nil)
+		req = httptest.NewRequest(http.MethodGet, "/api/users", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200 for Static fallback with old API prefix, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 
 	t.Run("Static - without fallback", func(t *testing.T) {
@@ -847,25 +761,20 @@ func TestRouter_Static(t *testing.T) {
 		}))
 
 		// Test serving existing file (should work)
-		req := httptest.NewRequest("GET", "/app.js", nil)
+		req := httptest.NewRequest(http.MethodGet, "/app.js", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200 for existing asset, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 
 		// Test missing file (should use custom 404, not fallback to index.html)
-		req = httptest.NewRequest("GET", "/nonexistent", nil)
+		req = httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for missing file, got %d", w.Code)
-		}
-		if w.Body.String() != "Custom 404 for missing file" {
-			t.Errorf("Expected custom 404 message, got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Body("Custom 404 for missing file")
 	})
 
 	t.Run("StaticDir - with fallback", func(t *testing.T) {
@@ -873,39 +782,29 @@ func TestRouter_Static(t *testing.T) {
 		router.StaticDir("testdata/static", true)
 
 		// Test serving index.html for root
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
-
-		if !strings.Contains(w.Body.String(), "<!DOCTYPE html>") {
-			t.Error("Expected index.html content")
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			BodyContains("<!DOCTYPE html>")
 
 		// Test serving static asset
-		req = httptest.NewRequest("GET", "/app.js", nil)
+		req = httptest.NewRequest(http.MethodGet, "/app.js", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200 for static asset, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 
 		// Test Static fallback (should serve index.html)
-		req = httptest.NewRequest("GET", "/dashboard", nil)
+		req = httptest.NewRequest(http.MethodGet, "/dashboard", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200 for Static fallback, got %d", w.Code)
-		}
-
-		if !strings.Contains(w.Body.String(), "<!DOCTYPE html>") {
-			t.Error("Expected index.html content for Static fallback")
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			BodyContains("<!DOCTYPE html>")
 	})
 
 	t.Run("StaticDir - without fallback", func(t *testing.T) {
@@ -922,16 +821,13 @@ func TestRouter_Static(t *testing.T) {
 		}))
 
 		// Test missing file (should use custom 404)
-		req := httptest.NewRequest("GET", "/missing-page", nil)
+		req := httptest.NewRequest(http.MethodGet, "/missing-page", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for missing file, got %d", w.Code)
-		}
-		if w.Body.String() != "Static site 404" {
-			t.Errorf("Expected custom 404 message, got '%s'", w.Body.String())
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Body("Static site 404")
 	})
 
 	t.Run("StaticDir - with custom API prefixes and fallback", func(t *testing.T) {
@@ -939,22 +835,18 @@ func TestRouter_Static(t *testing.T) {
 		router.StaticDir("testdata/static", true, "/custom-api/", "/other-api/")
 
 		// Test custom API prefix exclusion
-		req := httptest.NewRequest("GET", "/custom-api/data", nil)
+		req := httptest.NewRequest(http.MethodGet, "/custom-api/data", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 
 		// Test second custom API prefix exclusion
-		req = httptest.NewRequest("GET", "/other-api/data", nil)
+		req = httptest.NewRequest(http.MethodGet, "/other-api/data", nil)
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for custom API route, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 	})
 }
 
@@ -973,17 +865,13 @@ func TestRouter_ServeMux(t *testing.T) {
 		}
 	})
 
-	req := httptest.NewRequest("GET", "/direct", nil)
+	req := httptest.NewRequest(http.MethodGet, "/direct", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
-	}
-
-	if w.Body.String() != "direct handler" {
-		t.Errorf("Expected 'direct handler', got '%s'", w.Body.String())
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusOK).
+		Body("direct handler")
 }
 
 func TestRouter_CONNECT_WebTransport(t *testing.T) {
@@ -1007,9 +895,7 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 			t.Error("CONNECT handler was not called")
 		}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status 200, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 
 	t.Run("CONNECT with middleware", func(t *testing.T) {
@@ -1048,9 +934,7 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for unregistered CONNECT route, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 	})
 
 	t.Run("CONNECT WebTransport-like upgrade", func(t *testing.T) {

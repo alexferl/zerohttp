@@ -33,22 +33,22 @@ func TestCircuitBreakerConfig_DefaultValues(t *testing.T) {
 
 func TestCircuitBreakerConfig_DefaultFunctions(t *testing.T) {
 	cfg := DefaultCircuitBreakerConfig
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 
 	t.Run("default IsFailure function", func(t *testing.T) {
 		tests := []struct {
 			statusCode int
 			expected   bool
 		}{
-			{200, false},
-			{201, false},
-			{400, false},
-			{404, false},
+			{http.StatusOK, false},
+			{http.StatusCreated, false},
+			{http.StatusBadRequest, false},
+			{http.StatusNotFound, false},
 			{499, false},
-			{500, true},
-			{501, true},
-			{502, true},
-			{503, true},
+			{http.StatusInternalServerError, true},
+			{http.StatusNotImplemented, true},
+			{http.StatusBadGateway, true},
+			{http.StatusServiceUnavailable, true},
 			{599, true},
 		}
 		for _, tt := range tests {
@@ -70,7 +70,7 @@ func TestCircuitBreakerConfig_DefaultFunctions(t *testing.T) {
 			{"", ""},
 		}
 		for _, tt := range tests {
-			req, _ := http.NewRequest("GET", tt.path, nil)
+			req, _ := http.NewRequest(http.MethodGet, tt.path, nil)
 			result := cfg.KeyExtractor(req)
 			if result != tt.expected {
 				t.Errorf("KeyExtractor(req with path %s) = %s, expected %s", tt.path, result, tt.expected)
@@ -126,19 +126,24 @@ func TestCircuitBreakerOptions(t *testing.T) {
 func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 	t.Run("custom IsFailure function", func(t *testing.T) {
 		customIsFailure := func(r *http.Request, statusCode int) bool {
-			return statusCode >= 400
+			return statusCode >= http.StatusBadRequest
 		}
 		cfg := DefaultCircuitBreakerConfig
 		WithCircuitBreakerIsFailure(customIsFailure)(&cfg)
 		if cfg.IsFailure == nil {
 			t.Error("expected IsFailure function to be set")
 		}
-		req, _ := http.NewRequest("GET", "/test", nil)
+		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		tests := []struct {
 			statusCode int
 			expected   bool
 		}{
-			{200, false}, {300, false}, {399, false}, {400, true}, {404, true}, {500, true},
+			{http.StatusOK, false},
+			{http.StatusMultipleChoices, false},
+			{399, false},
+			{http.StatusBadRequest, true},
+			{http.StatusNotFound, true},
+			{http.StatusInternalServerError, true},
 		}
 		for _, tt := range tests {
 			result := cfg.IsFailure(req, tt.statusCode)
@@ -160,9 +165,9 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 		tests := []struct {
 			method, path, expected string
 		}{
-			{"GET", "/users", "GET:/users"},
-			{"POST", "/api/data", "POST:/api/data"},
-			{"PUT", "/", "PUT:/"},
+			{http.MethodGet, "/users", "GET:/users"},
+			{http.MethodPost, "/api/data", "POST:/api/data"},
+			{http.MethodPut, "/", "PUT:/"},
 		}
 		for _, tt := range tests {
 			req, _ := http.NewRequest(tt.method, tt.path, nil)
@@ -177,7 +182,7 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 func TestCircuitBreakerConfig_MultipleOptions(t *testing.T) {
 	timeout := 45 * time.Second
 	customIsFailure := func(r *http.Request, statusCode int) bool {
-		return statusCode >= 400
+		return statusCode >= http.StatusBadRequest
 	}
 	customKeyExtractor := func(r *http.Request) string {
 		return r.Host + r.URL.Path
@@ -208,12 +213,12 @@ func TestCircuitBreakerConfig_MultipleOptions(t *testing.T) {
 		t.Errorf("expected open message = 'Service overloaded', got %s", cfg.OpenMessage)
 	}
 
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	req.Host = "example.com"
-	if !cfg.IsFailure(req, 400) {
+	if !cfg.IsFailure(req, http.StatusBadRequest) {
 		t.Error("expected custom IsFailure to return true for 400")
 	}
-	if cfg.IsFailure(req, 200) {
+	if cfg.IsFailure(req, http.StatusOK) {
 		t.Error("expected custom IsFailure to return false for 200")
 	}
 	expectedKey := "example.com/test"
@@ -256,9 +261,9 @@ func TestCircuitBreakerConfig_ComplexFunctionality(t *testing.T) {
 	t.Run("path-based failure logic", func(t *testing.T) {
 		customIsFailure := func(r *http.Request, statusCode int) bool {
 			if r.URL.Path == "/critical" {
-				return statusCode == 408 || statusCode >= 500
+				return statusCode == http.StatusRequestTimeout || statusCode >= http.StatusInternalServerError
 			}
-			return statusCode >= 500
+			return statusCode >= http.StatusInternalServerError
 		}
 		cfg := DefaultCircuitBreakerConfig
 		WithCircuitBreakerIsFailure(customIsFailure)(&cfg)
@@ -267,17 +272,17 @@ func TestCircuitBreakerConfig_ComplexFunctionality(t *testing.T) {
 			statusCode int
 			expected   bool
 		}{
-			{"/critical", 200, false},
-			{"/critical", 404, false},
-			{"/critical", 408, true},
-			{"/critical", 500, true},
-			{"/normal", 200, false},
-			{"/normal", 404, false},
-			{"/normal", 408, false},
-			{"/normal", 500, true},
+			{"/critical", http.StatusOK, false},
+			{"/critical", http.StatusNotFound, false},
+			{"/critical", http.StatusRequestTimeout, true},
+			{"/critical", http.StatusInternalServerError, true},
+			{"/normal", http.StatusOK, false},
+			{"/normal", http.StatusNotFound, false},
+			{"/normal", http.StatusRequestTimeout, false},
+			{"/normal", http.StatusInternalServerError, true},
 		}
 		for _, tt := range tests {
-			req, _ := http.NewRequest("GET", tt.path, nil)
+			req, _ := http.NewRequest(http.MethodGet, tt.path, nil)
 			result := cfg.IsFailure(req, tt.statusCode)
 			if result != tt.expected {
 				t.Errorf("custom IsFailure(req with path %s, %d) = %v, expected %v", tt.path, tt.statusCode, result, tt.expected)
@@ -304,7 +309,7 @@ func TestCircuitBreakerConfig_ComplexFunctionality(t *testing.T) {
 			{"/", "", "/"},
 		}
 		for _, tt := range tests {
-			req, _ := http.NewRequest("GET", tt.path, nil)
+			req, _ := http.NewRequest(http.MethodGet, tt.path, nil)
 			if tt.userID != "" {
 				req.Header.Set("X-User-ID", tt.userID)
 			}

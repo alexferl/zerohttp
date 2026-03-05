@@ -2,11 +2,11 @@ package middleware
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRateLimit_DefaultConfigFallbacks(t *testing.T) {
@@ -22,15 +22,10 @@ func TestRateLimit_DefaultConfigFallbacks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := tt.option()
-			req := httptest.NewRequest("GET", "/test", nil)
-			rr := httptest.NewRecorder()
-			m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})).ServeHTTP(rr, req)
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+			w := zhtest.TestMiddleware(m, req)
 
-			if rr.Code != http.StatusOK {
-				t.Errorf("expected status 200, got %d", rr.Code)
-			}
+			zhtest.AssertWith(t, w).Status(http.StatusOK)
 		})
 	}
 }
@@ -38,35 +33,24 @@ func TestRateLimit_DefaultConfigFallbacks(t *testing.T) {
 func TestRateLimitStatusCodeAndMessageDefaults(t *testing.T) {
 	m := RateLimit(config.WithRateLimitStatusCode(0), config.WithRateLimitRate(1), config.WithRateLimitWindow(time.Minute))
 	handler := m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
-	req := httptest.NewRequest("GET", "/test", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-	req = httptest.NewRequest("GET", "/test", nil)
-	rr = httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	zhtest.Serve(handler, req)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status 429, got %d", rr.Code)
-	}
-	if body := rr.Body.String(); body != "Rate limit exceeded" {
-		t.Errorf("expected default message, got %q", body)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Body("Rate limit exceeded")
 }
 
 func TestRateLimitMessageDefaults(t *testing.T) {
 	m := RateLimit(config.WithRateLimitMessage(""), config.WithRateLimitRate(1), config.WithRateLimitWindow(time.Minute))
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	handler := m(next)
-	req := httptest.NewRequest("GET", "/test", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req) // 1st OK
-	req = httptest.NewRequest("GET", "/test", nil)
-	rr = httptest.NewRecorder()
-	handler.ServeHTTP(rr, req) // 2nd rate limited
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	zhtest.Serve(handler, req) // 1st OK
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(handler, req) // 2nd rate limited
 
-	if body := rr.Body.String(); body != "Rate limit exceeded" {
-		t.Errorf("expected default message, got %q", body)
-	}
+	zhtest.AssertWith(t, w).Body("Rate limit exceeded")
 }
 
 func TestRateLimitTokenBucket(t *testing.T) {
@@ -81,28 +65,21 @@ func TestRateLimitTokenBucket(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	for i := range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
+		w := zhtest.Serve(handler, req)
 
-		if rr.Code != http.StatusOK {
-			t.Errorf("request %d: expected status 200, got %d", i+1, rr.Code)
+		if w.Code != http.StatusOK {
+			t.Errorf("request %d: expected status 200, got %d", i+1, w.Code)
 		}
 	}
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w := zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status 429, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Body("Rate limit exceeded")
 	if count != 2 {
 		t.Errorf("expected 2 successful requests, got %d", count)
-	}
-	if body := rr.Body.String(); body != "Rate limit exceeded" {
-		t.Errorf("expected rate limit message, got %s", body)
 	}
 }
 
@@ -114,23 +91,19 @@ func TestRateLimitFixedWindow(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	for i := range 3 {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
+		w := zhtest.Serve(handler, req)
 
-		if rr.Code != http.StatusOK {
-			t.Errorf("request %d: expected status 200, got %d", i+1, rr.Code)
+		if w.Code != http.StatusOK {
+			t.Errorf("request %d: expected status 200, got %d", i+1, w.Code)
 		}
 	}
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w := zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status 429, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests)
 	if count != 3 {
 		t.Errorf("expected 3 successful requests, got %d", count)
 	}
@@ -140,33 +113,26 @@ func TestRateLimitSlidingWindow(t *testing.T) {
 	m := RateLimit(config.WithRateLimitRate(2), config.WithRateLimitWindow(100*time.Millisecond), config.WithRateLimitAlgorithm(config.SlidingWindow))
 	handler := m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	for i := range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
+		w := zhtest.Serve(handler, req)
 
-		if rr.Code != http.StatusOK {
-			t.Errorf("request %d: expected status 200, got %d", i+1, rr.Code)
+		if w.Code != http.StatusOK {
+			t.Errorf("request %d: expected status 200, got %d", i+1, w.Code)
 		}
 	}
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w := zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status 429, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests)
 
 	time.Sleep(110 * time.Millisecond)
-	req = httptest.NewRequest("GET", "/test", nil)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr = httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w = zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected status 200 after window slide, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 }
 
 func TestRateLimitHeaders(t *testing.T) {
@@ -177,23 +143,16 @@ func TestRateLimitHeaders(t *testing.T) {
 		config.WithRateLimitIncludeHeaders(true),
 	)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w := zhtest.Serve(handler, req)
 
-	if rr.Header().Get("X-RateLimit-Limit") != "5" {
-		t.Errorf("expected X-RateLimit-Limit '5', got '%s'", rr.Header().Get("X-RateLimit-Limit"))
-	}
-	if rr.Header().Get("X-RateLimit-Remaining") == "" {
-		t.Error("expected X-RateLimit-Remaining header to be set")
-	}
-	if rr.Header().Get("X-RateLimit-Reset") == "" {
-		t.Error("expected X-RateLimit-Reset header to be set")
-	}
-	if rr.Header().Get("X-RateLimit-Window") != "1m0s" {
-		t.Errorf("expected X-RateLimit-Window '1m0s', got '%s'", rr.Header().Get("X-RateLimit-Window"))
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusOK).
+		Header("X-RateLimit-Limit", "5").
+		HeaderExists("X-RateLimit-Remaining").
+		HeaderExists("X-RateLimit-Reset").
+		Header("X-RateLimit-Window", "1m0s")
 }
 
 func TestRateLimitNoHeaders(t *testing.T) {
@@ -204,15 +163,13 @@ func TestRateLimitNoHeaders(t *testing.T) {
 		config.WithRateLimitIncludeHeaders(false),
 	)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w := zhtest.Serve(handler, req)
 
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	for _, hdr := range []string{"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"} {
-		if rr.Header().Get(hdr) != "" {
-			t.Errorf("expected no %s header, got '%s'", hdr, rr.Header().Get(hdr))
-		}
+		zhtest.AssertWith(t, w).HeaderNotExists(hdr)
 	}
 }
 
@@ -228,31 +185,21 @@ func TestRateLimitCustomKeyExtractor(t *testing.T) {
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	// User 1 allowed first two
 	for i := range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("User-ID", "user1")
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Errorf("user1 request %d: expected status 200, got %d", i+1, rr.Code)
+		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("User-ID", "user1").Build()
+		w := zhtest.Serve(handler, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("user1 request %d: expected status 200, got %d", i+1, w.Code)
 		}
 	}
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("User-ID", "user1")
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("User-ID", "user1").Build()
+	w := zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("user1: expected status 429, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests)
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("User-ID", "user2")
-	rr = httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	req = zhtest.NewRequest(http.MethodGet, "/test").WithHeader("User-ID", "user2").Build()
+	w = zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("user2: expected status 200, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 }
 
 func TestRateLimitExemptPaths(t *testing.T) {
@@ -268,35 +215,28 @@ func TestRateLimitExemptPaths(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	for i := range 3 {
-		req := httptest.NewRequest("GET", "/health", nil)
+		req := zhtest.NewRequest(http.MethodGet, "/health").Build()
 		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
+		w := zhtest.Serve(handler, req)
 
-		handler.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Errorf("exempt path request %d: expected status 200, got %d", i+1, rr.Code)
+		if w.Code != http.StatusOK {
+			t.Errorf("exempt path request %d: expected status 200, got %d", i+1, w.Code)
 		}
 	}
 	if count != 3 {
 		t.Errorf("expected 3 requests to exempt path, got %d", count)
 	}
-	req := httptest.NewRequest("GET", "/api", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/api").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w := zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("first non-exempt request: expected status 200, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 
-	req = httptest.NewRequest("GET", "/api", nil)
+	req = zhtest.NewRequest(http.MethodGet, "/api").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr = httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w = zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("second non-exempt request: expected status 429, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests)
 }
 
 func TestRateLimitCustomMessage(t *testing.T) {
@@ -308,36 +248,28 @@ func TestRateLimitCustomMessage(t *testing.T) {
 		config.WithRateLimitStatusCode(http.StatusServiceUnavailable),
 	)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	zhtest.Serve(handler, req)
 
-	req = httptest.NewRequest("GET", "/test", nil)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	rr = httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	w := zhtest.Serve(handler, req)
 
-	if rr.Code != http.StatusServiceUnavailable {
-		t.Errorf("second request: expected status 503, got %d", rr.Code)
-	}
-	if body := rr.Body.String(); body != "Too many requests, please slow down" {
-		t.Errorf("expected custom message, got %s", body)
-	}
-	if retryAfter := rr.Header().Get("Retry-After"); retryAfter == "" {
-		t.Error("expected Retry-After header to be set")
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusServiceUnavailable).
+		Body("Too many requests, please slow down").
+		HeaderExists("Retry-After")
 }
 
 func TestRateLimitDefaultKeyExtractor(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Forwarded-For", "192.168.1.1")
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "192.168.1.1").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	key := config.DefaultKeyExtractor(req)
 	if key != "192.168.1.1" {
 		t.Errorf("expected key '192.168.1.1', got '%s'", key)
 	}
-	req = httptest.NewRequest("GET", "/test", nil)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	key = config.DefaultKeyExtractor(req)
 	if key != "127.0.0.1:12345" {

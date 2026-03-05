@@ -191,7 +191,7 @@ func TestBinder_Form(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.formData.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set(HeaderContentType, "application/x-www-form-urlencoded")
 
 			var result testFormStruct
 			err := B.Form(req, &result)
@@ -238,7 +238,7 @@ func TestBinder_Form_Errors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.formData.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set(HeaderContentType, "application/x-www-form-urlencoded")
 
 			var result testFormStruct
 			err := B.Form(req, &result)
@@ -275,7 +275,7 @@ func TestBinder_Form_InvalidDestination(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("name=test"))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set(HeaderContentType, "application/x-www-form-urlencoded")
 
 			var err error
 			if tt.dst == nil {
@@ -390,7 +390,7 @@ func TestBinder_MultipartForm(t *testing.T) {
 			_ = writer.Close()
 
 			req := httptest.NewRequest(http.MethodPost, "/", &body)
-			req.Header.Set("Content-Type", writer.FormDataContentType())
+			req.Header.Set(HeaderContentType, writer.FormDataContentType())
 
 			var result testMultipartStruct
 			err := B.MultipartForm(req, &result, 32<<20)
@@ -429,7 +429,7 @@ func TestFileHeader_Open(t *testing.T) {
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(HeaderContentType, writer.FormDataContentType())
 
 	if err := req.ParseMultipartForm(32 << 20); err != nil {
 		t.Fatalf("failed to parse multipart form: %v", err)
@@ -464,7 +464,7 @@ func TestFileHeader_ReadAll(t *testing.T) {
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(HeaderContentType, writer.FormDataContentType())
 
 	var result struct {
 		File *FileHeader `form:"test"`
@@ -961,7 +961,7 @@ func TestBinder_Query_ImplicitSnakeCase(t *testing.T) {
 	if result.LastName != "Doe" {
 		t.Errorf("expected LastName='Doe', got %q", result.LastName)
 	}
-	if result.HTTPMethod != "GET" {
+	if result.HTTPMethod != http.MethodGet {
 		t.Errorf("expected HTTPMethod='GET', got %q", result.HTTPMethod)
 	}
 }
@@ -1125,7 +1125,7 @@ func TestBindFileField_NonPointerFileHeader(t *testing.T) {
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(HeaderContentType, writer.FormDataContentType())
 
 	var result WithNonPointerFileHeader
 	err := B.MultipartForm(req, &result, 32<<20)
@@ -1157,7 +1157,7 @@ func TestBindEmbeddedStruct_WithFiles(t *testing.T) {
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(HeaderContentType, writer.FormDataContentType())
 
 	var result Wrapper
 	err := B.MultipartForm(req, &result, 32<<20)
@@ -1337,7 +1337,7 @@ func TestFileHeader_ReadAll_OpenError(t *testing.T) {
 func TestBinder_Form_ParseFormError(t *testing.T) {
 	// Create a request with invalid content type that causes ParseForm to fail
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not=valid"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
 	req.Body = &errReader{}
 
 	var result testFormStruct
@@ -1361,7 +1361,7 @@ func (e *errReader) Close() error {
 func TestBinder_MultipartForm_ParseError(t *testing.T) {
 	// Request with malformed multipart data
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("not valid multipart"))
-	req.Header.Set("Content-Type", "multipart/form-data; boundary=xyz")
+	req.Header.Set(HeaderContentType, "multipart/form-data; boundary=xyz")
 
 	var result testMultipartStruct
 	err := B.MultipartForm(req, &result, 32<<20)
@@ -1378,7 +1378,7 @@ func TestBinder_MultipartForm_NoFormData(t *testing.T) {
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(HeaderContentType, writer.FormDataContentType())
 
 	// Manually parse then nil out the MultipartForm
 	_ = req.ParseMultipartForm(32 << 20)
@@ -1408,7 +1408,7 @@ func TestBindFilesToStruct_InvalidDestination(t *testing.T) {
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(HeaderContentType, writer.FormDataContentType())
 	_ = req.ParseMultipartForm(32 << 20)
 
 	tests := []struct {

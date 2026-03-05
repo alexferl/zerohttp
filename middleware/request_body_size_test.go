@@ -2,14 +2,13 @@ package middleware
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 type requestBodySizeTestHandler struct {
@@ -24,9 +23,7 @@ func (h *requestBodySizeTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 	h.bodyRead = body
 	h.bodyError = err
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("OK")); err != nil {
-		panic(fmt.Errorf("failed to write test response: %w", err))
-	}
+	_, _ = w.Write([]byte("OK"))
 }
 
 func TestRequestBodySize_Limits(t *testing.T) {
@@ -46,9 +43,8 @@ func TestRequestBodySize_Limits(t *testing.T) {
 			handler := &requestBodySizeTestHandler{}
 			middleware := RequestBodySize(config.WithRequestBodySizeMaxBytes(tt.maxBytes))(handler)
 			body := bytes.NewReader([]byte(tt.bodyContent))
-			req := httptest.NewRequest("POST", "/", body)
-			w := httptest.NewRecorder()
-			middleware.ServeHTTP(w, req)
+			req := zhtest.NewRequest(http.MethodPost, "/").WithBody(body).Build()
+			zhtest.Serve(middleware, req)
 
 			if !handler.called {
 				t.Error("Expected handler to be called")
@@ -87,9 +83,8 @@ func TestRequestBodySize_ExemptPaths(t *testing.T) {
 				config.WithRequestBodySizeExemptPaths([]string{"/upload", "/webhook", "/api/large"}),
 			)(handler)
 			largeBody := bytes.NewReader([]byte("this is a long body"))
-			req := httptest.NewRequest("POST", tt.path, largeBody)
-			w := httptest.NewRecorder()
-			middleware.ServeHTTP(w, req)
+			req := zhtest.NewRequest(http.MethodPost, tt.path).WithBody(largeBody).Build()
+			zhtest.Serve(middleware, req)
 
 			if !handler.called {
 				t.Errorf("Expected handler to be called for path %s", tt.path)
@@ -112,9 +107,8 @@ func TestRequestBodySize_EmptyExemptPaths(t *testing.T) {
 		config.WithRequestBodySizeExemptPaths([]string{}),
 	)(handler)
 	largeBody := bytes.NewReader([]byte("this body is longer than 10 bytes"))
-	req := httptest.NewRequest("POST", "/any-path", largeBody)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodPost, "/any-path").WithBody(largeBody).Build()
+	zhtest.Serve(middleware, req)
 
 	if !handler.called {
 		t.Error("Expected handler to be called")
@@ -138,9 +132,8 @@ func TestRequestBodySize_ConfigFallbacks(t *testing.T) {
 			handler := &requestBodySizeTestHandler{}
 			middleware := RequestBodySize(config.WithRequestBodySizeMaxBytes(tt.maxBytes))(handler)
 			smallBody := bytes.NewReader([]byte("small body"))
-			req := httptest.NewRequest("POST", "/", smallBody)
-			w := httptest.NewRecorder()
-			middleware.ServeHTTP(w, req)
+			req := zhtest.NewRequest(http.MethodPost, "/").WithBody(smallBody).Build()
+			zhtest.Serve(middleware, req)
 
 			if !handler.called {
 				t.Error("Expected handler to be called")
@@ -159,9 +152,8 @@ func TestRequestBodySize_NilExemptPaths(t *testing.T) {
 		config.WithRequestBodySizeExemptPaths(nil),
 	)(handler)
 	smallBody := bytes.NewReader([]byte("small body"))
-	req := httptest.NewRequest("POST", "/", smallBody)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(smallBody).Build()
+	zhtest.Serve(middleware, req)
 
 	if !handler.called {
 		t.Error("Expected handler to be called")
@@ -178,9 +170,8 @@ func TestRequestBodySize_MultipleOptions(t *testing.T) {
 		config.WithRequestBodySizeExemptPaths([]string{"/test"}),
 	)(handler)
 	largeBody := bytes.NewReader([]byte("this body is longer than 10 bytes but less than 100"))
-	req := httptest.NewRequest("POST", "/", largeBody)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(largeBody).Build()
+	zhtest.Serve(middleware, req)
 
 	if !handler.called {
 		t.Error("Expected handler to be called")
@@ -207,9 +198,8 @@ func TestDefaultRequestBodySizeConfig(t *testing.T) {
 func TestRequestBodySize_GetRequest(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
 	middleware := RequestBodySize(config.WithRequestBodySizeMaxBytes(10))(handler)
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(middleware, req)
 
 	if !handler.called {
 		t.Error("Expected handler to be called")

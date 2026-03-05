@@ -164,19 +164,19 @@ func (a *zerohttpAdapter) Handle(op *huma.Operation, handler func(huma.Context))
 
 	method := strings.ToUpper(op.Method)
 	switch method {
-	case "GET":
+	case http.MethodGet:
 		a.router.GET(op.Path, humaHandler)
-	case "POST":
+	case http.MethodPost:
 		a.router.POST(op.Path, humaHandler)
-	case "PUT":
+	case http.MethodPut:
 		a.router.PUT(op.Path, humaHandler)
-	case "DELETE":
+	case http.MethodDelete:
 		a.router.DELETE(op.Path, humaHandler)
-	case "PATCH":
+	case http.MethodPatch:
 		a.router.PATCH(op.Path, humaHandler)
-	case "HEAD":
+	case http.MethodHead:
 		a.router.HEAD(op.Path, humaHandler)
-	case "OPTIONS":
+	case http.MethodOptions:
 		a.router.OPTIONS(op.Path, humaHandler)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestETag_GeneratesETag(t *testing.T) {
@@ -20,9 +21,7 @@ func TestETag_GeneratesETag(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
 	etag := rec.Header().Get("ETag")
 	if etag == "" {
@@ -56,13 +55,9 @@ func TestETag_NotModified(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusNotModified {
-		t.Errorf("expected status %d, got %d", http.StatusNotModified, rec2.Code)
-	}
-
-	if rec2.Body.String() != "" {
-		t.Error("expected empty body for 304 response")
-	}
+	zhtest.AssertWith(t, rec2).
+		Status(http.StatusNotModified).
+		BodyEmpty()
 }
 
 func TestETag_NotModified_MultipleETags(t *testing.T) {
@@ -82,9 +77,7 @@ func TestETag_NotModified_MultipleETags(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusNotModified {
-		t.Errorf("expected status %d, got %d", http.StatusNotModified, rec2.Code)
-	}
+	zhtest.AssertWith(t, rec2).Status(http.StatusNotModified)
 }
 
 func TestETag_NotModified_Wildcard(t *testing.T) {
@@ -97,9 +90,7 @@ func TestETag_NotModified_Wildcard(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotModified {
-		t.Errorf("expected status %d, got %d", http.StatusNotModified, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusNotModified)
 }
 
 func TestETag_NoETagOnPOST(t *testing.T) {
@@ -391,9 +382,7 @@ func TestETag_ChangedContent(t *testing.T) {
 	rec3 := httptest.NewRecorder()
 	handler.ServeHTTP(rec3, req3)
 
-	if rec3.Code != http.StatusOK {
-		t.Errorf("expected status %d when content changed, got %d", http.StatusOK, rec3.Code)
-	}
+	zhtest.AssertWith(t, rec3).Status(http.StatusOK)
 }
 
 func TestETag_NotModified_StrongVsWeak(t *testing.T) {
@@ -417,9 +406,7 @@ func TestETag_NotModified_StrongVsWeak(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusNotModified {
-		t.Errorf("expected status %d for strong ETag matching weak ETag, got %d", http.StatusNotModified, rec2.Code)
-	}
+	zhtest.AssertWith(t, rec2).Status(http.StatusNotModified)
 }
 
 func TestDefaultETag(t *testing.T) {
@@ -482,9 +469,7 @@ func TestETag_ContentEncodingNotModified(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusNotModified {
-		t.Errorf("expected status %d, got %d", http.StatusNotModified, rec2.Code)
-	}
+	zhtest.AssertWith(t, rec2).Status(http.StatusNotModified)
 }
 
 // Range request tests
@@ -507,18 +492,10 @@ func TestETag_IfRange_MatchingETag(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusPartialContent {
-		t.Errorf("expected status %d, got %d", http.StatusPartialContent, rec2.Code)
-	}
-
-	if rec2.Body.String() != "01234" {
-		t.Errorf("expected body '01234', got %s", rec2.Body.String())
-	}
-
-	contentRange := rec2.Header().Get("Content-Range")
-	if contentRange != "bytes 0-4/10" {
-		t.Errorf("expected Content-Range 'bytes 0-4/10', got %s", contentRange)
-	}
+	zhtest.AssertWith(t, rec2).
+		Status(http.StatusPartialContent).
+		Body("01234").
+		Header("Content-Range", "bytes 0-4/10")
 }
 
 func TestETag_IfRange_NonMatchingETag(t *testing.T) {
@@ -533,9 +510,7 @@ func TestETag_IfRange_NonMatchingETag(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
 	if rec.Body.String() != "0123456789" {
 		t.Errorf("expected full body, got %s", rec.Body.String())
@@ -554,9 +529,7 @@ func TestETag_IfRange_NoETagHeader(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 // File-based ETag tests
@@ -663,13 +636,9 @@ func TestETag_Range_OpenEnded(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusPartialContent {
-		t.Errorf("expected status %d, got %d", http.StatusPartialContent, rec2.Code)
-	}
-
-	if rec2.Body.String() != "56789" {
-		t.Errorf("expected body '56789', got %s", rec2.Body.String())
-	}
+	zhtest.AssertWith(t, rec2).
+		Status(http.StatusPartialContent).
+		Body("56789")
 }
 
 func TestETag_Range_InvalidRange(t *testing.T) {
@@ -691,13 +660,9 @@ func TestETag_Range_InvalidRange(t *testing.T) {
 	handler.ServeHTTP(rec2, req2)
 
 	// Should fall back to 200 with full content
-	if rec2.Code != http.StatusOK {
-		t.Errorf("expected status %d for invalid range, got %d", http.StatusOK, rec2.Code)
-	}
-
-	if rec2.Body.String() != "0123456789" {
-		t.Errorf("expected full body for invalid range, got %s", rec2.Body.String())
-	}
+	zhtest.AssertWith(t, rec2).
+		Status(http.StatusOK).
+		Body("0123456789")
 }
 
 // If-Match tests (412 Precondition Failed)
@@ -719,9 +684,7 @@ func TestETag_IfMatch_Matches(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec2.Code)
-	}
+	zhtest.AssertWith(t, rec2).Status(http.StatusOK)
 }
 
 func TestETag_IfMatch_DoesNotMatch(t *testing.T) {
@@ -735,9 +698,7 @@ func TestETag_IfMatch_DoesNotMatch(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusPreconditionFailed {
-		t.Errorf("expected status %d, got %d", http.StatusPreconditionFailed, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusPreconditionFailed)
 }
 
 func TestETag_IfMatch_Wildcard(t *testing.T) {
@@ -751,9 +712,7 @@ func TestETag_IfMatch_Wildcard(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 func TestETag_IfMatch_NoETag(t *testing.T) {
@@ -766,9 +725,7 @@ func TestETag_IfMatch_NoETag(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 // HTTP interface tests
@@ -820,9 +777,7 @@ func TestETag_Range_InvalidFormat(t *testing.T) {
 	handler.ServeHTTP(rec2, req2)
 
 	// Should fall back to 200 with full content
-	if rec2.Code != http.StatusOK {
-		t.Errorf("expected status %d for invalid range format, got %d", http.StatusOK, rec2.Code)
-	}
+	zhtest.AssertWith(t, rec2).Status(http.StatusOK)
 }
 
 func TestETag_Range_NonNumericStart(t *testing.T) {
@@ -844,9 +799,7 @@ func TestETag_Range_NonNumericStart(t *testing.T) {
 	handler.ServeHTTP(rec2, req2)
 
 	// Should fall back to 200 with full content
-	if rec2.Code != http.StatusOK {
-		t.Errorf("expected status %d for non-numeric range, got %d", http.StatusOK, rec2.Code)
-	}
+	zhtest.AssertWith(t, rec2).Status(http.StatusOK)
 }
 
 func TestETag_Range_NonNumericEnd(t *testing.T) {
@@ -868,9 +821,7 @@ func TestETag_Range_NonNumericEnd(t *testing.T) {
 	handler.ServeHTTP(rec2, req2)
 
 	// Should fall back to 200 with full content
-	if rec2.Code != http.StatusOK {
-		t.Errorf("expected status %d for non-numeric end, got %d", http.StatusOK, rec2.Code)
-	}
+	zhtest.AssertWith(t, rec2).Status(http.StatusOK)
 }
 
 // Configuration edge cases
@@ -918,9 +869,7 @@ func TestETag_NilSkipStatusCodes(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	// Should still work without panic
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusInternalServerError)
 }
 
 // ServeContentWithETag tests
@@ -936,9 +885,7 @@ func TestServeContentWithETag_NotModified(t *testing.T) {
 
 	ServeContentWithETag(rec, req, 1709999999, content)
 
-	if rec.Code != http.StatusNotModified {
-		t.Errorf("expected status %d, got %d", http.StatusNotModified, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusNotModified)
 }
 
 func TestServeContentWithETag_ServesContent(t *testing.T) {
@@ -949,9 +896,7 @@ func TestServeContentWithETag_ServesContent(t *testing.T) {
 
 	ServeContentWithETag(rec, req, 1709999999, content)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
 	if rec.Header().Get("ETag") == "" {
 		t.Error("expected ETag header")
@@ -965,9 +910,7 @@ func TestServeContentWithETag_NilContent(t *testing.T) {
 	ServeContentWithETag(rec, req, 1709999999, nil)
 
 	// Should return 404 for nil content
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusNotFound)
 }
 
 // Buffer flush test
@@ -1004,9 +947,7 @@ func TestETag_WriteHeader_MultipleCalls(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 // Empty body test
@@ -1085,9 +1026,7 @@ func TestETag_POSTWithIfMatch(t *testing.T) {
 
 	// The ETag is generated, then compared against If-Match
 	// Since they don't match, we get 412
-	if rec.Code != http.StatusPreconditionFailed {
-		t.Errorf("expected status %d for non-matching If-Match, got %d", http.StatusPreconditionFailed, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusPreconditionFailed)
 }
 
 func TestETag_NilConfigMaps(t *testing.T) {
@@ -1115,9 +1054,7 @@ func TestETag_NilConfigMaps(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 func TestETag_ServeHTTP_WithHijacker(t *testing.T) {
@@ -1137,9 +1074,7 @@ func TestETag_ServeHTTP_WithHijacker(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	// The hijacker check runs but actual hijacking isn't possible in tests
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 func TestETag_ServeHTTP_WithPusher(t *testing.T) {
@@ -1157,9 +1092,7 @@ func TestETag_ServeHTTP_WithPusher(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 func TestETag_PUTWithoutIfMatch(t *testing.T) {
@@ -1172,9 +1105,7 @@ func TestETag_PUTWithoutIfMatch(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
 	// No ETag generated for non-GET/HEAD
 	if rec.Header().Get("ETag") != "" {
@@ -1192,9 +1123,7 @@ func TestETag_DELETEWithoutIfMatch(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("expected status %d, got %d", http.StatusNoContent, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusNoContent)
 }
 
 func TestETag_IfMatchWildcard(t *testing.T) {
@@ -1209,9 +1138,7 @@ func TestETag_IfMatchWildcard(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	// Should succeed since resource exists (handler writes content)
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d for If-Match: *, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 }
 
 func TestETag_NilSkipContentTypes(t *testing.T) {
@@ -1241,9 +1168,7 @@ func TestETag_NilSkipContentTypes(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
 	// Should generate ETag even with nil SkipContentTypes
 	if rec.Header().Get("ETag") == "" {

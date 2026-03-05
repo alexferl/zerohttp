@@ -1,46 +1,23 @@
 package healthcheck
 
 import (
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestDefaultHealthEndpoints(t *testing.T) {
 	app := zh.New()
 	New(app)
 
-	server := httptest.NewServer(app)
-	defer server.Close()
-
 	endpoints := []string{"/livez", "/readyz", "/startupz"}
 	for _, endpoint := range endpoints {
 		t.Run(endpoint, func(t *testing.T) {
-			resp, err := http.Get(server.URL + endpoint)
-			if err != nil {
-				t.Fatalf("Failed to get %s: %v", endpoint, err)
-			}
-			t.Cleanup(func() {
-				if err := resp.Body.Close(); err != nil {
-					t.Logf("failed to close body: %v", err)
-				}
-			})
-
-			if resp.StatusCode != http.StatusOK {
-				t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
-			}
-
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				t.Fatalf("Failed to read body: %v", err)
-			}
-
-			if string(body) != "ok" {
-				t.Errorf("Expected body 'ok', got '%s'", string(body))
-			}
+			req := zhtest.NewRequest(http.MethodGet, endpoint).Build()
+			w := zhtest.Serve(app, req)
+			zhtest.AssertWith(t, w).Status(http.StatusOK).Body("ok")
 		})
 	}
 }
@@ -54,25 +31,12 @@ func TestCustomEndpoints(t *testing.T) {
 		WithStartupEndpoint("/health/startup"),
 	)
 
-	server := httptest.NewServer(app)
-	defer server.Close()
-
 	endpoints := []string{"/health/live", "/health/ready", "/health/startup"}
 	for _, endpoint := range endpoints {
 		t.Run(endpoint, func(t *testing.T) {
-			resp, err := http.Get(server.URL + endpoint)
-			if err != nil {
-				t.Fatalf("Failed to get %s: %v", endpoint, err)
-			}
-			t.Cleanup(func() {
-				if err := resp.Body.Close(); err != nil {
-					t.Logf("failed to close body: %v", err)
-				}
-			})
-
-			if resp.StatusCode != http.StatusOK {
-				t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
-			}
+			req := zhtest.NewRequest(http.MethodGet, endpoint).Build()
+			w := zhtest.Serve(app, req)
+			zhtest.AssertWith(t, w).Status(http.StatusOK)
 		})
 	}
 }
@@ -111,32 +75,10 @@ func TestCustomHandlers(t *testing.T) {
 		WithStartupHandler(startupHandler),
 	)
 
-	server := httptest.NewServer(app)
-	defer server.Close()
-
 	t.Run("liveness", func(t *testing.T) {
-		resp, err := http.Get(server.URL + "/livez")
-		if err != nil {
-			t.Fatalf("Failed to get /livez: %v", err)
-		}
-		t.Cleanup(func() {
-			if err := resp.Body.Close(); err != nil {
-				t.Logf("failed to close body: %v", err)
-			}
-		})
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read body: %v", err)
-		}
-
-		if string(body) != "alive" {
-			t.Errorf("Expected body 'alive', got '%s'", string(body))
-		}
+		req := zhtest.NewRequest(http.MethodGet, "/livez").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("alive")
 
 		if !livenessHandlerCalled {
 			t.Error("Liveness handler was not called")
@@ -144,28 +86,9 @@ func TestCustomHandlers(t *testing.T) {
 	})
 
 	t.Run("readiness", func(t *testing.T) {
-		resp, err := http.Get(server.URL + "/readyz")
-		if err != nil {
-			t.Fatalf("Failed to get /readyz: %v", err)
-		}
-		t.Cleanup(func() {
-			if err := resp.Body.Close(); err != nil {
-				t.Logf("failed to close body: %v", err)
-			}
-		})
-
-		if resp.StatusCode != http.StatusServiceUnavailable {
-			t.Errorf("Expected status %d, got %d", http.StatusServiceUnavailable, resp.StatusCode)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read body: %v", err)
-		}
-
-		if string(body) != "not ready" {
-			t.Errorf("Expected body 'not ready', got '%s'", string(body))
-		}
+		req := zhtest.NewRequest(http.MethodGet, "/readyz").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable).Body("not ready")
 
 		if !readinessHandlerCalled {
 			t.Error("Readiness handler was not called")
@@ -173,28 +96,9 @@ func TestCustomHandlers(t *testing.T) {
 	})
 
 	t.Run("startup", func(t *testing.T) {
-		resp, err := http.Get(server.URL + "/startupz")
-		if err != nil {
-			t.Fatalf("Failed to get /startupz: %v", err)
-		}
-		t.Cleanup(func() {
-			if err := resp.Body.Close(); err != nil {
-				t.Logf("failed to close body: %v", err)
-			}
-		})
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read body: %v", err)
-		}
-
-		if string(body) != "started" {
-			t.Errorf("Expected body 'started', got '%s'", string(body))
-		}
+		req := zhtest.NewRequest(http.MethodGet, "/startupz").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("started")
 
 		if !startupHandlerCalled {
 			t.Error("Startup handler was not called")
@@ -219,57 +123,16 @@ func TestMixedOptions(t *testing.T) {
 		WithReadinessHandler(customHandler),
 	)
 
-	server := httptest.NewServer(app)
-	defer server.Close()
-
 	t.Run("custom endpoint", func(t *testing.T) {
-		resp, err := http.Get(server.URL + "/custom-livez")
-		if err != nil {
-			t.Fatalf("Failed to get /custom-livez: %v", err)
-		}
-		t.Cleanup(func() {
-			if err := resp.Body.Close(); err != nil {
-				t.Logf("failed to close body: %v", err)
-			}
-		})
-
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read body: %v", err)
-		}
-
-		if string(body) != "ok" {
-			t.Errorf("Expected body 'ok', got '%s'", string(body))
-		}
+		req := zhtest.NewRequest(http.MethodGet, "/custom-livez").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("ok")
 	})
 
 	t.Run("custom handler", func(t *testing.T) {
-		resp, err := http.Get(server.URL + "/readyz")
-		if err != nil {
-			t.Fatalf("Failed to get /readyz: %v", err)
-		}
-		t.Cleanup(func() {
-			if err := resp.Body.Close(); err != nil {
-				t.Logf("failed to close body: %v", err)
-			}
-		})
-
-		if resp.StatusCode != http.StatusTeapot {
-			t.Errorf("Expected status %d, got %d", http.StatusTeapot, resp.StatusCode)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("Failed to read body: %v", err)
-		}
-
-		if string(body) != "custom" {
-			t.Errorf("Expected body 'custom', got '%s'", string(body))
-		}
+		req := zhtest.NewRequest(http.MethodGet, "/readyz").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusTeapot).Body("custom")
 
 		if !customHandlerCalled {
 			t.Error("Custom handler was not called")

@@ -1,10 +1,13 @@
 package zerohttp
 
 const (
-	MIMETextHTML           = "text/html; charset=utf-8"
-	MIMETextPlain          = "text/plain; charset=utf-8"
-	MIMEApplicationJSON    = "application/json; charset=utf-8"
-	MIMEApplicationProblem = "application/problem+json"
+	MIMETextHTML                  = "text/html; charset=utf-8"
+	MIMETextPlain                 = "text/plain; charset=utf-8"
+	MIMETextEventStream           = "text/event-stream"
+	MIMEApplicationJSON           = "application/json; charset=utf-8"
+	MIMEApplicationProblem        = "application/problem+json"
+	MIMEApplicationFormURLEncoded = "application/x-www-form-urlencoded"
+	MIMEMultipartFormData         = "multipart/form-data"
 )
 
 // Request Headers
@@ -30,6 +33,7 @@ const (
 	HeaderIfNoneMatch       = "If-None-Match"
 	HeaderIfRange           = "If-Range"
 	HeaderIfUnmodifiedSince = "If-Unmodified-Since"
+	HeaderLastEventID       = "Last-Event-ID"
 	HeaderMaxForwards       = "Max-Forwards"
 	HeaderOrigin            = "Origin"
 	HeaderPragma            = "Pragma"

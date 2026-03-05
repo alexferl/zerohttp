@@ -52,7 +52,7 @@ func TestDefaultKeyExtractorFunction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("GET", "/test", nil)
+			req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 			req.RemoteAddr = tt.remoteAddr
 			if tt.xForwardedFor != "" {
 				req.Header.Set("X-Forwarded-For", tt.xForwardedFor)
@@ -111,7 +111,7 @@ func TestRateLimitOptions(t *testing.T) {
 			t.Error("expected key extractor to be set")
 		}
 
-		req, _ := http.NewRequest("GET", "/test", nil)
+		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		req.Header.Set("X-User-ID", "user123")
 		result := cfg.KeyExtractor(req)
 		if result != "user123" {
@@ -183,7 +183,7 @@ func TestRateLimitConfig_MultipleOptions(t *testing.T) {
 		t.Error("expected exempt paths to be set correctly")
 	}
 
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Authorization", "Bearer token123")
 	if cfg.KeyExtractor(req) != "Bearer token123" {
 		t.Error("expected custom key extractor to work")
@@ -214,7 +214,7 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("status code options", func(t *testing.T) {
-		testCases := []int{http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusForbidden, http.StatusBadRequest, 500, 0}
+		testCases := []int{http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusForbidden, http.StatusBadRequest, http.StatusInternalServerError, 0}
 		for _, statusCode := range testCases {
 			cfg := DefaultRateLimitConfig
 			WithRateLimitStatusCode(statusCode)(&cfg)
@@ -319,7 +319,7 @@ func TestRateLimitConfig_CustomKeyExtractors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := DefaultRateLimitConfig
 			WithRateLimitKeyExtractor(tt.extractor)(&cfg)
-			req, _ := http.NewRequest("GET", "/", nil)
+			req, _ := http.NewRequest(http.MethodGet, "/", nil)
 			tt.setupRequest(req)
 			result := cfg.KeyExtractor(req)
 			if result != tt.expectedKey {

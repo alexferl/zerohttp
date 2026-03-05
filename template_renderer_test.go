@@ -4,8 +4,9 @@ import (
 	"embed"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 //go:embed testdata/templates/*.html
@@ -29,15 +30,11 @@ func TestTemplateManager_Render(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-		if !strings.Contains(w.Body.String(), "Test Page") {
-			t.Errorf("expected body to contain 'Test Page', got %s", w.Body.String())
-		}
-		if w.Header().Get("Content-Type") != "text/html; charset=utf-8" {
-			t.Errorf("expected HTML content type, got %s", w.Header().Get("Content-Type"))
-		}
+
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			Header(HeaderContentType, "text/html; charset=utf-8").
+			BodyContains("Test Page")
 	})
 
 	t.Run("returns error for missing template", func(t *testing.T) {
@@ -57,8 +54,7 @@ func TestTemplateManager_Render(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if w.Code != http.StatusCreated {
-			t.Errorf("expected status 201, got %d", w.Code)
-		}
+
+		zhtest.AssertWith(t, w).Status(http.StatusCreated)
 	})
 }

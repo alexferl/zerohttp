@@ -3,13 +3,12 @@ package middleware
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 type mockLogger struct {
@@ -40,38 +39,28 @@ func panicHandler(panicValue any) http.Handler {
 func normalHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("OK")); err != nil {
-			panic(fmt.Errorf("failed to write test response: %w", err))
-		}
+		_, _ = w.Write([]byte("OK"))
 	})
 }
 
 func TestRecover_NoPanic(t *testing.T) {
 	logger := &mockLogger{}
 	handler := Recover(logger)(normalHandler())
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 0 {
 		t.Errorf("Expected no error logs, got %d", len(logger.errorLogs))
 	}
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
-	}
-	if w.Body.String() != "OK" {
-		t.Errorf("Expected body 'OK', got %s", w.Body.String())
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK).Body("OK")
 }
 
 func TestRecover_WithPanic(t *testing.T) {
 	logger := &mockLogger{}
 	panicMsg := "test panic"
 	handler := Recover(logger)(panicHandler(panicMsg))
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Request-Id", "test-req-123")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("X-Request-Id", "test-req-123").Build()
+	w := zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 1 {
 		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
@@ -79,9 +68,7 @@ func TestRecover_WithPanic(t *testing.T) {
 	if logger.errorLogs[0] != "Recovered from panic" {
 		t.Errorf("Expected message 'Recovered from panic', got %s", logger.errorLogs[0])
 	}
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, w.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 	fields := logger.errorFields[0]
 	foundPanic, foundRequestID, foundStack := false, false, false
 	for _, field := range fields {
@@ -114,26 +101,23 @@ func TestRecover_WithPanic(t *testing.T) {
 func TestRecover_HTTPAbortHandler(t *testing.T) {
 	logger := &mockLogger{}
 	handler := Recover(logger)(panicHandler(http.ErrAbortHandler))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	defer func() {
 		if r := recover(); r != http.ErrAbortHandler {
 			t.Errorf("Expected http.ErrAbortHandler to be re-panicked, got %v", r)
 		}
 	}()
-	handler.ServeHTTP(w, req)
+	zhtest.Serve(handler, req)
 	t.Error("Expected panic to be re-raised")
 }
 
 func TestRecover_UpgradeConnection(t *testing.T) {
 	logger := &mockLogger{}
 	handler := Recover(logger)(panicHandler("websocket panic"))
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Connection", "Upgrade")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("Connection", "Upgrade").Build()
+	w := zhtest.Serve(handler, req)
 
-	if w.Code != 200 {
+	if w.Code != http.StatusOK {
 		t.Errorf("Expected no status code change for upgrade connection, got %d", w.Code)
 	}
 	if len(logger.errorLogs) != 1 {
@@ -147,9 +131,8 @@ func TestRecover_CustomConfig(t *testing.T) {
 		config.WithRecoverStackSize(1024),
 		config.WithRecoverEnableStackTrace(true),
 	)(panicHandler("custom config panic"))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 1 {
 		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
@@ -174,9 +157,8 @@ func TestRecover_DisabledStackTrace(t *testing.T) {
 		config.WithRecoverStackSize(4096),
 		config.WithRecoverEnableStackTrace(false),
 	)(panicHandler("no stack panic"))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 1 {
 		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
@@ -195,9 +177,8 @@ func TestRecover_InvalidStackSize(t *testing.T) {
 		config.WithRecoverStackSize(0),
 		config.WithRecoverEnableStackTrace(true),
 	)(panicHandler("invalid stack size"))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 1 {
 		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
@@ -220,9 +201,8 @@ func TestRecover_ErrorValue(t *testing.T) {
 	logger := &mockLogger{}
 	testError := errors.New("test error panic")
 	handler := Recover(logger)(panicHandler(testError))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 1 {
 		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
@@ -243,9 +223,8 @@ func TestRecover_StringPanic(t *testing.T) {
 	logger := &mockLogger{}
 	panicMsg := "string panic message"
 	handler := Recover(logger)(panicHandler(panicMsg))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 1 {
 		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
@@ -279,9 +258,8 @@ func TestRecover_MultipleOptions(t *testing.T) {
 		config.WithRecoverStackSize(1024),
 		config.WithRecoverEnableStackTrace(true),
 	)(panicHandler("multiple options"))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(handler, req)
 
 	if len(logger.errorLogs) != 1 {
 		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
@@ -302,9 +280,8 @@ func TestRecover_PanicFieldLogging(t *testing.T) {
 	logger := &mockLogger{}
 	panicValue := "test panic for field check"
 	handler := Recover(logger)(panicHandler(panicValue))
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	zhtest.Serve(handler, req)
 
 	if len(logger.errorFields) == 0 {
 		t.Fatal("Expected error fields to be captured")

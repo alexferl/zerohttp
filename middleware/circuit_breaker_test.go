@@ -1,14 +1,13 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 type circuitTestHandler struct {
@@ -28,9 +27,7 @@ func (h *circuitTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.statusCode > 0 {
 		w.WriteHeader(h.statusCode)
 	}
-	if _, err := w.Write([]byte("response")); err != nil {
-		panic(fmt.Errorf("failed to write test response: %w", err))
-	}
+	_, _ = w.Write([]byte("response"))
 }
 
 func (h *circuitTestHandler) getCallCount() int {
@@ -46,26 +43,19 @@ func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 		config.WithCircuitBreakerRecoveryTimeout(100*time.Millisecond),
 	)(handler)
 
-	for i := range 3 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+	for range 3 {
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		w := zhtest.Serve(middleware, req)
 
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("Request %d: Expected status %d, got %d", i+1, http.StatusInternalServerError, w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 	}
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("Expected circuit open status %d, got %d", http.StatusServiceUnavailable, w.Code)
-	}
-	if w.Body.String() != "Service temporarily unavailable" {
-		t.Errorf("Expected circuit open message, got '%s'", w.Body.String())
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusServiceUnavailable).
+		Body("Service temporarily unavailable")
 	if handler.getCallCount() != 3 {
 		t.Errorf("Expected handler to be called 3 times, got %d", handler.getCallCount())
 	}
@@ -80,37 +70,27 @@ func TestCircuitBreaker_RecoveryTimeout(t *testing.T) {
 	)(handler)
 
 	for range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
 	}
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Error("Expected circuit to be open")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable)
 
 	time.Sleep(60 * time.Millisecond)
 	handler.statusCode = http.StatusOK
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected successful request after recovery, got %d", w.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected circuit to be closed, got %d", w.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 }
 
 func TestCircuitBreaker_HalfOpenSuccessThreshold(t *testing.T) {
@@ -122,40 +102,30 @@ func TestCircuitBreaker_HalfOpenSuccessThreshold(t *testing.T) {
 	)(handler)
 
 	for range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
 	}
 
 	time.Sleep(60 * time.Millisecond)
 	handler.statusCode = http.StatusOK
 
-	for i := range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+	for range 2 {
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		w := zhtest.Serve(middleware, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Request %d: Expected success in half-open, got %d", i+1, w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	}
 
 	handler.statusCode = http.StatusInternalServerError
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Error("Expected failure to reopen circuit")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Error("Expected circuit to be open again")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable)
 }
 
 func TestCircuitBreaker_CustomIsFailure(t *testing.T) {
@@ -163,27 +133,21 @@ func TestCircuitBreaker_CustomIsFailure(t *testing.T) {
 	middleware := CircuitBreaker(
 		config.WithCircuitBreakerFailureThreshold(2),
 		config.WithCircuitBreakerIsFailure(func(r *http.Request, statusCode int) bool {
-			return statusCode >= 400
+			return statusCode >= http.StatusBadRequest
 		}),
 	)(handler)
 
 	for range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		w := zhtest.Serve(middleware, req)
 
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusBadRequest)
 	}
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Error("Expected circuit to be open with custom failure function")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable)
 }
 
 func TestCircuitBreaker_CustomKeyExtractor(t *testing.T) {
@@ -196,29 +160,19 @@ func TestCircuitBreaker_CustomKeyExtractor(t *testing.T) {
 	)(handler)
 
 	for range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("X-Service-Key", "service-a")
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Service-Key", "service-a").Build()
+		zhtest.Serve(middleware, req)
 	}
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Service-Key", "service-a")
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Service-Key", "service-a").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Error("Expected service-a circuit to be open")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable)
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Service-Key", "service-b")
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req = zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Service-Key", "service-b").Build()
+	w = zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Error("Expected service-b to still process requests")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 }
 
 func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
@@ -230,21 +184,16 @@ func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
 	)(handler)
 
 	for range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
 	}
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusTooManyRequests {
-		t.Errorf("Expected custom status %d, got %d", http.StatusTooManyRequests, w.Code)
-	}
-	if w.Body.String() != "Circuit breaker active" {
-		t.Errorf("Expected custom message 'Circuit breaker active', got '%s'", w.Body.String())
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusTooManyRequests).
+		Body("Circuit breaker active")
 }
 
 func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {
@@ -260,18 +209,14 @@ func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {
 	)(handler)
 
 	for range 5 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
 	}
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Error("Expected circuit to use default configuration")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable)
 }
 
 func TestCircuitBreaker_ConcurrentRequests(t *testing.T) {
@@ -286,9 +231,8 @@ func TestCircuitBreaker_ConcurrentRequests(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			req := httptest.NewRequest("GET", "/test", nil)
-			w := httptest.NewRecorder()
-			middleware.ServeHTTP(w, req)
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+			w := zhtest.Serve(middleware, req)
 			mu.Lock()
 			if w.Code == http.StatusOK {
 				successCount++
@@ -308,26 +252,19 @@ func TestCircuitBreaker_MultipleEndpoints(t *testing.T) {
 	middleware := CircuitBreaker()(handler)
 
 	for range 5 {
-		req := httptest.NewRequest("GET", "/api/users", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
+		zhtest.Serve(middleware, req)
 	}
 
-	req := httptest.NewRequest("GET", "/api/users", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Error("Expected /api/users circuit to be open")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable)
 
-	req = httptest.NewRequest("GET", "/api/posts", nil)
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req = zhtest.NewRequest(http.MethodGet, "/api/posts").Build()
+	w = zhtest.Serve(middleware, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Error("Expected /api/posts to still process requests")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 }
 
 func TestCircuitBreaker_StateTransitions(t *testing.T) {
@@ -338,42 +275,31 @@ func TestCircuitBreaker_StateTransitions(t *testing.T) {
 		config.WithCircuitBreakerSuccessThreshold(2),
 	)(handler)
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Error("Expected request to go through in closed state")
-	}
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
+	zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	zhtest.Serve(middleware, req)
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
-	if w.Code != http.StatusServiceUnavailable {
-		t.Error("Expected circuit to be open")
-	}
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(middleware, req)
+	zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable)
 
 	time.Sleep(60 * time.Millisecond)
 	handler.statusCode = http.StatusOK
 
 	for i := range 2 {
-		req = httptest.NewRequest("GET", "/test", nil)
-		w = httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+		w = zhtest.Serve(middleware, req)
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected success in half-open state, iteration %d", i)
 		}
 	}
 
-	req = httptest.NewRequest("GET", "/test", nil)
-	w = httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Error("Expected circuit to be closed after successful recovery")
-	}
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(middleware, req)
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 }
 
 func TestCircuitBreaker_ResponseWriter(t *testing.T) {
@@ -387,10 +313,7 @@ func TestCircuitBreaker_ResponseWriter(t *testing.T) {
 			name: "explicit status code",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte("created"))
-				if err != nil {
-					t.Fatalf("failed to write response: %v", err)
-				}
+				_, _ = w.Write([]byte("created"))
 			}),
 			expectedStatus: http.StatusCreated,
 			expectedBody:   "created",
@@ -398,10 +321,7 @@ func TestCircuitBreaker_ResponseWriter(t *testing.T) {
 		{
 			name: "default status code",
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, err := w.Write([]byte("default status"))
-				if err != nil {
-					t.Fatalf("failed to write response: %v", err)
-				}
+				_, _ = w.Write([]byte("default status"))
 			}),
 			expectedStatus: http.StatusOK,
 			expectedBody:   "default status",
@@ -411,17 +331,10 @@ func TestCircuitBreaker_ResponseWriter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			middleware := CircuitBreaker()(tt.handler)
-			req := httptest.NewRequest("GET", "/test", nil)
-			w := httptest.NewRecorder()
-			middleware.ServeHTTP(w, req)
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+			w := zhtest.Serve(middleware, req)
 
-			if w.Code != tt.expectedStatus {
-				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
-			}
-
-			if w.Body.String() != tt.expectedBody {
-				t.Errorf("Expected body '%s', got '%s'", tt.expectedBody, w.Body.String())
-			}
+			zhtest.AssertWith(t, w).Status(tt.expectedStatus).Body(tt.expectedBody)
 		})
 	}
 }
@@ -434,14 +347,12 @@ func TestCircuitBreaker_MultipleOptions(t *testing.T) {
 	)(handler)
 
 	for range 2 {
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
 	}
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(middleware, req)
 
 	if w.Code == http.StatusServiceUnavailable {
 		t.Error("Expected circuit to use last option's threshold (not be open yet)")
@@ -457,29 +368,23 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 			}),
 		)(handler)
 
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		w := zhtest.Serve(middleware, req)
 
-		if w.Code != http.StatusOK {
-			t.Error("Expected request to work with empty key")
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 
 	t.Run("nil request to IsFailure", func(t *testing.T) {
 		handler := &circuitTestHandler{statusCode: http.StatusOK}
 		middleware := CircuitBreaker(
 			config.WithCircuitBreakerIsFailure(func(r *http.Request, statusCode int) bool {
-				return statusCode >= 500
+				return statusCode >= http.StatusInternalServerError
 			}),
 		)(handler)
 
-		req := httptest.NewRequest("GET", "/test", nil)
-		w := httptest.NewRecorder()
-		middleware.ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		w := zhtest.Serve(middleware, req)
 
-		if w.Code != http.StatusOK {
-			t.Error("Expected request to work")
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 }

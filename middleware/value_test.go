@@ -2,8 +2,9 @@ package middleware
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestWithValue(t *testing.T) {
@@ -22,18 +23,14 @@ func TestWithValue(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(handler, req)
 
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Result().StatusCode; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 }
 
 func TestGetContextValue_Found(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
 	// Set values using WithValue middleware
 	handler := WithValue("stringKey", "hello")(
@@ -60,11 +57,11 @@ func TestGetContextValue_Found(t *testing.T) {
 		),
 	)
 
-	handler.ServeHTTP(httptest.NewRecorder(), req)
+	zhtest.Serve(handler, req)
 }
 
 func TestGetContextValue_NotFound(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
 	// Try to get a value that does not exist
 	got, ok := GetContextValue[string](req, "missingKey")
@@ -78,7 +75,7 @@ func TestGetContextValue_NotFound(t *testing.T) {
 }
 
 func TestGetContextValue_WrongType(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
 	handler := WithValue("key", "stringValue")(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -93,11 +90,11 @@ func TestGetContextValue_WrongType(t *testing.T) {
 		}),
 	)
 
-	handler.ServeHTTP(httptest.NewRecorder(), req)
+	zhtest.Serve(handler, req)
 }
 
 func TestGetContextValue_NilValue(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
 	handler := WithValue("key", nil)(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,5 +109,5 @@ func TestGetContextValue_NilValue(t *testing.T) {
 		}),
 	)
 
-	handler.ServeHTTP(httptest.NewRecorder(), req)
+	zhtest.Serve(handler, req)
 }

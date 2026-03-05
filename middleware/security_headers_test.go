@@ -3,15 +3,11 @@ package middleware
 import (
 	"crypto/tls"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
-
-func mustGetHeader(h http.Header, name string) string {
-	return h.Get(name)
-}
 
 func TestSecurityHeaders_CustomConfig(t *testing.T) {
 	type headerTest struct {
@@ -79,28 +75,18 @@ func TestSecurityHeaders_CustomConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			rec := httptest.NewRecorder()
+			req := zhtest.NewRequest(http.MethodGet, "/").Build()
 			tt.prepReq(req)
-			tt.middleware(handler).ServeHTTP(rec, req)
+			w := zhtest.TestMiddlewareWithHandler(tt.middleware, handler, req)
 
+			zhtest.AssertWith(t, w).Status(http.StatusOK)
 			if tt.header != "" {
-				got := mustGetHeader(rec.Header(), tt.header)
-				if got != tt.expected {
-					t.Errorf("%s: got %q, want %q", tt.header, got, tt.expected)
-				}
+				zhtest.AssertWith(t, w).Header(tt.header, tt.expected)
 			} else {
-				expectedHeaders := map[string]string{
-					"Cross-Origin-Embedder-Policy": "unsafe-none",
-					"Cross-Origin-Opener-Policy":   "unsafe-none",
-					"Cross-Origin-Resource-Policy": "cross-origin",
-				}
-				for header, expected := range expectedHeaders {
-					got := mustGetHeader(rec.Header(), header)
-					if got != expected {
-						t.Errorf("%s: got %q, want %q", header, got, expected)
-					}
-				}
+				zhtest.AssertWith(t, w).
+					Header("Cross-Origin-Embedder-Policy", "unsafe-none").
+					Header("Cross-Origin-Opener-Policy", "unsafe-none").
+					Header("Cross-Origin-Resource-Policy", "cross-origin")
 			}
 		})
 	}
@@ -110,89 +96,77 @@ func TestSecurityHeaders_HSTSWithNestedOptions(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	middleware := SecurityHeaders(
-		config.WithSecurityHeadersHSTS(
-			config.WithHSTSMaxAge(31536000),
-			config.WithHSTSPreload(true),
-		),
-	)(handler)
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	req.TLS = &tls.ConnectionState{}
-	rec := httptest.NewRecorder()
-	middleware.ServeHTTP(rec, req)
+	w := zhtest.TestMiddlewareWithHandler(
+		SecurityHeaders(
+			config.WithSecurityHeadersHSTS(
+				config.WithHSTSMaxAge(31536000),
+				config.WithHSTSPreload(true),
+			),
+		),
+		handler,
+		req,
+	)
 
-	got := mustGetHeader(rec.Header(), "Strict-Transport-Security")
-	want := "max-age=31536000; includeSubDomains; preload"
-	if got != want {
-		t.Errorf("Strict-Transport-Security: got %q, want %q", got, want)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 }
 
 func TestSecurityHeaders_ExemptPaths(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	middleware := SecurityHeaders(
-		config.WithSecurityHeadersCSP("default-src 'self'"),
-		config.WithSecurityHeadersExemptPaths([]string{"/skipme"}),
-	)(handler)
+	req := zhtest.NewRequest(http.MethodGet, "/skipme").Build()
+	w := zhtest.TestMiddlewareWithHandler(
+		SecurityHeaders(
+			config.WithSecurityHeadersCSP("default-src 'self'"),
+			config.WithSecurityHeadersExemptPaths([]string{"/skipme"}),
+		),
+		handler,
+		req,
+	)
 
-	req := httptest.NewRequest(http.MethodGet, "/skipme", nil)
-	rec := httptest.NewRecorder()
-	middleware.ServeHTTP(rec, req)
-
-	if rec.Header().Get("Content-Security-Policy") != "" {
-		t.Errorf("CSP should not be set for exempt path '/skipme'")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).HeaderNotExists("Content-Security-Policy")
 }
 
 func TestSecurityHeaders_DefaultValuesFill(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	middleware := SecurityHeaders()(handler)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.TestMiddleware(SecurityHeaders(), req)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	middleware.ServeHTTP(rec, req)
-
-	keys := []string{
-		"Content-Security-Policy", "Cross-Origin-Embedder-Policy", "Cross-Origin-Opener-Policy",
-		"Cross-Origin-Resource-Policy", "Permissions-Policy", "Referrer-Policy",
-		"X-Content-Type-Options", "X-Frame-Options",
-	}
-	for _, key := range keys {
-		if rec.Header().Get(key) == "" {
-			t.Errorf("Header %s should have default value", key)
-		}
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).
+		HeaderExists("Content-Security-Policy").
+		HeaderExists("Cross-Origin-Embedder-Policy").
+		HeaderExists("Cross-Origin-Opener-Policy").
+		HeaderExists("Cross-Origin-Resource-Policy").
+		HeaderExists("Permissions-Policy").
+		HeaderExists("Referrer-Policy").
+		HeaderExists("X-Content-Type-Options").
+		HeaderExists("X-Frame-Options")
 }
 
 func TestSecurityHeaders_EmptyServerHidesHeader(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	middleware := SecurityHeaders(config.WithSecurityHeadersServer(""))(handler)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.TestMiddleware(
+		SecurityHeaders(config.WithSecurityHeadersServer("")),
+		req,
+	)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	middleware.ServeHTTP(rec, req)
-
-	if rec.Header().Get("Server") != "" {
-		t.Errorf("Server should not be set when config.Server is empty, got %q", rec.Header().Get("Server"))
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).HeaderNotExists("Server")
 }
 
 func TestSecurityHeaders_ContentSecurityPolicyNotSet(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	middleware := SecurityHeaders(config.WithSecurityHeadersCSP(""))(handler)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.TestMiddleware(
+		SecurityHeaders(config.WithSecurityHeadersCSP("")),
+		req,
+	)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	middleware.ServeHTTP(rec, req)
-
-	got := mustGetHeader(rec.Header(), "Content-Security-Policy")
-	want := config.DefaultSecurityHeadersConfig.ContentSecurityPolicy
-	if got != want {
-		t.Errorf("If config is empty, should use default CSP: got %q, want %q", got, want)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).Header("Content-Security-Policy", config.DefaultSecurityHeadersConfig.ContentSecurityPolicy)
 }
 
 func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
@@ -271,16 +245,11 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-			mw := tt.option(handler)
-			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			rec := httptest.NewRecorder()
-			mw.ServeHTTP(rec, req)
+			req := zhtest.NewRequest(http.MethodGet, "/").Build()
+			w := zhtest.TestMiddlewareWithHandler(tt.option, handler, req)
 
-			want := tt.expected
-			got := rec.Header().Get(tt.header)
-			if got != want {
-				t.Errorf("%s: got %q, want %q", tt.header, got, want)
-			}
+			zhtest.AssertWith(t, w).Status(http.StatusOK)
+			zhtest.AssertWith(t, w).Header(tt.header, tt.expected)
 		})
 	}
 }

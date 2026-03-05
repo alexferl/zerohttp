@@ -1,7 +1,6 @@
 package zerohttp
 
 import (
-	"bytes"
 	"errors"
 	"html/template"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRenderer_JSON(t *testing.T) {
@@ -19,13 +20,13 @@ func TestRenderer_JSON(t *testing.T) {
 		data       any
 		expected   string
 	}{
-		{"simple object", 200, M{"message": "hello"}, `{"message":"hello"}`},
-		{"array", 201, []string{"a", "b"}, `["a","b"]`},
-		{"string", 202, "test", `"test"`},
-		{"number", 200, 42, `42`},
-		{"boolean", 200, true, `true`},
-		{"null", 200, nil, `null`},
-		{"empty M", 200, M{}, `{}`},
+		{"simple object", http.StatusOK, M{"message": "hello"}, `{"message":"hello"}`},
+		{"array", http.StatusCreated, []string{"a", "b"}, `["a","b"]`},
+		{"string", http.StatusAccepted, "test", `"test"`},
+		{"number", http.StatusOK, 42, `42`},
+		{"boolean", http.StatusOK, true, `true`},
+		{"null", http.StatusOK, nil, `null`},
+		{"empty M", http.StatusOK, M{}, `{}`},
 	}
 
 	for _, tt := range tests {
@@ -36,18 +37,10 @@ func TestRenderer_JSON(t *testing.T) {
 				t.Fatalf("expected no error, got %v", err)
 			}
 
-			if w.Code != tt.statusCode {
-				t.Errorf("expected status %d, got %d", tt.statusCode, w.Code)
-			}
-
-			if ct := w.Header().Get(HeaderContentType); ct != MIMEApplicationJSON {
-				t.Errorf("expected Content-Type %s, got %s", MIMEApplicationJSON, ct)
-			}
-
-			body := strings.TrimSpace(w.Body.String())
-			if body != tt.expected {
-				t.Errorf("expected body %s, got %s", tt.expected, body)
-			}
+			zhtest.AssertWith(t, w).
+				Status(tt.statusCode).
+				Header(HeaderContentType, MIMEApplicationJSON).
+				JSONEq(tt.expected)
 		})
 	}
 }
@@ -56,13 +49,13 @@ func TestRenderer_JSON_Error(t *testing.T) {
 	w := httptest.NewRecorder()
 	invalidData := map[string]any{"func": func() {}}
 
-	err := R.JSON(w, 200, invalidData)
+	err := R.JSON(w, http.StatusOK, invalidData)
 	if err == nil {
 		t.Error("expected error for invalid data")
 	}
 
-	if w.Code != 200 {
-		t.Errorf("expected status 200 even on error, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status http.StatusOK even on error, got %d", w.Code)
 	}
 }
 
@@ -81,17 +74,13 @@ func TestRenderer_Text(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 
-			if err := R.Text(w, 200, tt.data); err != nil {
+			if err := R.Text(w, http.StatusOK, tt.data); err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}
 
-			if ct := w.Header().Get(HeaderContentType); ct != MIMETextPlain {
-				t.Errorf("expected Content-Type %s, got %s", MIMETextPlain, ct)
-			}
-
-			if body := w.Body.String(); body != tt.data {
-				t.Errorf("expected body %s, got %s", tt.data, body)
-			}
+			zhtest.AssertWith(t, w).
+				Header(HeaderContentType, MIMETextPlain).
+				Body(tt.data)
 		})
 	}
 }
@@ -100,17 +89,13 @@ func TestRenderer_HTML(t *testing.T) {
 	w := httptest.NewRecorder()
 	html := "<h1>Test</h1>"
 
-	if err := R.HTML(w, 200, html); err != nil {
+	if err := R.HTML(w, http.StatusOK, html); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if ct := w.Header().Get(HeaderContentType); ct != MIMETextHTML {
-		t.Errorf("expected Content-Type %s, got %s", MIMETextHTML, ct)
-	}
-
-	if body := w.Body.String(); body != html {
-		t.Errorf("expected body %s, got %s", html, body)
-	}
+	zhtest.AssertWith(t, w).
+		Header(HeaderContentType, MIMETextHTML).
+		Body(html)
 }
 
 func TestRenderer_Template(t *testing.T) {
@@ -126,21 +111,10 @@ func TestRenderer_Template(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-
-		if ct := w.Header().Get(HeaderContentType); ct != MIMETextHTML {
-			t.Errorf("expected Content-Type %s, got %s", MIMETextHTML, ct)
-		}
-
-		body := w.Body.String()
-		if !strings.Contains(body, "Test Page") {
-			t.Errorf("expected body to contain 'Test Page', got %s", body)
-		}
-		if !strings.Contains(body, "<title>Test Page</title>") {
-			t.Errorf("expected body to contain title tag, got %s", body)
-		}
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			Header(HeaderContentType, MIMETextHTML).
+			BodyContains("<title>Test Page</title>")
 	})
 
 	t.Run("returns error for missing template", func(t *testing.T) {
@@ -161,9 +135,7 @@ func TestRenderer_Template(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if w.Code != http.StatusCreated {
-			t.Errorf("expected status 201, got %d", w.Code)
-		}
+		zhtest.AssertWith(t, w).Status(http.StatusCreated)
 	})
 
 	t.Run("handles nil data", func(t *testing.T) {
@@ -174,10 +146,7 @@ func TestRenderer_Template(t *testing.T) {
 			t.Fatalf("expected no error with nil data, got %v", err)
 		}
 
-		body := w.Body.String()
-		if !strings.Contains(body, "<html>") {
-			t.Errorf("expected valid HTML structure, got %s", body)
-		}
+		zhtest.AssertWith(t, w).BodyContains("<html>")
 	})
 }
 
@@ -185,37 +154,31 @@ func TestRenderer_Blob(t *testing.T) {
 	data := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header
 	w := httptest.NewRecorder()
 
-	if err := R.Blob(w, 200, "image/png", data); err != nil {
+	if err := R.Blob(w, http.StatusOK, "image/png", data); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if ct := w.Header().Get(HeaderContentType); ct != "image/png" {
-		t.Errorf("expected Content-Type image/png, got %s", ct)
-	}
-
-	if !bytes.Equal(w.Body.Bytes(), data) {
-		t.Error("expected body to match data")
-	}
+	zhtest.AssertWith(t, w).
+		Header(HeaderContentType, "image/png").
+		Body(string(data))
 }
 
 func TestRenderer_Stream(t *testing.T) {
 	data := "streaming content"
 	w := httptest.NewRecorder()
 
-	if err := R.Stream(w, 200, "text/plain", strings.NewReader(data)); err != nil {
+	if err := R.Stream(w, http.StatusOK, "text/plain", strings.NewReader(data)); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if body := w.Body.String(); body != data {
-		t.Errorf("expected body %s, got %s", data, body)
-	}
+	zhtest.AssertWith(t, w).Body(data)
 }
 
 func TestRenderer_Stream_Error(t *testing.T) {
 	w := httptest.NewRecorder()
 	errorReader := &errorReader{err: errors.New("read error")}
 
-	err := R.Stream(w, 200, "text/plain", errorReader)
+	err := R.Stream(w, http.StatusOK, "text/plain", errorReader)
 	if err == nil {
 		t.Error("expected error from reader")
 	}
@@ -247,30 +210,23 @@ func TestRenderer_File(t *testing.T) {
 			}
 
 			w := httptest.NewRecorder()
-			r := httptest.NewRequest("GET", "/test", nil)
+			r := httptest.NewRequest(http.MethodGet, "/test", nil)
 
 			if err := R.File(w, r, filePath); err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}
 
-			if w.Code != 200 {
-				t.Errorf("expected status 200, got %d", w.Code)
-			}
-
-			if ct := w.Header().Get(HeaderContentType); ct != tt.contentType {
-				t.Errorf("expected Content-Type %s, got %s", tt.contentType, ct)
-			}
-
-			if body := w.Body.String(); body != tt.content {
-				t.Errorf("expected body %s, got %s", tt.content, body)
-			}
+			zhtest.AssertWith(t, w).
+				Status(http.StatusOK).
+				Header(HeaderContentType, tt.contentType).
+				Body(tt.content)
 		})
 	}
 }
 
 func TestRenderer_File_NonExistent(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/test", nil)
+	r := httptest.NewRequest(http.MethodGet, "/test", nil)
 
 	err := R.File(w, r, "/nonexistent.txt")
 	if err == nil {
@@ -292,20 +248,16 @@ func TestRenderer_File_Range(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/test", nil)
+	r := httptest.NewRequest(http.MethodGet, "/test", nil)
 	r.Header.Set(HeaderRange, "bytes=5-10")
 
 	if err := R.File(w, r, filePath); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if w.Code != http.StatusPartialContent {
-		t.Errorf("expected status 206, got %d", w.Code)
-	}
-
-	if body := w.Body.String(); body != "56789A" {
-		t.Errorf("expected range body 56789A, got %s", body)
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusPartialContent).
+		Body("56789A")
 }
 
 func TestRenderer_NoContent(t *testing.T) {
@@ -315,18 +267,10 @@ func TestRenderer_NoContent(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected status %d, got %d", http.StatusNoContent, w.Code)
-	}
-
-	if body := w.Body.String(); body != "" {
-		t.Errorf("expected empty body, got %s", body)
-	}
-
-	// 204 responses should not have Content-Type or Content-Length headers
-	if ct := w.Header().Get(HeaderContentType); ct != "" {
-		t.Errorf("expected no Content-Type header, got %s", ct)
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNoContent).
+		BodyEmpty().
+		HeaderNotExists(HeaderContentType)
 }
 
 func TestRenderer_NotModified(t *testing.T) {
@@ -336,18 +280,10 @@ func TestRenderer_NotModified(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if w.Code != http.StatusNotModified {
-		t.Errorf("expected status %d, got %d", http.StatusNotModified, w.Code)
-	}
-
-	if body := w.Body.String(); body != "" {
-		t.Errorf("expected empty body, got %s", body)
-	}
-
-	// 304 responses should not have Content-Type or Content-Length headers
-	if ct := w.Header().Get(HeaderContentType); ct != "" {
-		t.Errorf("expected no Content-Type header, got %s", ct)
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotModified).
+		BodyEmpty().
+		HeaderNotExists(HeaderContentType)
 }
 
 func TestRenderer_Redirect(t *testing.T) {
@@ -372,22 +308,10 @@ func TestRenderer_Redirect(t *testing.T) {
 				t.Fatalf("expected no error, got %v", err)
 			}
 
-			if w.Code != tt.statusCode {
-				t.Errorf("expected status %d, got %d", tt.statusCode, w.Code)
-			}
-
-			if location := w.Header().Get("Location"); location != tt.url {
-				t.Errorf("expected Location header %s, got %s", tt.url, location)
-			}
-
-			body := w.Body.String()
-			if body == "" {
-				t.Error("expected redirect to have body content")
-			}
-
-			if !strings.Contains(body, tt.url) {
-				t.Errorf("expected body to contain redirect URL %s, got %s", tt.url, body)
-			}
+			zhtest.AssertWith(t, w).
+				Status(tt.statusCode).
+				Header(HeaderLocation, tt.url).
+				BodyContains(tt.url)
 		})
 	}
 }
@@ -402,9 +326,7 @@ func TestRenderer_Redirect_AbsoluteURL(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if location := w.Header().Get("Location"); location != absoluteURL {
-		t.Errorf("expected Location header %s, got %s", absoluteURL, location)
-	}
+	zhtest.AssertWith(t, w).Header(HeaderLocation, absoluteURL)
 }
 
 func TestRenderer_Redirect_WithQuery(t *testing.T) {
@@ -417,7 +339,5 @@ func TestRenderer_Redirect_WithQuery(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if location := w.Header().Get("Location"); location != redirectURL {
-		t.Errorf("expected Location header %s, got %s", redirectURL, location)
-	}
+	zhtest.AssertWith(t, w).Header(HeaderLocation, redirectURL)
 }
