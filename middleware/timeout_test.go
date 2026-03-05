@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestTimeout_Scenarios(t *testing.T) {
@@ -20,10 +21,10 @@ func TestTimeout_Scenarios(t *testing.T) {
 		wantStatus int
 		wantBody   string
 	}{
-		{"success", 10 * time.Millisecond, 50 * time.Millisecond, 0, "", 200, "ok"},
-		{"timeout", 100 * time.Millisecond, 50 * time.Millisecond, 0, "timeout", 504, "timeout"},
-		{"custom status", 100 * time.Millisecond, 50 * time.Millisecond, 408, "custom", 408, "custom"},
-		{"empty message", 100 * time.Millisecond, 50 * time.Millisecond, 0, "", 504, ""},
+		{"success", 10 * time.Millisecond, 50 * time.Millisecond, 0, "", http.StatusOK, "ok"},
+		{"timeout", 100 * time.Millisecond, 50 * time.Millisecond, 0, "timeout", http.StatusGatewayTimeout, "timeout"},
+		{"custom status", 100 * time.Millisecond, 50 * time.Millisecond, http.StatusRequestTimeout, "custom", http.StatusRequestTimeout, "custom"},
+		{"empty message", 100 * time.Millisecond, 50 * time.Millisecond, 0, "", http.StatusGatewayTimeout, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -32,11 +33,8 @@ func TestTimeout_Scenarios(t *testing.T) {
 				case <-r.Context().Done():
 					return
 				case <-time.After(tt.delay):
-					w.WriteHeader(200)
-					_, err := w.Write([]byte("ok"))
-					if err != nil {
-						t.Fatalf("write failed: %v", err)
-					}
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte("ok"))
 				}
 			})
 
@@ -49,16 +47,10 @@ func TestTimeout_Scenarios(t *testing.T) {
 			}
 			middleware := Timeout(opts...)(handler)
 
-			w := httptest.NewRecorder()
-			r := httptest.NewRequest("GET", "/", nil)
-			middleware.ServeHTTP(w, r)
+			req := zhtest.NewRequest(http.MethodGet, "/").Build()
+			w := zhtest.Serve(middleware, req)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d", w.Code, tt.wantStatus)
-			}
-			if w.Body.String() != tt.wantBody {
-				t.Errorf("body = %q, want %q", w.Body.String(), tt.wantBody)
-			}
+			zhtest.AssertWith(t, w).Status(tt.wantStatus).Body(tt.wantBody)
 		})
 	}
 }
@@ -75,9 +67,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 			[]config.TimeoutOption{config.WithTimeoutDuration(0)},
 			10 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
-				if w.Code != 200 {
-					t.Errorf("expected success with default timeout, got %d", w.Code)
-				}
+				zhtest.AssertWith(t, w).Status(http.StatusOK)
 			},
 		},
 		{
@@ -85,9 +75,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 			[]config.TimeoutOption{config.WithTimeoutDuration(50 * time.Millisecond), config.WithTimeoutStatusCode(0)},
 			100 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
-				if w.Code != http.StatusGatewayTimeout {
-					t.Errorf("expected default status 504, got %d", w.Code)
-				}
+				zhtest.AssertWith(t, w).Status(http.StatusGatewayTimeout)
 			},
 		},
 		{
@@ -95,9 +83,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 			[]config.TimeoutOption{config.WithTimeoutDuration(50 * time.Millisecond), config.WithTimeoutExemptPaths(nil)},
 			100 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
-				if w.Code != http.StatusGatewayTimeout {
-					t.Errorf("expected timeout with nil exempt paths, got %d", w.Code)
-				}
+				zhtest.AssertWith(t, w).Status(http.StatusGatewayTimeout)
 			},
 		},
 	}
@@ -108,17 +94,13 @@ func TestTimeout_DefaultValues(t *testing.T) {
 				case <-r.Context().Done():
 					return
 				case <-time.After(tt.delay):
-					_, err := w.Write([]byte("ok"))
-					if err != nil {
-						t.Fatalf("write failed: %v", err)
-					}
+					_, _ = w.Write([]byte("ok"))
 				}
 			})
 			middleware := Timeout(tt.opts...)(handler)
 
-			w := httptest.NewRecorder()
-			r := httptest.NewRequest("GET", "/", nil)
-			middleware.ServeHTTP(w, r)
+			req := zhtest.NewRequest(http.MethodGet, "/").Build()
+			w := zhtest.Serve(middleware, req)
 
 			tt.expect(t, w)
 		})
@@ -128,71 +110,44 @@ func TestTimeout_DefaultValues(t *testing.T) {
 func TestTimeout_AllDefaults(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(10 * time.Millisecond)
-		_, err := w.Write([]byte("success"))
-		if err != nil {
-			t.Fatalf("write failed: %v", err)
-		}
+		_, _ = w.Write([]byte("success"))
 	})
 	middleware := Timeout()(handler)
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(middleware, req)
 
-	middleware.ServeHTTP(w, r)
-	if w.Code != 200 {
-		t.Errorf("expected success with all defaults, got %d", w.Code)
-	}
-	if w.Body.String() != "success" {
-		t.Errorf("expected 'success', got %q", w.Body.String())
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK).Body("success")
 }
 
 func TestTimeout_ExemptPaths(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
-		_, err := w.Write([]byte("done"))
-		if err != nil {
-			t.Fatalf("write failed: %v", err)
-		}
+		_, _ = w.Write([]byte("done"))
 	})
 	middleware := Timeout(
 		config.WithTimeoutDuration(50*time.Millisecond),
 		config.WithTimeoutExemptPaths([]string{"/health"}),
 	)(handler)
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/health", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/health").Build()
+	w := zhtest.Serve(middleware, req)
 
-	middleware.ServeHTTP(w, r)
-	if w.Code != 200 {
-		t.Errorf("exempt path failed, status = %d", w.Code)
-	}
-	if w.Body.String() != "done" {
-		t.Errorf("exempt path body = %q, want %q", w.Body.String(), "done")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK).Body("done")
 }
 
 func TestTimeout_HeadersPreserved(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Custom", "test")
-		w.WriteHeader(201)
-		_, err := w.Write([]byte("created"))
-		if err != nil {
-			t.Fatalf("write failed: %v", err)
-		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("created"))
 	})
 	middleware := Timeout()(handler)
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
-	middleware.ServeHTTP(w, r)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(middleware, req)
 
-	if w.Code != 201 {
-		t.Errorf("status = %d, want 201", w.Code)
-	}
-	if w.Header().Get("X-Custom") != "test" {
-		t.Error("custom header not preserved")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusCreated).Header("X-Custom", "test")
 }
 
 func TestTimeout_PanicPropagation(t *testing.T) {
@@ -201,15 +156,14 @@ func TestTimeout_PanicPropagation(t *testing.T) {
 	})
 	middleware := Timeout()(handler)
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
 	defer func() {
 		if r := recover(); r != "test panic" {
 			t.Errorf("panic = %v, want 'test panic'", r)
 		}
 	}()
-	middleware.ServeHTTP(w, r)
+	zhtest.Serve(middleware, req)
 
 	t.Error("should not reach here")
 }
@@ -230,15 +184,14 @@ func TestTimeout_NoRaceCondition(t *testing.T) {
 		})
 		middleware := Timeout(config.WithTimeoutDuration(50 * time.Millisecond))(handler)
 
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest("GET", "/", nil)
-		middleware.ServeHTTP(w, r)
+		req := zhtest.NewRequest(http.MethodGet, "/").Build()
+		w := zhtest.Serve(middleware, req)
 
 		body := w.Body.String()
-		if w.Code == 200 && body != "done" {
+		if w.Code == http.StatusOK && body != "done" {
 			t.Fatalf("race detected: status 200 but body %q", body)
 		}
-		if w.Code == 504 && body == "done" {
+		if w.Code == http.StatusGatewayTimeout && body == "done" {
 			t.Fatal("race detected: timeout status but success body")
 		}
 	}

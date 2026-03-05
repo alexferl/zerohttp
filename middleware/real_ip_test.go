@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRealIPMiddleware(t *testing.T) {
@@ -26,67 +26,58 @@ func TestRealIPMiddleware(t *testing.T) {
 	middleware := RealIP()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
-			for header, value := range tt.headers {
-				req.Header.Set(header, value)
-			}
-			rr := httptest.NewRecorder()
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.RemoteAddr != tt.expectedRemote {
 					t.Errorf("expected RemoteAddr '%s', got '%s'", tt.expectedRemote, r.RemoteAddr)
 				}
 				w.WriteHeader(http.StatusOK)
 			})
-			middleware(next).ServeHTTP(rr, req)
+			zhtest.TestMiddlewareWithHandler(middleware, next, req)
 		})
 	}
 }
 
 func TestRealIPMiddlewareNoPort(t *testing.T) {
 	middleware := RealIP()
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "203.0.113.1").Build()
 	req.RemoteAddr = "192.168.1.1"
-	req.Header.Set("X-Forwarded-For", "203.0.113.1")
-	rr := httptest.NewRecorder()
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "203.0.113.1" {
 			t.Errorf("expected RemoteAddr '203.0.113.1', got '%s'", r.RemoteAddr)
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	middleware(next).ServeHTTP(rr, req)
+	zhtest.TestMiddlewareWithHandler(middleware, next, req)
 }
 
 func TestRealIPCustomExtractor(t *testing.T) {
 	middleware := RealIP(config.WithRealIPExtractor(func(r *http.Request) string {
 		return "custom.ip.address"
 	}))
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "192.168.1.1:12345"
-	rr := httptest.NewRecorder()
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "custom.ip.address:12345" {
 			t.Errorf("expected RemoteAddr 'custom.ip.address:12345', got '%s'", r.RemoteAddr)
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	middleware(next).ServeHTTP(rr, req)
+	zhtest.TestMiddlewareWithHandler(middleware, next, req)
 }
 
 func TestRealIPNilExtractor(t *testing.T) {
 	middleware := RealIP(config.WithRealIPExtractor(nil))
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "203.0.113.1").Build()
 	req.RemoteAddr = "192.168.1.1:12345"
-	req.Header.Set("X-Forwarded-For", "203.0.113.1")
-	rr := httptest.NewRecorder()
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.RemoteAddr != "203.0.113.1:12345" {
 			t.Errorf("expected RemoteAddr '203.0.113.1:12345', got '%s'", r.RemoteAddr)
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	middleware(next).ServeHTTP(rr, req)
+	zhtest.TestMiddlewareWithHandler(middleware, next, req)
 }
 
 func TestDefaultIPExtractor(t *testing.T) {
@@ -109,11 +100,8 @@ func TestDefaultIPExtractor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
-			for header, value := range tt.headers {
-				req.Header.Set(header, value)
-			}
 			ip := config.DefaultIPExtractor(req)
 			if ip != tt.expectedIP {
 				t.Errorf("expected IP '%s', got '%s'", tt.expectedIP, ip)
@@ -135,11 +123,8 @@ func TestRemoteAddrIPExtractor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
-			for header, value := range tt.headers {
-				req.Header.Set(header, value)
-			}
 			ip := config.RemoteAddrIPExtractor(req)
 			if ip != tt.expectedIP {
 				t.Errorf("expected IP '%s', got '%s'", tt.expectedIP, ip)
@@ -162,11 +147,8 @@ func TestXForwardedForIPExtractor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
-			for header, value := range tt.headers {
-				req.Header.Set(header, value)
-			}
 			ip := config.XForwardedForIPExtractor(req)
 			if ip != tt.expectedIP {
 				t.Errorf("expected IP '%s', got '%s'", tt.expectedIP, ip)
@@ -188,11 +170,8 @@ func TestXRealIPExtractor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
-			for header, value := range tt.headers {
-				req.Header.Set(header, value)
-			}
 			ip := config.XRealIPExtractor(req)
 			if ip != tt.expectedIP {
 				t.Errorf("expected IP '%s', got '%s'", tt.expectedIP, ip)
@@ -230,19 +209,15 @@ func TestRealIPWithDifferentExtractors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			middleware := RealIP(config.WithRealIPExtractor(tt.extractor))
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = "192.168.1.1:12345"
-			for header, value := range tt.headers {
-				req.Header.Set(header, value)
-			}
-			rr := httptest.NewRecorder()
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.RemoteAddr != tt.expected {
 					t.Errorf("expected RemoteAddr '%s', got '%s'", tt.expected, r.RemoteAddr)
 				}
 				w.WriteHeader(http.StatusOK)
 			})
-			middleware(next).ServeHTTP(rr, req)
+			zhtest.TestMiddlewareWithHandler(middleware, next, req)
 		})
 	}
 }
@@ -250,40 +225,34 @@ func TestRealIPWithDifferentExtractors(t *testing.T) {
 func TestRealIPEdgeCases(t *testing.T) {
 	middleware := RealIP()
 	t.Run("empty X-Forwarded-For", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "").Build()
 		req.RemoteAddr = "192.168.1.1:12345"
-		req.Header.Set("X-Forwarded-For", "")
-		rr := httptest.NewRecorder()
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.RemoteAddr != "192.168.1.1:12345" {
 				t.Errorf("expected RemoteAddr '192.168.1.1:12345', got '%s'", r.RemoteAddr)
 			}
 			w.WriteHeader(http.StatusOK)
 		})
-		middleware(next).ServeHTTP(rr, req)
+		zhtest.TestMiddlewareWithHandler(middleware, next, req)
 	})
 	t.Run("malformed Forwarded header", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Forwarded", "invalid-format").Build()
 		req.RemoteAddr = "192.168.1.1:12345"
-		req.Header.Set("Forwarded", "invalid-format")
-		rr := httptest.NewRecorder()
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.RemoteAddr != "192.168.1.1:12345" {
 				t.Errorf("expected RemoteAddr '192.168.1.1:12345', got '%s'", r.RemoteAddr)
 			}
 			w.WriteHeader(http.StatusOK)
 		})
-		middleware(next).ServeHTTP(rr, req)
+		zhtest.TestMiddlewareWithHandler(middleware, next, req)
 	})
 	t.Run("X-Forwarded-For only commas", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", ",,,").Build()
 		req.RemoteAddr = "192.168.1.1:12345"
-		req.Header.Set("X-Forwarded-For", ",,,")
-		rr := httptest.NewRecorder()
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Should handle empty gracefully
 			w.WriteHeader(http.StatusOK)
 		})
-		middleware(next).ServeHTTP(rr, req)
+		zhtest.TestMiddlewareWithHandler(middleware, next, req)
 	})
 }

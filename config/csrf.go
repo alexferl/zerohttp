@@ -42,7 +42,7 @@ type CSRFConfig struct {
 	ExemptPaths []string
 
 	// ExemptMethods contains HTTP methods that skip CSRF validation
-	// Default: []string{"GET", "HEAD", "OPTIONS", "TRACE"}
+	// Default: []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace}
 	ExemptMethods []string
 
 	// HMACKey is the secret key used for HMAC signing (REQUIRED)

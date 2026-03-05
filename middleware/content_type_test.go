@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestContentTypeValidation(t *testing.T) {
@@ -38,9 +39,9 @@ func TestContentTypeValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var req *http.Request
 			if tt.body != "" {
-				req = httptest.NewRequest("POST", "/test", strings.NewReader(tt.body))
+				req = httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(tt.body))
 			} else {
-				req = httptest.NewRequest("POST", "/test", nil)
+				req = httptest.NewRequest(http.MethodPost, "/test", nil)
 			}
 			if tt.contentType != "" {
 				req.Header.Set("Content-Type", tt.contentType)
@@ -57,9 +58,7 @@ func TestContentTypeValidation(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("expected status %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
@@ -79,7 +78,7 @@ func TestContentTypeCustomConfig(t *testing.T) {
 	middleware := ContentType(config.WithContentTypeContentTypes([]string{"text/plain", "application/xml"}))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/test", strings.NewReader("test data"))
+			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test data"))
 			req.Header.Set("Content-Type", tt.contentType)
 			rr := httptest.NewRecorder()
 			nextCalled := false
@@ -92,9 +91,7 @@ func TestContentTypeCustomConfig(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("expected status %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
@@ -120,7 +117,7 @@ func TestContentTypeExemptPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", tt.path, strings.NewReader("test data"))
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader("test data"))
 			req.Header.Set("Content-Type", "text/plain")
 			rr := httptest.NewRecorder()
 			nextCalled := false
@@ -133,16 +130,14 @@ func TestContentTypeExemptPaths(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("expected status %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
 
 func TestContentTypeHTTPMethods(t *testing.T) {
 	middleware := ContentType()
-	methods := []string{"POST", "PUT", "PATCH"}
+	methods := []string{http.MethodPost, http.MethodPut, http.MethodPatch}
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			req := httptest.NewRequest(method, "/test", strings.NewReader(`{"test": "data"}`))
@@ -158,16 +153,14 @@ func TestContentTypeHTTPMethods(t *testing.T) {
 			if !nextCalled {
 				t.Errorf("handler should be called for method %s", method)
 			}
-			if rr.Code != http.StatusOK {
-				t.Errorf("expected status 200 for method %s, got %d", method, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(http.StatusOK)
 		})
 	}
 }
 
 func TestContentTypeGETRequests(t *testing.T) {
 	middleware := ContentType()
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Content-Type", "text/plain")
 	rr := httptest.NewRecorder()
 	nextCalled := false
@@ -180,15 +173,13 @@ func TestContentTypeGETRequests(t *testing.T) {
 	if !nextCalled {
 		t.Error("GET request should skip content type validation")
 	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected status 200 for GET request, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
 func TestContentTypeConfigFallbacks(t *testing.T) {
 	t.Run("empty config", func(t *testing.T) {
 		middleware := ContentType(config.WithContentTypeContentTypes([]string{}))
-		req := httptest.NewRequest("POST", "/test", strings.NewReader("test"))
+		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
 		nextCalled := false
@@ -200,14 +191,12 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 		if nextCalled {
 			t.Error("next handler should not be called with empty content types config")
 		}
-		if rr.Code != http.StatusUnsupportedMediaType {
-			t.Errorf("expected status 415, got %d", rr.Code)
-		}
+		zhtest.AssertWith(t, rr).Status(http.StatusUnsupportedMediaType)
 	})
 
 	t.Run("nil config", func(t *testing.T) {
 		middleware := ContentType(config.WithContentTypeContentTypes(nil))
-		req := httptest.NewRequest("POST", "/test", strings.NewReader(`{"test": "data"}`))
+		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"test": "data"}`))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
 		nextCalled := false
@@ -220,9 +209,7 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 		if !nextCalled {
 			t.Error("next handler should be called with default config when nil")
 		}
-		if rr.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rr.Code)
-		}
+		zhtest.AssertWith(t, rr).Status(http.StatusOK)
 	})
 
 	t.Run("nil exempt paths fallback", func(t *testing.T) {
@@ -230,7 +217,7 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 			config.WithContentTypeContentTypes([]string{"application/json"}),
 			config.WithContentTypeExemptPaths(nil),
 		)
-		req := httptest.NewRequest("POST", "/test", strings.NewReader("test"))
+		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 		req.Header.Set("Content-Type", "text/plain")
 		rr := httptest.NewRecorder()
 		called := false

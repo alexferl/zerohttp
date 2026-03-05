@@ -16,6 +16,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 const testCertPEM = `-----BEGIN CERTIFICATE-----
@@ -206,22 +207,15 @@ func TestServer_CreateHTTPSRedirectHandler(t *testing.T) {
 	server := New()
 	handler := server.createHTTPSRedirectHandler()
 
-	req := httptest.NewRequest("GET", "http://example.com/path?query=value", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/path?query=value", nil)
 	req.Host = "example.com"
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusMovedPermanently {
-		t.Errorf("Expected status %d, got %d", http.StatusMovedPermanently, w.Code)
-	}
-
-	// http.Redirect sets the Location header
-	location := w.Header().Get("Location")
-	expectedLocation := "https://example.com/path?query=value"
-	if location != expectedLocation {
-		t.Errorf("Expected Location '%s', got '%s'", expectedLocation, location)
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusMovedPermanently).
+		Header(HeaderLocation, "https://example.com/path?query=value")
 }
 
 func TestServer_ListenAndServe_NoServer(t *testing.T) {

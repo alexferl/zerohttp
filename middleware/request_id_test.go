@@ -2,45 +2,21 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
-type requestIDTestHandler struct {
-	called    bool
-	requestID string
-	context   context.Context
-	request   *http.Request
-}
-
-func (h *requestIDTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.called = true
-	h.context = r.Context()
-	h.request = r
-	h.requestID = GetRequestID(r.Context())
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("OK")); err != nil {
-		panic(fmt.Errorf("failed to write test response: %w", err))
-	}
-}
-
 func TestRequestID_ExistingHeader(t *testing.T) {
-	handler := &requestIDTestHandler{}
-	middleware := RequestID()(handler)
+	handler := &testHandler{}
 	existingID := "existing-request-id-123"
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Request-Id", existingID)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("X-Request-Id", existingID).Build()
+	w := zhtest.TestMiddlewareWithHandler(RequestID(), handler, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	if handler.requestID != existingID {
 		t.Errorf("Expected to use existing request ID %s, got %s", existingID, handler.requestID)
 	}
@@ -53,15 +29,11 @@ func TestRequestID_ExistingHeader(t *testing.T) {
 }
 
 func TestRequestID_CustomHeader(t *testing.T) {
-	handler := &requestIDTestHandler{}
-	middleware := RequestID(config.WithRequestIDHeader("X-Trace-Id"))(handler)
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	handler := &testHandler{}
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.TestMiddlewareWithHandler(RequestID(config.WithRequestIDHeader("X-Trace-Id")), handler, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	reqHeaderValue := handler.request.Header.Get("X-Trace-Id")
 	if reqHeaderValue == "" {
 		t.Error("Expected custom request header to be set")
@@ -73,37 +45,32 @@ func TestRequestID_CustomHeader(t *testing.T) {
 	if reqHeaderValue != respHeaderValue {
 		t.Errorf("Expected request and response headers to match: %s != %s", reqHeaderValue, respHeaderValue)
 	}
-	if defaultHeader := w.Header().Get("X-Request-Id"); defaultHeader != "" {
-		t.Error("Expected default header not to be set when using custom header")
-	}
+	zhtest.AssertWith(t, w).HeaderNotExists("X-Request-Id")
 }
 
 func TestRequestID_CustomGenerator(t *testing.T) {
 	counter := 0
 	customIDPrefix := "custom-"
-	middleware := RequestID(config.WithRequestIDGenerator(func() string {
+	mw := RequestID(config.WithRequestIDGenerator(func() string {
 		counter++
 		return customIDPrefix + string(rune('0'+counter))
 	}))
 
-	handler1 := &requestIDTestHandler{}
-	req1 := httptest.NewRequest("GET", "/", nil)
-	w1 := httptest.NewRecorder()
-	middleware(handler1).ServeHTTP(w1, req1)
+	handler1 := &testHandler{}
+	req1 := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w1 := zhtest.TestMiddlewareWithHandler(mw, handler1, req1)
 
-	if !handler1.called {
-		t.Error("Expected first handler to be called")
-	}
+	zhtest.AssertWith(t, w1).Status(http.StatusOK)
 	expectedID1 := customIDPrefix + "1"
 	if handler1.requestID != expectedID1 {
 		t.Errorf("Expected first custom generated ID %s, got %s", expectedID1, handler1.requestID)
 	}
 
-	handler2 := &requestIDTestHandler{}
-	req2 := httptest.NewRequest("GET", "/", nil)
-	w2 := httptest.NewRecorder()
-	middleware(handler2).ServeHTTP(w2, req2)
+	handler2 := &testHandler{}
+	req2 := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w2 := zhtest.TestMiddlewareWithHandler(mw, handler2, req2)
 
+	zhtest.AssertWith(t, w2).Status(http.StatusOK)
 	expectedID2 := customIDPrefix + "2"
 	if handler2.requestID != expectedID2 {
 		t.Errorf("Expected second custom generated ID %s, got %s", expectedID2, handler2.requestID)
@@ -111,16 +78,12 @@ func TestRequestID_CustomGenerator(t *testing.T) {
 }
 
 func TestRequestID_CustomContextKey(t *testing.T) {
-	handler := &requestIDTestHandler{}
+	handler := &testHandler{}
 	customKey := config.RequestIDContextKey("trace_id")
-	middleware := RequestID(config.WithRequestIDContextKey(customKey))(handler)
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.TestMiddlewareWithHandler(RequestID(config.WithRequestIDContextKey(customKey)), handler, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	customRequestID := GetRequestID(handler.context, customKey)
 	if customRequestID == "" {
 		t.Error("Expected request ID to be stored with custom context key")
@@ -134,22 +97,16 @@ func TestRequestID_CustomContextKey(t *testing.T) {
 }
 
 func TestRequestID_EmptyConfigValues(t *testing.T) {
-	handler := &requestIDTestHandler{}
-	middleware := RequestID(
+	handler := &testHandler{}
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.TestMiddlewareWithHandler(RequestID(
 		config.WithRequestIDHeader(""),
 		config.WithRequestIDGenerator(nil),
 		config.WithRequestIDContextKey(""),
-	)(handler)
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	), handler, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
-	if reqHeaderValue := handler.request.Header.Get("X-Request-Id"); reqHeaderValue == "" {
-		t.Error("Expected default request header to be set")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).HeaderExists("X-Request-Id")
 	if len(handler.requestID) != 32 {
 		t.Errorf("Expected default generated ID length 32, got %d", len(handler.requestID))
 	}
@@ -159,21 +116,15 @@ func TestRequestID_EmptyConfigValues(t *testing.T) {
 }
 
 func TestRequestID_MultipleOptions(t *testing.T) {
-	handler := &requestIDTestHandler{}
-	middleware := RequestID(
+	handler := &testHandler{}
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.TestMiddlewareWithHandler(RequestID(
 		config.WithRequestIDHeader("X-Trace-Id"),
 		config.WithRequestIDHeader("X-Custom-Id"),
-	)(handler)
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	), handler, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
-	if customHeader := w.Header().Get("X-Custom-Id"); customHeader == "" {
-		t.Error("Expected last option header to be set")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).HeaderExists("X-Custom-Id")
 }
 
 func TestGetRequestID_WithCustomKey(t *testing.T) {
@@ -248,18 +199,14 @@ type contextKey string
 const existingKey contextKey = "existing_key"
 
 func TestRequestID_PreservesExistingContext(t *testing.T) {
-	handler := &requestIDTestHandler{}
-	middleware := RequestID()(handler)
+	handler := &testHandler{}
 	existingValue := "existing_value"
 	ctx := context.WithValue(context.Background(), existingKey, existingValue)
-	req := httptest.NewRequest("GET", "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	req = req.WithContext(ctx)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	w := zhtest.TestMiddlewareWithHandler(RequestID(), handler, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	if retrievedValue := handler.context.Value(existingKey); retrievedValue != existingValue {
 		t.Errorf("Expected existing context value to be preserved: %v != %v", existingValue, retrievedValue)
 	}
@@ -269,18 +216,27 @@ func TestRequestID_PreservesExistingContext(t *testing.T) {
 }
 
 func TestRequestID_CaseInsensitiveHeader(t *testing.T) {
-	handler := &requestIDTestHandler{}
-	middleware := RequestID()(handler)
+	handler := &testHandler{}
 	existingID := "case-test-123"
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("x-request-id", existingID)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("x-request-id", existingID).Build()
+	w := zhtest.TestMiddlewareWithHandler(RequestID(), handler, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	if handler.requestID != existingID {
 		t.Errorf("Expected to use existing request ID %s, got %s", existingID, handler.requestID)
 	}
+}
+
+// testHandler is a reusable test handler that captures request information
+type testHandler struct {
+	requestID string
+	context   context.Context
+	request   *http.Request
+}
+
+func (h *testHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.context = r.Context()
+	h.request = r
+	h.requestID = GetRequestID(r.Context())
+	w.WriteHeader(http.StatusOK)
 }

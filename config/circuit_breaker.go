@@ -29,7 +29,7 @@ var DefaultCircuitBreakerConfig = CircuitBreakerConfig{
 	RecoveryTimeout:  30 * time.Second,
 	SuccessThreshold: 3,
 	IsFailure: func(r *http.Request, statusCode int) bool {
-		return statusCode >= 500 // Consider 5xx as failures
+		return statusCode >= http.StatusInternalServerError // Consider 5xx as failures
 	},
 	KeyExtractor: func(r *http.Request) string {
 		return r.URL.Path // Per-endpoint circuit breaker

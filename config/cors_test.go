@@ -76,7 +76,7 @@ func TestCORSOptions(t *testing.T) {
 	})
 
 	t.Run("allowed methods", func(t *testing.T) {
-		methods := []string{"GET", "POST", "PUT", "DELETE"}
+		methods := []string{http.MethodGet, http.MethodPost, http.MethodPost, http.MethodDelete}
 		cfg := DefaultCORSConfig
 		WithCORSAllowedMethods(methods)(&cfg)
 		if len(cfg.AllowedMethods) != 4 {
@@ -175,7 +175,7 @@ func TestCORSOptions(t *testing.T) {
 
 func TestCORSConfig_MultipleOptions(t *testing.T) {
 	origins := []string{"https://example.com"}
-	methods := []string{"GET", "POST"}
+	methods := []string{http.MethodGet, http.MethodPost}
 	headers := []string{"Content-Type"}
 	exposedHeaders := []string{"X-Total-Count"}
 	exemptPaths := []string{"/health"}

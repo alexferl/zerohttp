@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 type logEntry struct {
@@ -66,9 +66,7 @@ func (h *statusTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.statusCode > 0 {
 		w.WriteHeader(h.statusCode)
 	}
-	if _, err := w.Write([]byte("test response")); err != nil {
-		panic(fmt.Errorf("failed to write test response: %w", err))
-	}
+	_, _ = w.Write([]byte("test response"))
 }
 
 func TestRequestLogger_LogLevels(t *testing.T) {
@@ -77,28 +75,26 @@ func TestRequestLogger_LogLevels(t *testing.T) {
 
 	t.Run("client error", func(t *testing.T) {
 		handler := &statusTestHandler{statusCode: http.StatusNotFound}
-		req := httptest.NewRequest("GET", "/notfound", nil)
-		w := httptest.NewRecorder()
-		middleware(handler).ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/notfound").Build()
+		zhtest.TestMiddlewareWithHandler(middleware, handler, req)
 
 		if len(logger.warnLogs) != 1 {
 			t.Fatalf("Expected 1 warn log, got %d", len(logger.warnLogs))
 		}
-		if value, found := findFieldValue(logger.warnLogs[0].fields, "status"); !found || value != 404 {
+		if value, found := findFieldValue(logger.warnLogs[0].fields, "status"); !found || value != http.StatusNotFound {
 			t.Errorf("Expected status 404, got %v", value)
 		}
 	})
 
 	t.Run("server error", func(t *testing.T) {
 		handler := &statusTestHandler{statusCode: http.StatusInternalServerError}
-		req := httptest.NewRequest("GET", "/error", nil)
-		w := httptest.NewRecorder()
-		middleware(handler).ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/error").Build()
+		zhtest.TestMiddlewareWithHandler(middleware, handler, req)
 
 		if len(logger.errorLogs) != 1 {
 			t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
 		}
-		if value, found := findFieldValue(logger.errorLogs[0].fields, "status"); !found || value != 500 {
+		if value, found := findFieldValue(logger.errorLogs[0].fields, "status"); !found || value != http.StatusInternalServerError {
 			t.Errorf("Expected status 500, got %v", value)
 		}
 	})
@@ -108,9 +104,8 @@ func TestRequestLogger_LogLevels(t *testing.T) {
 		handler := &statusTestHandler{statusCode: http.StatusInternalServerError}
 		middleware := RequestLogger(logger, config.WithRequestLoggerLogErrors(false))
 
-		req := httptest.NewRequest("GET", "/error", nil)
-		w := httptest.NewRecorder()
-		middleware(handler).ServeHTTP(w, req)
+		req := zhtest.NewRequest(http.MethodGet, "/error").Build()
+		zhtest.TestMiddlewareWithHandler(middleware, handler, req)
 
 		if len(logger.infoLogs) != 1 {
 			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
@@ -127,12 +122,11 @@ func TestRequestLogger_FieldsAndDurations(t *testing.T) {
 	handler := &statusTestHandler{statusCode: http.StatusOK, delay: delay}
 	middleware := RequestLogger(logger)(handler)
 
-	req := httptest.NewRequest("GET", "/slow", nil)
-	w := httptest.NewRecorder()
+	req := zhtest.NewRequest(http.MethodGet, "/slow").Build()
 	start := time.Now()
-	middleware.ServeHTTP(w, req)
-
+	zhtest.Serve(middleware, req)
 	elapsed := time.Since(start)
+
 	if len(logger.infoLogs) != 1 {
 		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
 	}
@@ -162,10 +156,9 @@ func TestRequestLogger_EmptyPath(t *testing.T) {
 	handler := &statusTestHandler{statusCode: http.StatusOK}
 	middleware := RequestLogger(logger)(handler)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	req.URL.Path = ""
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	zhtest.Serve(middleware, req)
 
 	if len(logger.infoLogs) != 1 {
 		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
@@ -181,10 +174,8 @@ func TestRequestLogger_RequestIDField(t *testing.T) {
 	handler := &statusTestHandler{statusCode: http.StatusOK}
 	middleware := RequestLogger(logger)(handler)
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Request-Id", "test-123")
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Request-Id", "test-123").Build()
+	zhtest.Serve(middleware, req)
 
 	if len(logger.infoLogs) != 1 {
 		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
@@ -201,9 +192,8 @@ func TestRequestLogger_NoRequestIDField(t *testing.T) {
 	handler := &statusTestHandler{statusCode: http.StatusOK}
 	middleware := RequestLogger(logger)(handler)
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	zhtest.Serve(middleware, req)
 
 	if len(logger.infoLogs) != 1 {
 		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
@@ -224,9 +214,8 @@ func TestRequestLogger_CustomFields(t *testing.T) {
 		}),
 	)(handler)
 
-	req := httptest.NewRequest("POST", "/api/users", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodPost, "/api/users").Build()
+	zhtest.Serve(middleware, req)
 
 	if len(logger.infoLogs) != 1 {
 		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
@@ -253,17 +242,15 @@ func TestRequestLogger_ExemptPaths(t *testing.T) {
 	handler := &statusTestHandler{statusCode: http.StatusOK}
 	middleware := RequestLogger(logger, config.WithRequestLoggerExemptPaths([]string{"/health", "/metrics"}))(handler)
 
-	req1 := httptest.NewRequest("GET", "/health", nil)
-	w1 := httptest.NewRecorder()
-	middleware.ServeHTTP(w1, req1)
+	req1 := zhtest.NewRequest(http.MethodGet, "/health").Build()
+	zhtest.Serve(middleware, req1)
 
 	if len(logger.infoLogs) != 0 {
 		t.Errorf("Expected no logs for exempt path, got %d", len(logger.infoLogs))
 	}
 
-	req2 := httptest.NewRequest("GET", "/api", nil)
-	w2 := httptest.NewRecorder()
-	middleware.ServeHTTP(w2, req2)
+	req2 := zhtest.NewRequest(http.MethodGet, "/api").Build()
+	zhtest.Serve(middleware, req2)
 
 	if len(logger.infoLogs) != 1 {
 		t.Errorf("Expected 1 log for non-exempt path, got %d", len(logger.infoLogs))
@@ -275,9 +262,8 @@ func TestRequestLogger_NilFields(t *testing.T) {
 	handler := &statusTestHandler{statusCode: http.StatusOK}
 	middleware := RequestLogger(logger, config.WithRequestLoggerFields(nil))(handler)
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	zhtest.Serve(middleware, req)
 
 	if len(logger.infoLogs) != 1 {
 		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
@@ -296,9 +282,8 @@ func TestRequestLogger_MultipleOptions(t *testing.T) {
 		config.WithRequestLoggerFields([]config.LogField{config.FieldPath}),
 	)(handler)
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	middleware.ServeHTTP(w, req)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	zhtest.Serve(middleware, req)
 
 	if len(logger.infoLogs) != 1 {
 		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))

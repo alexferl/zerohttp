@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestDefaultMiddlewares(t *testing.T) {
@@ -44,8 +44,7 @@ func TestDefaultMiddlewares(t *testing.T) {
 		t.Error("Wrapped handler should not be nil")
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -53,7 +52,7 @@ func TestDefaultMiddlewares(t *testing.T) {
 		}
 	}()
 
-	wrappedHandler.ServeHTTP(w, req)
+	w := zhtest.Serve(wrappedHandler, req)
 
 	if w.Code == 0 {
 		t.Error("Expected response code to be set")

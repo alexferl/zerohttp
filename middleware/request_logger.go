@@ -106,9 +106,9 @@ func LogRequest(logger log.Logger, cfg config.RequestLoggerConfig, r *http.Reque
 	msg := "Request completed"
 
 	if cfg.LogErrors {
-		if statusCode >= 500 {
+		if statusCode >= http.StatusInternalServerError {
 			logger.Error(msg, logFields...)
-		} else if statusCode >= 400 {
+		} else if statusCode >= http.StatusBadRequest {
 			logger.Warn(msg, logFields...)
 		} else {
 			logger.Info(msg, logFields...)

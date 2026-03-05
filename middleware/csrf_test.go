@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 var testHMACKey = []byte("test-key-for-csrf-middleware-32!!")
@@ -91,9 +92,7 @@ func TestCSRF_DefaultValues(t *testing.T) {
 
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 
 	// Verify defaults were applied by checking cookie
 	cookies := rr.Result().Cookies()
@@ -135,9 +134,7 @@ func TestCSRF_TokenGeneration(t *testing.T) {
 
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 
 	// Check cookie was set
 	cookies := rr.Result().Cookies()
@@ -202,13 +199,9 @@ func TestCSRF_ValidToken(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr2.Code)
-	}
-
-	if rr2.Body.String() != "success" {
-		t.Errorf("Expected body 'success', got %s", rr2.Body.String())
-	}
+	zhtest.AssertWith(t, rr2).
+		Status(http.StatusOK).
+		Body("success")
 }
 
 func TestCSRF_InvalidToken(t *testing.T) {
@@ -226,14 +219,9 @@ func TestCSRF_InvalidToken(t *testing.T) {
 	rr := httptest.NewRecorder()
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403, got %d", rr.Code)
-	}
-
-	body := rr.Body.String()
-	if !strings.Contains(body, "CSRF token invalid or missing") {
-		t.Errorf("Expected error message, got %s", body)
-	}
+	zhtest.AssertWith(t, rr).
+		Status(http.StatusForbidden).
+		BodyContains("CSRF token invalid or missing")
 }
 
 func TestCSRF_MissingToken(t *testing.T) {
@@ -249,9 +237,7 @@ func TestCSRF_MissingToken(t *testing.T) {
 	rr := httptest.NewRecorder()
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusForbidden)
 }
 
 func TestCSRF_MismatchedTokens(t *testing.T) {
@@ -283,9 +269,7 @@ func TestCSRF_MismatchedTokens(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusForbidden)
 }
 
 func TestCSRF_ExemptMethods(t *testing.T) {
@@ -303,9 +287,7 @@ func TestCSRF_ExemptMethods(t *testing.T) {
 
 		csrf.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Errorf("Method %s: Expected status 200, got %d", method, rr.Code)
-		}
+		zhtest.AssertWith(t, rr).Status(http.StatusOK)
 	}
 }
 
@@ -324,27 +306,21 @@ func TestCSRF_ExemptPaths(t *testing.T) {
 	rr1 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr1, req1)
 
-	if rr1.Code != http.StatusOK {
-		t.Errorf("Expected status 200 for exempt path, got %d", rr1.Code)
-	}
+	zhtest.AssertWith(t, rr1).Status(http.StatusOK)
 
 	// Test prefix path match
 	req2 := httptest.NewRequest(http.MethodPost, "/public/something", nil)
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200 for exempt prefix path, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 
 	// Test non-exempt path (should require token)
 	req3 := httptest.NewRequest(http.MethodPost, "/api/other", nil)
 	rr3 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr3, req3)
 
-	if rr3.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 for non-exempt path, got %d", rr3.Code)
-	}
+	zhtest.AssertWith(t, rr3).Status(http.StatusForbidden)
 }
 
 func TestCSRF_CustomErrorHandler(t *testing.T) {
@@ -367,18 +343,10 @@ func TestCSRF_CustomErrorHandler(t *testing.T) {
 	rr := httptest.NewRecorder()
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403, got %d", rr.Code)
-	}
-
-	contentType := rr.Header().Get("Content-Type")
-	if contentType != "application/json" {
-		t.Errorf("Expected Content-Type application/json, got %s", contentType)
-	}
-
-	if !strings.Contains(rr.Body.String(), "custom csrf error") {
-		t.Errorf("Expected custom error message, got %s", rr.Body.String())
-	}
+	zhtest.AssertWith(t, rr).
+		Status(http.StatusForbidden).
+		Header("Content-Type", "application/json").
+		BodyContains("custom csrf error")
 }
 
 func TestCSRF_FormTokenLookup(t *testing.T) {
@@ -416,9 +384,7 @@ func TestCSRF_FormTokenLookup(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 }
 
 func TestCSRF_MultipartFormTokenLookup(t *testing.T) {
@@ -459,9 +425,7 @@ func TestCSRF_MultipartFormTokenLookup(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 }
 
 func TestCSRF_QueryTokenLookup(t *testing.T) {
@@ -495,9 +459,7 @@ func TestCSRF_QueryTokenLookup(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 }
 
 func TestCSRF_CustomCookieOptions(t *testing.T) {
@@ -583,9 +545,7 @@ func TestCSRF_TokenRotation(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 
 	// Check that a new cookie was set
 	cookies2 := rr2.Result().Cookies()
@@ -614,13 +574,11 @@ func TestCSRF_GetCSRFToken(t *testing.T) {
 
 	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rr := httptest.NewRecorder()
-
-	csrf.ServeHTTP(rr, req)
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(csrf, req)
 
 	// Should have a non-empty token in response body
-	token := rr.Body.String()
+	token := w.Body.String()
 	if token == "" {
 		t.Error("Expected non-empty CSRF token from GetCSRFToken")
 	}
@@ -663,9 +621,7 @@ func TestCSRF_InvalidBase64Token(t *testing.T) {
 	rr := httptest.NewRecorder()
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusForbidden)
 }
 
 func TestCSRF_TokenWithWrongSignature(t *testing.T) {
@@ -708,9 +664,7 @@ func TestCSRF_TokenWithWrongSignature(t *testing.T) {
 	csrf2.ServeHTTP(rr2, req2)
 
 	// Should fail because HMAC key is different
-	if rr2.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 for token with wrong signature, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusForbidden)
 }
 
 func TestCSRF_CustomExemptMethods(t *testing.T) {
@@ -729,18 +683,14 @@ func TestCSRF_CustomExemptMethods(t *testing.T) {
 	rr1 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr1, req1)
 
-	if rr1.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 for GET without token (not exempt), got %d", rr1.Code)
-	}
+	zhtest.AssertWith(t, rr1).Status(http.StatusForbidden)
 
 	// PUT should be exempt and work without token
 	req2 := httptest.NewRequest(http.MethodPut, "/", nil)
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200 for exempt PUT, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 }
 
 func TestCSRF_EmptyCookieValue(t *testing.T) {
@@ -758,9 +708,7 @@ func TestCSRF_EmptyCookieValue(t *testing.T) {
 	rr := httptest.NewRecorder()
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 for empty cookie, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusForbidden)
 }
 
 func TestCSRF_InvalidTokenFormatRegeneration(t *testing.T) {
@@ -777,9 +725,7 @@ func TestCSRF_InvalidTokenFormatRegeneration(t *testing.T) {
 	rr := httptest.NewRecorder()
 	csrf.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 
 	// Should have set a new valid cookie
 	cookies := rr.Result().Cookies()
@@ -830,9 +776,7 @@ func TestCSRF_DefaultTokenLookup(t *testing.T) {
 	csrf.ServeHTTP(rr2, req2)
 
 	// Should succeed because malformed lookup defaults to header:X-CSRF-Token
-	if rr2.Code != http.StatusOK {
-		t.Errorf("Expected status 200 with default header lookup, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 }
 
 func TestCSRF_UnknownTokenLookupSource(t *testing.T) {
@@ -869,9 +813,7 @@ func TestCSRF_UnknownTokenLookupSource(t *testing.T) {
 	csrf.ServeHTTP(rr2, req2)
 
 	// Should fail because token not in header
-	if rr2.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 when token not in header, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusForbidden)
 }
 
 func TestCSRF_FormParseError(t *testing.T) {
@@ -907,7 +849,5 @@ func TestCSRF_FormParseError(t *testing.T) {
 	csrf.ServeHTTP(rr2, req2)
 
 	// Should fail because form parsing fails
-	if rr2.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 for invalid form, got %d", rr2.Code)
-	}
+	zhtest.AssertWith(t, rr2).Status(http.StatusForbidden)
 }

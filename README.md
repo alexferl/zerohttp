@@ -34,6 +34,13 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
 - [Graceful Shutdown](#graceful-shutdown)
+- [Testing Utilities](#testing-utilities)
+    - [Request Builder](#request-builder)
+    - [Response Assertions](#response-assertions)
+    - [Testing Handlers and Middleware](#testing-handlers-and-middleware)
+    - [Problem Details Assertions](#problem-details-assertions)
+    - [Template Testing](#template-testing)
+    - [Response Wrapper](#response-wrapper)
 - [Configuration Reference](#configuration-reference)
     - [Server Configuration](#server-configuration)
     - [Middleware Configuration](#middleware-configuration)
@@ -1057,6 +1064,195 @@ app.RegisterShutdownHook("metrics", func(ctx context.Context) error {
 
 Hook errors are logged but do not stop the shutdown process. Context errors (`context.Canceled` or `context.DeadlineExceeded`) from pre-shutdown hooks will abort shutdown early.
 
+
+## Testing Utilities
+
+zerohttp includes a `zhtest` package with helpers for testing HTTP handlers and middleware:
+
+```go
+import (
+    "net/http"
+    "testing"
+
+    zh "github.com/alexferl/zerohttp"
+    "github.com/alexferl/zerohttp/zhtest"
+)
+
+func TestGetUser(t *testing.T) {
+    router := zh.NewRouter()
+    router.GET("/users/:id", getUserHandler)
+
+    // Build request fluently
+    req := zhtest.NewRequest("GET", "/users/123").
+        WithHeader("Authorization", "Bearer token").
+        Build()
+
+    // Serve and assert
+    w := zhtest.Serve(router, req)
+    zhtest.AssertWith(t, w).
+        Status(http.StatusOK).
+        Header("Content-Type", zh.MIMEApplicationJSON).
+        JSONPathEqual("user.name", "John")
+}
+```
+
+### Request Builder
+
+Build test requests fluently:
+
+```go
+// Simple GET request
+req := zhtest.NewRequest("GET", "/users").Build()
+
+// With query parameters
+req := zhtest.NewRequest("GET", "/users").
+    WithQuery("page", "1").
+    WithQuery("limit", "10").
+    Build()
+
+// With headers
+req := zhtest.NewRequest("GET", "/api/data").
+    WithHeader("Authorization", "Bearer token").
+    WithHeader("X-Request-ID", "abc123").
+    Build()
+
+// With JSON body
+req := zhtest.NewRequest("POST", "/users").
+    WithJSON(zh.M{"name": "John", "email": "john@example.com"}).
+    Build()
+
+// With form data
+req := zhtest.NewRequest("POST", "/login").
+    WithForm(url.Values{"username": []string{"john"}}).
+    Build()
+
+// With cookies
+req := zhtest.NewRequest("GET", "/profile").
+    WithCookie(&http.Cookie{Name: "session", Value: "abc123"}).
+    Build()
+```
+
+### Response Assertions
+
+Assert on response status, headers, body, and JSON:
+
+```go
+w := zhtest.Serve(handler, req)
+
+// Status assertions
+zhtest.AssertWith(t, w).Status(200)
+zhtest.AssertWith(t, w).StatusBetween(200, 299)
+zhtest.AssertWith(t, w).IsSuccess()
+zhtest.AssertWith(t, w).IsClientError()
+zhtest.AssertWith(t, w).IsServerError()
+
+// Header assertions
+zhtest.AssertWith(t, w).
+    Header("Content-Type", "application/json").
+    HeaderContains("Content-Type", "json").
+    HeaderExists("X-Request-ID")
+
+// Body assertions
+zhtest.AssertWith(t, w).Body("exact match")
+zhtest.AssertWith(t, w).BodyContains("partial")
+zhtest.AssertWith(t, w).BodyEmpty()
+zhtest.AssertWith(t, w).BodyNotEmpty()
+
+// JSON assertions
+var user User
+zhtest.AssertWith(t, w).JSON(&user)
+zhtest.AssertWith(t, w).JSONEquals(zh.M{"name": "John"})
+zhtest.AssertWith(t, w).JSONPathEqual("user.name", "John")
+```
+
+### Testing Handlers and Middleware
+
+```go
+// Test handler directly
+handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    zh.R.JSON(w, 200, zh.M{"ok": true})
+})
+
+req := zhtest.NewRequest("GET", "/").Build()
+w := zhtest.TestHandler(handler, req)
+zhtest.AssertWith(t, w).Status(200)
+
+// Test middleware
+mw := func(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("X-Custom", "value")
+        next.ServeHTTP(w, r)
+    })
+}
+
+req := zhtest.NewRequest("GET", "/").Build()
+w := zhtest.TestMiddleware(mw, req)
+zhtest.AssertWith(t, w).Header("X-Custom", "value")
+
+// Test middleware chain
+mw1 := func(next http.Handler) http.Handler { /* ... */ }
+mw2 := func(next http.Handler) http.Handler { /* ... */ }
+
+req := zhtest.NewRequest("GET", "/").Build()
+w := zhtest.TestMiddlewareChain([]func(http.Handler) http.Handler{mw1, mw2}, req)
+```
+
+### Problem Details Assertions
+
+```go
+// Test RFC 9457 Problem Detail responses
+zhtest.AssertWith(t, w).
+    IsProblemDetail().
+    ProblemDetailStatus(422).
+    ProblemDetailTitle("Unprocessable Entity").
+    ProblemDetailDetail("Validation failed").
+    ProblemDetailType("https://api.example.com/errors/validation").
+    ProblemDetailExtension("errors", []string{"field required"})
+```
+
+### Template Testing
+
+```go
+// Test template rendering
+w := zhtest.TestTemplate(`<h1>{{.Title}}</h1>`, map[string]string{"Title": "Hello"})
+zhtest.AssertTemplateWith(t, w).
+    Contains("<h1>Hello</h1>").
+    HasTitle("Page Title")
+
+// Or use the renderer for complex templates
+tmpl := template.Must(template.New("test").Parse(templates))
+tr := zhtest.NewTemplateRenderer(tmpl)
+w := tr.Render("index.html", data)
+```
+
+### Response Wrapper
+
+The `Response` wrapper provides helper methods for common checks:
+
+```go
+w := zhtest.ServeWithRecorder(handler, req)
+
+// Body access
+bodyStr := w.BodyString()
+bodyBytes := w.BodyBytes()
+
+// JSON decoding
+var result MyStruct
+err := w.JSON(&result)
+
+// Cookie access
+cookie := w.Cookie("session")
+cookieValue := w.CookieValue("session")
+
+// Header access
+headerValue := w.HeaderValue("Content-Type")
+
+// Status checks
+isSuccess := w.IsSuccess()
+isRedirect := w.IsRedirect()
+isClientError := w.IsClientError()
+isServerError := w.IsServerError()
+```
 
 ## Configuration Reference
 

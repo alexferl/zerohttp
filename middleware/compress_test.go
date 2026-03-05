@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestCompress(t *testing.T) {
@@ -27,15 +28,13 @@ func TestCompress(t *testing.T) {
 		}
 	}))
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Header().Get("Content-Encoding") != "gzip" {
-		t.Errorf("expected gzip encoding, got %q", rr.Header().Get("Content-Encoding"))
-	}
+	zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
 
 	// Test decompression
 	reader, err := gzip.NewReader(rr.Body)
@@ -85,7 +84,7 @@ func TestCompressExemptPaths(t *testing.T) {
 				}
 			}))
 
-			req := httptest.NewRequest("GET", tt.path, nil)
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			req.Header.Set("Accept-Encoding", "gzip")
 			rr := httptest.NewRecorder()
 
@@ -146,16 +145,13 @@ func TestCompressAlgorithms(t *testing.T) {
 				}
 			}))
 
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			req.Header.Set("Accept-Encoding", tt.acceptEncoding)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			actualEncoding := rr.Header().Get("Content-Encoding")
-			if actualEncoding != tt.expectedEncoding {
-				t.Errorf("expected encoding %q, got %q", tt.expectedEncoding, actualEncoding)
-			}
+			zhtest.AssertWith(t, rr).Header("Content-Encoding", tt.expectedEncoding)
 		})
 	}
 }
@@ -213,16 +209,13 @@ func TestCompressAllOptions(t *testing.T) {
 				}
 			}))
 
-			req := httptest.NewRequest("GET", tt.path, nil)
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			req.Header.Set("Accept-Encoding", tt.acceptEncoding)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			actualEncoding := rr.Header().Get("Content-Encoding")
-			if actualEncoding != tt.expectedEncoding {
-				t.Errorf("expected encoding %q, got %q", tt.expectedEncoding, actualEncoding)
-			}
+			zhtest.AssertWith(t, rr).Header("Content-Encoding", tt.expectedEncoding)
 		})
 	}
 }
@@ -318,7 +311,7 @@ func TestCompressor(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			resp, respString := testRequestWithAcceptedEncodings(t, ts, "GET", tc.path, tc.acceptedEncodings...)
+			resp, respString := testRequestWithAcceptedEncodings(t, ts, http.MethodGet, tc.path, tc.acceptedEncodings...)
 			if respString != "textstring" {
 				t.Errorf("response text doesn't match; expected:%q, got:%q", "textstring", respString)
 			}
@@ -411,15 +404,13 @@ func TestCompressorLevels(t *testing.T) {
 				}
 			}))
 
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			req.Header.Set("Accept-Encoding", "gzip")
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			if rr.Header().Get("Content-Encoding") != "gzip" {
-				t.Errorf("expected gzip encoding for level %d", tt.level)
-			}
+			zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
 
 			// Verify the data can be decompressed
 			reader, err := gzip.NewReader(rr.Body)
@@ -496,7 +487,7 @@ func TestCompressConfigDefaults(t *testing.T) {
 				}
 			}))
 
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.Header.Set("Accept-Encoding", "gzip")
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
@@ -542,7 +533,7 @@ func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 				}
 			}))
 
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			req.Header.Set("Accept-Encoding", "gzip")
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
@@ -573,14 +564,12 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 			}
 		}))
 
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("Accept-Encoding", "gzip")
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		if rr.Header().Get("Content-Encoding") != "gzip" {
-			t.Error("Expected compression with nil config values falling back to defaults")
-		}
+		zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
 	})
 
 	t.Run("overrides work when explicitly set", func(t *testing.T) {
@@ -599,14 +588,12 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 			}
 		}))
 
-		req1 := httptest.NewRequest("GET", "/", nil)
+		req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 		req1.Header.Set("Accept-Encoding", "gzip")
 		rr1 := httptest.NewRecorder()
 		handler1.ServeHTTP(rr1, req1)
 
-		if rr1.Header().Get("Content-Encoding") != "" {
-			t.Error("Should not compress non-matching content type")
-		}
+		zhtest.AssertWith(t, rr1).HeaderNotExists("Content-Encoding")
 
 		// Test with matching custom type
 		handler2 := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -617,14 +604,12 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 			}
 		}))
 
-		req2 := httptest.NewRequest("GET", "/", nil)
+		req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 		req2.Header.Set("Accept-Encoding", "gzip")
 		rr2 := httptest.NewRecorder()
 		handler2.ServeHTTP(rr2, req2)
 
-		if rr2.Header().Get("Content-Encoding") != "gzip" {
-			t.Error("Should compress matching custom content type")
-		}
+		zhtest.AssertWith(t, rr2).Header("Content-Encoding", "gzip")
 	})
 }
 

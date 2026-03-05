@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func createAuthHeader(user, pass string) string {
@@ -15,19 +16,17 @@ func createAuthHeader(user, pass string) string {
 
 func testMiddleware(t *testing.T, middleware func(http.Handler) http.Handler, req *http.Request, expectAuth bool, expectedStatus int) {
 	t.Helper()
-	rr := httptest.NewRecorder()
+	w := httptest.NewRecorder()
 	called := false
-	middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	middleware(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		called = true
-		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(rr, req)
+		rw.WriteHeader(http.StatusOK)
+	})).ServeHTTP(w, req)
 
 	if called != expectAuth {
 		t.Errorf("expected auth %v, got %v", expectAuth, called)
 	}
-	if rr.Code != expectedStatus {
-		t.Errorf("expected status %d, got %d", expectedStatus, rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(expectedStatus)
 }
 
 func TestBasicAuth(t *testing.T) {
@@ -139,27 +138,23 @@ func TestBasicAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", tt.path, nil)
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
-			rr := httptest.NewRecorder()
+			w := httptest.NewRecorder()
 			called := false
-			tt.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tt.middleware(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 				called = true
-				w.WriteHeader(http.StatusOK)
-			})).ServeHTTP(rr, req)
+				rw.WriteHeader(http.StatusOK)
+			})).ServeHTTP(w, req)
 
 			if called != tt.expectAuth {
 				t.Errorf("expected auth %v, got %v", tt.expectAuth, called)
 			}
-			if rr.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, rr.Code)
-			}
+			zhtest.AssertWith(t, w).Status(tt.expectedStatus)
 			if tt.checkWWWAuth {
-				if auth := rr.Header().Get("WWW-Authenticate"); auth != tt.expectedRealm {
-					t.Errorf("expected %s, got %s", tt.expectedRealm, auth)
-				}
+				zhtest.AssertWith(t, w).Header("WWW-Authenticate", tt.expectedRealm)
 			}
 		})
 	}
@@ -171,7 +166,7 @@ func TestBasicAuthMalformedHeaders(t *testing.T) {
 
 	for _, header := range malformedHeaders {
 		t.Run("malformed_"+header, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			if header != "" {
 				req.Header.Set("Authorization", header)
 			}
@@ -200,7 +195,7 @@ func TestBasicAuthExemptPaths(t *testing.T) {
 
 	for _, tt := range pathTests {
 		t.Run(tt.path, func(t *testing.T) {
-			req := httptest.NewRequest("GET", tt.path, nil)
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			expectedStatus := http.StatusUnauthorized
 			if tt.exempt {
 				expectedStatus = http.StatusOK
@@ -213,21 +208,19 @@ func TestBasicAuthExemptPaths(t *testing.T) {
 func TestBasicAuthNoAuthConfigured(t *testing.T) {
 	middleware := BasicAuth(config.WithBasicAuthRealm("Test Realm"))
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	auth := base64.StdEncoding.EncodeToString([]byte("user:password"))
 	req.Header.Set("Authorization", "Basic "+auth)
-	rr := httptest.NewRecorder()
+	w := httptest.NewRecorder()
 	called := false
-	middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	middleware(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		called = true
-	})).ServeHTTP(rr, req)
+	})).ServeHTTP(w, req)
 
 	if called {
 		t.Error("handler should not be called when no auth configured")
 	}
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusUnauthorized)
 }
 
 func TestBasicAuthNilExemptPathsFallback(t *testing.T) {
@@ -236,29 +229,24 @@ func TestBasicAuthNilExemptPathsFallback(t *testing.T) {
 		config.WithBasicAuthExemptPaths(nil),
 	)
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w := httptest.NewRecorder()
 	called := false
-	middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	middleware(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		called = true
-	})).ServeHTTP(rr, req)
+	})).ServeHTTP(w, req)
 
 	if called {
 		t.Error("handler should not be called without auth")
 	}
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, w).Status(http.StatusUnauthorized)
 }
 
 func TestBasicAuthFailedFunction(t *testing.T) {
-	rr := httptest.NewRecorder()
-	basicAuthFailed(rr, "Test Realm")
+	w := httptest.NewRecorder()
+	basicAuthFailed(w, "Test Realm")
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
-	}
-	if auth := rr.Header().Get("WWW-Authenticate"); auth != `Basic realm="Test Realm"` {
-		t.Errorf("expected Test Realm, got %s", auth)
-	}
+	zhtest.AssertWith(t, w).
+		Status(http.StatusUnauthorized).
+		Header("WWW-Authenticate", `Basic realm="Test Realm"`)
 }

@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestNewEventStream(t *testing.T) {
@@ -22,13 +23,9 @@ func TestNewEventStream(t *testing.T) {
 		defer func() { _ = stream.Close() }()
 
 		// Check headers
-		resp := w.Result()
-		if resp.Header.Get("Content-Type") != "text/event-stream" {
-			t.Errorf("expected Content-Type text/event-stream, got %s", resp.Header.Get("Content-Type"))
-		}
-		if resp.Header.Get("Cache-Control") != "no-cache" {
-			t.Errorf("expected Cache-Control no-cache, got %s", resp.Header.Get("Cache-Control"))
-		}
+		zhtest.AssertWith(t, w).
+			Header(HeaderContentType, MIMETextEventStream).
+			Header(HeaderCacheControl, "no-cache")
 	})
 
 	t.Run("returns error if headers already sent", func(t *testing.T) {
@@ -36,7 +33,7 @@ func TestNewEventStream(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		// Set Content-Type header to simulate headers already sent
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(HeaderContentType, MIMETextPlain)
 		w.WriteHeader(http.StatusOK)
 
 		_, err := NewSSE(w, r)
@@ -66,10 +63,7 @@ func TestEventStream_Send(t *testing.T) {
 		}
 
 		// Check body
-		body := w.Body.String()
-		if !strings.Contains(body, "data: hello world\n") {
-			t.Errorf("expected event data in body, got %s", body)
-		}
+		zhtest.AssertWith(t, w).BodyContains("data: hello world\n")
 	})
 
 	t.Run("sends event with all fields", func(t *testing.T) {
@@ -93,19 +87,11 @@ func TestEventStream_Send(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		body := w.Body.String()
-		if !strings.Contains(body, "id: 123\n") {
-			t.Errorf("expected id in body, got %s", body)
-		}
-		if !strings.Contains(body, "event: update\n") {
-			t.Errorf("expected event name in body, got %s", body)
-		}
-		if !strings.Contains(body, "retry: 5000\n") {
-			t.Errorf("expected retry in body, got %s", body)
-		}
-		if !strings.Contains(body, "data: test data\n") {
-			t.Errorf("expected data in body, got %s", body)
-		}
+		zhtest.AssertWith(t, w).
+			BodyContains("id: 123\n").
+			BodyContains("event: update\n").
+			BodyContains("retry: 5000\n").
+			BodyContains("data: test data\n")
 	})
 
 	t.Run("handles multi-line data", func(t *testing.T) {
@@ -126,11 +112,7 @@ func TestEventStream_Send(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		body := w.Body.String()
-		expected := "data: line1\ndata: line2\ndata: line3\n"
-		if !strings.Contains(body, expected) {
-			t.Errorf("expected multi-line data format, got %s", body)
-		}
+		zhtest.AssertWith(t, w).BodyContains("data: line1\ndata: line2\ndata: line3\n")
 	})
 
 	t.Run("returns error after close", func(t *testing.T) {
@@ -167,10 +149,7 @@ func TestEventStream_SendComment(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		body := w.Body.String()
-		if !strings.Contains(body, ": keepalive\n") {
-			t.Errorf("expected comment in body, got %s", body)
-		}
+		zhtest.AssertWith(t, w).BodyContains(": keepalive\n")
 	})
 }
 
@@ -197,10 +176,7 @@ func TestEventStream_SetRetry(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		body := w.Body.String()
-		if !strings.Contains(body, "retry: 10000\n") {
-			t.Errorf("expected default retry in body, got %s", body)
-		}
+		zhtest.AssertWith(t, w).BodyContains("retry: 10000\n")
 	})
 }
 
@@ -371,10 +347,7 @@ func TestNewSSEWriter(t *testing.T) {
 		}
 
 		// Check headers
-		resp := w.Result()
-		if resp.Header.Get("Content-Type") != "text/event-stream" {
-			t.Errorf("expected Content-Type text/event-stream, got %s", resp.Header.Get("Content-Type"))
-		}
+		zhtest.AssertWith(t, w).Header(HeaderContentType, MIMETextEventStream)
 
 		_ = writer
 	})
@@ -383,7 +356,7 @@ func TestNewSSEWriter(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(HeaderContentType, MIMETextPlain)
 		w.WriteHeader(http.StatusOK)
 
 		_, err := NewSSEWriter(w, r)
@@ -415,19 +388,11 @@ func TestSSEWriter_WriteEvent(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		body := w.Body.String()
-		if !strings.Contains(body, "id: 456") {
-			t.Errorf("expected id in body, got %s", body)
-		}
-		if !strings.Contains(body, "event: message") {
-			t.Errorf("expected event name in body, got %s", body)
-		}
-		if !strings.Contains(body, "retry: 3000") {
-			t.Errorf("expected retry in body, got %s", body)
-		}
-		if !strings.Contains(body, "data: hello") {
-			t.Errorf("expected data in body, got %s", body)
-		}
+		zhtest.AssertWith(t, w).
+			BodyContains("id: 456").
+			BodyContains("event: message").
+			BodyContains("retry: 3000").
+			BodyContains("data: hello")
 	})
 }
 
@@ -446,10 +411,7 @@ func TestSSEWriter_WriteComment(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 
-		body := w.Body.String()
-		if !strings.Contains(body, ": keepalive") {
-			t.Errorf("expected comment in body, got %s", body)
-		}
+		zhtest.AssertWith(t, w).BodyContains(": keepalive")
 	})
 }
 
@@ -575,7 +537,7 @@ func TestSSEWithReplay(t *testing.T) {
 	t.Run("replays events when Last-Event-ID present", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set("Last-Event-ID", "0")
+		r.Header.Set(HeaderLastEventID, "0")
 		replay := NewInMemoryReplayer(100, 0)
 
 		replay.Store(SSEEvent{Data: []byte("event1")})
@@ -587,16 +549,15 @@ func TestSSEWithReplay(t *testing.T) {
 		}
 		defer func() { _ = stream.Close() }()
 
-		body := w.Body.String()
-		if !strings.Contains(body, "event1") || !strings.Contains(body, "event2") {
-			t.Errorf("expected replayed events in body, got %s", body)
-		}
+		zhtest.AssertWith(t, w).
+			BodyContains("event1").
+			BodyContains("event2")
 	})
 
 	t.Run("returns error for invalid Last-Event-ID", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set("Last-Event-ID", "not-a-number")
+		r.Header.Set(HeaderLastEventID, "not-a-number")
 		replay := NewInMemoryReplayer(100, 0)
 
 		_, err := SSEWithReplay(w, r, replay)
@@ -661,12 +622,8 @@ func TestSSEHub(t *testing.T) {
 
 		hub.Broadcast(SSEEvent{Data: []byte("hello all")})
 
-		if !strings.Contains(w1.Body.String(), "hello all") {
-			t.Error("expected stream1 to receive broadcast")
-		}
-		if !strings.Contains(w2.Body.String(), "hello all") {
-			t.Error("expected stream2 to receive broadcast")
-		}
+		zhtest.AssertWith(t, w1).BodyContains("hello all")
+		zhtest.AssertWith(t, w2).BodyContains("hello all")
 	})
 
 	t.Run("broadcasts to topic subscribers only", func(t *testing.T) {
@@ -684,12 +641,8 @@ func TestSSEHub(t *testing.T) {
 
 		hub.BroadcastTo("topic1", SSEEvent{Data: []byte("topic1 message")})
 
-		if !strings.Contains(w1.Body.String(), "topic1 message") {
-			t.Error("expected stream1 to receive topic1 message")
-		}
-		if strings.Contains(w2.Body.String(), "topic1 message") {
-			t.Error("expected stream2 NOT to receive topic1 message")
-		}
+		zhtest.AssertWith(t, w1).BodyContains("topic1 message")
+		zhtest.AssertWith(t, w2).BodyNotContains("topic1 message")
 	})
 
 	t.Run("unsubscribe removes from all topics", func(t *testing.T) {

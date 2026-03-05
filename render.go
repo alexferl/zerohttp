@@ -132,6 +132,10 @@ func (r *defaultRenderer) File(w http.ResponseWriter, req *http.Request, filenam
 	}
 
 	contentType := mime.TypeByExtension(filepath.Ext(filename))
+	// Use charset-aware constants for known types
+	if contentType == "application/json" {
+		contentType = MIMEApplicationJSON
+	}
 	if contentType == "" {
 		buffer := make([]byte, 512)
 		n, err := file.Read(buffer)

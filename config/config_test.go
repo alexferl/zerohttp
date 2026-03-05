@@ -163,7 +163,7 @@ func TestConfigOptions(t *testing.T) {
 			t.Errorf("expected 1 custom middleware, got %d", len(cfg.DefaultMiddlewares))
 		}
 		h := cfg.DefaultMiddlewares[0](http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-		req, _ := http.NewRequest("GET", "/", nil)
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
 	})

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestContentEncodingValidation(t *testing.T) {
@@ -32,9 +33,9 @@ func TestContentEncodingValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var req *http.Request
 			if tt.body != "" {
-				req = httptest.NewRequest("POST", "/test", strings.NewReader(tt.body))
+				req = httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(tt.body))
 			} else {
-				req = httptest.NewRequest("POST", "/test", nil)
+				req = httptest.NewRequest(http.MethodPost, "/test", nil)
 			}
 			if tt.contentEncoding != "" {
 				req.Header.Set("Content-Encoding", tt.contentEncoding)
@@ -51,9 +52,7 @@ func TestContentEncodingValidation(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("expected status %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
@@ -75,7 +74,7 @@ func TestContentEncodingMultipleValues(t *testing.T) {
 	middleware := ContentEncoding()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/test", strings.NewReader("test"))
+			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 			for _, encoding := range tt.encodings {
 				req.Header.Add("Content-Encoding", encoding)
 			}
@@ -90,9 +89,7 @@ func TestContentEncodingMultipleValues(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("expected status %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
@@ -112,7 +109,7 @@ func TestContentEncodingCustomConfig(t *testing.T) {
 	middleware := ContentEncoding(config.WithContentEncodingEncodings([]string{"br", "gzip"}))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/test", strings.NewReader("test"))
+			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 			req.Header.Set("Content-Encoding", tt.encoding)
 			rr := httptest.NewRecorder()
 			nextCalled := false
@@ -125,9 +122,7 @@ func TestContentEncodingCustomConfig(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("expected status %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
@@ -152,7 +147,7 @@ func TestContentEncodingExemptPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", tt.path, strings.NewReader("test"))
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader("test"))
 			req.Header.Set("Content-Encoding", tt.encoding)
 			rr := httptest.NewRecorder()
 			nextCalled := false
@@ -165,16 +160,14 @@ func TestContentEncodingExemptPaths(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("expected status %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
 
 func TestContentEncodingHTTPMethods(t *testing.T) {
 	middleware := ContentEncoding()
-	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
+	methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			req := httptest.NewRequest(method, "/test", strings.NewReader("test"))
@@ -190,16 +183,14 @@ func TestContentEncodingHTTPMethods(t *testing.T) {
 			if !nextCalled {
 				t.Errorf("handler should be called for method %s", method)
 			}
-			if rr.Code != http.StatusOK {
-				t.Errorf("expected status 200 for method %s, got %d", method, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(http.StatusOK)
 		})
 	}
 }
 
 func TestContentEncodingNilEncodingsFallback(t *testing.T) {
 	middleware := ContentEncoding(config.WithContentEncodingEncodings(nil)) // Explicitly set to nil
-	req := httptest.NewRequest("POST", "/test", strings.NewReader("test"))
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 	req.Header.Set("Content-Encoding", "gzip") // Should be allowed by default config
 	rr := httptest.NewRecorder()
 	nextCalled := false
@@ -212,9 +203,7 @@ func TestContentEncodingNilEncodingsFallback(t *testing.T) {
 	if !nextCalled {
 		t.Error("handler should be called with default encodings fallback")
 	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
 func TestContentEncodingNilExemptPathsFallback(t *testing.T) {
@@ -222,7 +211,7 @@ func TestContentEncodingNilExemptPathsFallback(t *testing.T) {
 		config.WithContentEncodingEncodings([]string{"gzip"}),
 		config.WithContentEncodingExemptPaths(nil),
 	)
-	req := httptest.NewRequest("POST", "/test", strings.NewReader("test"))
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 	req.Header.Set("Content-Encoding", "br")
 	rr := httptest.NewRecorder()
 	nextCalled := false
@@ -235,7 +224,5 @@ func TestContentEncodingNilExemptPathsFallback(t *testing.T) {
 	if nextCalled {
 		t.Error("handler should not be called with disallowed encoding")
 	}
-	if rr.Code != http.StatusUnsupportedMediaType {
-		t.Errorf("expected status 415, got %d", rr.Code)
-	}
+	zhtest.AssertWith(t, rr).Status(http.StatusUnsupportedMediaType)
 }

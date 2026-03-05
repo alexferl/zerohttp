@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestContentCharset(t *testing.T) {
@@ -115,7 +116,7 @@ func TestContentCharset(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			middleware := tt.config()
-			req := httptest.NewRequest("POST", "/test", nil)
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
 			if tt.contentType != "" {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
@@ -130,16 +131,14 @@ func TestContentCharset(t *testing.T) {
 			if nextCalled != tt.expectNext {
 				t.Errorf("Expected nextCalled=%v, got nextCalled=%v", tt.expectNext, nextCalled)
 			}
-			if rr.Code != tt.expectCode {
-				t.Errorf("Expected status code %d, got %d", tt.expectCode, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
 
 func TestContentCharsetHTTPMethods(t *testing.T) {
 	middleware := ContentCharset()
-	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
+	methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
 
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
@@ -156,9 +155,7 @@ func TestContentCharsetHTTPMethods(t *testing.T) {
 			if !nextCalled {
 				t.Errorf("Next handler should be called for method %s", method)
 			}
-			if rr.Code != http.StatusOK {
-				t.Errorf("Expected status 200 for method %s, got %d", method, rr.Code)
-			}
+			zhtest.AssertWith(t, rr).Status(http.StatusOK)
 		})
 	}
 }
