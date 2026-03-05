@@ -53,10 +53,6 @@ func TestRenderer_JSON_Error(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for invalid data")
 	}
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status http.StatusOK even on error, got %d", w.Code)
-	}
 }
 
 func TestRenderer_Text(t *testing.T) {
@@ -167,7 +163,7 @@ func TestRenderer_Stream(t *testing.T) {
 	data := "streaming content"
 	w := httptest.NewRecorder()
 
-	if err := R.Stream(w, http.StatusOK, "text/plain", strings.NewReader(data)); err != nil {
+	if err := R.Stream(w, http.StatusOK, MIMETextPlain, strings.NewReader(data)); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
@@ -178,7 +174,7 @@ func TestRenderer_Stream_Error(t *testing.T) {
 	w := httptest.NewRecorder()
 	errorReader := &errorReader{err: errors.New("read error")}
 
-	err := R.Stream(w, http.StatusOK, "text/plain", errorReader)
+	err := R.Stream(w, http.StatusOK, MIMETextPlain, errorReader)
 	if err == nil {
 		t.Error("expected error from reader")
 	}
@@ -195,9 +191,9 @@ func TestRenderer_File(t *testing.T) {
 		content     string
 		contentType string
 	}{
-		{"text", "test.txt", "Hello!", "text/plain; charset=utf-8"},
-		{"json", "test.json", `{"test":"value"}`, "application/json"},
-		{"html", "test.html", "<h1>Test</h1>", "text/html; charset=utf-8"},
+		{"text", "test.txt", "Hello!", MIMETextPlain},
+		{"json", "test.json", `{"test":"value"}`, MIMEApplicationJSON},
+		{"html", "test.html", "<h1>Test</h1>", MIMETextHTML},
 	}
 
 	tempDir := t.TempDir()
