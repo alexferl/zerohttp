@@ -14,10 +14,10 @@ func TestRateLimit_DefaultConfigFallbacks(t *testing.T) {
 		name   string
 		option func() func(http.Handler) http.Handler
 	}{
-		{"rate", func() func(http.Handler) http.Handler { return RateLimit(config.WithRateLimitRate(0)) }},
-		{"window", func() func(http.Handler) http.Handler { return RateLimit(config.WithRateLimitWindow(0)) }},
-		{"algorithm", func() func(http.Handler) http.Handler { return RateLimit(config.WithRateLimitAlgorithm("")) }},
-		{"key extractor", func() func(http.Handler) http.Handler { return RateLimit(config.WithRateLimitKeyExtractor(nil)) }},
+		{"rate", func() func(http.Handler) http.Handler { return RateLimit(config.RateLimitConfig{Rate: 0}) }},
+		{"window", func() func(http.Handler) http.Handler { return RateLimit(config.RateLimitConfig{Window: 0}) }},
+		{"algorithm", func() func(http.Handler) http.Handler { return RateLimit(config.RateLimitConfig{Algorithm: ""}) }},
+		{"key extractor", func() func(http.Handler) http.Handler { return RateLimit(config.RateLimitConfig{KeyExtractor: nil}) }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -31,7 +31,7 @@ func TestRateLimit_DefaultConfigFallbacks(t *testing.T) {
 }
 
 func TestRateLimitStatusCodeAndMessageDefaults(t *testing.T) {
-	m := RateLimit(config.WithRateLimitStatusCode(0), config.WithRateLimitRate(1), config.WithRateLimitWindow(time.Minute))
+	m := RateLimit(config.RateLimitConfig{StatusCode: 0, Rate: 1, Window: time.Minute})
 	handler := m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(handler, req)
@@ -42,7 +42,7 @@ func TestRateLimitStatusCodeAndMessageDefaults(t *testing.T) {
 }
 
 func TestRateLimitMessageDefaults(t *testing.T) {
-	m := RateLimit(config.WithRateLimitMessage(""), config.WithRateLimitRate(1), config.WithRateLimitWindow(time.Minute))
+	m := RateLimit(config.RateLimitConfig{Message: "", Rate: 1, Window: time.Minute})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	handler := m(next)
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -54,11 +54,11 @@ func TestRateLimitMessageDefaults(t *testing.T) {
 }
 
 func TestRateLimitTokenBucket(t *testing.T) {
-	middleware := RateLimit(
-		config.WithRateLimitRate(2),
-		config.WithRateLimitWindow(time.Second),
-		config.WithRateLimitAlgorithm(config.TokenBucket),
-	)
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:      2,
+		Window:    time.Second,
+		Algorithm: config.TokenBucket,
+	})
 	count := 0
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count++
@@ -84,7 +84,11 @@ func TestRateLimitTokenBucket(t *testing.T) {
 }
 
 func TestRateLimitFixedWindow(t *testing.T) {
-	middleware := RateLimit(config.WithRateLimitRate(3), config.WithRateLimitWindow(time.Second), config.WithRateLimitAlgorithm(config.FixedWindow))
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:      3,
+		Window:    time.Second,
+		Algorithm: config.FixedWindow,
+	})
 	count := 0
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count++
@@ -110,7 +114,11 @@ func TestRateLimitFixedWindow(t *testing.T) {
 }
 
 func TestRateLimitSlidingWindow(t *testing.T) {
-	m := RateLimit(config.WithRateLimitRate(2), config.WithRateLimitWindow(100*time.Millisecond), config.WithRateLimitAlgorithm(config.SlidingWindow))
+	m := RateLimit(config.RateLimitConfig{
+		Rate:      2,
+		Window:    100 * time.Millisecond,
+		Algorithm: config.SlidingWindow,
+	})
 	handler := m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	for i := range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -136,12 +144,12 @@ func TestRateLimitSlidingWindow(t *testing.T) {
 }
 
 func TestRateLimitHeaders(t *testing.T) {
-	middleware := RateLimit(
-		config.WithRateLimitRate(5),
-		config.WithRateLimitWindow(time.Minute),
-		config.WithRateLimitAlgorithm(config.TokenBucket),
-		config.WithRateLimitIncludeHeaders(true),
-	)
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:           5,
+		Window:         time.Minute,
+		Algorithm:      config.TokenBucket,
+		IncludeHeaders: true,
+	})
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -156,12 +164,12 @@ func TestRateLimitHeaders(t *testing.T) {
 }
 
 func TestRateLimitNoHeaders(t *testing.T) {
-	middleware := RateLimit(
-		config.WithRateLimitRate(2),
-		config.WithRateLimitWindow(time.Second),
-		config.WithRateLimitAlgorithm(config.TokenBucket),
-		config.WithRateLimitIncludeHeaders(false),
-	)
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:           2,
+		Window:         time.Second,
+		Algorithm:      config.TokenBucket,
+		IncludeHeaders: false,
+	})
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -174,14 +182,14 @@ func TestRateLimitNoHeaders(t *testing.T) {
 }
 
 func TestRateLimitCustomKeyExtractor(t *testing.T) {
-	middleware := RateLimit(
-		config.WithRateLimitRate(2),
-		config.WithRateLimitWindow(time.Second),
-		config.WithRateLimitAlgorithm(config.TokenBucket),
-		config.WithRateLimitKeyExtractor(func(r *http.Request) string {
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:      2,
+		Window:    time.Second,
+		Algorithm: config.TokenBucket,
+		KeyExtractor: func(r *http.Request) string {
 			return r.Header.Get("User-ID")
-		}),
-	)
+		},
+	})
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	// User 1 allowed first two
 	for i := range 2 {
@@ -203,12 +211,12 @@ func TestRateLimitCustomKeyExtractor(t *testing.T) {
 }
 
 func TestRateLimitExemptPaths(t *testing.T) {
-	middleware := RateLimit(
-		config.WithRateLimitRate(1),
-		config.WithRateLimitWindow(time.Second),
-		config.WithRateLimitAlgorithm(config.TokenBucket),
-		config.WithRateLimitExemptPaths([]string{"/health", "/metrics"}),
-	)
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:        1,
+		Window:      time.Second,
+		Algorithm:   config.TokenBucket,
+		ExemptPaths: []string{"/health", "/metrics"},
+	})
 	count := 0
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count++
@@ -240,13 +248,13 @@ func TestRateLimitExemptPaths(t *testing.T) {
 }
 
 func TestRateLimitCustomMessage(t *testing.T) {
-	middleware := RateLimit(
-		config.WithRateLimitRate(1),
-		config.WithRateLimitWindow(time.Second),
-		config.WithRateLimitAlgorithm(config.TokenBucket),
-		config.WithRateLimitMessage("Too many requests, please slow down"),
-		config.WithRateLimitStatusCode(http.StatusServiceUnavailable),
-	)
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:       1,
+		Window:     time.Second,
+		Algorithm:  config.TokenBucket,
+		Message:    "Too many requests, please slow down",
+		StatusCode: http.StatusServiceUnavailable,
+	})
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"

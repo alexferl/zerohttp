@@ -44,7 +44,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Configuration Reference](#configuration-reference)
     - [Server Configuration](#server-configuration)
     - [Middleware Configuration](#middleware-configuration)
-    - [Logging](#logging)
+    - [Shutdown Hooks](#shutdown-hooks)
 
 
 ## Features
@@ -396,24 +396,24 @@ app := zh.New()
 
 // Add additional middleware (default security middlewares already applied)
 app.Use(
-    middleware.CORS(
-        config.WithCORSAllowedOrigins([]string{"https://example.com"}),
-        config.WithCORSAllowCredentials(true),
-    ),
-    middleware.RateLimit(
-        config.WithRateLimitRate(100),
-        config.WithRateLimitWindow(time.Minute),
-    ),
+    middleware.CORS(config.CORSConfig{
+        AllowedOrigins:   []string{"https://example.com"},
+        AllowCredentials: true,
+    }),
+    middleware.RateLimit(config.RateLimitConfig{
+        Rate:   100,
+        Window: time.Minute,
+    }),
 )
 
 // Route-specific middleware
 app.GET("/admin", adminHandler,
-    middleware.BasicAuth(
-        config.WithBasicAuthCredentials(map[string]string{"admin": "secret"}),
-    ),
-    middleware.RequestBodySize(
-        config.WithRequestBodySizeMaxBytes(1024 * 1024), // 1MB limit
-    ),
+    middleware.BasicAuth(config.BasicAuthConfig{
+        Credentials: map[string]string{"admin": "secret"},
+    }),
+    middleware.RequestBodySize(config.RequestBodySizeConfig{
+        MaxBytes: 1024 * 1024, // 1MB limit
+    }),
 )
 ```
 
@@ -550,45 +550,45 @@ return zh.NewValidationProblemDetail("Validation failed", customErrors).Render(w
 
 ## Configuration
 
-Flexible configuration system with functional options:
+Flexible configuration system with struct-based config:
 
 ```go
-app := zh.New(
+app := zh.New(config.Config{
     // Server configuration
-    config.WithAddr(":8080"),
-    config.WithServer(&http.Server{
+    Addr: ":8080",
+    Server: &http.Server{
         ReadTimeout:  10 * time.Second,
         WriteTimeout: 10 * time.Second,
-    }),
-    config.WithTLSAddr(":8443"),
-    config.WithTLSServer(&http.Server{
+    },
+    TLSAddr: ":8443",
+    TLSServer: &http.Server{
         ReadTimeout:  10 * time.Second,
         WriteTimeout: 10 * time.Second,
-    }),
-    config.WithCertFile("cert.pem"),
-    config.WithKeyFile("key.pem"),
-    config.WithLogger(myCustomLogger),
+    },
+    CertFile: "cert.pem",
+    KeyFile:  "key.pem",
+    Logger:   myCustomLogger,
 
-    // Configure default middlewares using their respective option containers
-    config.WithRequestBodySizeOptions(
-        config.WithRequestBodySizeMaxBytes(10*1024*1024), // 10MB
-    ),
-    config.WithRequestIDOptions(
-        config.WithRequestIDHeader("X-Request-ID"),
-    ),
-    config.WithRecoverOptions(
-        config.WithRecoverStackSize(8192),
-        config.WithRecoverEnableStackTrace(true),
-    ),
-    config.WithSecurityHeadersOptions(
-        config.WithSecurityHeadersCSP("default-src 'self'"),
-        config.WithSecurityHeadersXFrameOptions("SAMEORIGIN"),
-        config.WithSecurityHeadersHSTS(
-            config.WithHSTSMaxAge(31536000), // 1 year
-            config.WithHSTSPreload(true),
-        ),
-    ),
-)
+    // Configure default middlewares
+    RequestBodySize: config.RequestBodySizeConfig{
+        MaxBytes: 10 * 1024 * 1024, // 10MB
+    },
+    RequestID: config.RequestIDConfig{
+        Header: "X-Request-ID",
+    },
+    Recover: config.RecoverConfig{
+        StackSize:         8192,
+        EnableStackTrace: true,
+    },
+    SecurityHeaders: config.SecurityHeadersConfig{
+        CSP:           "default-src 'self'",
+        XFrameOptions: "SAMEORIGIN",
+        HSTS: config.HSTSConfig{
+            MaxAge:   31536000, // 1 year
+            Preload:  true,
+        },
+    },
+})
 ```
 
 
@@ -597,14 +597,14 @@ app := zh.New(
 If you need to disable default middlewares:
 
 ```go
-app := zh.New(
-    config.WithDisableDefaultMiddlewares(), // Disable all defaults
+app := zh.New(config.Config{
+    DisableDefaultMiddlewares: true, // Disable all defaults
     // Or provide custom defaults
-    config.WithDefaultMiddlewares([]func(http.Handler) http.Handler{
-        middleware.RequestID(),
-        middleware.CORS(),
-    }),
-)
+    DefaultMiddlewares: []func(http.Handler) http.Handler{
+        middleware.RequestID(config.DefaultRequestIDConfig),
+        middleware.CORS(config.DefaultCORSConfig),
+    },
+})
 ```
 
 
@@ -617,35 +617,36 @@ app := zh.New(
 - **Monitoring**: Request Logger, Circuit Breaker, Timeout, Recover
 - **Utilities**: Request ID, Real IP, Trailing Slash, Set Header, No Cache, With Value
 
-Each middleware uses functional options for configuration:
+Each middleware accepts a config struct:
 
 ```go
 // CORS middleware
-middleware.CORS(
-    config.WithCORSAllowedOrigins([]string{"https://example.com"}),
-    config.WithCORSAllowCredentials(true),
-)
+middleware.CORS(config.CORSConfig{
+    AllowedOrigins:   []string{"https://example.com"},
+    AllowCredentials: true,
+})
 
 // Rate limiting
-middleware.RateLimit(
-    config.WithRateLimitRate(50),
-    config.WithRateLimitWindow(time.Minute),
-    config.WithRateLimitAlgorithm(config.TokenBucket),
-)
+middleware.RateLimit(config.RateLimitConfig{
+    Rate:      50,
+    Window:    time.Minute,
+    Algorithm: config.TokenBucket,
+})
 
 // Compression
-middleware.Compress(
-    config.WithCompressLevel(6),
-)
+middleware.Compress(config.CompressConfig{
+    Level: 6,
+})
 
 // Security headers with HSTS options
-middleware.SecurityHeaders(
-    config.WithSecurityHeadersCSP("default-src 'self'; script-src 'self' 'unsafe-inline'"),
-    config.WithSecurityHeadersHSTS(
-        config.WithHSTSMaxAge(31536000),
-        config.WithHSTSPreload(true),
-    ),
-)
+middleware.SecurityHeaders(config.SecurityHeadersConfig{
+    CSP:           "default-src 'self'; script-src 'self' 'unsafe-inline'",
+    XFrameOptions: "DENY",
+    HSTS: config.HSTSConfig{
+        MaxAge:  31536000,
+        Preload: true,
+    },
+})
 ```
 
 
@@ -735,14 +736,14 @@ interface {
 }
 ```
 
-All pluggable features are configured via functional options:
+All pluggable features are configured via the Config struct:
 
 ```go
-app := zh.New(
-    config.WithAutocertManager(myCertManager),
-    config.WithHTTP3Server(myH3Server),
-    config.WithWebTransportServer(myWTServer),
-)
+app := zh.New(config.Config{
+    AutocertManager:    myCertManager,
+    HTTP3Server:        myH3Server,
+    WebTransportServer: myWTServer,
+})
 ```
 
 ### Auto-TLS
@@ -763,9 +764,9 @@ manager := &autocert.Manager{
     HostPolicy: autocert.HostWhitelist("example.com", "www.example.com"),
 }
 
-app := zh.New(
-    config.WithAutocertManager(manager),
-)
+app := zh.New(config.Config{
+    AutocertManager: manager,
+})
 
 // StartAutoTLS starts HTTP (for ACME challenges) and HTTPS servers
 app.StartAutoTLS()
@@ -816,7 +817,9 @@ import (
 )
 
 func main() {
-    app := zh.New(config.WithSSEProvider(zh.NewDefaultProvider()))
+    app := zh.New(config.Config{
+        SSEProvider: zh.NewDefaultProvider(),
+    })
 
     app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
         stream, err := app.SSEProvider().NewSSE(w, r)
@@ -875,9 +878,9 @@ func main() {
         CheckOrigin: func(r *http.Request) bool { return true },
     }
 
-    app := zh.New(
-        config.WithWebSocketUpgrader(&myUpgrader{upgrader: gupgrader}),
-    )
+    app := zh.New(config.Config{
+        WebSocketUpgrader: &myUpgrader{upgrader: gupgrader},
+    })
 
     // WebSocket endpoint
     app.GET("/ws", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
@@ -968,21 +971,21 @@ func main() {
     app := zh.New()
 
     // Add default health endpoints: /livez, /readyz, /startupz
-    healthcheck.New(app)
+    healthcheck.New(app, healthcheck.DefaultConfig)
 
     // Or customize endpoints and handlers
-    healthcheck.New(app,
-        healthcheck.WithLivenessEndpoint("/health/live"),
-        healthcheck.WithReadinessEndpoint("/health/ready"),
-        healthcheck.WithReadinessHandler(func(w http.ResponseWriter, r *http.Request) error {
-            // Check database connections, dependencies, etc.
-            if !isAppReady() {
-                return zh.R.Text(w, http.StatusServiceUnavailable, "not ready")
-            }
-            return zh.R.Text(w, http.StatusOK, "ready")
-        }),
-        healthcheck.WithStartupEndpoint("/health/startup"),
-    )
+    cfg := healthcheck.DefaultConfig
+    cfg.LivenessEndpoint = "/health/live"
+    cfg.ReadinessEndpoint = "/health/ready"
+    cfg.ReadinessHandler = func(w http.ResponseWriter, r *http.Request) error {
+        // Check database connections, dependencies, etc.
+        if !isAppReady() {
+            return zh.R.Text(w, http.StatusServiceUnavailable, "not ready")
+        }
+        return zh.R.Text(w, http.StatusOK, "ready")
+    }
+    cfg.StartupEndpoint = "/health/startup"
+    healthcheck.New(app, cfg)
 
     log.Fatal(app.Start())
 }
@@ -1004,11 +1007,11 @@ Prevent cascading failures with configurable circuit breaker middleware:
 app.Use(middleware.CircuitBreaker())
 
 // Custom configuration
-app.Use(middleware.CircuitBreaker(
-    config.WithCircuitBreakerFailureThreshold(3),             // Break after 3 failures
-    config.WithCircuitBreakerRecoveryTimeout(10*time.Second), // Try recovery after 10s
-    config.WithCircuitBreakerOpenStatusCode(503),             // Return 503 when open
-))
+app.Use(middleware.CircuitBreaker(config.CircuitBreakerConfig{
+    FailureThreshold:  3,                // Break after 3 failures
+    RecoveryTimeout:   10 * time.Second, // Try recovery after 10s
+    OpenStatusCode:    503,              // Return 503 when open
+}))
 ```
 
 The circuit breaker operates in three states: **Closed** (normal), **Open** (blocked), and **Half-Open** (testing recovery). It prevents cascading failures when downstream services are unavailable.
@@ -1021,33 +1024,51 @@ zerohttp provides graceful shutdown hooks for cleanup tasks during server shutdo
 **⚠️ Important:** Hooks **must** respect context cancellation by checking `ctx.Done()`. If a hook blocks without respecting the context, shutdown will hang.
 
 ```go
-app := zh.New(
+app := zh.New(config.Config{
     // Pre-shutdown: run before servers start shutting down (sequential)
-    config.WithPreShutdownHook("health", func(ctx context.Context) error {
-        // Mark service as unhealthy to stop receiving traffic
-        health.SetUnhealthy()
-        return nil
-    }),
+    PreShutdownHooks: []config.ShutdownHookConfig{
+        {
+            Name: "health",
+            Hook: func(ctx context.Context) error {
+                // Mark service as unhealthy to stop receiving traffic
+                health.SetUnhealthy()
+                return nil
+            },
+        },
+    },
 
     // Shutdown: run concurrently with server shutdown
-    config.WithShutdownHook("flush-logs", func(ctx context.Context) error {
-        return logger.Flush()
-    }),
-    config.WithShutdownHook("close-db", func(ctx context.Context) error {
-        // Always check context cancellation for long operations
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        default:
-            return db.Close()
-        }
-    }),
+    ShutdownHooks: []config.ShutdownHookConfig{
+        {
+            Name: "flush-logs",
+            Hook: func(ctx context.Context) error {
+                return logger.Flush()
+            },
+        },
+        {
+            Name: "close-db",
+            Hook: func(ctx context.Context) error {
+                // Always check context cancellation for long operations
+                select {
+                case <-ctx.Done():
+                    return ctx.Err()
+                default:
+                    return db.Close()
+                }
+            },
+        },
+    },
 
     // Post-shutdown: run after all servers are stopped (sequential)
-    config.WithPostShutdownHook("cleanup", func(ctx context.Context) error {
-        return os.RemoveAll("/tmp/app-*")
-    }),
-)
+    PostShutdownHooks: []config.ShutdownHookConfig{
+        {
+            Name: "cleanup",
+            Hook: func(ctx context.Context) error {
+                return os.RemoveAll("/tmp/app-*")
+            },
+        },
+    },
+})
 
 // Hooks can also be registered programmatically
 app.RegisterShutdownHook("metrics", func(ctx context.Context) error {
@@ -1256,39 +1277,74 @@ isServerError := w.IsServerError()
 
 ## Configuration Reference
 
-The functional options pattern provides structured configuration for all aspects of the server:
+zerohttp uses struct-based configuration. Pass a `config.Config` struct to `zh.New()`:
 
 ### Server Configuration
 
-- `config.WithAddr()` - HTTP server address
-- `config.WithTLSAddr()` - HTTPS server address
-- `config.WithServer()` - Custom HTTP server instance
-- `config.WithTLSServer()` - Custom HTTPS server instance
-- `config.WithListener()` - Custom HTTP listener
-- `config.WithTLSListener()` - Custom HTTPS listener
-- `config.WithCertFile()` - TLS certificate file path
-- `config.WithKeyFile()` - TLS key file path
-- `config.WithPreShutdownHook()` - Hook to run before server shutdown
-- `config.WithShutdownHook()` - Hook to run concurrently with server shutdown
-- `config.WithPostShutdownHook()` - Hook to run after server shutdown
-- `config.WithAutocertManager()` - Let's Encrypt integration
-- `config.WithHTTP3Server()` - HTTP/3 server (e.g., quic-go)
-- `config.WithSSEProvider()` - SSE provider for server-sent events
-- `config.WithWebSocketUpgrader()` - WebSocket upgrader (e.g., gorilla/websocket)
-- `config.WithWebTransportServer()` - WebTransport server (e.g., webtransport-go)
-
-
-### Logging
-
-- `config.WithLogger()` - Custom logger instance
-
+```go
+app := zh.New(config.Config{
+    Addr:                   ":8080",                    // HTTP server address
+    TLSAddr:                ":8443",                    // HTTPS server address
+    Server:                 &http.Server{...},          // Custom HTTP server instance
+    TLSServer:              &http.Server{...},          // Custom HTTPS server instance
+    Listener:               myListener,                  // Custom HTTP listener
+    TLSListener:            myTLSListener,               // Custom HTTPS listener
+    CertFile:               "cert.pem",                  // TLS certificate file path
+    KeyFile:                "key.pem",                   // TLS key file path
+    Logger:                 myLogger,                    // Custom logger instance
+    AutocertManager:        myCertManager,               // Let's Encrypt integration
+    HTTP3Server:            myH3Server,                  // HTTP/3 server (e.g., quic-go)
+    SSEProvider:            mySSEProvider,               // SSE provider for server-sent events
+    WebSocketUpgrader:      myWSUpgrader,                // WebSocket upgrader
+    WebTransportServer:     myWTServer,                  // WebTransport server
+    DisableDefaultMiddlewares: false,                    // Disable built-in middlewares
+    DefaultMiddlewares:     []func(http.Handler) http.Handler{...}, // Custom middleware chain
+})
+```
 
 ### Middleware Configuration
 
-- `config.WithDisableDefaultMiddlewares()` - Disable built-in middlewares
-- `config.WithDefaultMiddlewares()` - Custom middleware chain
-- `config.WithRequestIDOptions()` - Request ID generation settings
-- `config.WithRecoverOptions()` - Panic recovery settings
-- `config.WithRequestBodySizeOptions()` - Request body size limits
-- `config.WithSecurityHeadersOptions()` - Security header configuration options
-- `config.WithRequestLoggerOptions()` - Request logging configuration
+Configure default middlewares directly on the Config struct:
+
+```go
+app := zh.New(config.Config{
+    RequestID: config.RequestIDConfig{
+        Header: "X-Request-ID",
+    },
+    Recover: config.RecoverConfig{
+        StackSize:        4096,
+        EnableStackTrace: true,
+    },
+    RequestBodySize: config.RequestBodySizeConfig{
+        MaxBytes: 5 * 1024 * 1024, // 5MB
+    },
+    SecurityHeaders: config.SecurityHeadersConfig{
+        CSP:              "default-src 'self'",
+        XFrameOptions:    "DENY",
+        HSTS: config.HSTSConfig{
+            MaxAge:   31536000,
+            Preload:  true,
+        },
+    },
+    RequestLogger: config.RequestLoggerConfig{
+        LogErrors: true,
+        Fields:    []string{"method", "uri", "status", "duration"},
+    },
+})
+```
+
+### Shutdown Hooks
+
+```go
+app := zh.New(config.Config{
+    PreShutdownHooks: []config.ShutdownHookConfig{
+        {Name: "health", Hook: func(ctx context.Context) error { ... }},
+    },
+    ShutdownHooks: []config.ShutdownHookConfig{
+        {Name: "flush-logs", Hook: func(ctx context.Context) error { ... }},
+    },
+    PostShutdownHooks: []config.ShutdownHookConfig{
+        {Name: "cleanup", Hook: func(ctx context.Context) error { ... }},
+    },
+})
+```

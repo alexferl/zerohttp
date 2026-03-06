@@ -32,36 +32,43 @@ func TestTimeoutConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestTimeoutOptions(t *testing.T) {
-	t.Run("duration option", func(t *testing.T) {
-		cfg := DefaultTimeoutConfig
-		WithTimeoutDuration(60 * time.Second)(&cfg)
+func TestTimeoutConfig_StructAssignment(t *testing.T) {
+	t.Run("duration assignment", func(t *testing.T) {
+		cfg := TimeoutConfig{
+			Timeout: 60 * time.Second,
+		}
 		if cfg.Timeout != 60*time.Second {
 			t.Errorf("expected timeout = 60s, got %v", cfg.Timeout)
 		}
 	})
 
-	t.Run("status code option", func(t *testing.T) {
-		cfg := DefaultTimeoutConfig
-		WithTimeoutStatusCode(http.StatusRequestTimeout)(&cfg)
+	t.Run("status code assignment", func(t *testing.T) {
+		cfg := TimeoutConfig{
+			Timeout:    DefaultTimeoutConfig.Timeout,
+			StatusCode: http.StatusRequestTimeout,
+		}
 		if cfg.StatusCode != http.StatusRequestTimeout {
 			t.Errorf("expected status code = %d, got %d", http.StatusRequestTimeout, cfg.StatusCode)
 		}
 	})
 
-	t.Run("message option", func(t *testing.T) {
+	t.Run("message assignment", func(t *testing.T) {
 		message := "Request timed out, please try again later"
-		cfg := DefaultTimeoutConfig
-		WithTimeoutMessage(message)(&cfg)
+		cfg := TimeoutConfig{
+			Timeout: DefaultTimeoutConfig.Timeout,
+			Message: message,
+		}
 		if cfg.Message != message {
 			t.Errorf("expected message = %s, got %s", message, cfg.Message)
 		}
 	})
 
-	t.Run("exempt paths option", func(t *testing.T) {
+	t.Run("exempt paths assignment", func(t *testing.T) {
 		exemptPaths := []string{"/api/long-running", "/upload", "/stream", "/websocket"}
-		cfg := DefaultTimeoutConfig
-		WithTimeoutExemptPaths(exemptPaths)(&cfg)
+		cfg := TimeoutConfig{
+			Timeout:     DefaultTimeoutConfig.Timeout,
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != 4 {
 			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -70,13 +77,14 @@ func TestTimeoutOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("multiple options", func(t *testing.T) {
+	t.Run("multiple fields", func(t *testing.T) {
 		exemptPaths := []string{"/long-process", "/upload"}
-		cfg := DefaultTimeoutConfig
-		WithTimeoutDuration(2 * time.Minute)(&cfg)
-		WithTimeoutStatusCode(http.StatusServiceUnavailable)(&cfg)
-		WithTimeoutMessage("Service unavailable due to timeout")(&cfg)
-		WithTimeoutExemptPaths(exemptPaths)(&cfg)
+		cfg := TimeoutConfig{
+			Timeout:     2 * time.Minute,
+			StatusCode:  http.StatusServiceUnavailable,
+			Message:     "Service unavailable due to timeout",
+			ExemptPaths: exemptPaths,
+		}
 
 		if cfg.Timeout != 2*time.Minute {
 			t.Errorf("expected timeout = 2m, got %v", cfg.Timeout)
@@ -116,8 +124,9 @@ func TestTimeoutConfig_DurationVariations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := DefaultTimeoutConfig
-			WithTimeoutDuration(tt.duration)(&cfg)
+			cfg := TimeoutConfig{
+				Timeout: tt.duration,
+			}
 			if cfg.Timeout != tt.duration {
 				t.Errorf("expected timeout = %v, got %v", tt.duration, cfg.Timeout)
 			}
@@ -142,8 +151,10 @@ func TestTimeoutConfig_StatusCodeVariations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := DefaultTimeoutConfig
-			WithTimeoutStatusCode(tt.statusCode)(&cfg)
+			cfg := TimeoutConfig{
+				Timeout:    DefaultTimeoutConfig.Timeout,
+				StatusCode: tt.statusCode,
+			}
 			if cfg.StatusCode != tt.expected {
 				t.Errorf("expected status code = %d, got %d", tt.expected, cfg.StatusCode)
 			}
@@ -168,8 +179,10 @@ func TestTimeoutConfig_MessageVariations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := DefaultTimeoutConfig
-			WithTimeoutMessage(tt.message)(&cfg)
+			cfg := TimeoutConfig{
+				Timeout: DefaultTimeoutConfig.Timeout,
+				Message: tt.message,
+			}
 			if cfg.Message != tt.message {
 				t.Errorf("expected message = %q, got %q", tt.message, cfg.Message)
 			}
@@ -179,8 +192,10 @@ func TestTimeoutConfig_MessageVariations(t *testing.T) {
 
 func TestTimeoutConfig_EdgeCases(t *testing.T) {
 	t.Run("empty exempt paths", func(t *testing.T) {
-		cfg := DefaultTimeoutConfig
-		WithTimeoutExemptPaths([]string{})(&cfg)
+		cfg := TimeoutConfig{
+			Timeout:     DefaultTimeoutConfig.Timeout,
+			ExemptPaths: []string{},
+		}
 		if cfg.ExemptPaths == nil {
 			t.Error("expected exempt paths slice to be initialized, not nil")
 		}
@@ -190,8 +205,10 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil exempt paths", func(t *testing.T) {
-		cfg := DefaultTimeoutConfig
-		WithTimeoutExemptPaths(nil)(&cfg)
+		cfg := TimeoutConfig{
+			Timeout:     DefaultTimeoutConfig.Timeout,
+			ExemptPaths: nil,
+		}
 		if cfg.ExemptPaths != nil {
 			t.Error("expected exempt paths to remain nil when nil is passed")
 		}
@@ -199,8 +216,10 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 
 	t.Run("empty string paths", func(t *testing.T) {
 		exemptPaths := []string{"", "/upload", ""}
-		cfg := DefaultTimeoutConfig
-		WithTimeoutExemptPaths(exemptPaths)(&cfg)
+		cfg := TimeoutConfig{
+			Timeout:     DefaultTimeoutConfig.Timeout,
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != 3 {
 			t.Errorf("expected 3 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -216,8 +235,10 @@ func TestTimeoutConfig_PathPatterns(t *testing.T) {
 			"/api/v1/upload/*", "/streaming/*", "/websocket", "/long-poll",
 			"*.upload", "/admin/backup/*", "/reports/generate", "/sse/*",
 		}
-		cfg := DefaultTimeoutConfig
-		WithTimeoutExemptPaths(exemptPaths)(&cfg)
+		cfg := TimeoutConfig{
+			Timeout:     DefaultTimeoutConfig.Timeout,
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != len(exemptPaths) {
 			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
 		}
@@ -231,8 +252,10 @@ func TestTimeoutConfig_PathPatterns(t *testing.T) {
 			"/api-v1/upload", "/long_running_task", "/upload-service", "/stream.data",
 			"/process (background)", "/path with spaces", "/path/with/unicode-ñ", "/files/test@example.com",
 		}
-		cfg := DefaultTimeoutConfig
-		WithTimeoutExemptPaths(exemptPaths)(&cfg)
+		cfg := TimeoutConfig{
+			Timeout:     DefaultTimeoutConfig.Timeout,
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != len(exemptPaths) {
 			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
 		}

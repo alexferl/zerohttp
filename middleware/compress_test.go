@@ -15,10 +15,10 @@ import (
 )
 
 func TestCompress(t *testing.T) {
-	middleware := Compress(
-		config.WithCompressTypes([]string{"text/html", "application/json"}),
-		config.WithCompressLevel(9),
-	)
+	middleware := Compress(config.CompressConfig{
+		Types: []string{"text/html", "application/json"},
+		Level: 9,
+	})
 
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -58,9 +58,9 @@ func TestCompress(t *testing.T) {
 }
 
 func TestCompressExemptPaths(t *testing.T) {
-	middleware := Compress(
-		config.WithCompressExemptPaths([]string{"/health", "/metrics", "/api/internal/"}),
-	)
+	middleware := Compress(config.CompressConfig{
+		ExemptPaths: []string{"/health", "/metrics", "/api/internal/"},
+	})
 
 	tests := []struct {
 		path           string
@@ -133,9 +133,9 @@ func TestCompressAlgorithms(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			middleware := Compress(
-				config.WithCompressAlgorithms(tt.algorithms),
-			)
+			middleware := Compress(config.CompressConfig{
+				Algorithms: tt.algorithms,
+			})
 
 			handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/plain")
@@ -158,12 +158,12 @@ func TestCompressAlgorithms(t *testing.T) {
 
 func TestCompressAllOptions(t *testing.T) {
 	// Test all options working together
-	middleware := Compress(
-		config.WithCompressLevel(9),
-		config.WithCompressTypes([]string{"text/html", "application/json"}),
-		config.WithCompressAlgorithms([]config.CompressionAlgorithm{config.Gzip}),
-		config.WithCompressExemptPaths([]string{"/health"}),
-	)
+	middleware := Compress(config.CompressConfig{
+		Level:       9,
+		Types:       []string{"text/html", "application/json"},
+		Algorithms:  []config.CompressionAlgorithm{config.Gzip},
+		ExemptPaths: []string{"/health"},
+	})
 
 	tests := []struct {
 		name             string
@@ -434,43 +434,43 @@ func TestCompressorLevels(t *testing.T) {
 func TestCompressConfigDefaults(t *testing.T) {
 	tests := []struct {
 		name           string
-		options        []config.CompressOption
+		config         config.CompressConfig
 		description    string
 		shouldCompress bool
 	}{
 		{
-			name:           "no options - use all defaults",
-			options:        []config.CompressOption{},
+			name:           "no config - use all defaults",
+			config:         config.CompressConfig{},
 			description:    "Should use default level, types, algorithms, and exempt paths",
 			shouldCompress: true,
 		},
 		{
 			name:           "zero level - fallback to default",
-			options:        []config.CompressOption{config.WithCompressLevel(0)},
+			config:         config.CompressConfig{Level: 0},
 			description:    "Level 0 should fallback to default level (6)",
 			shouldCompress: true,
 		},
 		{
 			name:           "negative level - fallback to default",
-			options:        []config.CompressOption{config.WithCompressLevel(-1)},
+			config:         config.CompressConfig{Level: -1},
 			description:    "Negative level should fallback to default",
 			shouldCompress: true,
 		},
 		{
 			name:           "nil types - use defaults",
-			options:        []config.CompressOption{config.WithCompressTypes(nil)},
+			config:         config.CompressConfig{Types: nil},
 			description:    "Nil types should use default compressible types",
 			shouldCompress: true,
 		},
 		{
 			name:           "nil algorithms - use defaults",
-			options:        []config.CompressOption{config.WithCompressAlgorithms(nil)},
+			config:         config.CompressConfig{Algorithms: nil},
 			description:    "Nil algorithms should use default algorithms (gzip, deflate)",
 			shouldCompress: true,
 		},
 		{
 			name:           "nil exempt paths - use defaults",
-			options:        []config.CompressOption{config.WithCompressExemptPaths(nil)},
+			config:         config.CompressConfig{ExemptPaths: nil},
 			description:    "Nil exempt paths should use default (empty list)",
 			shouldCompress: true,
 		},
@@ -478,7 +478,7 @@ func TestCompressConfigDefaults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mw := Compress(tt.options...)
+			mw := Compress(tt.config)
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/html")
 				_, err := w.Write([]byte(strings.Repeat("test content ", 50)))
@@ -504,19 +504,19 @@ func TestCompressConfigDefaults(t *testing.T) {
 func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 	tests := []struct {
 		name              string
-		options           []config.CompressOption
+		config            config.CompressConfig
 		description       string
 		expectCompression bool
 	}{
 		{
 			name:              "empty algorithms slice - disable compression",
-			options:           []config.CompressOption{config.WithCompressAlgorithms([]config.CompressionAlgorithm{})},
+			config:            config.CompressConfig{Algorithms: []config.CompressionAlgorithm{}},
 			description:       "Empty algorithms slice should disable all compression algorithms",
 			expectCompression: false,
 		},
 		{
 			name:              "empty exempt paths - allow compression",
-			options:           []config.CompressOption{config.WithCompressExemptPaths([]string{})},
+			config:            config.CompressConfig{ExemptPaths: []string{}},
 			description:       "Empty exempt paths should allow compression on all paths",
 			expectCompression: true,
 		},
@@ -524,7 +524,7 @@ func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mw := Compress(tt.options...)
+			mw := Compress(tt.config)
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/html")
 				_, err := w.Write([]byte(strings.Repeat("test content ", 50)))
@@ -549,12 +549,12 @@ func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 
 func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 	t.Run("defaults used when config values are nil or invalid", func(t *testing.T) {
-		mw := Compress(
-			config.WithCompressLevel(0),         // Should fallback to default (6)
-			config.WithCompressTypes(nil),       // Should use defaults
-			config.WithCompressAlgorithms(nil),  // Should use defaults
-			config.WithCompressExemptPaths(nil), // Should use defaults
-		)
+		mw := Compress(config.CompressConfig{
+			Level:       0,   // Should fallback to default (6)
+			Types:       nil, // Should use defaults
+			Algorithms:  nil, // Should use defaults
+			ExemptPaths: nil, // Should use defaults
+		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json") // Default compressible type
@@ -573,11 +573,11 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 	})
 
 	t.Run("overrides work when explicitly set", func(t *testing.T) {
-		mw := Compress(
-			config.WithCompressLevel(9),                                               // Explicit level
-			config.WithCompressTypes([]string{"text/custom"}),                         // Custom type only
-			config.WithCompressAlgorithms([]config.CompressionAlgorithm{config.Gzip}), // Gzip only
-		)
+		mw := Compress(config.CompressConfig{
+			Level:      9,                                          // Explicit level
+			Types:      []string{"text/custom"},                    // Custom type only
+			Algorithms: []config.CompressionAlgorithm{config.Gzip}, // Gzip only
+		})
 
 		// Test with non-matching type
 		handler1 := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

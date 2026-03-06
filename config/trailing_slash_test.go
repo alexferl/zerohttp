@@ -46,41 +46,45 @@ func TestTrailingSlashConfig_ActionConstants(t *testing.T) {
 	}
 }
 
-func TestTrailingSlashOptions(t *testing.T) {
-	t.Run("action option", func(t *testing.T) {
-		cfg := DefaultTrailingSlashConfig
-		WithTrailingSlashAction(StripAction)(&cfg)
+func TestTrailingSlashConfig_StructAssignment(t *testing.T) {
+	t.Run("action assignment", func(t *testing.T) {
+		cfg := TrailingSlashConfig{
+			Action: StripAction,
+		}
 		if cfg.Action != StripAction {
 			t.Errorf("expected action = %s, got %s", StripAction, cfg.Action)
 		}
 	})
 
-	t.Run("preference option", func(t *testing.T) {
-		cfg := DefaultTrailingSlashConfig
-		WithTrailingSlashPreference(true)(&cfg)
+	t.Run("preference assignment", func(t *testing.T) {
+		cfg := TrailingSlashConfig{
+			PreferTrailingSlash: true,
+		}
 		if cfg.PreferTrailingSlash != true {
 			t.Errorf("expected prefer trailing slash = true, got %t", cfg.PreferTrailingSlash)
 		}
 		// Test setting back to false
-		WithTrailingSlashPreference(false)(&cfg)
+		cfg.PreferTrailingSlash = false
 		if cfg.PreferTrailingSlash != false {
 			t.Errorf("expected prefer trailing slash = false, got %t", cfg.PreferTrailingSlash)
 		}
 	})
 
-	t.Run("redirect code option", func(t *testing.T) {
-		cfg := DefaultTrailingSlashConfig
-		WithTrailingSlashRedirectCode(http.StatusFound)(&cfg)
+	t.Run("redirect code assignment", func(t *testing.T) {
+		cfg := TrailingSlashConfig{
+			RedirectCode: http.StatusFound,
+		}
 		if cfg.RedirectCode != http.StatusFound {
 			t.Errorf("expected redirect code = %d, got %d", http.StatusFound, cfg.RedirectCode)
 		}
 	})
 
-	t.Run("multiple options", func(t *testing.T) {
-		cfg := DefaultTrailingSlashConfig
-		WithTrailingSlashAction(AppendAction)(&cfg)
-		WithTrailingSlashPreference(true)(&cfg)
-		WithTrailingSlashRedirectCode(http.StatusFound)(&cfg)
+	t.Run("multiple fields", func(t *testing.T) {
+		cfg := TrailingSlashConfig{
+			Action:              AppendAction,
+			PreferTrailingSlash: true,
+			RedirectCode:        http.StatusFound,
+		}
 
 		if cfg.Action != AppendAction {
 			t.Errorf("expected action = %s, got %s", AppendAction, cfg.Action)
@@ -98,8 +102,9 @@ func TestTrailingSlashConfig_AllActions(t *testing.T) {
 	actions := []TrailingSlashAction{RedirectAction, StripAction, AppendAction}
 	for _, action := range actions {
 		t.Run(string(action), func(t *testing.T) {
-			cfg := DefaultTrailingSlashConfig
-			WithTrailingSlashAction(action)(&cfg)
+			cfg := TrailingSlashConfig{
+				Action: action,
+			}
 			if cfg.Action != action {
 				t.Errorf("expected action = %s, got %s", action, cfg.Action)
 			}
@@ -125,8 +130,9 @@ func TestTrailingSlashConfig_RedirectCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := DefaultTrailingSlashConfig
-			WithTrailingSlashRedirectCode(tt.redirectCode)(&cfg)
+			cfg := TrailingSlashConfig{
+				RedirectCode: tt.redirectCode,
+			}
 			if cfg.RedirectCode != tt.httpConst {
 				t.Errorf("expected %s redirect code = %d, got %d", tt.description, tt.httpConst, cfg.RedirectCode)
 			}
@@ -152,9 +158,10 @@ func TestTrailingSlashConfig_UsageScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := DefaultTrailingSlashConfig
-			WithTrailingSlashPreference(tt.preferTrailingSlash)(&cfg)
-			WithTrailingSlashAction(tt.action)(&cfg)
+			cfg := TrailingSlashConfig{
+				PreferTrailingSlash: tt.preferTrailingSlash,
+				Action:              tt.action,
+			}
 
 			if cfg.PreferTrailingSlash != tt.preferTrailingSlash {
 				t.Errorf("%s: expected prefer trailing slash = %t, got %t", tt.description, tt.preferTrailingSlash, cfg.PreferTrailingSlash)
@@ -174,12 +181,12 @@ func TestTrailingSlashConfig_EdgeCases(t *testing.T) {
 			t.Error("expected initial PreferTrailingSlash = false")
 		}
 		// Toggle to true
-		WithTrailingSlashPreference(true)(&cfg)
+		cfg.PreferTrailingSlash = true
 		if cfg.PreferTrailingSlash != true {
 			t.Error("expected PreferTrailingSlash = true after toggle")
 		}
 		// Toggle back to false
-		WithTrailingSlashPreference(false)(&cfg)
+		cfg.PreferTrailingSlash = false
 		if cfg.PreferTrailingSlash != false {
 			t.Error("expected PreferTrailingSlash = false after toggle back")
 		}

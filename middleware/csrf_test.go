@@ -77,15 +77,15 @@ func TestCSRF_DefaultValues(t *testing.T) {
 	})
 
 	// Test with explicit zero values to trigger default code paths
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFCookieName(""),
-		config.WithCSRFCookieMaxAge(0),
-		config.WithCSRFCookiePath(""),
-		config.WithCSRFTokenLookup(""),
-		config.WithCSRFExemptMethods(nil),
-		config.WithCSRFExemptPaths(nil),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:       testHMACKey,
+		CookieName:    "",
+		CookieMaxAge:  0,
+		CookiePath:    "",
+		TokenLookup:   "",
+		ExemptMethods: nil,
+		ExemptPaths:   nil,
+	})(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
@@ -126,7 +126,7 @@ func TestCSRF_TokenGeneration(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// GET request should generate token
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -170,7 +170,7 @@ func TestCSRF_ValidToken(t *testing.T) {
 		_, _ = w.Write([]byte("success"))
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// First, get a CSRF token via GET
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -209,7 +209,7 @@ func TestCSRF_InvalidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// Make POST request with invalid token
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -229,7 +229,7 @@ func TestCSRF_MissingToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// Make POST request without token
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -245,7 +245,7 @@ func TestCSRF_MismatchedTokens(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// First, get a valid CSRF token via GET
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -277,7 +277,7 @@ func TestCSRF_ExemptMethods(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	exemptMethods := []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace}
 
@@ -296,10 +296,10 @@ func TestCSRF_ExemptPaths(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFExemptPaths([]string{"/api/webhook", "/public/"}),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:     testHMACKey,
+		ExemptPaths: []string{"/api/webhook", "/public/"},
+	})(handler)
 
 	// Test exact path match
 	req1 := httptest.NewRequest(http.MethodPost, "/api/webhook", nil)
@@ -334,10 +334,10 @@ func TestCSRF_CustomErrorHandler(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFErrorHandler(customHandler),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:      testHMACKey,
+		ErrorHandler: customHandler,
+	})(handler)
 
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rr := httptest.NewRecorder()
@@ -354,10 +354,10 @@ func TestCSRF_FormTokenLookup(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFTokenLookup("form:csrf_token"),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:     testHMACKey,
+		TokenLookup: "form:csrf_token",
+	})(handler)
 
 	// Get token
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -392,10 +392,10 @@ func TestCSRF_MultipartFormTokenLookup(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFTokenLookup("form:csrf_token"),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:     testHMACKey,
+		TokenLookup: "form:csrf_token",
+	})(handler)
 
 	// Get token
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -433,10 +433,10 @@ func TestCSRF_QueryTokenLookup(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFTokenLookup("query:csrf_token"),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:     testHMACKey,
+		TokenLookup: "query:csrf_token",
+	})(handler)
 
 	// Get token
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -467,15 +467,15 @@ func TestCSRF_CustomCookieOptions(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFCookieName("custom_csrf"),
-		config.WithCSRFCookieMaxAge(3600),
-		config.WithCSRFCookieDomain("example.com"),
-		config.WithCSRFCookiePath("/api"),
-		config.WithCSRFCookieSecure(false),
-		config.WithCSRFCookieSameSite(http.SameSiteLaxMode),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:        testHMACKey,
+		CookieName:     "custom_csrf",
+		CookieMaxAge:   3600,
+		CookieDomain:   "example.com",
+		CookiePath:     "/api",
+		CookieSecure:   config.Bool(false),
+		CookieSameSite: http.SameSiteLaxMode,
+	})(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
@@ -521,7 +521,7 @@ func TestCSRF_TokenRotation(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// Get initial token
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -572,7 +572,7 @@ func TestCSRF_GetCSRFToken(t *testing.T) {
 		_, _ = w.Write([]byte(token))
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.Serve(csrf, req)
@@ -611,7 +611,7 @@ func TestCSRF_InvalidBase64Token(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// Make POST request with invalid base64 token
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -631,9 +631,7 @@ func TestCSRF_TokenWithWrongSignature(t *testing.T) {
 
 	// Use a specific HMAC key
 	hmacKey := []byte("test-key-for-csrf-middleware-32!")
-	csrf := CSRF(
-		config.WithCSRFHMACKey(hmacKey),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: hmacKey})(handler)
 
 	// Get valid token
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -651,9 +649,7 @@ func TestCSRF_TokenWithWrongSignature(t *testing.T) {
 
 	// Create a different middleware with different key
 	hmacKey2 := []byte("different-key-for-testing-32!!")
-	csrf2 := CSRF(
-		config.WithCSRFHMACKey(hmacKey2),
-	)(handler)
+	csrf2 := CSRF(config.CSRFConfig{HMACKey: hmacKey2})(handler)
 
 	// Try to use token from first middleware with second middleware
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -673,10 +669,10 @@ func TestCSRF_CustomExemptMethods(t *testing.T) {
 	})
 
 	// Only exempt PUT, not GET
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFExemptMethods([]string{http.MethodPut}),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:       testHMACKey,
+		ExemptMethods: []string{http.MethodPut},
+	})(handler)
 
 	// GET without token should return 403 (not exempt)
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -698,7 +694,7 @@ func TestCSRF_EmptyCookieValue(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// POST with empty cookie value
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -716,7 +712,7 @@ func TestCSRF_InvalidTokenFormatRegeneration(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(config.WithCSRFHMACKey(testHMACKey))(handler)
+	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
 	// GET request with invalid token format cookie should regenerate
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -748,10 +744,10 @@ func TestCSRF_DefaultTokenLookup(t *testing.T) {
 	})
 
 	// Use malformed token lookup to trigger default case
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFTokenLookup("malformed"),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:     testHMACKey,
+		TokenLookup: "malformed",
+	})(handler)
 
 	// Get token
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -785,10 +781,10 @@ func TestCSRF_UnknownTokenLookupSource(t *testing.T) {
 	})
 
 	// Use unknown source to trigger default case in extractToken
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFTokenLookup("unknown:token"),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:     testHMACKey,
+		TokenLookup: "unknown:token",
+	})(handler)
 
 	// Get token
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -821,10 +817,10 @@ func TestCSRF_FormParseError(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	csrf := CSRF(
-		config.WithCSRFHMACKey(testHMACKey),
-		config.WithCSRFTokenLookup("form:csrf_token"),
-	)(handler)
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:     testHMACKey,
+		TokenLookup: "form:csrf_token",
+	})(handler)
 
 	// Get token first
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)

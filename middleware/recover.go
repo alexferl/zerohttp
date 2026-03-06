@@ -12,15 +12,13 @@ import (
 
 // Recover is a middleware that recovers from panics, logs the panic (and a backtrace),
 // and returns HTTP 500 if possible. It prints a request ID if one is provided.
-func Recover(logger log.Logger, opts ...config.RecoverOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultRecoverConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func Recover(logger log.Logger, cfg ...config.RecoverConfig) func(http.Handler) http.Handler {
+	c := config.DefaultRecoverConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-
-	if cfg.StackSize <= 0 {
-		cfg.StackSize = config.DefaultRecoverConfig.StackSize
+	if c.StackSize <= 0 {
+		c.StackSize = config.DefaultRecoverConfig.StackSize
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -41,8 +39,8 @@ func Recover(logger log.Logger, opts ...config.RecoverOption) func(http.Handler)
 						log.F("request_id", reqID),
 					}
 
-					if cfg.EnableStackTrace {
-						stack := make([]byte, cfg.StackSize)
+					if c.EnableStackTrace {
+						stack := make([]byte, c.StackSize)
 						length := runtime.Stack(stack, false)
 						fields = append(fields, log.F("stack", string(stack[:length])))
 					}

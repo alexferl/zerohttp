@@ -10,11 +10,11 @@ import (
 
 func DefaultMiddlewares(cfg config.Config, logger log.Logger) []func(http.Handler) http.Handler {
 	return []func(http.Handler) http.Handler{
-		RequestID(cfg.RequestIDOptions...),
-		Recover(logger, cfg.RecoverOptions...),
-		RequestBodySize(cfg.RequestBodySizeOptions...),
-		SecurityHeaders(cfg.SecurityHeadersOptions...),
-		RequestLogger(logger, cfg.RequestLoggerOptions...),
+		RequestID(cfg.RequestID),
+		Recover(logger, cfg.Recover),
+		RequestBodySize(cfg.RequestBodySize),
+		SecurityHeaders(cfg.SecurityHeaders),
+		RequestLogger(logger, cfg.RequestLogger),
 	}
 }
 

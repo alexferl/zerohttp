@@ -21,11 +21,11 @@ func main() {
 	tm.RegisterComponent("home", ComponentFactory(HomePage))
 	tm.RegisterComponent("404", ComponentFactory(NotFoundPage))
 
-	app := zh.New(
-		config.WithSecurityHeadersOptions(
-			config.WithSecurityHeadersCSP(csp),
-		),
-	)
+	app := zh.New(config.Config{
+		SecurityHeaders: config.SecurityHeadersConfig{
+			ContentSecurityPolicy: csp,
+		},
+	})
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		data := PageData{

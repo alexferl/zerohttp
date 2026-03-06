@@ -86,10 +86,12 @@ func main() {
 
 	// Create zerohttp app with autocert manager
 	app := zh.New(
-		config.WithDisableDefaultMiddlewares(),
-		config.WithAddr(":80"),     // HTTP port for ACME challenges
-		config.WithTLSAddr(":443"), // HTTPS port
-		config.WithAutocertManager(wrappedMgr),
+		config.Config{
+			DisableDefaultMiddlewares: true,
+			Addr:                      ":80",  // HTTP port for ACME challenges
+			TLSAddr:                   ":443", // HTTPS port
+			AutocertManager:           wrappedMgr,
+		},
 	)
 
 	// Create HTTP/3 server
