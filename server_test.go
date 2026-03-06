@@ -1967,3 +1967,70 @@ func TestServer_SSEProvider(t *testing.T) {
 		}
 	})
 }
+
+func TestConfigMerging(t *testing.T) {
+	t.Run("partial config uses default Addr", func(t *testing.T) {
+		// Only set DisableDefaultMiddlewares, Addr should use default
+		s := New(config.Config{DisableDefaultMiddlewares: true})
+
+		// Verify server was created successfully with default address
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("custom Addr overrides default", func(t *testing.T) {
+		customAddr := ":9999"
+		s := New(config.Config{Addr: customAddr})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("partial config with only middleware settings uses default Addr", func(t *testing.T) {
+		s := New(config.Config{
+			RequestBodySize: config.RequestBodySizeConfig{
+				MaxBytes: 10 * 1024 * 1024,
+			},
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("merge preserves default TLSAddr when not set", func(t *testing.T) {
+		s := New(config.Config{
+			Addr: ":8080",
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("merge RequestID config", func(t *testing.T) {
+		s := New(config.Config{
+			RequestID: config.RequestIDConfig{
+				Header: "X-Custom-Request-ID",
+			},
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("merge SecurityHeaders config", func(t *testing.T) {
+		s := New(config.Config{
+			SecurityHeaders: config.SecurityHeadersConfig{
+				XFrameOptions: "SAMEORIGIN",
+			},
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+}

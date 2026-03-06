@@ -112,7 +112,67 @@ type Server struct {
 func New(cfg ...config.Config) *Server {
 	c := config.DefaultConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		userCfg := cfg[0]
+		if userCfg.Addr != "" {
+			c.Addr = userCfg.Addr
+		}
+		if userCfg.TLSAddr != "" {
+			c.TLSAddr = userCfg.TLSAddr
+		}
+		if userCfg.Server != nil {
+			c.Server = userCfg.Server
+		}
+		if userCfg.Listener != nil {
+			c.Listener = userCfg.Listener
+		}
+		if userCfg.TLSServer != nil {
+			c.TLSServer = userCfg.TLSServer
+		}
+		if userCfg.TLSListener != nil {
+			c.TLSListener = userCfg.TLSListener
+		}
+		if userCfg.CertFile != "" {
+			c.CertFile = userCfg.CertFile
+		}
+		if userCfg.KeyFile != "" {
+			c.KeyFile = userCfg.KeyFile
+		}
+		if userCfg.Logger != nil {
+			c.Logger = userCfg.Logger
+		}
+		if len(userCfg.PreShutdownHooks) > 0 {
+			c.PreShutdownHooks = userCfg.PreShutdownHooks
+		}
+		if len(userCfg.ShutdownHooks) > 0 {
+			c.ShutdownHooks = userCfg.ShutdownHooks
+		}
+		if len(userCfg.PostShutdownHooks) > 0 {
+			c.PostShutdownHooks = userCfg.PostShutdownHooks
+		}
+		c.DisableDefaultMiddlewares = userCfg.DisableDefaultMiddlewares
+		if len(userCfg.DefaultMiddlewares) > 0 {
+			c.DefaultMiddlewares = userCfg.DefaultMiddlewares
+		}
+		c.Recover = mergeRecoverConfig(c.Recover, userCfg.Recover)
+		c.RequestBodySize = mergeRequestBodySizeConfig(c.RequestBodySize, userCfg.RequestBodySize)
+		c.RequestID = mergeRequestIDConfig(c.RequestID, userCfg.RequestID)
+		c.RequestLogger = mergeRequestLoggerConfig(c.RequestLogger, userCfg.RequestLogger)
+		c.SecurityHeaders = mergeSecurityHeadersConfig(c.SecurityHeaders, userCfg.SecurityHeaders)
+		if userCfg.AutocertManager != nil {
+			c.AutocertManager = userCfg.AutocertManager
+		}
+		if userCfg.HTTP3Server != nil {
+			c.HTTP3Server = userCfg.HTTP3Server
+		}
+		if userCfg.SSEProvider != nil {
+			c.SSEProvider = userCfg.SSEProvider
+		}
+		if userCfg.WebSocketUpgrader != nil {
+			c.WebSocketUpgrader = userCfg.WebSocketUpgrader
+		}
+		if userCfg.WebTransportServer != nil {
+			c.WebTransportServer = userCfg.WebTransportServer
+		}
 	}
 
 	router := NewRouter()
@@ -194,6 +254,95 @@ func New(cfg ...config.Config) *Server {
 	}
 
 	return s
+}
+
+// mergeRecoverConfig merges user config with defaults
+func mergeRecoverConfig(defaultCfg, userCfg config.RecoverConfig) config.RecoverConfig {
+	if userCfg.StackSize != 0 {
+		defaultCfg.StackSize = userCfg.StackSize
+	}
+	if userCfg.EnableStackTrace {
+		defaultCfg.EnableStackTrace = userCfg.EnableStackTrace
+	}
+	return defaultCfg
+}
+
+// mergeRequestBodySizeConfig merges user config with defaults
+func mergeRequestBodySizeConfig(defaultCfg, userCfg config.RequestBodySizeConfig) config.RequestBodySizeConfig {
+	if userCfg.MaxBytes != 0 {
+		defaultCfg.MaxBytes = userCfg.MaxBytes
+	}
+	if len(userCfg.ExemptPaths) > 0 {
+		defaultCfg.ExemptPaths = userCfg.ExemptPaths
+	}
+	return defaultCfg
+}
+
+// mergeRequestIDConfig merges user config with defaults
+func mergeRequestIDConfig(defaultCfg, userCfg config.RequestIDConfig) config.RequestIDConfig {
+	if userCfg.Header != "" {
+		defaultCfg.Header = userCfg.Header
+	}
+	if userCfg.Generator != nil {
+		defaultCfg.Generator = userCfg.Generator
+	}
+	if userCfg.ContextKey != "" {
+		defaultCfg.ContextKey = userCfg.ContextKey
+	}
+	return defaultCfg
+}
+
+// mergeRequestLoggerConfig merges user config with defaults
+func mergeRequestLoggerConfig(defaultCfg, userCfg config.RequestLoggerConfig) config.RequestLoggerConfig {
+	if userCfg.LogErrors {
+		defaultCfg.LogErrors = userCfg.LogErrors
+	}
+	if len(userCfg.Fields) > 0 {
+		defaultCfg.Fields = userCfg.Fields
+	}
+	if len(userCfg.ExemptPaths) > 0 {
+		defaultCfg.ExemptPaths = userCfg.ExemptPaths
+	}
+	return defaultCfg
+}
+
+// mergeSecurityHeadersConfig merges user config with defaults
+func mergeSecurityHeadersConfig(defaultCfg, userCfg config.SecurityHeadersConfig) config.SecurityHeadersConfig {
+	if userCfg.ContentSecurityPolicy != "" {
+		defaultCfg.ContentSecurityPolicy = userCfg.ContentSecurityPolicy
+	}
+	defaultCfg.ContentSecurityPolicyReportOnly = userCfg.ContentSecurityPolicyReportOnly
+	if userCfg.CrossOriginEmbedderPolicy != "" {
+		defaultCfg.CrossOriginEmbedderPolicy = userCfg.CrossOriginEmbedderPolicy
+	}
+	if userCfg.CrossOriginOpenerPolicy != "" {
+		defaultCfg.CrossOriginOpenerPolicy = userCfg.CrossOriginOpenerPolicy
+	}
+	if userCfg.CrossOriginResourcePolicy != "" {
+		defaultCfg.CrossOriginResourcePolicy = userCfg.CrossOriginResourcePolicy
+	}
+	if userCfg.PermissionsPolicy != "" {
+		defaultCfg.PermissionsPolicy = userCfg.PermissionsPolicy
+	}
+	if userCfg.ReferrerPolicy != "" {
+		defaultCfg.ReferrerPolicy = userCfg.ReferrerPolicy
+	}
+	if userCfg.Server != "" {
+		defaultCfg.Server = userCfg.Server
+	}
+	if userCfg.StrictTransportSecurity.MaxAge != 0 {
+		defaultCfg.StrictTransportSecurity = userCfg.StrictTransportSecurity
+	}
+	if userCfg.XContentTypeOptions != "" {
+		defaultCfg.XContentTypeOptions = userCfg.XContentTypeOptions
+	}
+	if userCfg.XFrameOptions != "" {
+		defaultCfg.XFrameOptions = userCfg.XFrameOptions
+	}
+	if len(userCfg.ExemptPaths) > 0 {
+		defaultCfg.ExemptPaths = userCfg.ExemptPaths
+	}
+	return defaultCfg
 }
 
 // ListenAndServe starts the HTTP server and begins accepting connections.
