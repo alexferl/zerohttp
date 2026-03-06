@@ -19,7 +19,9 @@ func main() {
 		Logger()
 	logger := NewZerologAdapter(zl)
 
-	app := zh.New(config.WithLogger(logger))
+	app := zh.New(config.Config{
+		Logger: logger,
+	})
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		app.Logger().Info("I'm a log!")

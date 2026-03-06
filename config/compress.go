@@ -39,34 +39,3 @@ var DefaultCompressConfig = CompressConfig{
 	Algorithms:  []CompressionAlgorithm{Gzip, Deflate},
 	ExemptPaths: []string{},
 }
-
-// CompressOption configures compression middleware.
-type CompressOption func(*CompressConfig)
-
-// WithCompressLevel sets the compression level (1-9 for gzip/deflate).
-func WithCompressLevel(level int) CompressOption {
-	return func(c *CompressConfig) {
-		c.Level = level
-	}
-}
-
-// WithCompressTypes sets the MIME types to compress.
-func WithCompressTypes(types []string) CompressOption {
-	return func(c *CompressConfig) {
-		c.Types = types
-	}
-}
-
-// WithCompressAlgorithms sets the compression algorithms to support.
-func WithCompressAlgorithms(algorithms []CompressionAlgorithm) CompressOption {
-	return func(c *CompressConfig) {
-		c.Algorithms = algorithms
-	}
-}
-
-// WithCompressExemptPaths sets paths to skip compression.
-func WithCompressExemptPaths(paths []string) CompressOption {
-	return func(c *CompressConfig) {
-		c.ExemptPaths = paths
-	}
-}

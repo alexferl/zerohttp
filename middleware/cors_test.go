@@ -91,7 +91,7 @@ func TestCORSCustomOrigins(t *testing.T) {
 		{"https://evil.com", ""},
 		{"HTTPS://EXAMPLE.COM", "HTTPS://EXAMPLE.COM"},
 	}
-	mw := CORS(config.WithCORSAllowedOrigins([]string{"https://example.com", "https://api.example.com"}))
+	mw := CORS(config.CORSConfig{AllowedOrigins: []string{"https://example.com", "https://api.example.com"}})
 	for _, tt := range tests {
 		t.Run(tt.origin, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -107,10 +107,10 @@ func TestCORSCustomOrigins(t *testing.T) {
 }
 
 func TestCORSCredentials(t *testing.T) {
-	mw := CORS(
-		config.WithCORSAllowedOrigins([]string{"https://example.com"}),
-		config.WithCORSAllowCredentials(true),
-	)
+	mw := CORS(config.CORSConfig{
+		AllowedOrigins:   []string{"https://example.com"},
+		AllowCredentials: true,
+	})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Origin", "https://example.com")
 	rr := httptest.NewRecorder()
@@ -124,7 +124,10 @@ func TestCORSCredentials(t *testing.T) {
 }
 
 func TestCORSCredentialsWithWildcard(t *testing.T) {
-	mw := CORS(config.WithCORSAllowedOrigins([]string{"*"}), config.WithCORSAllowCredentials(true))
+	mw := CORS(config.CORSConfig{
+		AllowedOrigins:   []string{"*"},
+		AllowCredentials: true,
+	})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Origin", "https://example.com")
 	rr := httptest.NewRecorder()
@@ -138,7 +141,7 @@ func TestCORSCredentialsWithWildcard(t *testing.T) {
 }
 
 func TestCORSExposedHeaders(t *testing.T) {
-	mw := CORS(config.WithCORSExposedHeaders([]string{"X-Total-Count", "X-Page-Count"}))
+	mw := CORS(config.CORSConfig{ExposedHeaders: []string{"X-Total-Count", "X-Page-Count"}})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Origin", "https://example.com")
 	rr := httptest.NewRecorder()
@@ -150,7 +153,7 @@ func TestCORSExposedHeaders(t *testing.T) {
 }
 
 func TestCORSOptionsPassthrough(t *testing.T) {
-	mw := CORS(config.WithCORSOptionsPassthrough(true))
+	mw := CORS(config.CORSConfig{OptionsPassthrough: true})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req.Header.Set("Origin", "https://example.com")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
@@ -176,7 +179,7 @@ func TestCORSExemptPaths(t *testing.T) {
 		{"/no-cors", false},
 		{"/api/users", true},
 	}
-	mw := CORS(config.WithCORSExemptPaths([]string{"/skip-cors", "/no-cors"}))
+	mw := CORS(config.CORSConfig{ExemptPaths: []string{"/skip-cors", "/no-cors"}})
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
@@ -197,12 +200,12 @@ func TestCORSExemptPaths(t *testing.T) {
 }
 
 func TestCORSCustomConfig(t *testing.T) {
-	mw := CORS(
-		config.WithCORSAllowedOrigins([]string{"https://myapp.com"}),
-		config.WithCORSAllowedMethods([]string{http.MethodGet, http.MethodPost}),
-		config.WithCORSAllowedHeaders([]string{"Content-Type"}),
-		config.WithCORSMaxAge(3600),
-	)
+	mw := CORS(config.CORSConfig{
+		AllowedOrigins: []string{"https://myapp.com"},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost},
+		AllowedHeaders: []string{"Content-Type"},
+		MaxAge:         3600,
+	})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req.Header.Set("Origin", "https://myapp.com")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
@@ -218,11 +221,11 @@ func TestCORSCustomConfig(t *testing.T) {
 }
 
 func TestCORSNilConfig(t *testing.T) {
-	mw := CORS(
-		config.WithCORSAllowedOrigins(nil),
-		config.WithCORSAllowedMethods(nil),
-		config.WithCORSAllowedHeaders(nil),
-	)
+	mw := CORS(config.CORSConfig{
+		AllowedOrigins: nil,
+		AllowedMethods: nil,
+		AllowedHeaders: nil,
+	})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req.Header.Set("Origin", "https://example.com")
 	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
@@ -239,7 +242,7 @@ func TestCORSNilConfig(t *testing.T) {
 }
 
 func TestCORSNilExemptPathsFallback(t *testing.T) {
-	mw := CORS(config.WithCORSExemptPaths(nil))
+	mw := CORS(config.CORSConfig{ExemptPaths: nil})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Origin", "https://example.com")
 	rr := httptest.NewRecorder()
@@ -256,7 +259,7 @@ func TestCORSNilExemptPathsFallback(t *testing.T) {
 }
 
 func TestCORSZeroMaxAgeFallback(t *testing.T) {
-	mw := CORS(config.WithCORSMaxAge(0))
+	mw := CORS(config.CORSConfig{MaxAge: 0})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req.Header.Set("Origin", "https://example.com")
 	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
@@ -267,7 +270,7 @@ func TestCORSZeroMaxAgeFallback(t *testing.T) {
 }
 
 func TestCORSNoOriginOptionsPassthrough(t *testing.T) {
-	mw := CORS(config.WithCORSOptionsPassthrough(true))
+	mw := CORS(config.CORSConfig{OptionsPassthrough: true})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	rr := httptest.NewRecorder()
 	called := false
@@ -283,10 +286,10 @@ func TestCORSNoOriginOptionsPassthrough(t *testing.T) {
 }
 
 func TestCORSDisallowedOriginOptionsPassthrough(t *testing.T) {
-	mw := CORS(
-		config.WithCORSAllowedOrigins([]string{"https://allowed.com"}),
-		config.WithCORSOptionsPassthrough(true),
-	)
+	mw := CORS(config.CORSConfig{
+		AllowedOrigins:     []string{"https://allowed.com"},
+		OptionsPassthrough: true,
+	})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req.Header.Set("Origin", "https://notallowed.com")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
@@ -304,7 +307,7 @@ func TestCORSDisallowedOriginOptionsPassthrough(t *testing.T) {
 }
 
 func TestCORSDisallowedOriginNoPassthrough(t *testing.T) {
-	mw := CORS(config.WithCORSAllowedOrigins([]string{"https://allowed.com"}))
+	mw := CORS(config.CORSConfig{AllowedOrigins: []string{"https://allowed.com"}})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req.Header.Set("Origin", "https://notallowed.com")
 	req.Header.Set("Access-Control-Request-Method", http.MethodPost)

@@ -30,27 +30,3 @@ var DefaultTrailingSlashConfig = TrailingSlashConfig{
 	PreferTrailingSlash: false, // Most APIs prefer no trailing slash
 	RedirectCode:        http.StatusMovedPermanently,
 }
-
-// TrailingSlashOption configures trailing slash middleware.
-type TrailingSlashOption func(*TrailingSlashConfig)
-
-// WithTrailingSlashAction sets the action to take for trailing slash mismatches.
-func WithTrailingSlashAction(action TrailingSlashAction) TrailingSlashOption {
-	return func(c *TrailingSlashConfig) {
-		c.Action = action
-	}
-}
-
-// WithTrailingSlashPreference sets whether URLs should have trailing slashes.
-func WithTrailingSlashPreference(prefer bool) TrailingSlashOption {
-	return func(c *TrailingSlashConfig) {
-		c.PreferTrailingSlash = prefer
-	}
-}
-
-// WithTrailingSlashRedirectCode sets the redirect status code for redirects.
-func WithTrailingSlashRedirectCode(code int) TrailingSlashOption {
-	return func(c *TrailingSlashConfig) {
-		c.RedirectCode = code
-	}
-}

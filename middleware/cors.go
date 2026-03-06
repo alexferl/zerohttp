@@ -9,33 +9,32 @@ import (
 )
 
 // CORS middleware handles Cross-Origin Resource Sharing
-func CORS(opts ...config.CORSOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultCORSConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
+	c := config.DefaultCORSConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
 	// Set defaults if not provided
-	if cfg.AllowedOrigins == nil {
-		cfg.AllowedOrigins = config.DefaultCORSConfig.AllowedOrigins
+	if c.AllowedOrigins == nil {
+		c.AllowedOrigins = config.DefaultCORSConfig.AllowedOrigins
 	}
-	if cfg.AllowedMethods == nil {
-		cfg.AllowedMethods = config.DefaultCORSConfig.AllowedMethods
+	if c.AllowedMethods == nil {
+		c.AllowedMethods = config.DefaultCORSConfig.AllowedMethods
 	}
-	if cfg.AllowedHeaders == nil {
-		cfg.AllowedHeaders = config.DefaultCORSConfig.AllowedHeaders
+	if c.AllowedHeaders == nil {
+		c.AllowedHeaders = config.DefaultCORSConfig.AllowedHeaders
 	}
-	if cfg.MaxAge == 0 {
-		cfg.MaxAge = config.DefaultCORSConfig.MaxAge
+	if c.MaxAge == 0 {
+		c.MaxAge = config.DefaultCORSConfig.MaxAge
 	}
-	if cfg.ExemptPaths == nil {
-		cfg.ExemptPaths = config.DefaultCORSConfig.ExemptPaths
+	if c.ExemptPaths == nil {
+		c.ExemptPaths = config.DefaultCORSConfig.ExemptPaths
 	}
 
 	allowedOriginMap := make(map[string]bool)
 	allowAllOrigins := false
-	for _, origin := range cfg.AllowedOrigins {
+	for _, origin := range c.AllowedOrigins {
 		if origin == "*" {
 			allowAllOrigins = true
 			break
@@ -44,23 +43,23 @@ func CORS(opts ...config.CORSOption) func(http.Handler) http.Handler {
 	}
 
 	allowedMethodMap := make(map[string]bool)
-	for _, method := range cfg.AllowedMethods {
+	for _, method := range c.AllowedMethods {
 		allowedMethodMap[strings.ToUpper(method)] = true
 	}
 
 	allowedHeaderMap := make(map[string]bool)
-	for _, header := range cfg.AllowedHeaders {
+	for _, header := range c.AllowedHeaders {
 		allowedHeaderMap[strings.ToLower(header)] = true
 	}
 
-	allowedMethodsHeader := strings.Join(cfg.AllowedMethods, ", ")
-	allowedHeadersHeader := strings.Join(cfg.AllowedHeaders, ", ")
-	exposedHeadersHeader := strings.Join(cfg.ExposedHeaders, ", ")
-	maxAgeHeader := strconv.Itoa(cfg.MaxAge)
+	allowedMethodsHeader := strings.Join(c.AllowedMethods, ", ")
+	allowedHeadersHeader := strings.Join(c.AllowedHeaders, ", ")
+	exposedHeadersHeader := strings.Join(c.ExposedHeaders, ", ")
+	maxAgeHeader := strconv.Itoa(c.MaxAge)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range cfg.ExemptPaths {
+			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return
@@ -72,7 +71,7 @@ func CORS(opts ...config.CORSOption) func(http.Handler) http.Handler {
 			// Only process CORS if Origin header is present
 			if origin == "" {
 				// No origin header means this is not a cross-origin request
-				if r.Method == http.MethodOptions && cfg.OptionsPassthrough {
+				if r.Method == http.MethodOptions && c.OptionsPassthrough {
 					next.ServeHTTP(w, r)
 					return
 				} else if r.Method == http.MethodOptions {
@@ -86,7 +85,7 @@ func CORS(opts ...config.CORSOption) func(http.Handler) http.Handler {
 			// Determine if origin is allowed
 			var allowedOrigin string
 			if allowAllOrigins {
-				if cfg.AllowCredentials {
+				if c.AllowCredentials {
 					// When credentials are allowed, can't use "*"
 					allowedOrigin = origin
 				} else {
@@ -100,11 +99,11 @@ func CORS(opts ...config.CORSOption) func(http.Handler) http.Handler {
 			if allowedOrigin != "" {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 
-				if cfg.AllowCredentials {
+				if c.AllowCredentials {
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 				}
 
-				if len(cfg.ExposedHeaders) > 0 {
+				if len(c.ExposedHeaders) > 0 {
 					w.Header().Set("Access-Control-Expose-Headers", exposedHeadersHeader)
 				}
 			}
@@ -113,7 +112,7 @@ func CORS(opts ...config.CORSOption) func(http.Handler) http.Handler {
 			if r.Method == http.MethodOptions {
 				if allowedOrigin == "" {
 					// Origin not allowed, don't set preflight headers
-					if cfg.OptionsPassthrough {
+					if c.OptionsPassthrough {
 						next.ServeHTTP(w, r)
 						return
 					}
@@ -146,7 +145,7 @@ func CORS(opts ...config.CORSOption) func(http.Handler) http.Handler {
 				w.Header().Set("Access-Control-Allow-Headers", allowedHeadersHeader)
 				w.Header().Set("Access-Control-Max-Age", maxAgeHeader)
 
-				if cfg.OptionsPassthrough {
+				if c.OptionsPassthrough {
 					next.ServeHTTP(w, r)
 					return
 				}

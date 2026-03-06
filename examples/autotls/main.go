@@ -36,9 +36,11 @@ func main() {
 	}
 
 	app := zh.New(
-		config.WithAddr(":80"),              // HTTP port for ACME challenges
-		config.WithTLSAddr(":443"),          // HTTPS port
-		config.WithAutocertManager(manager), // Enable auto TLS
+		config.Config{
+			Addr:            ":80",   // HTTP port for ACME challenges
+			TLSAddr:         ":443",  // HTTPS port
+			AutocertManager: manager, // Enable auto TLS
+		},
 	)
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

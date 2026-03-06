@@ -118,7 +118,9 @@ The middleware supports two hash algorithms:
 Configure with:
 
 ```go
-app.Use(middleware.ETag(config.WithETagAlgorithm(config.MD5)))
+app.Use(middleware.ETag(config.ETagConfig{
+    Algorithm: config.MD5,
+}))
 ```
 
 ## Weak vs Strong ETags
@@ -130,7 +132,9 @@ By default, weak ETags are generated (`W/"..."`):
 For strong ETags (byte-for-byte equality):
 
 ```go
-app.Use(middleware.ETag(config.WithETagWeak(false)))
+app.Use(middleware.ETag(config.ETagConfig{
+    Weak: config.Bool(false),
+}))
 ```
 
 ## Content-Encoding Aware ETags

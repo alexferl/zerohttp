@@ -9,21 +9,20 @@ import (
 
 // ContentCharset generates a middleware that validates request charset and returns
 // 415 Unsupported Media Type if the charset doesn't match the allowed list
-func ContentCharset(opts ...config.ContentCharsetOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultContentCharsetConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func ContentCharset(cfg ...config.ContentCharsetConfig) func(http.Handler) http.Handler {
+	c := config.DefaultContentCharsetConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
-	if cfg.Charsets == nil {
-		cfg.Charsets = config.DefaultContentCharsetConfig.Charsets
+	if c.Charsets == nil {
+		c.Charsets = config.DefaultContentCharsetConfig.Charsets
 	}
 
 	// Normalize charsets to lowercase
-	normalizedCharsets := make([]string, len(cfg.Charsets))
-	for i, c := range cfg.Charsets {
-		normalizedCharsets[i] = strings.ToLower(c)
+	normalizedCharsets := make([]string, len(c.Charsets))
+	for i, charset := range c.Charsets {
+		normalizedCharsets[i] = strings.ToLower(charset)
 	}
 
 	return func(next http.Handler) http.Handler {

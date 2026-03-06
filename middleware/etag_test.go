@@ -188,7 +188,7 @@ func TestETag_PreservesExistingETag(t *testing.T) {
 }
 
 func TestETag_StrongETag(t *testing.T) {
-	handler := ETag(config.WithETagWeak(false))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{Weak: config.Bool(false)})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello world"))
 	}))
 
@@ -210,7 +210,7 @@ func TestETag_MD5Algorithm(t *testing.T) {
 	fnvHandler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello world"))
 	}))
-	md5Handler := ETag(config.WithETagAlgorithm(config.MD5))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	md5Handler := ETag(config.ETagConfig{Algorithm: config.MD5})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello world"))
 	}))
 
@@ -235,7 +235,7 @@ func TestETag_MD5Algorithm(t *testing.T) {
 }
 
 func TestETag_ExemptPaths(t *testing.T) {
-	handler := ETag(config.WithETagExemptPaths([]string{"/skip"}))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{ExemptPaths: []string{"/skip"}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -263,7 +263,7 @@ func TestETag_ExemptFunc(t *testing.T) {
 		return r.Header.Get("X-Skip-ETag") == "true"
 	}
 
-	handler := ETag(config.WithETagExemptFunc(exemptFunc))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{ExemptFunc: exemptFunc})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -288,7 +288,7 @@ func TestETag_ExemptFunc(t *testing.T) {
 }
 
 func TestETag_SkipContentTypes(t *testing.T) {
-	handler := ETag(config.WithETagSkipContentTypes("application/pdf"))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{SkipContentTypes: map[string]struct{}{"application/pdf": {}}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/pdf")
 		_, _ = w.Write([]byte("pdf content"))
 	}))
@@ -303,7 +303,7 @@ func TestETag_SkipContentTypes(t *testing.T) {
 }
 
 func TestETag_SkipStatusCodes(t *testing.T) {
-	handler := ETag(config.WithETagSkipStatusCodes(http.StatusTeapot))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{SkipStatusCodes: map[int]struct{}{http.StatusTeapot: {}}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 		_, _ = w.Write([]byte("I'm a teapot"))
 	}))
@@ -321,7 +321,7 @@ func TestETag_MaxBufferSize(t *testing.T) {
 	content := strings.Repeat("a", 100)
 
 	// Small buffer that will be exceeded
-	handler := ETag(config.WithETagMaxBufferSize(50))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{MaxBufferSize: 50})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(content))
 	}))
 
@@ -828,7 +828,7 @@ func TestETag_Range_NonNumericEnd(t *testing.T) {
 
 func TestETag_InvalidAlgorithm(t *testing.T) {
 	// Invalid algorithm should fall back to FNV
-	handler := ETag(config.WithETagAlgorithm("invalid"))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{Algorithm: "invalid"})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -845,7 +845,7 @@ func TestETag_NilSkipStatusCodes(t *testing.T) {
 	// nil SkipStatusCodes should use defaults
 	cfg := config.ETagConfig{
 		Algorithm:        config.FNV,
-		Weak:             true,
+		Weak:             config.Bool(true),
 		MaxBufferSize:    1024 * 1024,
 		SkipStatusCodes:  nil, // nil
 		SkipContentTypes: nil, // nil
@@ -917,7 +917,7 @@ func TestServeContentWithETag_NilContent(t *testing.T) {
 
 func TestETag_BufferExceedsMaxSize(t *testing.T) {
 	// Small max buffer size
-	handler := ETag(config.WithETagMaxBufferSize(10))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{MaxBufferSize: 10})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Write in two parts - first within limit, second exceeds
 		_, _ = w.Write([]byte("0123456789")) // 10 bytes - at limit
 		_, _ = w.Write([]byte("more"))       // exceeds limit
@@ -998,7 +998,7 @@ func TestETagMatches_ExactMatches(t *testing.T) {
 }
 
 func TestETag_ExemptPaths_PrefixMatch(t *testing.T) {
-	handler := ETag(config.WithETagExemptPaths([]string{"/api/"}))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{ExemptPaths: []string{"/api/"}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -1033,7 +1033,7 @@ func TestETag_NilConfigMaps(t *testing.T) {
 	// Test with nil maps to ensure no panic
 	cfg := config.ETagConfig{
 		Algorithm:       config.FNV,
-		Weak:            true,
+		Weak:            config.Bool(true),
 		MaxBufferSize:   1024,
 		SkipStatusCodes: nil,
 		ExemptPaths:     []string{},
@@ -1145,7 +1145,7 @@ func TestETag_NilSkipContentTypes(t *testing.T) {
 	// Test with nil SkipContentTypes
 	cfg := config.ETagConfig{
 		Algorithm:        config.FNV,
-		Weak:             true,
+		Weak:             config.Bool(true),
 		MaxBufferSize:    1024,
 		SkipStatusCodes:  map[int]struct{}{},
 		SkipContentTypes: nil, // nil

@@ -92,9 +92,9 @@ manager := &autocert.Manager{
     HostPolicy: autocert.HostWhitelist("example.com"),
 }
 
-app := zerohttp.New(
-    config.WithAutocertManager(manager),
-)
+app := zerohttp.New(config.Config{
+    AutocertManager: manager,
+})
 
 h3Server := &http3AutocertServer{
     server: &http3.Server{Addr: ":443", Handler: app},

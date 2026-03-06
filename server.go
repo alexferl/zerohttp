@@ -94,40 +94,41 @@ type Server struct {
 	mu sync.RWMutex
 }
 
-// New creates and configures a new Server instance with the provided options.
+// New creates and configures a new Server instance with the provided config.
 // It initializes the server with default configurations that can be overridden
-// using the provided options. The server includes HTTP and HTTPS support,
+// using the provided config. The server includes HTTP and HTTPS support,
 // middleware integration, and structured logging.
 //
 // Example usage:
 //
-//	server := zerohttp.New(
-//	    config.WithAddr(":8080"),
-//	    config.WithLogger(myLogger),
-//	)
-func New(opts ...config.Option) *Server {
-	cfg := config.DefaultConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+//	// Use defaults
+//	server := zerohttp.New()
+//
+//	// With custom config
+//	server := zerohttp.New(config.Config{
+//	    Addr: ":8080",
+//	    Logger: myLogger,
+//	})
+func New(cfg ...config.Config) *Server {
+	c := config.DefaultConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-
-	cfg.Build()
 
 	router := NewRouter()
 
-	logger := cfg.Logger
+	logger := c.Logger
 	if logger == nil {
 		logger = log.NewDefaultLogger()
 	}
 
 	router.SetLogger(logger)
-	router.SetConfig(cfg)
+	router.SetConfig(c)
 
-	server := cfg.Server
+	server := c.Server
 	if server == nil {
 		server = &http.Server{
-			Addr:           cfg.Addr,
+			Addr:           c.Addr,
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			IdleTimeout:    60 * time.Second,
@@ -135,10 +136,10 @@ func New(opts ...config.Option) *Server {
 		}
 	}
 
-	tlsServer := cfg.TLSServer
+	tlsServer := c.TLSServer
 	if tlsServer == nil {
 		tlsServer = &http.Server{
-			Addr:           cfg.TLSAddr,
+			Addr:           c.TLSAddr,
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			IdleTimeout:    60 * time.Second,
@@ -153,20 +154,20 @@ func New(opts ...config.Option) *Server {
 	s := &Server{
 		Router:             router,
 		server:             server,
-		listener:           cfg.Listener,
+		listener:           c.Listener,
 		tlsServer:          tlsServer,
-		tlsListener:        cfg.TLSListener,
-		certFile:           cfg.CertFile,
-		keyFile:            cfg.KeyFile,
-		autocertManager:    cfg.AutocertManager,
-		http3Server:        cfg.HTTP3Server,
-		webTransportServer: cfg.WebTransportServer,
-		webSocketUpgrader:  cfg.WebSocketUpgrader,
-		sseProvider:        cfg.SSEProvider,
+		tlsListener:        c.TLSListener,
+		certFile:           c.CertFile,
+		keyFile:            c.KeyFile,
+		autocertManager:    c.AutocertManager,
+		http3Server:        c.HTTP3Server,
+		webTransportServer: c.WebTransportServer,
+		webSocketUpgrader:  c.WebSocketUpgrader,
+		sseProvider:        c.SSEProvider,
 		logger:             logger,
-		preShutdownHooks:   cfg.PreShutdownHooks,
-		shutdownHooks:      cfg.ShutdownHooks,
-		postShutdownHooks:  cfg.PostShutdownHooks,
+		preShutdownHooks:   c.PreShutdownHooks,
+		shutdownHooks:      c.ShutdownHooks,
+		postShutdownHooks:  c.PostShutdownHooks,
 	}
 
 	if s.server != nil {
@@ -179,13 +180,13 @@ func New(opts ...config.Option) *Server {
 
 	var middlewares []func(http.Handler) http.Handler
 
-	if cfg.DisableDefaultMiddlewares {
-		middlewares = cfg.DefaultMiddlewares
-	} else if cfg.DefaultMiddlewares == nil {
-		middlewares = middleware.DefaultMiddlewares(cfg, s.logger)
+	if c.DisableDefaultMiddlewares {
+		middlewares = c.DefaultMiddlewares
+	} else if c.DefaultMiddlewares == nil {
+		middlewares = middleware.DefaultMiddlewares(c, s.logger)
 	} else {
-		defaults := middleware.DefaultMiddlewares(cfg, s.logger)
-		middlewares = append(defaults, cfg.DefaultMiddlewares...)
+		defaults := middleware.DefaultMiddlewares(c, s.logger)
+		middlewares = append(defaults, c.DefaultMiddlewares...)
 	}
 
 	if len(middlewares) > 0 {

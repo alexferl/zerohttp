@@ -11,19 +11,18 @@ import (
 
 func main() {
 	app := zh.New(
-		// Allow inline styles/scripts for this demo (not recommended for production)
-		config.WithSecurityHeadersOptions(
-			config.WithSecurityHeadersCSP("default-src 'none'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'; form-action 'self';"),
-		),
+		config.Config{
+			DisableDefaultMiddlewares: true,
+		},
 	)
 
 	// Add CSRF middleware with form token lookup for traditional HTML forms
 	// Using a fixed HMAC key so tokens remain valid across server restarts
-	app.Use(middleware.CSRF(
-		config.WithCSRFTokenLookup("form:csrf_token"),
-		config.WithCSRFCookieSecure(false), // Disable Secure flag for local HTTP testing
-		config.WithCSRFHMACKey([]byte("demo-csrf-key-for-local-testing-only!!")),
-	))
+	app.Use(middleware.CSRF(config.CSRFConfig{
+		TokenLookup:  "form:csrf_token",
+		CookieSecure: config.Bool(false), // Disable Secure flag for local HTTP testing
+		HMACKey:      []byte("demo-csrf-key-for-local-testing-only!!"),
+	}))
 
 	// Routes
 	app.GET("/", zh.HandlerFunc(indexHandler))
@@ -123,14 +122,14 @@ curl -X POST http://localhost:8080/submit \
   -d "message=hello"</pre>
 
     <h2>Configuration Options</h2>
-    <pre>app.Use(middleware.CSRF(
-    config.WithCSRFTokenLookup("form:csrf_token"),
-    config.WithCSRFCookieName("csrf_token"),
-    config.WithCSRFCookieMaxAge(86400),
-    config.WithCSRFCookieSecure(true),
-    config.WithCSRFCookieSameSite(http.SameSiteStrictMode),
-    config.WithCSRFExemptPaths([]string{"/api/webhook"}),
-))</pre>
+    <pre>app.Use(middleware.CSRF(config.CSRFConfig{
+    TokenLookup:    "form:csrf_token",
+    CookieName:     "csrf_token",
+    CookieMaxAge:   86400,
+    CookieSecure:   config.Bool(true),
+    CookieSameSite: http.SameSiteStrictMode,
+    ExemptPaths:    []string{"/api/webhook"},
+}))</pre>
 
     <h2>Token Lookup Methods</h2>
     <ul>

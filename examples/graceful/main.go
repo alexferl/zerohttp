@@ -16,30 +16,47 @@ import (
 
 func main() {
 	app := zh.New(
-		// Pre-shutdown: mark service as unhealthy first
-		config.WithPreShutdownHook("health", func(ctx context.Context) error {
-			// In a real app, this would update a health check endpoint
-			return nil
-		}),
-
-		// During shutdown: close resources concurrently with server shutdown
-		config.WithShutdownHook("flush-logs", func(ctx context.Context) error {
-			// Simulate log flush
-			time.Sleep(100 * time.Millisecond)
-			return nil
-		}),
-
-		config.WithShutdownHook("close-connections", func(ctx context.Context) error {
-			// Simulate DB connection close
-			time.Sleep(100 * time.Millisecond)
-			return nil
-		}),
-
-		// Post-shutdown: final cleanup after servers are stopped
-		config.WithPostShutdownHook("cleanup", func(ctx context.Context) error {
-			// Cleanup temporary files
-			return nil
-		}),
+		config.Config{
+			// Pre-shutdown: mark service as unhealthy first
+			PreShutdownHooks: []config.ShutdownHookConfig{
+				{
+					Name: "health",
+					Hook: func(ctx context.Context) error {
+						// In a real app, this would update a health check endpoint
+						return nil
+					},
+				},
+			},
+			// During shutdown: close resources concurrently with server shutdown
+			ShutdownHooks: []config.ShutdownHookConfig{
+				{
+					Name: "flush-logs",
+					Hook: func(ctx context.Context) error {
+						// Simulate log flush
+						time.Sleep(100 * time.Millisecond)
+						return nil
+					},
+				},
+				{
+					Name: "close-connections",
+					Hook: func(ctx context.Context) error {
+						// Simulate DB connection close
+						time.Sleep(100 * time.Millisecond)
+						return nil
+					},
+				},
+			},
+			// Post-shutdown: final cleanup after servers are stopped
+			PostShutdownHooks: []config.ShutdownHookConfig{
+				{
+					Name: "cleanup",
+					Hook: func(ctx context.Context) error {
+						// Cleanup temporary files
+						return nil
+					},
+				},
+			},
+		},
 	)
 
 	// Hooks can also be registered programmatically
