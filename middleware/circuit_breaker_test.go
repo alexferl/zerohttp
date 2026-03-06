@@ -38,10 +38,10 @@ func (h *circuitTestHandler) getCallCount() int {
 
 func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(3),
-		config.WithCircuitBreakerRecoveryTimeout(100*time.Millisecond),
-	)(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 3,
+		RecoveryTimeout:  100 * time.Millisecond,
+	})(handler)
 
 	for range 3 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -63,11 +63,11 @@ func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 
 func TestCircuitBreaker_RecoveryTimeout(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(2),
-		config.WithCircuitBreakerRecoveryTimeout(50*time.Millisecond),
-		config.WithCircuitBreakerSuccessThreshold(1),
-	)(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 2,
+		RecoveryTimeout:  50 * time.Millisecond,
+		SuccessThreshold: 1,
+	})(handler)
 
 	for range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -95,11 +95,11 @@ func TestCircuitBreaker_RecoveryTimeout(t *testing.T) {
 
 func TestCircuitBreaker_HalfOpenSuccessThreshold(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(2),
-		config.WithCircuitBreakerRecoveryTimeout(50*time.Millisecond),
-		config.WithCircuitBreakerSuccessThreshold(3),
-	)(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 2,
+		RecoveryTimeout:  50 * time.Millisecond,
+		SuccessThreshold: 3,
+	})(handler)
 
 	for range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -130,12 +130,12 @@ func TestCircuitBreaker_HalfOpenSuccessThreshold(t *testing.T) {
 
 func TestCircuitBreaker_CustomIsFailure(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusBadRequest}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(2),
-		config.WithCircuitBreakerIsFailure(func(r *http.Request, statusCode int) bool {
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 2,
+		IsFailure: func(r *http.Request, statusCode int) bool {
 			return statusCode >= http.StatusBadRequest
-		}),
-	)(handler)
+		},
+	})(handler)
 
 	for range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -152,12 +152,12 @@ func TestCircuitBreaker_CustomIsFailure(t *testing.T) {
 
 func TestCircuitBreaker_CustomKeyExtractor(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(2),
-		config.WithCircuitBreakerKeyExtractor(func(r *http.Request) string {
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 2,
+		KeyExtractor: func(r *http.Request) string {
 			return r.Header.Get("X-Service-Key")
-		}),
-	)(handler)
+		},
+	})(handler)
 
 	for range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Service-Key", "service-a").Build()
@@ -177,11 +177,11 @@ func TestCircuitBreaker_CustomKeyExtractor(t *testing.T) {
 
 func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(2),
-		config.WithCircuitBreakerOpenStatusCode(http.StatusTooManyRequests),
-		config.WithCircuitBreakerOpenMessage("Circuit breaker active"),
-	)(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 2,
+		OpenStatusCode:   http.StatusTooManyRequests,
+		OpenMessage:      "Circuit breaker active",
+	})(handler)
 
 	for range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -198,15 +198,15 @@ func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
 
 func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(0),
-		config.WithCircuitBreakerRecoveryTimeout(0),
-		config.WithCircuitBreakerSuccessThreshold(0),
-		config.WithCircuitBreakerIsFailure(nil),
-		config.WithCircuitBreakerKeyExtractor(nil),
-		config.WithCircuitBreakerOpenStatusCode(0),
-		config.WithCircuitBreakerOpenMessage(""),
-	)(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 0,
+		RecoveryTimeout:  0,
+		SuccessThreshold: 0,
+		IsFailure:        nil,
+		KeyExtractor:     nil,
+		OpenStatusCode:   0,
+		OpenMessage:      "",
+	})(handler)
 
 	for range 5 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -221,7 +221,7 @@ func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {
 
 func TestCircuitBreaker_ConcurrentRequests(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusOK}
-	middleware := CircuitBreaker(config.WithCircuitBreakerFailureThreshold(5))(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{FailureThreshold: 5})(handler)
 
 	var wg sync.WaitGroup
 	successCount := 0
@@ -269,11 +269,11 @@ func TestCircuitBreaker_MultipleEndpoints(t *testing.T) {
 
 func TestCircuitBreaker_StateTransitions(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(2),
-		config.WithCircuitBreakerRecoveryTimeout(50*time.Millisecond),
-		config.WithCircuitBreakerSuccessThreshold(2),
-	)(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 2,
+		RecoveryTimeout:  50 * time.Millisecond,
+		SuccessThreshold: 2,
+	})(handler)
 
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w := zhtest.Serve(middleware, req)
@@ -341,10 +341,9 @@ func TestCircuitBreaker_ResponseWriter(t *testing.T) {
 
 func TestCircuitBreaker_MultipleOptions(t *testing.T) {
 	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
-	middleware := CircuitBreaker(
-		config.WithCircuitBreakerFailureThreshold(2),
-		config.WithCircuitBreakerFailureThreshold(10),
-	)(handler)
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 10,
+	})(handler)
 
 	for range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -362,11 +361,11 @@ func TestCircuitBreaker_MultipleOptions(t *testing.T) {
 func TestCircuitBreaker_EdgeCases(t *testing.T) {
 	t.Run("empty key extractor result", func(t *testing.T) {
 		handler := &circuitTestHandler{statusCode: http.StatusOK}
-		middleware := CircuitBreaker(
-			config.WithCircuitBreakerKeyExtractor(func(r *http.Request) string {
+		middleware := CircuitBreaker(config.CircuitBreakerConfig{
+			KeyExtractor: func(r *http.Request) string {
 				return ""
-			}),
-		)(handler)
+			},
+		})(handler)
 
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		w := zhtest.Serve(middleware, req)
@@ -376,11 +375,11 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 
 	t.Run("nil request to IsFailure", func(t *testing.T) {
 		handler := &circuitTestHandler{statusCode: http.StatusOK}
-		middleware := CircuitBreaker(
-			config.WithCircuitBreakerIsFailure(func(r *http.Request, statusCode int) bool {
+		middleware := CircuitBreaker(config.CircuitBreakerConfig{
+			IsFailure: func(r *http.Request, statusCode int) bool {
 				return statusCode >= http.StatusInternalServerError
-			}),
-		)(handler)
+			},
+		})(handler)
 
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		w := zhtest.Serve(middleware, req)

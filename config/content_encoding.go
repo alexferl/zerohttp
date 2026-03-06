@@ -13,20 +13,3 @@ var DefaultContentEncodingConfig = ContentEncodingConfig{
 	Encodings:   []string{"gzip", "deflate"},
 	ExemptPaths: []string{},
 }
-
-// ContentEncodingOption configures content encoding middleware.
-type ContentEncodingOption func(*ContentEncodingConfig)
-
-// WithContentEncodingEncodings sets the list of allowed content encodings.
-func WithContentEncodingEncodings(encodings []string) ContentEncodingOption {
-	return func(c *ContentEncodingConfig) {
-		c.Encodings = encodings
-	}
-}
-
-// WithContentEncodingExemptPaths sets paths that skip content encoding validation.
-func WithContentEncodingExemptPaths(paths []string) ContentEncodingOption {
-	return func(c *ContentEncodingConfig) {
-		c.ExemptPaths = paths
-	}
-}

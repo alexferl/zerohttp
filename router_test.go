@@ -190,15 +190,10 @@ func TestNewRouter(t *testing.T) {
 		}
 
 		cfg := router.Config()
-		requestIDCfg := config.DefaultRequestIDConfig
-		for _, opt := range cfg.RequestIDOptions {
-			opt(&requestIDCfg)
+		if cfg.RequestID.Header != "X-Request-Id" {
+			t.Errorf("Expected default header name 'X-Request-Id', got '%s'", cfg.RequestID.Header)
 		}
-
-		if requestIDCfg.Header != "X-Request-Id" {
-			t.Errorf("Expected default header name 'X-Request-Id', got '%s'", requestIDCfg.Header)
-		}
-		if requestIDCfg.Generator == nil {
+		if cfg.RequestID.Generator == nil {
 			t.Error("Expected default GenerateID function to be set")
 		}
 	})
@@ -511,10 +506,8 @@ func TestRouter_Configuration(t *testing.T) {
 	t.Run("config management", func(t *testing.T) {
 		router := NewRouter()
 		customConfig := config.DefaultConfig
-		customConfig.RequestIDOptions = []config.RequestIDOption{
-			config.WithRequestIDHeader("X-Custom-Request-Id"),
-			config.WithRequestIDGenerator(func() string { return "custom-id-12345" }),
-		}
+		customConfig.RequestID.Header = "X-Custom-Request-Id"
+		customConfig.RequestID.Generator = func() string { return "custom-id-12345" }
 
 		router.SetConfig(customConfig)
 

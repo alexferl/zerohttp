@@ -188,7 +188,6 @@ type defaultRouter struct {
 //	router := NewRouter(loggingMiddleware, authMiddleware)
 func NewRouter(mw ...func(http.Handler) http.Handler) Router {
 	cfg := config.DefaultConfig
-	cfg.Build()
 
 	r := &defaultRouter{
 		mux:                     &http.ServeMux{},
@@ -450,7 +449,6 @@ func (r *defaultRouter) Config() config.Config {
 // Note: Changing the configuration affects both regular routes
 // and 404/405 error responses.
 func (r *defaultRouter) SetConfig(cfg config.Config) {
-	cfg.Build()
 	r.config = cfg
 }
 

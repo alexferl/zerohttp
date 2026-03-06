@@ -58,48 +58,47 @@ func (w *circuitResponseWriter) Write(data []byte) (int, error) {
 }
 
 // CircuitBreaker creates a circuit breaker middleware
-func CircuitBreaker(opts ...config.CircuitBreakerOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultCircuitBreakerConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.Handler {
+	c := config.DefaultCircuitBreakerConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
-	if cfg.FailureThreshold <= 0 {
-		cfg.FailureThreshold = config.DefaultCircuitBreakerConfig.FailureThreshold
+	if c.FailureThreshold <= 0 {
+		c.FailureThreshold = config.DefaultCircuitBreakerConfig.FailureThreshold
 	}
-	if cfg.RecoveryTimeout <= 0 {
-		cfg.RecoveryTimeout = config.DefaultCircuitBreakerConfig.RecoveryTimeout
+	if c.RecoveryTimeout <= 0 {
+		c.RecoveryTimeout = config.DefaultCircuitBreakerConfig.RecoveryTimeout
 	}
-	if cfg.SuccessThreshold <= 0 {
-		cfg.SuccessThreshold = config.DefaultCircuitBreakerConfig.SuccessThreshold
+	if c.SuccessThreshold <= 0 {
+		c.SuccessThreshold = config.DefaultCircuitBreakerConfig.SuccessThreshold
 	}
-	if cfg.IsFailure == nil {
-		cfg.IsFailure = config.DefaultCircuitBreakerConfig.IsFailure
+	if c.IsFailure == nil {
+		c.IsFailure = config.DefaultCircuitBreakerConfig.IsFailure
 	}
-	if cfg.KeyExtractor == nil {
-		cfg.KeyExtractor = config.DefaultCircuitBreakerConfig.KeyExtractor
+	if c.KeyExtractor == nil {
+		c.KeyExtractor = config.DefaultCircuitBreakerConfig.KeyExtractor
 	}
-	if cfg.OpenStatusCode == 0 {
-		cfg.OpenStatusCode = config.DefaultCircuitBreakerConfig.OpenStatusCode
+	if c.OpenStatusCode == 0 {
+		c.OpenStatusCode = config.DefaultCircuitBreakerConfig.OpenStatusCode
 	}
-	if cfg.OpenMessage == "" {
-		cfg.OpenMessage = config.DefaultCircuitBreakerConfig.OpenMessage
+	if c.OpenMessage == "" {
+		c.OpenMessage = config.DefaultCircuitBreakerConfig.OpenMessage
 	}
 
 	cbm := &circuitBreakerMiddleware{
 		circuits: make(map[string]*circuit),
-		config:   cfg,
+		config:   c,
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := cfg.KeyExtractor(r)
-			c := cbm.getCircuit(key)
+			key := c.KeyExtractor(r)
+			circ := cbm.getCircuit(key)
 
-			if c.isOpen() {
-				w.WriteHeader(cfg.OpenStatusCode)
-				if _, err := w.Write([]byte(cfg.OpenMessage)); err != nil {
+			if circ.isOpen() {
+				w.WriteHeader(c.OpenStatusCode)
+				if _, err := w.Write([]byte(c.OpenMessage)); err != nil {
 					panic(fmt.Errorf("circuit breaker message write failed: %w", err))
 				}
 				return
@@ -112,7 +111,7 @@ func CircuitBreaker(opts ...config.CircuitBreakerOption) func(http.Handler) http
 
 			next.ServeHTTP(wrapped, r)
 
-			c.recordResult(r, wrapped.statusCode)
+			circ.recordResult(r, wrapped.statusCode)
 		})
 	}
 }

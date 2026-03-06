@@ -235,9 +235,9 @@ mgr := &autocert.Manager{
 }
 
 // Create zerohttp app with autocert manager
-app := zh.New(
-    config.WithAutocertManager(mgr),
-)
+app := zh.New(config.Config{
+    AutocertManager: mgr,
+})
 
 // Create HTTP/3 and WebTransport servers
 h3 := &http3.Server{Addr: ":443", Handler: app}

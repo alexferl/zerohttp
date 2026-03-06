@@ -40,53 +40,70 @@ func TestCompressConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestCompressOptions(t *testing.T) {
-	t.Run("level option", func(t *testing.T) {
-		cfg := DefaultCompressConfig
-		WithCompressLevel(9)(&cfg)
+func TestCompressConfig_StructAssignment(t *testing.T) {
+	t.Run("level assignment", func(t *testing.T) {
+		cfg := CompressConfig{
+			Level:       9,
+			Types:       DefaultCompressConfig.Types,
+			Algorithms:  DefaultCompressConfig.Algorithms,
+			ExemptPaths: []string{},
+		}
 		if cfg.Level != 9 {
 			t.Errorf("expected level = 9, got %d", cfg.Level)
 		}
 	})
 
-	t.Run("types option", func(t *testing.T) {
+	t.Run("types assignment", func(t *testing.T) {
 		types := []string{"text/html", "application/json", "text/css", "application/xml"}
-		cfg := DefaultCompressConfig
-		WithCompressTypes(types)(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       types,
+			Algorithms:  DefaultCompressConfig.Algorithms,
+			ExemptPaths: []string{},
+		}
 		if !reflect.DeepEqual(cfg.Types, types) {
 			t.Errorf("expected types = %v, got %v", types, cfg.Types)
 		}
 	})
 
-	t.Run("algorithms option", func(t *testing.T) {
+	t.Run("algorithms assignment", func(t *testing.T) {
 		algorithms := []CompressionAlgorithm{Gzip}
-		cfg := DefaultCompressConfig
-		WithCompressAlgorithms(algorithms)(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       DefaultCompressConfig.Types,
+			Algorithms:  algorithms,
+			ExemptPaths: []string{},
+		}
 		if !reflect.DeepEqual(cfg.Algorithms, algorithms) {
 			t.Errorf("expected algorithms = %v, got %v", algorithms, cfg.Algorithms)
 		}
 	})
 
-	t.Run("exempt paths option", func(t *testing.T) {
+	t.Run("exempt paths assignment", func(t *testing.T) {
 		exemptPaths := []string{"/api/stream", "/download", "/static/images", "/videos"}
-		cfg := DefaultCompressConfig
-		WithCompressExemptPaths(exemptPaths)(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       DefaultCompressConfig.Types,
+			Algorithms:  DefaultCompressConfig.Algorithms,
+			ExemptPaths: exemptPaths,
+		}
 		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
 			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
 		}
 	})
 }
 
-func TestCompressConfig_MultipleOptions(t *testing.T) {
+func TestCompressConfig_MultipleFields(t *testing.T) {
 	types := []string{"application/json", "text/html", "text/css"}
 	algorithms := []CompressionAlgorithm{Deflate}
 	exemptPaths := []string{"/large-files", "/api/binary"}
 
-	cfg := DefaultCompressConfig
-	WithCompressLevel(3)(&cfg)
-	WithCompressTypes(types)(&cfg)
-	WithCompressAlgorithms(algorithms)(&cfg)
-	WithCompressExemptPaths(exemptPaths)(&cfg)
+	cfg := CompressConfig{
+		Level:       3,
+		Types:       types,
+		Algorithms:  algorithms,
+		ExemptPaths: exemptPaths,
+	}
 
 	if cfg.Level != 3 {
 		t.Errorf("expected level = 3, got %d", cfg.Level)
@@ -104,10 +121,12 @@ func TestCompressConfig_MultipleOptions(t *testing.T) {
 
 func TestCompressConfig_EdgeCases(t *testing.T) {
 	t.Run("empty slices", func(t *testing.T) {
-		cfg := DefaultCompressConfig
-		WithCompressTypes([]string{})(&cfg)
-		WithCompressAlgorithms([]CompressionAlgorithm{})(&cfg)
-		WithCompressExemptPaths([]string{})(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       []string{},
+			Algorithms:  []CompressionAlgorithm{},
+			ExemptPaths: []string{},
+		}
 
 		if cfg.Types == nil || len(cfg.Types) != 0 {
 			t.Errorf("expected empty types slice, got %v", cfg.Types)
@@ -121,29 +140,35 @@ func TestCompressConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil slices", func(t *testing.T) {
-		cfg := DefaultCompressConfig
-		WithCompressTypes(nil)(&cfg)
-		WithCompressAlgorithms(nil)(&cfg)
-		WithCompressExemptPaths(nil)(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       nil,
+			Algorithms:  nil,
+			ExemptPaths: nil,
+		}
 
 		if cfg.Types != nil {
-			t.Error("expected types to remain nil when nil is passed")
+			t.Error("expected types to be nil")
 		}
 		if cfg.Algorithms != nil {
-			t.Error("expected algorithms to remain nil when nil is passed")
+			t.Error("expected algorithms to be nil")
 		}
 		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+			t.Error("expected exempt paths to be nil")
 		}
 	})
 
 	t.Run("boundary levels", func(t *testing.T) {
 		testCases := []int{-1, 0, 1, 5, 9, 10}
 		for _, level := range testCases {
-			cfg := DefaultCompressConfig
-			WithCompressLevel(level)(&cfg)
+			cfg := CompressConfig{
+				Level:       level,
+				Types:       DefaultCompressConfig.Types,
+				Algorithms:  DefaultCompressConfig.Algorithms,
+				ExemptPaths: []string{},
+			}
 			if cfg.Level != level {
-				t.Errorf("WithCompressLevel(%d): expected level = %d, got %d", level, level, cfg.Level)
+				t.Errorf("expected level = %d, got %d", level, cfg.Level)
 			}
 		}
 	})
@@ -152,8 +177,12 @@ func TestCompressConfig_EdgeCases(t *testing.T) {
 func TestCompressConfig_CustomScenarios(t *testing.T) {
 	t.Run("mixed algorithms", func(t *testing.T) {
 		algorithms := []CompressionAlgorithm{Deflate, Gzip}
-		cfg := DefaultCompressConfig
-		WithCompressAlgorithms(algorithms)(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       DefaultCompressConfig.Types,
+			Algorithms:  algorithms,
+			ExemptPaths: []string{},
+		}
 		if len(cfg.Algorithms) != 2 {
 			t.Errorf("expected 2 algorithms, got %d", len(cfg.Algorithms))
 		}
@@ -169,8 +198,12 @@ func TestCompressConfig_CustomScenarios(t *testing.T) {
 			"application/ld+json",
 			"text/csv",
 		}
-		cfg := DefaultCompressConfig
-		WithCompressTypes(customTypes)(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       customTypes,
+			Algorithms:  DefaultCompressConfig.Algorithms,
+			ExemptPaths: []string{},
+		}
 		if !reflect.DeepEqual(cfg.Types, customTypes) {
 			t.Errorf("expected custom types %v, got %v", customTypes, cfg.Types)
 		}
@@ -185,8 +218,12 @@ func TestCompressConfig_CustomScenarios(t *testing.T) {
 			"*.gz",
 			"/health",
 		}
-		cfg := DefaultCompressConfig
-		WithCompressExemptPaths(exemptPaths)(&cfg)
+		cfg := CompressConfig{
+			Level:       6,
+			Types:       DefaultCompressConfig.Types,
+			Algorithms:  DefaultCompressConfig.Algorithms,
+			ExemptPaths: exemptPaths,
+		}
 		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
 			t.Errorf("expected exempt paths %v, got %v", exemptPaths, cfg.ExemptPaths)
 		}
