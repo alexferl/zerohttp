@@ -15,16 +15,15 @@ func TestSetHeaderConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestSetHeaderConfig_StructAssignment(t *testing.T) {
+func TestWithSetHeadersOption(t *testing.T) {
 	t.Run("multiple headers", func(t *testing.T) {
 		headers := map[string]string{
 			"X-Custom-Header":  "custom-value",
 			"X-API-Version":    "v1.0",
 			"X-Request-Source": "api-gateway",
 		}
-		cfg := SetHeaderConfig{
-			Headers: headers,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(headers)(&cfg)
 
 		if len(cfg.Headers) != 3 {
 			t.Errorf("expected 3 headers, got %d", len(cfg.Headers))
@@ -47,9 +46,8 @@ func TestSetHeaderConfig_StructAssignment(t *testing.T) {
 
 	t.Run("single header", func(t *testing.T) {
 		headers := map[string]string{"X-Single-Header": "single-value"}
-		cfg := SetHeaderConfig{
-			Headers: headers,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(headers)(&cfg)
 
 		if len(cfg.Headers) != 1 {
 			t.Errorf("expected 1 header, got %d", len(cfg.Headers))
@@ -69,11 +67,9 @@ func TestSetHeaderConfig_StructAssignment(t *testing.T) {
 			"X-New-Header":  "new-value",
 		}
 
-		cfg := SetHeaderConfig{
-			Headers: firstHeaders,
-		}
-		// Reassign to simulate overwrite
-		cfg.Headers = secondHeaders
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(firstHeaders)(&cfg)
+		WithSetHeaders(secondHeaders)(&cfg)
 
 		// Should only have the second set of headers
 		if len(cfg.Headers) != 2 {
@@ -95,9 +91,8 @@ func TestSetHeaderConfig_StructAssignment(t *testing.T) {
 func TestSetHeaderConfig_EdgeCases(t *testing.T) {
 	t.Run("empty headers", func(t *testing.T) {
 		emptyHeaders := map[string]string{}
-		cfg := SetHeaderConfig{
-			Headers: emptyHeaders,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(emptyHeaders)(&cfg)
 
 		if cfg.Headers == nil {
 			t.Error("expected headers map to be initialized, not nil")
@@ -108,9 +103,8 @@ func TestSetHeaderConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil headers", func(t *testing.T) {
-		cfg := SetHeaderConfig{
-			Headers: nil,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(nil)(&cfg)
 		if cfg.Headers != nil {
 			t.Error("expected headers to remain nil when nil is passed")
 		}
@@ -122,9 +116,8 @@ func TestSetHeaderConfig_EdgeCases(t *testing.T) {
 			"X-Custom-Header": "titlecase",
 			"X-CUSTOM-HEADER": "uppercase",
 		}
-		cfg := SetHeaderConfig{
-			Headers: headers,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(headers)(&cfg)
 
 		if len(cfg.Headers) != 3 {
 			t.Errorf("expected 3 headers (case-sensitive keys), got %d", len(cfg.Headers))
@@ -147,9 +140,8 @@ func TestSetHeaderConfig_EdgeCases(t *testing.T) {
 			"X-Normal-Header": "value",
 			"X-Another-Empty": "",
 		}
-		cfg := SetHeaderConfig{
-			Headers: headers,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(headers)(&cfg)
 
 		if len(cfg.Headers) != 3 {
 			t.Errorf("expected 3 headers, got %d", len(cfg.Headers))
@@ -182,9 +174,8 @@ func TestSetHeaderConfig_SpecialValues(t *testing.T) {
 			"X-Unicode":       "héllo wørld ñoñó",
 			"X-Quotes":        `"quoted value" and 'single quotes'`,
 		}
-		cfg := SetHeaderConfig{
-			Headers: headers,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(headers)(&cfg)
 
 		if len(cfg.Headers) != 5 {
 			t.Errorf("expected 5 headers, got %d", len(cfg.Headers))
@@ -202,9 +193,8 @@ func TestSetHeaderConfig_SpecialValues(t *testing.T) {
 			"X-Long-Header": longValue,
 			"X-Short":       "short",
 		}
-		cfg := SetHeaderConfig{
-			Headers: headers,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(headers)(&cfg)
 
 		if cfg.Headers["X-Long-Header"] != longValue {
 			t.Error("expected long header value to be preserved exactly")
@@ -223,9 +213,8 @@ func TestSetHeaderConfig_SpecialValues(t *testing.T) {
 			"X-Tab-Character":   "value\twith\ttabs",
 			"X-Newline":         "value\nwith\nnewlines",
 		}
-		cfg := SetHeaderConfig{
-			Headers: headers,
-		}
+		cfg := DefaultSetHeaderConfig
+		WithSetHeaders(headers)(&cfg)
 
 		if len(cfg.Headers) != 6 {
 			t.Errorf("expected 6 whitespace headers, got %d", len(cfg.Headers))

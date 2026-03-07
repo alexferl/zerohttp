@@ -102,7 +102,7 @@ func TestRequestLogger_LogLevels(t *testing.T) {
 	t.Run("logErrors disabled", func(t *testing.T) {
 		logger := &requestLoggerMockLogger{}
 		handler := &statusTestHandler{statusCode: http.StatusInternalServerError}
-		middleware := RequestLogger(logger, config.RequestLoggerConfig{LogErrors: false})
+		middleware := RequestLogger(logger, config.WithRequestLoggerLogErrors(false))
 
 		req := zhtest.NewRequest(http.MethodGet, "/error").Build()
 		zhtest.TestMiddlewareWithHandler(middleware, handler, req)
@@ -208,11 +208,11 @@ func TestRequestLogger_NoRequestIDField(t *testing.T) {
 func TestRequestLogger_CustomFields(t *testing.T) {
 	logger := &requestLoggerMockLogger{}
 	handler := &statusTestHandler{statusCode: http.StatusOK}
-	middleware := RequestLogger(logger, config.RequestLoggerConfig{
-		Fields: []config.LogField{
+	middleware := RequestLogger(logger,
+		config.WithRequestLoggerFields([]config.LogField{
 			config.FieldMethod, config.FieldPath, config.FieldStatus,
-		},
-	})(handler)
+		}),
+	)(handler)
 
 	req := zhtest.NewRequest(http.MethodPost, "/api/users").Build()
 	zhtest.Serve(middleware, req)
@@ -240,7 +240,7 @@ func TestRequestLogger_CustomFields(t *testing.T) {
 func TestRequestLogger_ExemptPaths(t *testing.T) {
 	logger := &requestLoggerMockLogger{}
 	handler := &statusTestHandler{statusCode: http.StatusOK}
-	middleware := RequestLogger(logger, config.RequestLoggerConfig{ExemptPaths: []string{"/health", "/metrics"}})(handler)
+	middleware := RequestLogger(logger, config.WithRequestLoggerExemptPaths([]string{"/health", "/metrics"}))(handler)
 
 	req1 := zhtest.NewRequest(http.MethodGet, "/health").Build()
 	zhtest.Serve(middleware, req1)
@@ -260,7 +260,7 @@ func TestRequestLogger_ExemptPaths(t *testing.T) {
 func TestRequestLogger_NilFields(t *testing.T) {
 	logger := &requestLoggerMockLogger{}
 	handler := &statusTestHandler{statusCode: http.StatusOK}
-	middleware := RequestLogger(logger, config.RequestLoggerConfig{Fields: nil})(handler)
+	middleware := RequestLogger(logger, config.WithRequestLoggerFields(nil))(handler)
 
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(middleware, req)
@@ -277,9 +277,10 @@ func TestRequestLogger_NilFields(t *testing.T) {
 func TestRequestLogger_MultipleOptions(t *testing.T) {
 	logger := &requestLoggerMockLogger{}
 	handler := &statusTestHandler{statusCode: http.StatusOK}
-	middleware := RequestLogger(logger, config.RequestLoggerConfig{
-		Fields: []config.LogField{config.FieldPath},
-	})(handler)
+	middleware := RequestLogger(logger,
+		config.WithRequestLoggerFields([]config.LogField{config.FieldMethod}),
+		config.WithRequestLoggerFields([]config.LogField{config.FieldPath}),
+	)(handler)
 
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(middleware, req)

@@ -8,93 +8,95 @@ import (
 )
 
 // SecurityHeaders creates a security headers middleware that adds various security-related HTTP headers
-func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) http.Handler {
-	c := config.DefaultSecurityHeadersConfig
-	if len(cfg) > 0 {
-		c = cfg[0]
+func SecurityHeaders(opts ...config.SecurityHeadersOption) func(http.Handler) http.Handler {
+	cfg := config.DefaultSecurityHeadersConfig
+
+	for _, opt := range opts {
+		opt(&cfg)
 	}
-	if c.ContentSecurityPolicy == "" {
-		c.ContentSecurityPolicy = config.DefaultSecurityHeadersConfig.ContentSecurityPolicy
+
+	if cfg.ContentSecurityPolicy == "" {
+		cfg.ContentSecurityPolicy = config.DefaultSecurityHeadersConfig.ContentSecurityPolicy
 	}
-	if c.CrossOriginEmbedderPolicy == "" {
-		c.CrossOriginEmbedderPolicy = config.DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy
+	if cfg.CrossOriginEmbedderPolicy == "" {
+		cfg.CrossOriginEmbedderPolicy = config.DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy
 	}
-	if c.CrossOriginOpenerPolicy == "" {
-		c.CrossOriginOpenerPolicy = config.DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy
+	if cfg.CrossOriginOpenerPolicy == "" {
+		cfg.CrossOriginOpenerPolicy = config.DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy
 	}
-	if c.CrossOriginResourcePolicy == "" {
-		c.CrossOriginResourcePolicy = config.DefaultSecurityHeadersConfig.CrossOriginResourcePolicy
+	if cfg.CrossOriginResourcePolicy == "" {
+		cfg.CrossOriginResourcePolicy = config.DefaultSecurityHeadersConfig.CrossOriginResourcePolicy
 	}
-	if c.PermissionsPolicy == "" {
-		c.PermissionsPolicy = config.DefaultSecurityHeadersConfig.PermissionsPolicy
+	if cfg.PermissionsPolicy == "" {
+		cfg.PermissionsPolicy = config.DefaultSecurityHeadersConfig.PermissionsPolicy
 	}
-	if c.ReferrerPolicy == "" {
-		c.ReferrerPolicy = config.DefaultSecurityHeadersConfig.ReferrerPolicy
+	if cfg.ReferrerPolicy == "" {
+		cfg.ReferrerPolicy = config.DefaultSecurityHeadersConfig.ReferrerPolicy
 	}
-	if c.XContentTypeOptions == "" {
-		c.XContentTypeOptions = config.DefaultSecurityHeadersConfig.XContentTypeOptions
+	if cfg.XContentTypeOptions == "" {
+		cfg.XContentTypeOptions = config.DefaultSecurityHeadersConfig.XContentTypeOptions
 	}
-	if c.XFrameOptions == "" {
-		c.XFrameOptions = config.DefaultSecurityHeadersConfig.XFrameOptions
+	if cfg.XFrameOptions == "" {
+		cfg.XFrameOptions = config.DefaultSecurityHeadersConfig.XFrameOptions
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range c.ExemptPaths {
+			for _, exemptPath := range cfg.ExemptPaths {
 				if r.URL.Path == exemptPath {
 					next.ServeHTTP(w, r)
 					return
 				}
 			}
 
-			if c.ContentSecurityPolicy != "" {
-				if c.ContentSecurityPolicyReportOnly {
-					w.Header().Set("Content-Security-Policy-Report-Only", c.ContentSecurityPolicy)
+			if cfg.ContentSecurityPolicy != "" {
+				if cfg.ContentSecurityPolicyReportOnly {
+					w.Header().Set("Content-Security-Policy-Report-Only", cfg.ContentSecurityPolicy)
 				} else {
-					w.Header().Set("Content-Security-Policy", c.ContentSecurityPolicy)
+					w.Header().Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
 				}
 			}
 
-			if c.CrossOriginEmbedderPolicy != "" {
-				w.Header().Set("Cross-Origin-Embedder-Policy", c.CrossOriginEmbedderPolicy)
+			if cfg.CrossOriginEmbedderPolicy != "" {
+				w.Header().Set("Cross-Origin-Embedder-Policy", cfg.CrossOriginEmbedderPolicy)
 			}
-			if c.CrossOriginOpenerPolicy != "" {
-				w.Header().Set("Cross-Origin-Opener-Policy", c.CrossOriginOpenerPolicy)
+			if cfg.CrossOriginOpenerPolicy != "" {
+				w.Header().Set("Cross-Origin-Opener-Policy", cfg.CrossOriginOpenerPolicy)
 			}
-			if c.CrossOriginResourcePolicy != "" {
-				w.Header().Set("Cross-Origin-Resource-Policy", c.CrossOriginResourcePolicy)
-			}
-
-			if c.PermissionsPolicy != "" {
-				w.Header().Set("Permissions-Policy", c.PermissionsPolicy)
+			if cfg.CrossOriginResourcePolicy != "" {
+				w.Header().Set("Cross-Origin-Resource-Policy", cfg.CrossOriginResourcePolicy)
 			}
 
-			if c.ReferrerPolicy != "" {
-				w.Header().Set("Referrer-Policy", c.ReferrerPolicy)
+			if cfg.PermissionsPolicy != "" {
+				w.Header().Set("Permissions-Policy", cfg.PermissionsPolicy)
 			}
 
-			if c.Server != "" {
-				w.Header().Set("Server", c.Server)
+			if cfg.ReferrerPolicy != "" {
+				w.Header().Set("Referrer-Policy", cfg.ReferrerPolicy)
+			}
+
+			if cfg.Server != "" {
+				w.Header().Set("Server", cfg.Server)
 			}
 
 			// HSTS (only for HTTPS requests)
-			if c.StrictTransportSecurity.MaxAge != 0 && isHTTPS(r) {
-				hstsValue := fmt.Sprintf("max-age=%d", c.StrictTransportSecurity.MaxAge)
-				if !c.StrictTransportSecurity.ExcludeSubdomains {
+			if cfg.StrictTransportSecurity.MaxAge != 0 && isHTTPS(r) {
+				hstsValue := fmt.Sprintf("max-age=%d", cfg.StrictTransportSecurity.MaxAge)
+				if !cfg.StrictTransportSecurity.ExcludeSubdomains {
 					hstsValue += "; includeSubDomains"
 				}
-				if c.StrictTransportSecurity.PreloadEnabled {
+				if cfg.StrictTransportSecurity.PreloadEnabled {
 					hstsValue += "; preload"
 				}
 				w.Header().Set("Strict-Transport-Security", hstsValue)
 			}
 
-			if c.XContentTypeOptions != "" {
-				w.Header().Set("X-Content-Type-Options", c.XContentTypeOptions)
+			if cfg.XContentTypeOptions != "" {
+				w.Header().Set("X-Content-Type-Options", cfg.XContentTypeOptions)
 			}
 
-			if c.XFrameOptions != "" {
-				w.Header().Set("X-Frame-Options", c.XFrameOptions)
+			if cfg.XFrameOptions != "" {
+				w.Header().Set("X-Frame-Options", cfg.XFrameOptions)
 			}
 
 			next.ServeHTTP(w, r)

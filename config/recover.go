@@ -13,3 +13,28 @@ var DefaultRecoverConfig = RecoverConfig{
 	StackSize:        4 << 10, // 4KB
 	EnableStackTrace: true,
 }
+
+// recoverConfigToOptions converts a RecoverConfig struct to a slice of RecoverOption functions
+func recoverConfigToOptions(cfg RecoverConfig) []RecoverOption {
+	return []RecoverOption{
+		WithRecoverStackSize(cfg.StackSize),
+		WithRecoverEnableStackTrace(cfg.EnableStackTrace),
+	}
+}
+
+// RecoverOption configures panic recovery middleware
+type RecoverOption func(*RecoverConfig)
+
+// WithRecoverStackSize sets the maximum stack trace size in bytes
+func WithRecoverStackSize(size int64) RecoverOption {
+	return func(c *RecoverConfig) {
+		c.StackSize = size
+	}
+}
+
+// WithRecoverEnableStackTrace enables or disables stack trace inclusion
+func WithRecoverEnableStackTrace(enabled bool) RecoverOption {
+	return func(c *RecoverConfig) {
+		c.EnableStackTrace = enabled
+	}
+}

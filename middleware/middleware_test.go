@@ -9,7 +9,13 @@ import (
 )
 
 func TestDefaultMiddlewares(t *testing.T) {
-	cfg := config.DefaultConfig
+	cfg := config.Config{
+		RequestIDOptions:       []config.RequestIDOption{},
+		RecoverOptions:         []config.RecoverOption{},
+		RequestBodySizeOptions: []config.RequestBodySizeOption{},
+		SecurityHeadersOptions: []config.SecurityHeadersOption{},
+		RequestLoggerOptions:   []config.RequestLoggerOption{},
+	}
 	logger := &mockLogger{}
 
 	middlewares := DefaultMiddlewares(cfg, logger)

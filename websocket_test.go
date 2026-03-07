@@ -265,7 +265,7 @@ func TestServerWebSocketUpgrader(t *testing.T) {
 func TestServerWithWebSocketUpgrader(t *testing.T) {
 	// Test that WebSocket upgrader can be set via config option
 	mockUpgrader := &mockWebSocketUpgrader{}
-	app := New(config.Config{WebSocketUpgrader: mockUpgrader})
+	app := New(config.WithWebSocketUpgrader(mockUpgrader))
 
 	if app.WebSocketUpgrader() != mockUpgrader {
 		t.Error("WebSocketUpgrader should be set via config option")
@@ -288,7 +288,7 @@ func TestWebSocketHandler(t *testing.T) {
 
 	mockUpgrader := &mockWebSocketUpgrader{conn: mockConn}
 
-	app := New(config.Config{WebSocketUpgrader: mockUpgrader})
+	app := New(config.WithWebSocketUpgrader(mockUpgrader))
 
 	app.GET("/ws", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		ws, err := app.WebSocketUpgrader().Upgrade(w, r)

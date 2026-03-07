@@ -14,11 +14,11 @@ func TestTrailingSlash_PreferTrailingSlash(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("path: " + r.URL.Path))
 	})
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		PreferTrailingSlash: true,
-		Action:              config.RedirectAction,
-		RedirectCode:        http.StatusMovedPermanently,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashPreference(true),
+		config.WithTrailingSlashAction(config.RedirectAction),
+		config.WithTrailingSlashRedirectCode(http.StatusMovedPermanently),
+	)(handler)
 	tests := []struct {
 		name, requestPath, expectedPath, expectedHeader string
 		expectedCode                                    int
@@ -48,10 +48,10 @@ func TestTrailingSlash_StripAction(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("path: " + r.URL.Path))
 	})
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.StripAction,
-		PreferTrailingSlash: false,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.StripAction),
+		config.WithTrailingSlashPreference(false),
+	)(handler)
 	tests := []struct {
 		name, requestPath, expectedPath string
 		expectedCode                    int
@@ -75,10 +75,10 @@ func TestTrailingSlash_AppendAction(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("path: " + r.URL.Path))
 	})
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.AppendAction,
-		PreferTrailingSlash: true,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.AppendAction),
+		config.WithTrailingSlashPreference(true),
+	)(handler)
 	tests := []struct {
 		name, requestPath, expectedPath string
 		expectedCode                    int
@@ -99,11 +99,11 @@ func TestTrailingSlash_AppendAction(t *testing.T) {
 
 func TestTrailingSlash_CustomRedirectCode(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.RedirectAction,
-		PreferTrailingSlash: false,
-		RedirectCode:        http.StatusFound,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.RedirectAction),
+		config.WithTrailingSlashPreference(false),
+		config.WithTrailingSlashRedirectCode(http.StatusFound),
+	)(handler)
 	req := zhtest.NewRequest(http.MethodGet, "/api/users/").Build()
 	w := zhtest.Serve(middleware, req)
 
@@ -112,11 +112,11 @@ func TestTrailingSlash_CustomRedirectCode(t *testing.T) {
 
 func TestTrailingSlash_WithQueryString(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.RedirectAction,
-		PreferTrailingSlash: false,
-		RedirectCode:        http.StatusMovedPermanently,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.RedirectAction),
+		config.WithTrailingSlashPreference(false),
+		config.WithTrailingSlashRedirectCode(http.StatusMovedPermanently),
+	)(handler)
 	req := zhtest.NewRequest(http.MethodGet, "/api/users/?param=value&other=test").Build()
 	w := zhtest.Serve(middleware, req)
 
@@ -125,11 +125,11 @@ func TestTrailingSlash_WithQueryString(t *testing.T) {
 
 func TestTrailingSlash_WithFragment(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.RedirectAction,
-		PreferTrailingSlash: true,
-		RedirectCode:        http.StatusMovedPermanently,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.RedirectAction),
+		config.WithTrailingSlashPreference(true),
+		config.WithTrailingSlashRedirectCode(http.StatusMovedPermanently),
+	)(handler)
 	targetURL, _ := url.Parse("/api/users?param=value#section")
 	req := &http.Request{Method: http.MethodGet, URL: targetURL, Header: make(http.Header)}
 	w := zhtest.Serve(middleware, req)
@@ -140,14 +140,14 @@ func TestTrailingSlash_WithFragment(t *testing.T) {
 func TestTrailingSlash_ConfigEdgeCases(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	t.Run("Empty action uses default", func(t *testing.T) {
-		middleware := TrailingSlash(config.TrailingSlashConfig{Action: "", PreferTrailingSlash: false})(handler)
+		middleware := TrailingSlash(config.WithTrailingSlashAction(""), config.WithTrailingSlashPreference(false))(handler)
 		req := zhtest.NewRequest(http.MethodGet, "/api/users/").Build()
 		w := zhtest.Serve(middleware, req)
 
 		zhtest.AssertWith(t, w).Status(http.StatusMovedPermanently)
 	})
 	t.Run("Zero redirect code uses default", func(t *testing.T) {
-		middleware := TrailingSlash(config.TrailingSlashConfig{Action: config.RedirectAction, PreferTrailingSlash: false, RedirectCode: 0})(handler)
+		middleware := TrailingSlash(config.WithTrailingSlashAction(config.RedirectAction), config.WithTrailingSlashPreference(false), config.WithTrailingSlashRedirectCode(0))(handler)
 		req := zhtest.NewRequest(http.MethodGet, "/api/users/").Build()
 		w := zhtest.Serve(middleware, req)
 
@@ -158,7 +158,7 @@ func TestTrailingSlash_ConfigEdgeCases(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("path: " + r.URL.Path))
 		})
-		middleware := TrailingSlash(config.TrailingSlashConfig{Action: "invalid", PreferTrailingSlash: false})(handler)
+		middleware := TrailingSlash(config.WithTrailingSlashAction("invalid"), config.WithTrailingSlashPreference(false))(handler)
 		req := zhtest.NewRequest(http.MethodGet, "/api/users/").Build()
 		w := zhtest.Serve(middleware, req)
 
@@ -171,10 +171,11 @@ func TestTrailingSlash_MultipleOptions(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("path: " + r.URL.Path))
 	})
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.AppendAction,
-		PreferTrailingSlash: true,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.StripAction),
+		config.WithTrailingSlashAction(config.AppendAction),
+		config.WithTrailingSlashPreference(true),
+	)(handler)
 	req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
 	w := zhtest.Serve(middleware, req)
 
@@ -183,10 +184,10 @@ func TestTrailingSlash_MultipleOptions(t *testing.T) {
 
 func TestTrailingSlash_DifferentHTTPMethods(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.RedirectAction,
-		PreferTrailingSlash: false,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.RedirectAction),
+		config.WithTrailingSlashPreference(false),
+	)(handler)
 	methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodHead, http.MethodOptions}
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
@@ -203,10 +204,10 @@ func TestTrailingSlash_ComplexPaths(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("path: " + r.URL.Path))
 	})
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.StripAction,
-		PreferTrailingSlash: false,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.StripAction),
+		config.WithTrailingSlashPreference(false),
+	)(handler)
 	tests := []struct {
 		name, requestPath, expectedPath string
 	}{
@@ -245,10 +246,10 @@ func TestTrailingSlash_PreserveRequestData(t *testing.T) {
 		capturedHeaders = r.Header.Clone()
 		w.WriteHeader(http.StatusOK)
 	})
-	middleware := TrailingSlash(config.TrailingSlashConfig{
-		Action:              config.StripAction,
-		PreferTrailingSlash: false,
-	})(handler)
+	middleware := TrailingSlash(
+		config.WithTrailingSlashAction(config.StripAction),
+		config.WithTrailingSlashPreference(false),
+	)(handler)
 	req := zhtest.NewRequest(http.MethodPost, "/api/users/").
 		WithHeader("Content-Type", "application/json").
 		WithHeader("Authorization", "Bearer token123").

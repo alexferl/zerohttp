@@ -45,6 +45,30 @@ var DefaultStrictTransportSecurity = StrictTransportSecurity{
 	PreloadEnabled:    false,
 }
 
+// StrictTransportSecurityOption configures HSTS settings.
+type StrictTransportSecurityOption func(*StrictTransportSecurity)
+
+// WithHSTSMaxAge sets the max-age directive for HSTS.
+func WithHSTSMaxAge(maxAge int) StrictTransportSecurityOption {
+	return func(hsts *StrictTransportSecurity) {
+		hsts.MaxAge = maxAge
+	}
+}
+
+// WithHSTSExcludeSubdomains controls whether subdomains are excluded from HSTS.
+func WithHSTSExcludeSubdomains(exclude bool) StrictTransportSecurityOption {
+	return func(hsts *StrictTransportSecurity) {
+		hsts.ExcludeSubdomains = exclude
+	}
+}
+
+// WithHSTSPreload enables or disables the preload directive.
+func WithHSTSPreload(preload bool) StrictTransportSecurityOption {
+	return func(hsts *StrictTransportSecurity) {
+		hsts.PreloadEnabled = preload
+	}
+}
+
 // SecurityHeadersConfig allows customization of security headers
 type SecurityHeadersConfig struct {
 	// ContentSecurityPolicy sets the `Content-Security-Policy` header
@@ -85,4 +109,117 @@ var DefaultSecurityHeadersConfig = SecurityHeadersConfig{
 	XContentTypeOptions:       "nosniff",
 	XFrameOptions:             "DENY",
 	ExemptPaths:               []string{},
+}
+
+// SecurityHeadersOption configures the security headers middleware.
+type SecurityHeadersOption func(*SecurityHeadersConfig)
+
+// WithSecurityHeadersCSP sets the Content-Security-Policy header.
+func WithSecurityHeadersCSP(policy string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.ContentSecurityPolicy = policy
+	}
+}
+
+// WithSecurityHeadersCSPReportOnly sets the policy in report-only mode.
+func WithSecurityHeadersCSPReportOnly(reportOnly bool) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.ContentSecurityPolicyReportOnly = reportOnly
+	}
+}
+
+// WithSecurityHeadersCrossOriginEmbedderPolicy sets the Cross-Origin-Embedder-Policy header.
+func WithSecurityHeadersCrossOriginEmbedderPolicy(value string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.CrossOriginEmbedderPolicy = value
+	}
+}
+
+// WithSecurityHeadersCrossOriginOpenerPolicy sets the Cross-Origin-Opener-Policy header.
+func WithSecurityHeadersCrossOriginOpenerPolicy(value string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.CrossOriginOpenerPolicy = value
+	}
+}
+
+// WithSecurityHeadersCrossOriginResourcePolicy sets the Cross-Origin-Resource-Policy header.
+func WithSecurityHeadersCrossOriginResourcePolicy(value string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.CrossOriginResourcePolicy = value
+	}
+}
+
+// WithSecurityHeadersPermissionsPolicy sets the Permissions-Policy header.
+func WithSecurityHeadersPermissionsPolicy(policy string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.PermissionsPolicy = policy
+	}
+}
+
+// WithSecurityHeadersReferrerPolicy sets the Referrer-Policy header.
+func WithSecurityHeadersReferrerPolicy(policy string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.ReferrerPolicy = policy
+	}
+}
+
+// WithSecurityHeadersServer sets the Server header.
+func WithSecurityHeadersServer(server string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.Server = server
+	}
+}
+
+// WithSecurityHeadersHSTS configures the Strict-Transport-Security header.
+func WithSecurityHeadersHSTS(opts ...StrictTransportSecurityOption) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		hsts := DefaultStrictTransportSecurity
+		for _, opt := range opts {
+			opt(&hsts)
+		}
+		c.StrictTransportSecurity = hsts
+	}
+}
+
+// WithSecurityHeadersXContentTypeOptions sets the X-Content-Type-Options header.
+func WithSecurityHeadersXContentTypeOptions(value string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.XContentTypeOptions = value
+	}
+}
+
+// WithSecurityHeadersXFrameOptions sets the X-Frame-Options header.
+func WithSecurityHeadersXFrameOptions(value string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.XFrameOptions = value
+	}
+}
+
+// WithSecurityHeadersExemptPaths sets paths to skip security headers.
+func WithSecurityHeadersExemptPaths(paths []string) SecurityHeadersOption {
+	return func(c *SecurityHeadersConfig) {
+		c.ExemptPaths = paths
+	}
+}
+
+// securityHeadersConfigToOptions converts a SecurityHeadersConfig struct to a slice of SecurityHeadersOption functions.
+func securityHeadersConfigToOptions(cfg SecurityHeadersConfig) []SecurityHeadersOption {
+	return []SecurityHeadersOption{
+		WithSecurityHeadersCSP(cfg.ContentSecurityPolicy),
+		WithSecurityHeadersCSPReportOnly(cfg.ContentSecurityPolicyReportOnly),
+		WithSecurityHeadersCrossOriginEmbedderPolicy(cfg.CrossOriginEmbedderPolicy),
+		WithSecurityHeadersCrossOriginOpenerPolicy(cfg.CrossOriginOpenerPolicy),
+		WithSecurityHeadersCrossOriginResourcePolicy(cfg.CrossOriginResourcePolicy),
+		WithSecurityHeadersPermissionsPolicy(cfg.PermissionsPolicy),
+		WithSecurityHeadersReferrerPolicy(cfg.ReferrerPolicy),
+		WithSecurityHeadersServer(cfg.Server),
+		WithSecurityHeadersHSTS(
+			WithHSTSMaxAge(cfg.StrictTransportSecurity.MaxAge),
+			WithHSTSExcludeSubdomains(cfg.StrictTransportSecurity.ExcludeSubdomains),
+			WithHSTSPreload(cfg.StrictTransportSecurity.PreloadEnabled),
+		),
+		WithSecurityHeadersXContentTypeOptions(cfg.XContentTypeOptions),
+		WithSecurityHeadersXFrameOptions(cfg.XFrameOptions),
+		WithSecurityHeadersExemptPaths(cfg.ExemptPaths),
+	}
 }

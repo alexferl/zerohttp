@@ -21,9 +21,7 @@ func main() {
 
 	// Create zerohttp app first (we need it as the handler)
 	app := zh.New(
-		config.Config{
-			DisableDefaultMiddlewares: true,
-		},
+		config.WithDisableDefaultMiddlewares(),
 	)
 
 	// Create HTTP/3 server with zerohttp as the handler

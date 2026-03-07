@@ -94,101 +94,40 @@ type Server struct {
 	mu sync.RWMutex
 }
 
-// New creates and configures a new Server instance with the provided config.
+// New creates and configures a new Server instance with the provided options.
 // It initializes the server with default configurations that can be overridden
-// using the provided config. The server includes HTTP and HTTPS support,
+// using the provided options. The server includes HTTP and HTTPS support,
 // middleware integration, and structured logging.
 //
 // Example usage:
 //
-//	// Use defaults
-//	server := zerohttp.New()
-//
-//	// With custom config
-//	server := zerohttp.New(config.Config{
-//	    Addr: ":8080",
-//	    Logger: myLogger,
-//	})
-func New(cfg ...config.Config) *Server {
-	c := config.DefaultConfig
-	if len(cfg) > 0 {
-		userCfg := cfg[0]
-		if userCfg.Addr != "" {
-			c.Addr = userCfg.Addr
-		}
-		if userCfg.TLSAddr != "" {
-			c.TLSAddr = userCfg.TLSAddr
-		}
-		if userCfg.Server != nil {
-			c.Server = userCfg.Server
-		}
-		if userCfg.Listener != nil {
-			c.Listener = userCfg.Listener
-		}
-		if userCfg.TLSServer != nil {
-			c.TLSServer = userCfg.TLSServer
-		}
-		if userCfg.TLSListener != nil {
-			c.TLSListener = userCfg.TLSListener
-		}
-		if userCfg.CertFile != "" {
-			c.CertFile = userCfg.CertFile
-		}
-		if userCfg.KeyFile != "" {
-			c.KeyFile = userCfg.KeyFile
-		}
-		if userCfg.Logger != nil {
-			c.Logger = userCfg.Logger
-		}
-		if len(userCfg.PreShutdownHooks) > 0 {
-			c.PreShutdownHooks = userCfg.PreShutdownHooks
-		}
-		if len(userCfg.ShutdownHooks) > 0 {
-			c.ShutdownHooks = userCfg.ShutdownHooks
-		}
-		if len(userCfg.PostShutdownHooks) > 0 {
-			c.PostShutdownHooks = userCfg.PostShutdownHooks
-		}
-		c.DisableDefaultMiddlewares = userCfg.DisableDefaultMiddlewares
-		if len(userCfg.DefaultMiddlewares) > 0 {
-			c.DefaultMiddlewares = userCfg.DefaultMiddlewares
-		}
-		c.Recover = mergeRecoverConfig(c.Recover, userCfg.Recover)
-		c.RequestBodySize = mergeRequestBodySizeConfig(c.RequestBodySize, userCfg.RequestBodySize)
-		c.RequestID = mergeRequestIDConfig(c.RequestID, userCfg.RequestID)
-		c.RequestLogger = mergeRequestLoggerConfig(c.RequestLogger, userCfg.RequestLogger)
-		c.SecurityHeaders = mergeSecurityHeadersConfig(c.SecurityHeaders, userCfg.SecurityHeaders)
-		if userCfg.AutocertManager != nil {
-			c.AutocertManager = userCfg.AutocertManager
-		}
-		if userCfg.HTTP3Server != nil {
-			c.HTTP3Server = userCfg.HTTP3Server
-		}
-		if userCfg.SSEProvider != nil {
-			c.SSEProvider = userCfg.SSEProvider
-		}
-		if userCfg.WebSocketUpgrader != nil {
-			c.WebSocketUpgrader = userCfg.WebSocketUpgrader
-		}
-		if userCfg.WebTransportServer != nil {
-			c.WebTransportServer = userCfg.WebTransportServer
-		}
+//	server := zerohttp.New(
+//	    config.WithAddr(":8080"),
+//	    config.WithLogger(myLogger),
+//	)
+func New(opts ...config.Option) *Server {
+	cfg := config.DefaultConfig
+
+	for _, opt := range opts {
+		opt(&cfg)
 	}
+
+	cfg.Build()
 
 	router := NewRouter()
 
-	logger := c.Logger
+	logger := cfg.Logger
 	if logger == nil {
 		logger = log.NewDefaultLogger()
 	}
 
 	router.SetLogger(logger)
-	router.SetConfig(c)
+	router.SetConfig(cfg)
 
-	server := c.Server
+	server := cfg.Server
 	if server == nil {
 		server = &http.Server{
-			Addr:           c.Addr,
+			Addr:           cfg.Addr,
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			IdleTimeout:    60 * time.Second,
@@ -196,10 +135,10 @@ func New(cfg ...config.Config) *Server {
 		}
 	}
 
-	tlsServer := c.TLSServer
+	tlsServer := cfg.TLSServer
 	if tlsServer == nil {
 		tlsServer = &http.Server{
-			Addr:           c.TLSAddr,
+			Addr:           cfg.TLSAddr,
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			IdleTimeout:    60 * time.Second,
@@ -214,20 +153,20 @@ func New(cfg ...config.Config) *Server {
 	s := &Server{
 		Router:             router,
 		server:             server,
-		listener:           c.Listener,
+		listener:           cfg.Listener,
 		tlsServer:          tlsServer,
-		tlsListener:        c.TLSListener,
-		certFile:           c.CertFile,
-		keyFile:            c.KeyFile,
-		autocertManager:    c.AutocertManager,
-		http3Server:        c.HTTP3Server,
-		webTransportServer: c.WebTransportServer,
-		webSocketUpgrader:  c.WebSocketUpgrader,
-		sseProvider:        c.SSEProvider,
+		tlsListener:        cfg.TLSListener,
+		certFile:           cfg.CertFile,
+		keyFile:            cfg.KeyFile,
+		autocertManager:    cfg.AutocertManager,
+		http3Server:        cfg.HTTP3Server,
+		webTransportServer: cfg.WebTransportServer,
+		webSocketUpgrader:  cfg.WebSocketUpgrader,
+		sseProvider:        cfg.SSEProvider,
 		logger:             logger,
-		preShutdownHooks:   c.PreShutdownHooks,
-		shutdownHooks:      c.ShutdownHooks,
-		postShutdownHooks:  c.PostShutdownHooks,
+		preShutdownHooks:   cfg.PreShutdownHooks,
+		shutdownHooks:      cfg.ShutdownHooks,
+		postShutdownHooks:  cfg.PostShutdownHooks,
 	}
 
 	if s.server != nil {
@@ -240,13 +179,13 @@ func New(cfg ...config.Config) *Server {
 
 	var middlewares []func(http.Handler) http.Handler
 
-	if c.DisableDefaultMiddlewares {
-		middlewares = c.DefaultMiddlewares
-	} else if c.DefaultMiddlewares == nil {
-		middlewares = middleware.DefaultMiddlewares(c, s.logger)
+	if cfg.DisableDefaultMiddlewares {
+		middlewares = cfg.DefaultMiddlewares
+	} else if cfg.DefaultMiddlewares == nil {
+		middlewares = middleware.DefaultMiddlewares(cfg, s.logger)
 	} else {
-		defaults := middleware.DefaultMiddlewares(c, s.logger)
-		middlewares = append(defaults, c.DefaultMiddlewares...)
+		defaults := middleware.DefaultMiddlewares(cfg, s.logger)
+		middlewares = append(defaults, cfg.DefaultMiddlewares...)
 	}
 
 	if len(middlewares) > 0 {
@@ -254,95 +193,6 @@ func New(cfg ...config.Config) *Server {
 	}
 
 	return s
-}
-
-// mergeRecoverConfig merges user config with defaults
-func mergeRecoverConfig(defaultCfg, userCfg config.RecoverConfig) config.RecoverConfig {
-	if userCfg.StackSize != 0 {
-		defaultCfg.StackSize = userCfg.StackSize
-	}
-	if userCfg.EnableStackTrace {
-		defaultCfg.EnableStackTrace = userCfg.EnableStackTrace
-	}
-	return defaultCfg
-}
-
-// mergeRequestBodySizeConfig merges user config with defaults
-func mergeRequestBodySizeConfig(defaultCfg, userCfg config.RequestBodySizeConfig) config.RequestBodySizeConfig {
-	if userCfg.MaxBytes != 0 {
-		defaultCfg.MaxBytes = userCfg.MaxBytes
-	}
-	if len(userCfg.ExemptPaths) > 0 {
-		defaultCfg.ExemptPaths = userCfg.ExemptPaths
-	}
-	return defaultCfg
-}
-
-// mergeRequestIDConfig merges user config with defaults
-func mergeRequestIDConfig(defaultCfg, userCfg config.RequestIDConfig) config.RequestIDConfig {
-	if userCfg.Header != "" {
-		defaultCfg.Header = userCfg.Header
-	}
-	if userCfg.Generator != nil {
-		defaultCfg.Generator = userCfg.Generator
-	}
-	if userCfg.ContextKey != "" {
-		defaultCfg.ContextKey = userCfg.ContextKey
-	}
-	return defaultCfg
-}
-
-// mergeRequestLoggerConfig merges user config with defaults
-func mergeRequestLoggerConfig(defaultCfg, userCfg config.RequestLoggerConfig) config.RequestLoggerConfig {
-	if userCfg.LogErrors {
-		defaultCfg.LogErrors = userCfg.LogErrors
-	}
-	if len(userCfg.Fields) > 0 {
-		defaultCfg.Fields = userCfg.Fields
-	}
-	if len(userCfg.ExemptPaths) > 0 {
-		defaultCfg.ExemptPaths = userCfg.ExemptPaths
-	}
-	return defaultCfg
-}
-
-// mergeSecurityHeadersConfig merges user config with defaults
-func mergeSecurityHeadersConfig(defaultCfg, userCfg config.SecurityHeadersConfig) config.SecurityHeadersConfig {
-	if userCfg.ContentSecurityPolicy != "" {
-		defaultCfg.ContentSecurityPolicy = userCfg.ContentSecurityPolicy
-	}
-	defaultCfg.ContentSecurityPolicyReportOnly = userCfg.ContentSecurityPolicyReportOnly
-	if userCfg.CrossOriginEmbedderPolicy != "" {
-		defaultCfg.CrossOriginEmbedderPolicy = userCfg.CrossOriginEmbedderPolicy
-	}
-	if userCfg.CrossOriginOpenerPolicy != "" {
-		defaultCfg.CrossOriginOpenerPolicy = userCfg.CrossOriginOpenerPolicy
-	}
-	if userCfg.CrossOriginResourcePolicy != "" {
-		defaultCfg.CrossOriginResourcePolicy = userCfg.CrossOriginResourcePolicy
-	}
-	if userCfg.PermissionsPolicy != "" {
-		defaultCfg.PermissionsPolicy = userCfg.PermissionsPolicy
-	}
-	if userCfg.ReferrerPolicy != "" {
-		defaultCfg.ReferrerPolicy = userCfg.ReferrerPolicy
-	}
-	if userCfg.Server != "" {
-		defaultCfg.Server = userCfg.Server
-	}
-	if userCfg.StrictTransportSecurity.MaxAge != 0 {
-		defaultCfg.StrictTransportSecurity = userCfg.StrictTransportSecurity
-	}
-	if userCfg.XContentTypeOptions != "" {
-		defaultCfg.XContentTypeOptions = userCfg.XContentTypeOptions
-	}
-	if userCfg.XFrameOptions != "" {
-		defaultCfg.XFrameOptions = userCfg.XFrameOptions
-	}
-	if len(userCfg.ExemptPaths) > 0 {
-		defaultCfg.ExemptPaths = userCfg.ExemptPaths
-	}
-	return defaultCfg
 }
 
 // ListenAndServe starts the HTTP server and begins accepting connections.

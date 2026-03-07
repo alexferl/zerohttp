@@ -8,22 +8,24 @@ import (
 	"github.com/alexferl/zerohttp/config"
 )
 
-// BasicAuth creates a basic authentication middleware with the provided configuration
-func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
-	c := config.DefaultBasicAuthConfig
-	if len(cfg) > 0 {
-		c = cfg[0]
+// BasicAuth creates a basic authentication middleware with optional configuration
+func BasicAuth(opts ...config.BasicAuthOption) func(http.Handler) http.Handler {
+	cfg := config.DefaultBasicAuthConfig
+
+	for _, opt := range opts {
+		opt(&cfg)
 	}
-	if c.Realm == "" {
-		c.Realm = config.DefaultBasicAuthConfig.Realm
+
+	if cfg.Realm == "" {
+		cfg.Realm = config.DefaultBasicAuthConfig.Realm
 	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultBasicAuthConfig.ExemptPaths
+	if cfg.ExemptPaths == nil {
+		cfg.ExemptPaths = config.DefaultBasicAuthConfig.ExemptPaths
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range c.ExemptPaths {
+			for _, exemptPath := range cfg.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return
@@ -32,16 +34,16 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 
 			user, pass, ok := r.BasicAuth()
 			if !ok {
-				basicAuthFailed(w, c.Realm)
+				basicAuthFailed(w, cfg.Realm)
 				return
 			}
 
 			var isValid bool
 
-			if c.Validator != nil {
-				isValid = c.Validator(user, pass)
-			} else if c.Credentials != nil {
-				credPass, credUserOk := c.Credentials[user]
+			if cfg.Validator != nil {
+				isValid = cfg.Validator(user, pass)
+			} else if cfg.Credentials != nil {
+				credPass, credUserOk := cfg.Credentials[user]
 				isValid = credUserOk && subtle.ConstantTimeCompare([]byte(pass), []byte(credPass)) == 1
 			} else {
 				// No authentication configured - deny all
@@ -49,7 +51,7 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 			}
 
 			if !isValid {
-				basicAuthFailed(w, c.Realm)
+				basicAuthFailed(w, cfg.Realm)
 				return
 			}
 

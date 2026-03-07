@@ -79,11 +79,10 @@ func TestCircuitBreakerConfig_DefaultFunctions(t *testing.T) {
 	})
 }
 
-func TestCircuitBreakerConfig_StructAssignment(t *testing.T) {
+func TestCircuitBreakerOptions(t *testing.T) {
 	t.Run("failure threshold", func(t *testing.T) {
-		cfg := CircuitBreakerConfig{
-			FailureThreshold: 10,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerFailureThreshold(10)(&cfg)
 		if cfg.FailureThreshold != 10 {
 			t.Errorf("expected failure threshold = 10, got %d", cfg.FailureThreshold)
 		}
@@ -91,27 +90,24 @@ func TestCircuitBreakerConfig_StructAssignment(t *testing.T) {
 
 	t.Run("recovery timeout", func(t *testing.T) {
 		timeout := 60 * time.Second
-		cfg := CircuitBreakerConfig{
-			RecoveryTimeout: timeout,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerRecoveryTimeout(timeout)(&cfg)
 		if cfg.RecoveryTimeout != timeout {
 			t.Errorf("expected recovery timeout = %v, got %v", timeout, cfg.RecoveryTimeout)
 		}
 	})
 
 	t.Run("success threshold", func(t *testing.T) {
-		cfg := CircuitBreakerConfig{
-			SuccessThreshold: 5,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerSuccessThreshold(5)(&cfg)
 		if cfg.SuccessThreshold != 5 {
 			t.Errorf("expected success threshold = 5, got %d", cfg.SuccessThreshold)
 		}
 	})
 
 	t.Run("open status code", func(t *testing.T) {
-		cfg := CircuitBreakerConfig{
-			OpenStatusCode: http.StatusTooManyRequests,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerOpenStatusCode(http.StatusTooManyRequests)(&cfg)
 		if cfg.OpenStatusCode != http.StatusTooManyRequests {
 			t.Errorf("expected open status code = %d, got %d", http.StatusTooManyRequests, cfg.OpenStatusCode)
 		}
@@ -119,9 +115,8 @@ func TestCircuitBreakerConfig_StructAssignment(t *testing.T) {
 
 	t.Run("open message", func(t *testing.T) {
 		message := "Circuit breaker is open"
-		cfg := CircuitBreakerConfig{
-			OpenMessage: message,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerOpenMessage(message)(&cfg)
 		if cfg.OpenMessage != message {
 			t.Errorf("expected open message = %s, got %s", message, cfg.OpenMessage)
 		}
@@ -133,9 +128,8 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 		customIsFailure := func(r *http.Request, statusCode int) bool {
 			return statusCode >= http.StatusBadRequest
 		}
-		cfg := CircuitBreakerConfig{
-			IsFailure: customIsFailure,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerIsFailure(customIsFailure)(&cfg)
 		if cfg.IsFailure == nil {
 			t.Error("expected IsFailure function to be set")
 		}
@@ -163,9 +157,8 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 		customKeyExtractor := func(r *http.Request) string {
 			return r.Method + ":" + r.URL.Path
 		}
-		cfg := CircuitBreakerConfig{
-			KeyExtractor: customKeyExtractor,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerKeyExtractor(customKeyExtractor)(&cfg)
 		if cfg.KeyExtractor == nil {
 			t.Error("expected KeyExtractor function to be set")
 		}
@@ -186,7 +179,7 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 	})
 }
 
-func TestCircuitBreakerConfig_MultipleFields(t *testing.T) {
+func TestCircuitBreakerConfig_MultipleOptions(t *testing.T) {
 	timeout := 45 * time.Second
 	customIsFailure := func(r *http.Request, statusCode int) bool {
 		return statusCode >= http.StatusBadRequest
@@ -195,15 +188,14 @@ func TestCircuitBreakerConfig_MultipleFields(t *testing.T) {
 		return r.Host + r.URL.Path
 	}
 
-	cfg := CircuitBreakerConfig{
-		FailureThreshold: 8,
-		RecoveryTimeout:  timeout,
-		SuccessThreshold: 4,
-		IsFailure:        customIsFailure,
-		KeyExtractor:     customKeyExtractor,
-		OpenStatusCode:   http.StatusTooManyRequests,
-		OpenMessage:      "Service overloaded",
-	}
+	cfg := DefaultCircuitBreakerConfig
+	WithCircuitBreakerFailureThreshold(8)(&cfg)
+	WithCircuitBreakerRecoveryTimeout(timeout)(&cfg)
+	WithCircuitBreakerSuccessThreshold(4)(&cfg)
+	WithCircuitBreakerIsFailure(customIsFailure)(&cfg)
+	WithCircuitBreakerKeyExtractor(customKeyExtractor)(&cfg)
+	WithCircuitBreakerOpenStatusCode(http.StatusTooManyRequests)(&cfg)
+	WithCircuitBreakerOpenMessage("Service overloaded")(&cfg)
 
 	if cfg.FailureThreshold != 8 {
 		t.Errorf("expected failure threshold = 8, got %d", cfg.FailureThreshold)
@@ -237,11 +229,10 @@ func TestCircuitBreakerConfig_MultipleFields(t *testing.T) {
 
 func TestCircuitBreakerConfig_EdgeCases(t *testing.T) {
 	t.Run("zero values", func(t *testing.T) {
-		cfg := CircuitBreakerConfig{
-			FailureThreshold: 0,
-			RecoveryTimeout:  0,
-			SuccessThreshold: 0,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerFailureThreshold(0)(&cfg)
+		WithCircuitBreakerRecoveryTimeout(0)(&cfg)
+		WithCircuitBreakerSuccessThreshold(0)(&cfg)
 		if cfg.FailureThreshold != 0 {
 			t.Errorf("expected failure threshold = 0, got %d", cfg.FailureThreshold)
 		}
@@ -254,10 +245,9 @@ func TestCircuitBreakerConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil functions", func(t *testing.T) {
-		cfg := CircuitBreakerConfig{
-			IsFailure:    nil,
-			KeyExtractor: nil,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerIsFailure(nil)(&cfg)
+		WithCircuitBreakerKeyExtractor(nil)(&cfg)
 		if cfg.IsFailure != nil {
 			t.Error("expected IsFailure to be nil when nil is passed")
 		}
@@ -275,9 +265,8 @@ func TestCircuitBreakerConfig_ComplexFunctionality(t *testing.T) {
 			}
 			return statusCode >= http.StatusInternalServerError
 		}
-		cfg := CircuitBreakerConfig{
-			IsFailure: customIsFailure,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerIsFailure(customIsFailure)(&cfg)
 		tests := []struct {
 			path       string
 			statusCode int
@@ -309,9 +298,8 @@ func TestCircuitBreakerConfig_ComplexFunctionality(t *testing.T) {
 			}
 			return r.URL.Path
 		}
-		cfg := CircuitBreakerConfig{
-			KeyExtractor: customKeyExtractor,
-		}
+		cfg := DefaultCircuitBreakerConfig
+		WithCircuitBreakerKeyExtractor(customKeyExtractor)(&cfg)
 		tests := []struct {
 			path, userID, expected string
 		}{

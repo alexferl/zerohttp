@@ -92,3 +92,13 @@ func XRealIPExtractor(r *http.Request) string {
 	}
 	return RemoteAddrIPExtractor(r)
 }
+
+// RealIPOption configures real IP middleware.
+type RealIPOption func(*RealIPConfig)
+
+// WithRealIPExtractor sets the function to extract the real client IP.
+func WithRealIPExtractor(extractor IPExtractor) RealIPOption {
+	return func(c *RealIPConfig) {
+		c.IPExtractor = extractor
+	}
+}

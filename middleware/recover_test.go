@@ -127,10 +127,10 @@ func TestRecover_UpgradeConnection(t *testing.T) {
 
 func TestRecover_CustomConfig(t *testing.T) {
 	logger := &mockLogger{}
-	handler := Recover(logger, config.RecoverConfig{
-		StackSize:        1024,
-		EnableStackTrace: true,
-	})(panicHandler("custom config panic"))
+	handler := Recover(logger,
+		config.WithRecoverStackSize(1024),
+		config.WithRecoverEnableStackTrace(true),
+	)(panicHandler("custom config panic"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
@@ -153,10 +153,10 @@ func TestRecover_CustomConfig(t *testing.T) {
 
 func TestRecover_DisabledStackTrace(t *testing.T) {
 	logger := &mockLogger{}
-	handler := Recover(logger, config.RecoverConfig{
-		StackSize:        4096,
-		EnableStackTrace: false,
-	})(panicHandler("no stack panic"))
+	handler := Recover(logger,
+		config.WithRecoverStackSize(4096),
+		config.WithRecoverEnableStackTrace(false),
+	)(panicHandler("no stack panic"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
@@ -173,10 +173,10 @@ func TestRecover_DisabledStackTrace(t *testing.T) {
 
 func TestRecover_InvalidStackSize(t *testing.T) {
 	logger := &mockLogger{}
-	handler := Recover(logger, config.RecoverConfig{
-		StackSize:        0,
-		EnableStackTrace: true,
-	})(panicHandler("invalid stack size"))
+	handler := Recover(logger,
+		config.WithRecoverStackSize(0),
+		config.WithRecoverEnableStackTrace(true),
+	)(panicHandler("invalid stack size"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
@@ -254,10 +254,10 @@ func TestDefaultRecoverConfig(t *testing.T) {
 
 func TestRecover_MultipleOptions(t *testing.T) {
 	logger := &mockLogger{}
-	handler := Recover(logger, config.RecoverConfig{
-		StackSize:        1024,
-		EnableStackTrace: true,
-	})(panicHandler("multiple options"))
+	handler := Recover(logger,
+		config.WithRecoverStackSize(1024),
+		config.WithRecoverEnableStackTrace(true),
+	)(panicHandler("multiple options"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 

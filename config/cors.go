@@ -47,3 +47,62 @@ var DefaultCORSConfig = CORSConfig{
 	OptionsPassthrough: false,
 	ExemptPaths:        []string{},
 }
+
+// CORSOption configures CORS middleware.
+type CORSOption func(*CORSConfig)
+
+// WithCORSAllowedOrigins sets the list of allowed origins.
+func WithCORSAllowedOrigins(origins []string) CORSOption {
+	return func(c *CORSConfig) {
+		c.AllowedOrigins = origins
+	}
+}
+
+// WithCORSAllowedMethods sets the list of allowed HTTP methods.
+func WithCORSAllowedMethods(methods []string) CORSOption {
+	return func(c *CORSConfig) {
+		c.AllowedMethods = methods
+	}
+}
+
+// WithCORSAllowedHeaders sets the list of allowed request headers.
+func WithCORSAllowedHeaders(headers []string) CORSOption {
+	return func(c *CORSConfig) {
+		c.AllowedHeaders = headers
+	}
+}
+
+// WithCORSExposedHeaders sets the list of headers exposed to the client.
+func WithCORSExposedHeaders(headers []string) CORSOption {
+	return func(c *CORSConfig) {
+		c.ExposedHeaders = headers
+	}
+}
+
+// WithCORSAllowCredentials sets whether credentials are allowed.
+func WithCORSAllowCredentials(allow bool) CORSOption {
+	return func(c *CORSConfig) {
+		c.AllowCredentials = allow
+	}
+}
+
+// WithCORSMaxAge sets how long preflight requests can be cached (in seconds).
+func WithCORSMaxAge(maxAge int) CORSOption {
+	return func(c *CORSConfig) {
+		c.MaxAge = maxAge
+	}
+}
+
+// WithCORSOptionsPassthrough sets whether OPTIONS requests are passed to the next handler.
+func WithCORSOptionsPassthrough(passthrough bool) CORSOption {
+	return func(c *CORSConfig) {
+		c.OptionsPassthrough = passthrough
+	}
+}
+
+// WithCORSExemptPaths sets paths that skip CORS processing.
+func WithCORSExemptPaths(paths []string) CORSOption {
+	return func(c *CORSConfig) {
+		c.ExemptPaths = paths
+	}
+}

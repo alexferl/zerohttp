@@ -21,15 +21,15 @@ func main() {
 	app := zh.New()
 
 	// Basic usage with defaults
-	healthcheck.New(app, healthcheck.DefaultConfig)
+	healthcheck.New(app)
 
-	// Or with custom configuration
-	cfg := healthcheck.DefaultConfig
-	cfg.LivenessEndpoint = "/health/live"
-	cfg.ReadinessEndpoint = "/health/ready"
-	cfg.ReadinessHandler = customReadinessHandler
-	cfg.StartupEndpoint = "/health/startup"
-	healthcheck.New(app, cfg)
+	// Or with custom options
+	healthcheck.New(app,
+		healthcheck.WithLivenessEndpoint("/health/live"),
+		healthcheck.WithReadinessEndpoint("/health/ready"),
+		healthcheck.WithReadinessHandler(customReadinessHandler),
+		healthcheck.WithStartupEndpoint("/health/startup"),
+	)
 
 	log.Fatal(app.Start())
 }

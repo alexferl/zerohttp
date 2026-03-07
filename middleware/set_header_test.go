@@ -27,9 +27,9 @@ func TestSetHeader_DefaultConfig(t *testing.T) {
 func TestSetHeader_SingleHeader(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: map[string]string{
+		SetHeader(config.WithSetHeaders(map[string]string{
 			"X-Custom-Header": "custom-value",
-		}}),
+		})),
 		req,
 	)
 
@@ -46,7 +46,7 @@ func TestSetHeader_MultipleHeaders(t *testing.T) {
 	}
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: headers}),
+		SetHeader(config.WithSetHeaders(headers)),
 		req,
 	)
 
@@ -59,10 +59,10 @@ func TestSetHeader_MultipleHeaders(t *testing.T) {
 func TestSetHeader_EmptyHeaderValue(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: map[string]string{
+		SetHeader(config.WithSetHeaders(map[string]string{
 			"X-Empty-Header":  "",
 			"X-Normal-Header": "normal-value",
-		}}),
+		})),
 		req,
 	)
 
@@ -81,7 +81,7 @@ func TestSetHeader_EmptyHeaderValue(t *testing.T) {
 func TestSetHeader_NilHeaders(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: nil}),
+		SetHeader(config.WithSetHeaders(nil)),
 		req,
 	)
 
@@ -96,10 +96,10 @@ func TestSetHeader_OverrideExistingHeaders(t *testing.T) {
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddlewareWithHandler(
-		SetHeader(config.SetHeaderConfig{Headers: map[string]string{
+		SetHeader(config.WithSetHeaders(map[string]string{
 			"Content-Type": "application/json",
 			"Server":       "Custom-Server",
-		}}),
+		})),
 		handler,
 		req,
 	)
@@ -123,9 +123,9 @@ func TestSetHeader_HeadersSetBeforeHandler(t *testing.T) {
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddlewareWithHandler(
-		SetHeader(config.SetHeaderConfig{Headers: map[string]string{
+		SetHeader(config.WithSetHeaders(map[string]string{
 			"X-Middleware-Header": "middleware-value",
-		}}),
+		})),
 		handler,
 		req,
 	)
@@ -140,10 +140,10 @@ func TestSetHeader_HeadersSetBeforeHandler(t *testing.T) {
 func TestSetHeader_CaseInsensitiveHeaders(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: map[string]string{
+		SetHeader(config.WithSetHeaders(map[string]string{
 			"content-type":    "application/json",
 			"x-custom-header": "lowercase-key",
-		}}),
+		})),
 		req,
 	)
 
@@ -156,11 +156,11 @@ func TestSetHeader_CaseInsensitiveHeaders(t *testing.T) {
 func TestSetHeader_SpecialCharactersInHeaderValue(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: map[string]string{
+		SetHeader(config.WithSetHeaders(map[string]string{
 			"X-Special-Chars": "value with spaces, commas; and: colons",
 			"X-Unicode":       "测试值",
 			"X-Numbers":       "12345",
-		}}),
+		})),
 		req,
 	)
 
@@ -175,8 +175,8 @@ func TestSetHeader_MultipleOptions(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
 		SetHeader(
-			config.SetHeaderConfig{Headers: map[string]string{"X-First-Header": "first-value"}},
-			config.SetHeaderConfig{Headers: map[string]string{"X-Second-Header": "second-value"}},
+			config.WithSetHeaders(map[string]string{"X-First-Header": "first-value"}),
+			config.WithSetHeaders(map[string]string{"X-Second-Header": "second-value"}),
 		),
 		req,
 	)
@@ -192,7 +192,7 @@ func TestSetHeader_WithDifferentHTTPMethods(t *testing.T) {
 		t.Run(method, func(t *testing.T) {
 			req := zhtest.NewRequest(method, "/").Build()
 			w := zhtest.TestMiddleware(
-				SetHeader(config.SetHeaderConfig{Headers: map[string]string{"X-Method-Header": "method-test"}}),
+				SetHeader(config.WithSetHeaders(map[string]string{"X-Method-Header": "method-test"})),
 				req,
 			)
 
@@ -218,7 +218,7 @@ func TestSetHeader_HeadersNotAffectedByRequestHeaders(t *testing.T) {
 		WithHeader("X-Response-Header", "request-value").
 		Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: map[string]string{"X-Response-Header": "response-value"}}),
+		SetHeader(config.WithSetHeaders(map[string]string{"X-Response-Header": "response-value"})),
 		req,
 	)
 
@@ -233,7 +233,7 @@ func TestSetHeader_LargeNumberOfHeaders(t *testing.T) {
 	}
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SetHeader(config.SetHeaderConfig{Headers: headers}),
+		SetHeader(config.WithSetHeaders(headers)),
 		req,
 	)
 

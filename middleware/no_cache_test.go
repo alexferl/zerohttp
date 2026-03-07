@@ -71,13 +71,13 @@ func TestNoCacheRequestHeaderRemoval(t *testing.T) {
 }
 
 func TestNoCacheCustomConfig(t *testing.T) {
-	middleware := NoCache(config.NoCacheConfig{
-		NoCacheHeaders: map[string]string{
+	middleware := NoCache(
+		config.WithNoCacheHeaders(map[string]string{
 			"Cache-Control": "no-cache",
 			"Expires":       "0",
-		},
-		ETagHeaders: []string{"ETag", "If-None-Match"},
-	})
+		}),
+		config.WithNoCacheETagHeaders([]string{"ETag", "If-None-Match"}),
+	)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if etag := r.Header.Get("ETag"); etag != "" {
 			t.Errorf("expected ETag to be removed, got %s", etag)
@@ -101,10 +101,10 @@ func TestNoCacheCustomConfig(t *testing.T) {
 }
 
 func TestNoCacheNilConfig(t *testing.T) {
-	middleware := NoCache(config.NoCacheConfig{
-		NoCacheHeaders: nil,
-		ETagHeaders:    nil,
-	})
+	middleware := NoCache(
+		config.WithNoCacheHeaders(nil),
+		config.WithNoCacheETagHeaders(nil),
+	)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if etag := r.Header.Get("ETag"); etag != "" {
 			t.Errorf("expected ETag to be removed with nil config, got %s", etag)
@@ -140,10 +140,10 @@ func TestNoCacheHTTPMethods(t *testing.T) {
 }
 
 func TestNoCacheEmptyHeaders(t *testing.T) {
-	middleware := NoCache(config.NoCacheConfig{
-		NoCacheHeaders: map[string]string{},
-		ETagHeaders:    []string{},
-	})
+	middleware := NoCache(
+		config.WithNoCacheHeaders(map[string]string{}),
+		config.WithNoCacheETagHeaders([]string{}),
+	)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if etag := r.Header.Get("ETag"); etag != `"test123"` {
 			t.Errorf("expected ETag to remain with empty config, got %s", etag)

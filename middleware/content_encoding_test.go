@@ -106,7 +106,7 @@ func TestContentEncodingCustomConfig(t *testing.T) {
 		{"custom disallowed deflate", "deflate", false, http.StatusUnsupportedMediaType},
 	}
 
-	middleware := ContentEncoding(config.ContentEncodingConfig{Encodings: []string{"br", "gzip"}})
+	middleware := ContentEncoding(config.WithContentEncodingEncodings([]string{"br", "gzip"}))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
@@ -140,10 +140,10 @@ func TestContentEncodingExemptPaths(t *testing.T) {
 		{"not exempt", "/api/users", "br", false, http.StatusUnsupportedMediaType},
 	}
 
-	middleware := ContentEncoding(config.ContentEncodingConfig{
-		Encodings:   []string{"gzip"},
-		ExemptPaths: []string{"/health", "/api/webhooks/"},
-	})
+	middleware := ContentEncoding(
+		config.WithContentEncodingEncodings([]string{"gzip"}),
+		config.WithContentEncodingExemptPaths([]string{"/health", "/api/webhooks/"}),
+	)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestContentEncodingHTTPMethods(t *testing.T) {
 }
 
 func TestContentEncodingNilEncodingsFallback(t *testing.T) {
-	middleware := ContentEncoding(config.ContentEncodingConfig{Encodings: nil}) // Explicitly set to nil
+	middleware := ContentEncoding(config.WithContentEncodingEncodings(nil)) // Explicitly set to nil
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 	req.Header.Set("Content-Encoding", "gzip") // Should be allowed by default config
 	rr := httptest.NewRecorder()
@@ -207,10 +207,10 @@ func TestContentEncodingNilEncodingsFallback(t *testing.T) {
 }
 
 func TestContentEncodingNilExemptPathsFallback(t *testing.T) {
-	middleware := ContentEncoding(config.ContentEncodingConfig{
-		Encodings:   []string{"gzip"},
-		ExemptPaths: nil,
-	})
+	middleware := ContentEncoding(
+		config.WithContentEncodingEncodings([]string{"gzip"}),
+		config.WithContentEncodingExemptPaths(nil),
+	)
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 	req.Header.Set("Content-Encoding", "br")
 	rr := httptest.NewRecorder()

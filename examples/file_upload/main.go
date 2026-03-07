@@ -26,11 +26,11 @@ type UploadForm struct {
 }
 
 func main() {
-	app := zh.New(config.Config{
-		RequestBodySize: config.RequestBodySizeConfig{
-			MaxBytes: maxFormSize,
-		},
-	})
+	app := zh.New(
+		config.WithRequestBodySizeOptions(
+			config.WithRequestBodySizeMaxBytes(maxFormSize),
+		),
+	)
 
 	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 		log.Fatal("Failed to create upload directory:", err)

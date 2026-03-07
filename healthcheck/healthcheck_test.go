@@ -10,7 +10,7 @@ import (
 
 func TestDefaultHealthEndpoints(t *testing.T) {
 	app := zh.New()
-	New(app, DefaultConfig)
+	New(app)
 
 	endpoints := []string{"/livez", "/readyz", "/startupz"}
 	for _, endpoint := range endpoints {
@@ -25,11 +25,11 @@ func TestDefaultHealthEndpoints(t *testing.T) {
 func TestCustomEndpoints(t *testing.T) {
 	app := zh.New()
 
-	cfg := DefaultConfig
-	cfg.LivenessEndpoint = "/health/live"
-	cfg.ReadinessEndpoint = "/health/ready"
-	cfg.StartupEndpoint = "/health/startup"
-	New(app, cfg)
+	New(app,
+		WithLivenessEndpoint("/health/live"),
+		WithReadinessEndpoint("/health/ready"),
+		WithStartupEndpoint("/health/startup"),
+	)
 
 	endpoints := []string{"/health/live", "/health/ready", "/health/startup"}
 	for _, endpoint := range endpoints {
@@ -69,11 +69,11 @@ func TestCustomHandlers(t *testing.T) {
 
 	app := zh.New()
 
-	cfg := DefaultConfig
-	cfg.LivenessHandler = livenessHandler
-	cfg.ReadinessHandler = readinessHandler
-	cfg.StartupHandler = startupHandler
-	New(app, cfg)
+	New(app,
+		WithLivenessHandler(livenessHandler),
+		WithReadinessHandler(readinessHandler),
+		WithStartupHandler(startupHandler),
+	)
 
 	t.Run("liveness", func(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/livez").Build()
@@ -118,10 +118,10 @@ func TestMixedOptions(t *testing.T) {
 
 	app := zh.New()
 
-	cfg := DefaultConfig
-	cfg.LivenessEndpoint = "/custom-livez"
-	cfg.ReadinessHandler = customHandler
-	New(app, cfg)
+	New(app,
+		WithLivenessEndpoint("/custom-livez"),
+		WithReadinessHandler(customHandler),
+	)
 
 	t.Run("custom endpoint", func(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/custom-livez").Build()
@@ -141,27 +141,29 @@ func TestMixedOptions(t *testing.T) {
 }
 
 func TestDefaultConfig(t *testing.T) {
-	if DefaultConfig.LivenessEndpoint != "/livez" {
-		t.Errorf("Expected LivenessEndpoint '/livez', got '%s'", DefaultConfig.LivenessEndpoint)
+	cfg := defaultConfig()
+
+	if cfg.LivenessEndpoint != "/livez" {
+		t.Errorf("Expected LivenessEndpoint '/livez', got '%s'", cfg.LivenessEndpoint)
 	}
 
-	if DefaultConfig.ReadinessEndpoint != "/readyz" {
-		t.Errorf("Expected ReadinessEndpoint '/readyz', got '%s'", DefaultConfig.ReadinessEndpoint)
+	if cfg.ReadinessEndpoint != "/readyz" {
+		t.Errorf("Expected ReadinessEndpoint '/readyz', got '%s'", cfg.ReadinessEndpoint)
 	}
 
-	if DefaultConfig.StartupEndpoint != "/startupz" {
-		t.Errorf("Expected StartupEndpoint '/startupz', got '%s'", DefaultConfig.StartupEndpoint)
+	if cfg.StartupEndpoint != "/startupz" {
+		t.Errorf("Expected StartupEndpoint '/startupz', got '%s'", cfg.StartupEndpoint)
 	}
 
-	if DefaultConfig.LivenessHandler == nil {
+	if cfg.LivenessHandler == nil {
 		t.Error("Expected LivenessHandler to be set")
 	}
 
-	if DefaultConfig.ReadinessHandler == nil {
+	if cfg.ReadinessHandler == nil {
 		t.Error("Expected ReadinessHandler to be set")
 	}
 
-	if DefaultConfig.StartupHandler == nil {
+	if cfg.StartupHandler == nil {
 		t.Error("Expected StartupHandler to be set")
 	}
 }

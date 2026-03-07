@@ -24,68 +24,54 @@ const (
 )
 
 // CSRF returns middleware that provides CSRF protection using the double-submit cookie pattern
-func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
-	c := config.DefaultCSRFConfig
-	if len(cfg) > 0 {
-		// Merge user config with defaults
-		if cfg[0].CookieName != "" {
-			c.CookieName = cfg[0].CookieName
-		}
-		if cfg[0].CookieMaxAge != 0 {
-			c.CookieMaxAge = cfg[0].CookieMaxAge
-		}
-		if cfg[0].CookiePath != "" {
-			c.CookiePath = cfg[0].CookiePath
-		}
-		if cfg[0].CookieDomain != "" {
-			c.CookieDomain = cfg[0].CookieDomain
-		}
-		// For CookieSecure: use provided value if set, otherwise use default
-		if cfg[0].CookieSecure != nil {
-			c.CookieSecure = cfg[0].CookieSecure
-		}
-		if cfg[0].CookieSameSite != 0 {
-			c.CookieSameSite = cfg[0].CookieSameSite
-		}
-		if cfg[0].TokenLookup != "" {
-			c.TokenLookup = cfg[0].TokenLookup
-		}
-		if cfg[0].ErrorHandler != nil {
-			c.ErrorHandler = cfg[0].ErrorHandler
-		}
-		if cfg[0].ExemptPaths != nil {
-			c.ExemptPaths = cfg[0].ExemptPaths
-		}
-		if cfg[0].ExemptMethods != nil {
-			c.ExemptMethods = cfg[0].ExemptMethods
-		}
-		if cfg[0].HMACKey != nil {
-			c.HMACKey = cfg[0].HMACKey
-		}
+func CSRF(opts ...config.CSRFOption) func(http.Handler) http.Handler {
+	cfg := config.DefaultCSRFConfig
+
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	if cfg.CookieName == "" {
+		cfg.CookieName = config.DefaultCSRFConfig.CookieName
+	}
+	if cfg.CookieMaxAge == 0 {
+		cfg.CookieMaxAge = config.DefaultCSRFConfig.CookieMaxAge
+	}
+	if cfg.CookiePath == "" {
+		cfg.CookiePath = config.DefaultCSRFConfig.CookiePath
+	}
+	if cfg.TokenLookup == "" {
+		cfg.TokenLookup = config.DefaultCSRFConfig.TokenLookup
+	}
+	if cfg.ExemptMethods == nil {
+		cfg.ExemptMethods = config.DefaultCSRFConfig.ExemptMethods
+	}
+	if cfg.ExemptPaths == nil {
+		cfg.ExemptPaths = config.DefaultCSRFConfig.ExemptPaths
 	}
 
 	// HMAC key is required - fail fast if not provided
-	if len(c.HMACKey) == 0 {
-		panic("CSRF: HMACKey is required. Set a fixed key in CSRFConfig{HMACKey: []byte(\"your-secret-32-bytes!!\")} " +
+	if len(cfg.HMACKey) == 0 {
+		panic("CSRF: HMACKey is required. Set a fixed key with config.WithCSRFHMACKey([]byte(\"your-secret-32-bytes!!\")) " +
 			"or load from environment variables. Using a random key would invalidate all tokens on server restart.")
 	}
-	hmacKey := c.HMACKey
+	hmacKey := cfg.HMACKey
 
 	exemptMethodMap := make(map[string]bool)
-	for _, method := range c.ExemptMethods {
+	for _, method := range cfg.ExemptMethods {
 		exemptMethodMap[strings.ToUpper(method)] = true
 	}
 
-	lookupSource, lookupName := parseTokenLookup(c.TokenLookup)
+	lookupSource, lookupName := parseTokenLookup(cfg.TokenLookup)
 
-	errorHandler := c.ErrorHandler
+	errorHandler := cfg.ErrorHandler
 	if errorHandler == nil {
 		errorHandler = defaultCSRFErrorHandler
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range c.ExemptPaths {
+			for _, exemptPath := range cfg.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return
@@ -93,11 +79,11 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 			}
 
 			if exemptMethodMap[strings.ToUpper(r.Method)] {
-				cookie, err := r.Cookie(c.CookieName)
+				cookie, err := r.Cookie(cfg.CookieName)
 				var token string
 				if err != nil || cookie.Value == "" || !validateTokenFormat(cookie.Value) {
 					token = generateToken(hmacKey)
-					setCSRFCookie(w, c, token)
+					setCSRFCookie(w, cfg, token)
 				} else {
 					token = cookie.Value
 				}
@@ -108,7 +94,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			cookie, err := r.Cookie(c.CookieName)
+			cookie, err := r.Cookie(cfg.CookieName)
 			if err != nil || cookie.Value == "" {
 				errorHandler(w, r)
 				return
@@ -127,7 +113,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 			}
 
 			newToken := generateToken(hmacKey)
-			setCSRFCookie(w, c, newToken)
+			setCSRFCookie(w, cfg, newToken)
 
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, csrfTokenContextKey, newToken)
@@ -244,19 +230,13 @@ func extractToken(r *http.Request, source, name string) string {
 
 // setCSRFCookie sets the CSRF cookie on the response
 func setCSRFCookie(w http.ResponseWriter, cfg config.CSRFConfig, token string) {
-	// Handle CookieSecure pointer - default to true if nil
-	secure := true
-	if cfg.CookieSecure != nil {
-		secure = *cfg.CookieSecure
-	}
-
 	cookie := &http.Cookie{
 		Name:     cfg.CookieName,
 		Value:    token,
 		MaxAge:   cfg.CookieMaxAge,
 		Domain:   cfg.CookieDomain,
 		Path:     cfg.CookiePath,
-		Secure:   secure,
+		Secure:   cfg.CookieSecure,
 		HttpOnly: true,
 		SameSite: cfg.CookieSameSite,
 	}

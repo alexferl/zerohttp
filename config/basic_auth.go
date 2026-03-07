@@ -19,3 +19,34 @@ var DefaultBasicAuthConfig = BasicAuthConfig{
 	Validator:   nil,
 	ExemptPaths: []string{},
 }
+
+// BasicAuthOption configures basic authentication middleware
+type BasicAuthOption func(*BasicAuthConfig)
+
+// WithBasicAuthRealm sets the authentication realm
+func WithBasicAuthRealm(realm string) BasicAuthOption {
+	return func(c *BasicAuthConfig) {
+		c.Realm = realm
+	}
+}
+
+// WithBasicAuthCredentials sets username/password pairs
+func WithBasicAuthCredentials(credentials map[string]string) BasicAuthOption {
+	return func(c *BasicAuthConfig) {
+		c.Credentials = credentials
+	}
+}
+
+// WithBasicAuthValidator sets a custom credential validator function
+func WithBasicAuthValidator(validator func(string, string) bool) BasicAuthOption {
+	return func(c *BasicAuthConfig) {
+		c.Validator = validator
+	}
+}
+
+// WithBasicAuthExemptPaths sets paths that skip authentication
+func WithBasicAuthExemptPaths(paths []string) BasicAuthOption {
+	return func(c *BasicAuthConfig) {
+		c.ExemptPaths = paths
+	}
+}

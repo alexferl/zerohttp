@@ -40,11 +40,9 @@ func main() {
 
 	// Create zerohttp server
 	app := zh.New(
-		config.Config{
-			Server:                    customServer,
-			DisableDefaultMiddlewares: true,
-			SSEProvider:               zh.NewDefaultProvider(),
-		},
+		config.WithServer(customServer),
+		config.WithDisableDefaultMiddlewares(),
+		config.WithSSEProvider(zh.NewDefaultProvider()),
 	)
 
 	// Serve HTML client

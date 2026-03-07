@@ -41,7 +41,7 @@ func TestRequestBodySize_Limits(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := &requestBodySizeTestHandler{}
-			middleware := RequestBodySize(config.RequestBodySizeConfig{MaxBytes: tt.maxBytes})(handler)
+			middleware := RequestBodySize(config.WithRequestBodySizeMaxBytes(tt.maxBytes))(handler)
 			body := bytes.NewReader([]byte(tt.bodyContent))
 			req := zhtest.NewRequest(http.MethodPost, "/").WithBody(body).Build()
 			zhtest.Serve(middleware, req)
@@ -78,10 +78,10 @@ func TestRequestBodySize_ExemptPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
 			handler := &requestBodySizeTestHandler{}
-			middleware := RequestBodySize(config.RequestBodySizeConfig{
-				MaxBytes:    5,
-				ExemptPaths: []string{"/upload", "/webhook", "/api/large"},
-			})(handler)
+			middleware := RequestBodySize(
+				config.WithRequestBodySizeMaxBytes(5),
+				config.WithRequestBodySizeExemptPaths([]string{"/upload", "/webhook", "/api/large"}),
+			)(handler)
 			largeBody := bytes.NewReader([]byte("this is a long body"))
 			req := zhtest.NewRequest(http.MethodPost, tt.path).WithBody(largeBody).Build()
 			zhtest.Serve(middleware, req)
@@ -102,10 +102,10 @@ func TestRequestBodySize_ExemptPaths(t *testing.T) {
 
 func TestRequestBodySize_EmptyExemptPaths(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
-	middleware := RequestBodySize(config.RequestBodySizeConfig{
-		MaxBytes:    10,
-		ExemptPaths: []string{},
-	})(handler)
+	middleware := RequestBodySize(
+		config.WithRequestBodySizeMaxBytes(10),
+		config.WithRequestBodySizeExemptPaths([]string{}),
+	)(handler)
 	largeBody := bytes.NewReader([]byte("this body is longer than 10 bytes"))
 	req := zhtest.NewRequest(http.MethodPost, "/any-path").WithBody(largeBody).Build()
 	zhtest.Serve(middleware, req)
@@ -130,7 +130,7 @@ func TestRequestBodySize_ConfigFallbacks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := &requestBodySizeTestHandler{}
-			middleware := RequestBodySize(config.RequestBodySizeConfig{MaxBytes: tt.maxBytes})(handler)
+			middleware := RequestBodySize(config.WithRequestBodySizeMaxBytes(tt.maxBytes))(handler)
 			smallBody := bytes.NewReader([]byte("small body"))
 			req := zhtest.NewRequest(http.MethodPost, "/").WithBody(smallBody).Build()
 			zhtest.Serve(middleware, req)
@@ -147,10 +147,10 @@ func TestRequestBodySize_ConfigFallbacks(t *testing.T) {
 
 func TestRequestBodySize_NilExemptPaths(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
-	middleware := RequestBodySize(config.RequestBodySizeConfig{
-		MaxBytes:    100,
-		ExemptPaths: nil,
-	})(handler)
+	middleware := RequestBodySize(
+		config.WithRequestBodySizeMaxBytes(100),
+		config.WithRequestBodySizeExemptPaths(nil),
+	)(handler)
 	smallBody := bytes.NewReader([]byte("small body"))
 	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(smallBody).Build()
 	zhtest.Serve(middleware, req)
@@ -165,10 +165,10 @@ func TestRequestBodySize_NilExemptPaths(t *testing.T) {
 
 func TestRequestBodySize_MultipleOptions(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
-	middleware := RequestBodySize(config.RequestBodySizeConfig{
-		MaxBytes:    10,
-		ExemptPaths: []string{"/test"},
-	})(handler)
+	middleware := RequestBodySize(
+		config.WithRequestBodySizeMaxBytes(10),
+		config.WithRequestBodySizeExemptPaths([]string{"/test"}),
+	)(handler)
 	largeBody := bytes.NewReader([]byte("this body is longer than 10 bytes but less than 100"))
 	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(largeBody).Build()
 	zhtest.Serve(middleware, req)
@@ -197,7 +197,7 @@ func TestDefaultRequestBodySizeConfig(t *testing.T) {
 
 func TestRequestBodySize_GetRequest(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
-	middleware := RequestBodySize(config.RequestBodySizeConfig{MaxBytes: 10})(handler)
+	middleware := RequestBodySize(config.WithRequestBodySizeMaxBytes(10))(handler)
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(middleware, req)
 

@@ -36,3 +36,36 @@ func GenerateRequestID() string {
 	}
 	return hex.EncodeToString(bytes)
 }
+
+// RequestIDOption configures request ID generation middleware.
+type RequestIDOption func(*RequestIDConfig)
+
+// WithRequestIDHeader sets the header name for the request ID.
+func WithRequestIDHeader(header string) RequestIDOption {
+	return func(c *RequestIDConfig) {
+		c.Header = header
+	}
+}
+
+// WithRequestIDGenerator sets a custom request ID generator function.
+func WithRequestIDGenerator(gen func() string) RequestIDOption {
+	return func(c *RequestIDConfig) {
+		c.Generator = gen
+	}
+}
+
+// WithRequestIDContextKey sets the context key used to store the request ID.
+func WithRequestIDContextKey(key RequestIDContextKey) RequestIDOption {
+	return func(c *RequestIDConfig) {
+		c.ContextKey = key
+	}
+}
+
+// requestIDConfigToOptions converts a RequestIDConfig struct to a slice of RequestIDOption functions.
+func requestIDConfigToOptions(cfg RequestIDConfig) []RequestIDOption {
+	return []RequestIDOption{
+		WithRequestIDHeader(cfg.Header),
+		WithRequestIDGenerator(cfg.Generator),
+		WithRequestIDContextKey(cfg.ContextKey),
+	}
+}

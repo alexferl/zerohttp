@@ -31,9 +31,7 @@ func TestRequestID_ExistingHeader(t *testing.T) {
 func TestRequestID_CustomHeader(t *testing.T) {
 	handler := &testHandler{}
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
-	w := zhtest.TestMiddlewareWithHandler(RequestID(config.RequestIDConfig{
-		Header: "X-Trace-Id",
-	}), handler, req)
+	w := zhtest.TestMiddlewareWithHandler(RequestID(config.WithRequestIDHeader("X-Trace-Id")), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	reqHeaderValue := handler.request.Header.Get("X-Trace-Id")
@@ -53,12 +51,10 @@ func TestRequestID_CustomHeader(t *testing.T) {
 func TestRequestID_CustomGenerator(t *testing.T) {
 	counter := 0
 	customIDPrefix := "custom-"
-	mw := RequestID(config.RequestIDConfig{
-		Generator: func() string {
-			counter++
-			return customIDPrefix + string(rune('0'+counter))
-		},
-	})
+	mw := RequestID(config.WithRequestIDGenerator(func() string {
+		counter++
+		return customIDPrefix + string(rune('0'+counter))
+	}))
 
 	handler1 := &testHandler{}
 	req1 := zhtest.NewRequest(http.MethodGet, "/").Build()
@@ -85,9 +81,7 @@ func TestRequestID_CustomContextKey(t *testing.T) {
 	handler := &testHandler{}
 	customKey := config.RequestIDContextKey("trace_id")
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
-	w := zhtest.TestMiddlewareWithHandler(RequestID(config.RequestIDConfig{
-		ContextKey: customKey,
-	}), handler, req)
+	w := zhtest.TestMiddlewareWithHandler(RequestID(config.WithRequestIDContextKey(customKey)), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	customRequestID := GetRequestID(handler.context, customKey)
@@ -105,7 +99,11 @@ func TestRequestID_CustomContextKey(t *testing.T) {
 func TestRequestID_EmptyConfigValues(t *testing.T) {
 	handler := &testHandler{}
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
-	w := zhtest.TestMiddlewareWithHandler(RequestID(config.RequestIDConfig{}), handler, req)
+	w := zhtest.TestMiddlewareWithHandler(RequestID(
+		config.WithRequestIDHeader(""),
+		config.WithRequestIDGenerator(nil),
+		config.WithRequestIDContextKey(""),
+	), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	zhtest.AssertWith(t, w).HeaderExists("X-Request-Id")
@@ -120,9 +118,10 @@ func TestRequestID_EmptyConfigValues(t *testing.T) {
 func TestRequestID_MultipleOptions(t *testing.T) {
 	handler := &testHandler{}
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
-	w := zhtest.TestMiddlewareWithHandler(RequestID(config.RequestIDConfig{
-		Header: "X-Custom-Id",
-	}), handler, req)
+	w := zhtest.TestMiddlewareWithHandler(RequestID(
+		config.WithRequestIDHeader("X-Trace-Id"),
+		config.WithRequestIDHeader("X-Custom-Id"),
+	), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	zhtest.AssertWith(t, w).HeaderExists("X-Custom-Id")

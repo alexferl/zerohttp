@@ -16,9 +16,7 @@ func main() {
 
 	// Create zerohttp server with TLS
 	app := zh.New(
-		config.Config{
-			TLSAddr: ":8443",
-		},
+		config.WithTLSAddr(":8443"),
 	)
 
 	// Add Alt-Svc header middleware to advertise HTTP/3

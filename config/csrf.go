@@ -22,8 +22,7 @@ type CSRFConfig struct {
 
 	// CookieSecure sets the Secure flag on the cookie
 	// Default: true (recommended for HTTPS)
-	// Use a pointer to distinguish between "not set" and "explicitly set to false"
-	CookieSecure *bool
+	CookieSecure bool
 
 	// CookieSameSite sets the SameSite attribute
 	// Default: http.SameSiteStrictMode
@@ -47,15 +46,10 @@ type CSRFConfig struct {
 	ExemptMethods []string
 
 	// HMACKey is the secret key used for HMAC signing (REQUIRED)
-	// Must be set explicitly. The middleware will panic if not set.
+	// Must be set with WithCSRFHMACKey(). The middleware will panic if not set.
 	// Use a 32-byte key from environment variables or secure storage.
 	// All servers in a cluster must use the same key.
 	HMACKey []byte
-}
-
-// Bool returns a pointer to a bool value
-func Bool(b bool) *bool {
-	return &b
 }
 
 // DefaultCSRFConfig contains the default values for CSRF configuration
@@ -64,11 +58,91 @@ var DefaultCSRFConfig = CSRFConfig{
 	CookieMaxAge:   86400, // 24 hours
 	CookieDomain:   "",
 	CookiePath:     "/",
-	CookieSecure:   Bool(true),
+	CookieSecure:   true,
 	CookieSameSite: http.SameSiteStrictMode,
 	TokenLookup:    "header:X-CSRF-Token",
 	ErrorHandler:   nil,
 	ExemptPaths:    []string{},
 	ExemptMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace},
 	HMACKey:        nil,
+}
+
+// CSRFOption configures CSRF middleware
+type CSRFOption func(*CSRFConfig)
+
+// WithCSRFCookieName sets the CSRF cookie name
+func WithCSRFCookieName(name string) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.CookieName = name
+	}
+}
+
+// WithCSRFCookieMaxAge sets the cookie max age in seconds
+func WithCSRFCookieMaxAge(maxAge int) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.CookieMaxAge = maxAge
+	}
+}
+
+// WithCSRFCookieDomain sets the cookie domain
+func WithCSRFCookieDomain(domain string) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.CookieDomain = domain
+	}
+}
+
+// WithCSRFCookiePath sets the cookie path
+func WithCSRFCookiePath(path string) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.CookiePath = path
+	}
+}
+
+// WithCSRFCookieSecure sets the Secure flag
+func WithCSRFCookieSecure(secure bool) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.CookieSecure = secure
+	}
+}
+
+// WithCSRFCookieSameSite sets the SameSite attribute
+func WithCSRFCookieSameSite(sameSite http.SameSite) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.CookieSameSite = sameSite
+	}
+}
+
+// WithCSRFTokenLookup sets the token lookup format
+func WithCSRFTokenLookup(lookup string) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.TokenLookup = lookup
+	}
+}
+
+// WithCSRFErrorHandler sets a custom error handler
+func WithCSRFErrorHandler(handler http.HandlerFunc) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.ErrorHandler = handler
+	}
+}
+
+// WithCSRFExemptPaths sets exempt paths
+func WithCSRFExemptPaths(paths []string) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.ExemptPaths = paths
+	}
+}
+
+// WithCSRFExemptMethods sets exempt HTTP methods
+func WithCSRFExemptMethods(methods []string) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.ExemptMethods = methods
+	}
+}
+
+// WithCSRFHMACKey sets the HMAC signing key
+func WithCSRFHMACKey(key []byte) CSRFOption {
+	return func(c *CSRFConfig) {
+		c.HMACKey = key
+	}
 }

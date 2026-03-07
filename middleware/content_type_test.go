@@ -75,7 +75,7 @@ func TestContentTypeCustomConfig(t *testing.T) {
 		{"custom disallowed application/json", "application/json", false, http.StatusUnsupportedMediaType},
 	}
 
-	middleware := ContentType(config.ContentTypeConfig{ContentTypes: []string{"text/plain", "application/xml"}})
+	middleware := ContentType(config.WithContentTypeContentTypes([]string{"text/plain", "application/xml"}))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test data"))
@@ -110,10 +110,10 @@ func TestContentTypeExemptPaths(t *testing.T) {
 		{"not exempt /api/users", "/api/users", false, http.StatusUnsupportedMediaType},
 	}
 
-	middleware := ContentType(config.ContentTypeConfig{
-		ContentTypes: []string{"application/json"},
-		ExemptPaths:  []string{"/health", "/webhooks/", "/api/upload"},
-	})
+	middleware := ContentType(
+		config.WithContentTypeContentTypes([]string{"application/json"}),
+		config.WithContentTypeExemptPaths([]string{"/health", "/webhooks/", "/api/upload"}),
+	)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -178,7 +178,7 @@ func TestContentTypeGETRequests(t *testing.T) {
 
 func TestContentTypeConfigFallbacks(t *testing.T) {
 	t.Run("empty config", func(t *testing.T) {
-		middleware := ContentType(config.ContentTypeConfig{ContentTypes: []string{}})
+		middleware := ContentType(config.WithContentTypeContentTypes([]string{}))
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
@@ -195,7 +195,7 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 	})
 
 	t.Run("nil config", func(t *testing.T) {
-		middleware := ContentType(config.ContentTypeConfig{ContentTypes: nil})
+		middleware := ContentType(config.WithContentTypeContentTypes(nil))
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"test": "data"}`))
 		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
@@ -213,10 +213,10 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 	})
 
 	t.Run("nil exempt paths fallback", func(t *testing.T) {
-		middleware := ContentType(config.ContentTypeConfig{
-			ContentTypes: []string{"application/json"},
-			ExemptPaths:  nil,
-		})
+		middleware := ContentType(
+			config.WithContentTypeContentTypes([]string{"application/json"}),
+			config.WithContentTypeExemptPaths(nil),
+		)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 		req.Header.Set("Content-Type", "text/plain")
 		rr := httptest.NewRecorder()

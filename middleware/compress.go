@@ -345,31 +345,32 @@ func encoderDeflate(w io.Writer, level int) io.Writer {
 }
 
 // Compress creates a compression middleware using the full config
-func Compress(cfg ...config.CompressConfig) func(http.Handler) http.Handler {
-	c := config.DefaultCompressConfig
-	if len(cfg) > 0 {
-		c = cfg[0]
+func Compress(opts ...config.CompressOption) func(http.Handler) http.Handler {
+	cfg := config.DefaultCompressConfig
+
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
-	if c.Level <= 0 {
-		c.Level = config.DefaultCompressConfig.Level
+	if cfg.Level <= 0 {
+		cfg.Level = config.DefaultCompressConfig.Level
 	}
-	if c.Types == nil {
-		c.Types = config.DefaultCompressConfig.Types
+	if cfg.Types == nil {
+		cfg.Types = config.DefaultCompressConfig.Types
 	}
-	if c.Algorithms == nil {
-		c.Algorithms = config.DefaultCompressConfig.Algorithms
+	if cfg.Algorithms == nil {
+		cfg.Algorithms = config.DefaultCompressConfig.Algorithms
 	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultCompressConfig.ExemptPaths
+	if cfg.ExemptPaths == nil {
+		cfg.ExemptPaths = config.DefaultCompressConfig.ExemptPaths
 	}
 
-	compressor := NewCompressor(c.Level, c.Types...)
-	compressor.exemptPaths = c.ExemptPaths
+	compressor := NewCompressor(cfg.Level, cfg.Types...)
+	compressor.exemptPaths = cfg.ExemptPaths
 
 	// Set allowed algorithms
 	compressor.algorithms = make(map[config.CompressionAlgorithm]bool)
-	for _, alg := range c.Algorithms {
+	for _, alg := range cfg.Algorithms {
 		compressor.algorithms[alg] = true
 	}
 

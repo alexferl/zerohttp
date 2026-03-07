@@ -22,7 +22,7 @@ func TestContentCharsetConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestContentCharsetConfig_StructAssignment(t *testing.T) {
+func TestWithContentCharsetCharsetsOption(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []string
@@ -38,9 +38,8 @@ func TestContentCharsetConfig_StructAssignment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := ContentCharsetConfig{
-				Charsets: tt.input,
-			}
+			cfg := DefaultContentCharsetConfig
+			WithContentCharsetCharsets(tt.input)(&cfg)
 			if len(cfg.Charsets) != len(tt.expected) {
 				t.Errorf("expected %d charsets, got %d", len(tt.expected), len(cfg.Charsets))
 			}
@@ -53,9 +52,8 @@ func TestContentCharsetConfig_StructAssignment(t *testing.T) {
 
 func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 	t.Run("empty charsets", func(t *testing.T) {
-		cfg := ContentCharsetConfig{
-			Charsets: []string{},
-		}
+		cfg := DefaultContentCharsetConfig
+		WithContentCharsetCharsets([]string{})(&cfg)
 		if cfg.Charsets == nil {
 			t.Error("expected charsets slice to be initialized, not nil")
 		}
@@ -65,9 +63,8 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil charsets", func(t *testing.T) {
-		cfg := ContentCharsetConfig{
-			Charsets: nil,
-		}
+		cfg := DefaultContentCharsetConfig
+		WithContentCharsetCharsets(nil)(&cfg)
 		if cfg.Charsets != nil {
 			t.Error("expected charsets to remain nil when nil is passed")
 		}
@@ -75,9 +72,8 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 
 	t.Run("case sensitivity", func(t *testing.T) {
 		charsets := []string{"UTF-8", "utf-8", "Utf-8"}
-		cfg := ContentCharsetConfig{
-			Charsets: charsets,
-		}
+		cfg := DefaultContentCharsetConfig
+		WithContentCharsetCharsets(charsets)(&cfg)
 		if len(cfg.Charsets) != 3 {
 			t.Errorf("expected 3 charsets, got %d", len(cfg.Charsets))
 		}
@@ -90,9 +86,8 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 
 	t.Run("duplicate charsets", func(t *testing.T) {
 		charsets := []string{"utf-8", "utf-8", "iso-8859-1", "utf-8"}
-		cfg := ContentCharsetConfig{
-			Charsets: charsets,
-		}
+		cfg := DefaultContentCharsetConfig
+		WithContentCharsetCharsets(charsets)(&cfg)
 		if len(cfg.Charsets) != 4 {
 			t.Errorf("expected 4 charsets (including duplicates), got %d", len(cfg.Charsets))
 		}
@@ -105,9 +100,8 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 
 	t.Run("mixed empty and non-empty", func(t *testing.T) {
 		charsets := []string{"", "utf-8", "", "iso-8859-1", ""}
-		cfg := ContentCharsetConfig{
-			Charsets: charsets,
-		}
+		cfg := DefaultContentCharsetConfig
+		WithContentCharsetCharsets(charsets)(&cfg)
 		if len(cfg.Charsets) != 5 {
 			t.Errorf("expected 5 charsets, got %d", len(cfg.Charsets))
 		}
@@ -120,9 +114,8 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 
 	t.Run("whitespace charsets", func(t *testing.T) {
 		charsets := []string{"utf-8", " ", "\t", "\n", "iso-8859-1"}
-		cfg := ContentCharsetConfig{
-			Charsets: charsets,
-		}
+		cfg := DefaultContentCharsetConfig
+		WithContentCharsetCharsets(charsets)(&cfg)
 		if len(cfg.Charsets) != 5 {
 			t.Errorf("expected 5 charsets, got %d", len(cfg.Charsets))
 		}

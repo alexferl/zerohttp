@@ -20,49 +20,49 @@ func TestSecurityHeaders_CustomConfig(t *testing.T) {
 	tests := []headerTest{
 		{
 			name:       "Custom CSP",
-			middleware: SecurityHeaders(config.SecurityHeadersConfig{ContentSecurityPolicy: "default-src 'self'"}),
+			middleware: SecurityHeaders(config.WithSecurityHeadersCSP("default-src 'self'")),
 			header:     "Content-Security-Policy",
 			expected:   "default-src 'self'",
 			prepReq:    func(r *http.Request) {},
 		},
 		{
 			name: "CSP Report Only",
-			middleware: SecurityHeaders(config.SecurityHeadersConfig{
-				ContentSecurityPolicy:           "default-src 'self'",
-				ContentSecurityPolicyReportOnly: true,
-			}),
+			middleware: SecurityHeaders(
+				config.WithSecurityHeadersCSP("default-src 'self'"),
+				config.WithSecurityHeadersCSPReportOnly(true),
+			),
 			header:   "Content-Security-Policy-Report-Only",
 			expected: "default-src 'self'",
 			prepReq:  func(r *http.Request) {},
 		},
 		{
 			name:       "Custom Permissions Policy",
-			middleware: SecurityHeaders(config.SecurityHeadersConfig{PermissionsPolicy: "camera=(), microphone=()"}),
+			middleware: SecurityHeaders(config.WithSecurityHeadersPermissionsPolicy("camera=(), microphone=()")),
 			header:     "Permissions-Policy",
 			expected:   "camera=(), microphone=()",
 			prepReq:    func(r *http.Request) {},
 		},
 		{
 			name:       "Custom Referrer Policy",
-			middleware: SecurityHeaders(config.SecurityHeadersConfig{ReferrerPolicy: "strict-origin-when-cross-origin"}),
+			middleware: SecurityHeaders(config.WithSecurityHeadersReferrerPolicy("strict-origin-when-cross-origin")),
 			header:     "Referrer-Policy",
 			expected:   "strict-origin-when-cross-origin",
 			prepReq:    func(r *http.Request) {},
 		},
 		{
 			name:       "Custom Server Header",
-			middleware: SecurityHeaders(config.SecurityHeadersConfig{Server: "MyCustomServer"}),
+			middleware: SecurityHeaders(config.WithSecurityHeadersServer("MyCustomServer")),
 			header:     "Server",
 			expected:   "MyCustomServer",
 			prepReq:    func(r *http.Request) {},
 		},
 		{
 			name: "Cross-Origin policies",
-			middleware: SecurityHeaders(config.SecurityHeadersConfig{
-				CrossOriginEmbedderPolicy: "unsafe-none",
-				CrossOriginOpenerPolicy:   "unsafe-none",
-				CrossOriginResourcePolicy: "cross-origin",
-			}),
+			middleware: SecurityHeaders(
+				config.WithSecurityHeadersCrossOriginEmbedderPolicy("unsafe-none"),
+				config.WithSecurityHeadersCrossOriginOpenerPolicy("unsafe-none"),
+				config.WithSecurityHeadersCrossOriginResourcePolicy("cross-origin"),
+			),
 			header:   "",
 			expected: "",
 			prepReq:  func(r *http.Request) {},
@@ -99,12 +99,12 @@ func TestSecurityHeaders_HSTSWithNestedOptions(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	req.TLS = &tls.ConnectionState{}
 	w := zhtest.TestMiddlewareWithHandler(
-		SecurityHeaders(config.SecurityHeadersConfig{
-			StrictTransportSecurity: config.StrictTransportSecurity{
-				MaxAge:         31536000,
-				PreloadEnabled: true,
-			},
-		}),
+		SecurityHeaders(
+			config.WithSecurityHeadersHSTS(
+				config.WithHSTSMaxAge(31536000),
+				config.WithHSTSPreload(true),
+			),
+		),
 		handler,
 		req,
 	)
@@ -119,10 +119,10 @@ func TestSecurityHeaders_ExemptPaths(t *testing.T) {
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/skipme").Build()
 	w := zhtest.TestMiddlewareWithHandler(
-		SecurityHeaders(config.SecurityHeadersConfig{
-			ContentSecurityPolicy: "default-src 'self'",
-			ExemptPaths:           []string{"/skipme"},
-		}),
+		SecurityHeaders(
+			config.WithSecurityHeadersCSP("default-src 'self'"),
+			config.WithSecurityHeadersExemptPaths([]string{"/skipme"}),
+		),
 		handler,
 		req,
 	)
@@ -150,7 +150,7 @@ func TestSecurityHeaders_DefaultValuesFill(t *testing.T) {
 func TestSecurityHeaders_EmptyServerHidesHeader(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SecurityHeaders(config.SecurityHeadersConfig{Server: ""}),
+		SecurityHeaders(config.WithSecurityHeadersServer("")),
 		req,
 	)
 
@@ -161,7 +161,7 @@ func TestSecurityHeaders_EmptyServerHidesHeader(t *testing.T) {
 func TestSecurityHeaders_ContentSecurityPolicyNotSet(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddleware(
-		SecurityHeaders(config.SecurityHeadersConfig{ContentSecurityPolicy: ""}),
+		SecurityHeaders(config.WithSecurityHeadersCSP("")),
 		req,
 	)
 
@@ -179,7 +179,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_ContentSecurityPolicy",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{ContentSecurityPolicy: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersCSP(""))(h)
 			},
 			"Content-Security-Policy",
 			config.DefaultSecurityHeadersConfig.ContentSecurityPolicy,
@@ -187,7 +187,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_CrossOriginEmbedderPolicy",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{CrossOriginEmbedderPolicy: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersCrossOriginEmbedderPolicy(""))(h)
 			},
 			"Cross-Origin-Embedder-Policy",
 			config.DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
@@ -195,7 +195,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_CrossOriginOpenerPolicy",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{CrossOriginOpenerPolicy: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersCrossOriginOpenerPolicy(""))(h)
 			},
 			"Cross-Origin-Opener-Policy",
 			config.DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
@@ -203,7 +203,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_CrossOriginResourcePolicy",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{CrossOriginResourcePolicy: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersCrossOriginResourcePolicy(""))(h)
 			},
 			"Cross-Origin-Resource-Policy",
 			config.DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
@@ -211,7 +211,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_PermissionsPolicy",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{PermissionsPolicy: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersPermissionsPolicy(""))(h)
 			},
 			"Permissions-Policy",
 			config.DefaultSecurityHeadersConfig.PermissionsPolicy,
@@ -219,7 +219,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_ReferrerPolicy",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{ReferrerPolicy: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersReferrerPolicy(""))(h)
 			},
 			"Referrer-Policy",
 			config.DefaultSecurityHeadersConfig.ReferrerPolicy,
@@ -227,7 +227,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_XContentTypeOptions",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{XContentTypeOptions: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersXContentTypeOptions(""))(h)
 			},
 			"X-Content-Type-Options",
 			config.DefaultSecurityHeadersConfig.XContentTypeOptions,
@@ -235,7 +235,7 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 		{
 			"DefaultValueFill_XFrameOptions",
 			func(h http.Handler) http.Handler {
-				return SecurityHeaders(config.SecurityHeadersConfig{XFrameOptions: ""})(h)
+				return SecurityHeaders(config.WithSecurityHeadersXFrameOptions(""))(h)
 			},
 			"X-Frame-Options",
 			config.DefaultSecurityHeadersConfig.XFrameOptions,

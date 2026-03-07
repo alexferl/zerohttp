@@ -67,10 +67,8 @@ func main() {
 	// Create zerohttp server with WebSocket support
 	// Disable default middlewares to avoid CSP blocking inline styles/scripts in the demo
 	app := zh.New(
-		config.Config{
-			DisableDefaultMiddlewares: true,
-			WebSocketUpgrader:         &myUpgrader{upgrader: gupgrader},
-		},
+		config.WithDisableDefaultMiddlewares(),
+		config.WithWebSocketUpgrader(&myUpgrader{upgrader: gupgrader}),
 	)
 
 	// Serve HTML client

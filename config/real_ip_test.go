@@ -255,13 +255,12 @@ func TestSpecializedIPExtractors(t *testing.T) {
 }
 
 func TestRealIPConfig_CustomExtractors(t *testing.T) {
-	t.Run("custom extractor", func(t *testing.T) {
+	t.Run("custom extractor option", func(t *testing.T) {
 		customExtractor := func(r *http.Request) string {
 			return "custom-ip"
 		}
-		cfg := RealIPConfig{
-			IPExtractor: customExtractor,
-		}
+		cfg := DefaultRealIPConfig
+		WithRealIPExtractor(customExtractor)(&cfg)
 		if cfg.IPExtractor == nil {
 			t.Error("expected IP extractor to be set")
 		}
@@ -273,9 +272,8 @@ func TestRealIPConfig_CustomExtractors(t *testing.T) {
 	})
 
 	t.Run("nil extractor", func(t *testing.T) {
-		cfg := RealIPConfig{
-			IPExtractor: nil,
-		}
+		cfg := DefaultRealIPConfig
+		WithRealIPExtractor(nil)(&cfg)
 		if cfg.IPExtractor != nil {
 			t.Error("expected IP extractor to remain nil when nil is passed")
 		}
@@ -334,9 +332,8 @@ func TestRealIPConfig_CustomExtractors(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				cfg := RealIPConfig{
-					IPExtractor: tt.extractor,
-				}
+				cfg := DefaultRealIPConfig
+				WithRealIPExtractor(tt.extractor)(&cfg)
 				req, _ := http.NewRequest(http.MethodGet, "/", nil)
 				tt.setupRequest(req)
 				result := cfg.IPExtractor(req)

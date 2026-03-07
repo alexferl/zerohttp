@@ -38,14 +38,14 @@ func TestTimeout_Scenarios(t *testing.T) {
 				}
 			})
 
-			cfg := config.TimeoutConfig{Timeout: tt.timeout}
+			opts := []config.TimeoutOption{config.WithTimeoutDuration(tt.timeout)}
 			if tt.statusCode != 0 {
-				cfg.StatusCode = tt.statusCode
+				opts = append(opts, config.WithTimeoutStatusCode(tt.statusCode))
 			}
 			if tt.message != "" {
-				cfg.Message = tt.message
+				opts = append(opts, config.WithTimeoutMessage(tt.message))
 			}
-			middleware := Timeout(cfg)(handler)
+			middleware := Timeout(opts...)(handler)
 
 			req := zhtest.NewRequest(http.MethodGet, "/").Build()
 			w := zhtest.Serve(middleware, req)
@@ -58,13 +58,13 @@ func TestTimeout_Scenarios(t *testing.T) {
 func TestTimeout_DefaultValues(t *testing.T) {
 	tests := []struct {
 		name   string
-		cfg    config.TimeoutConfig
+		opts   []config.TimeoutOption
 		delay  time.Duration
 		expect func(t *testing.T, w *httptest.ResponseRecorder)
 	}{
 		{
 			"zero timeout uses default",
-			config.TimeoutConfig{Timeout: 0},
+			[]config.TimeoutOption{config.WithTimeoutDuration(0)},
 			10 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
 				zhtest.AssertWith(t, w).Status(http.StatusOK)
@@ -72,7 +72,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 		},
 		{
 			"zero status code uses default",
-			config.TimeoutConfig{Timeout: 50 * time.Millisecond, StatusCode: 0},
+			[]config.TimeoutOption{config.WithTimeoutDuration(50 * time.Millisecond), config.WithTimeoutStatusCode(0)},
 			100 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
 				zhtest.AssertWith(t, w).Status(http.StatusGatewayTimeout)
@@ -80,7 +80,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 		},
 		{
 			"nil exempt paths uses default",
-			config.TimeoutConfig{Timeout: 50 * time.Millisecond, ExemptPaths: nil},
+			[]config.TimeoutOption{config.WithTimeoutDuration(50 * time.Millisecond), config.WithTimeoutExemptPaths(nil)},
 			100 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
 				zhtest.AssertWith(t, w).Status(http.StatusGatewayTimeout)
@@ -97,7 +97,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 					_, _ = w.Write([]byte("ok"))
 				}
 			})
-			middleware := Timeout(tt.cfg)(handler)
+			middleware := Timeout(tt.opts...)(handler)
 
 			req := zhtest.NewRequest(http.MethodGet, "/").Build()
 			w := zhtest.Serve(middleware, req)
@@ -125,10 +125,10 @@ func TestTimeout_ExemptPaths(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		_, _ = w.Write([]byte("done"))
 	})
-	middleware := Timeout(config.TimeoutConfig{
-		Timeout:     50 * time.Millisecond,
-		ExemptPaths: []string{"/health"},
-	})(handler)
+	middleware := Timeout(
+		config.WithTimeoutDuration(50*time.Millisecond),
+		config.WithTimeoutExemptPaths([]string{"/health"}),
+	)(handler)
 
 	req := zhtest.NewRequest(http.MethodGet, "/health").Build()
 	w := zhtest.Serve(middleware, req)
@@ -182,7 +182,7 @@ func TestTimeout_NoRaceCondition(t *testing.T) {
 				}
 			}
 		})
-		middleware := Timeout(config.TimeoutConfig{Timeout: 50 * time.Millisecond})(handler)
+		middleware := Timeout(config.WithTimeoutDuration(50 * time.Millisecond))(handler)
 
 		req := zhtest.NewRequest(http.MethodGet, "/").Build()
 		w := zhtest.Serve(middleware, req)

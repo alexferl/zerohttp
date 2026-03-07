@@ -6,31 +6,17 @@ import (
 	zh "github.com/alexferl/zerohttp"
 )
 
+// Option is a function that configures the healthcheck
+type Option func(*Config)
+
 // Config holds the healthcheck configuration
 type Config struct {
-	// LivenessEndpoint is the path for the liveness probe endpoint.
-	// Default: "/livez"
-	LivenessEndpoint string
-
-	// LivenessHandler is the handler for the liveness probe.
-	// Default: returns "ok" with 200 status
-	LivenessHandler zh.HandlerFunc
-
-	// ReadinessEndpoint is the path for the readiness probe endpoint.
-	// Default: "/readyz"
+	LivenessEndpoint  string
+	LivenessHandler   zh.HandlerFunc
 	ReadinessEndpoint string
-
-	// ReadinessHandler is the handler for the readiness probe.
-	// Default: returns "ok" with 200 status
-	ReadinessHandler zh.HandlerFunc
-
-	// StartupEndpoint is the path for the startup probe endpoint.
-	// Default: "/startupz"
-	StartupEndpoint string
-
-	// StartupHandler is the handler for the startup probe.
-	// Default: returns "ok" with 200 status
-	StartupHandler zh.HandlerFunc
+	ReadinessHandler  zh.HandlerFunc
+	StartupEndpoint   string
+	StartupHandler    zh.HandlerFunc
 }
 
 // defaultHandler returns a simple "ok" response
@@ -40,29 +26,68 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) error {
 	return err
 }
 
-// DefaultConfig is the default healthcheck configuration.
-// Modify this to change system-wide defaults.
-var DefaultConfig = Config{
-	LivenessEndpoint:  "/livez",
-	LivenessHandler:   defaultHandler,
-	ReadinessEndpoint: "/readyz",
-	ReadinessHandler:  defaultHandler,
-	StartupEndpoint:   "/startupz",
-	StartupHandler:    defaultHandler,
+// defaultConfig returns the default configuration
+func defaultConfig() Config {
+	return Config{
+		LivenessEndpoint:  "/livez",
+		LivenessHandler:   defaultHandler,
+		ReadinessEndpoint: "/readyz",
+		ReadinessHandler:  defaultHandler,
+		StartupEndpoint:   "/startupz",
+		StartupHandler:    defaultHandler,
+	}
 }
 
-// New creates and registers all healthcheck endpoints with the provided configuration.
-// Use DefaultConfig for default values:
-//
-//	healthcheck.New(app, healthcheck.DefaultConfig)
-//
-// Or customize specific fields:
-//
-//	cfg := healthcheck.DefaultConfig
-//	cfg.LivenessEndpoint = "/health/live"
-//	cfg.ReadinessHandler = myCustomHandler
-//	healthcheck.New(app, cfg)
-func New(app *zh.Server, cfg Config) {
+// WithLivenessEndpoint sets the liveness endpoint path
+func WithLivenessEndpoint(endpoint string) Option {
+	return func(c *Config) {
+		c.LivenessEndpoint = endpoint
+	}
+}
+
+// WithLivenessHandler sets the liveness handler
+func WithLivenessHandler(handler zh.HandlerFunc) Option {
+	return func(c *Config) {
+		c.LivenessHandler = handler
+	}
+}
+
+// WithReadinessEndpoint sets the readiness endpoint path
+func WithReadinessEndpoint(endpoint string) Option {
+	return func(c *Config) {
+		c.ReadinessEndpoint = endpoint
+	}
+}
+
+// WithReadinessHandler sets the readiness handler
+func WithReadinessHandler(handler zh.HandlerFunc) Option {
+	return func(c *Config) {
+		c.ReadinessHandler = handler
+	}
+}
+
+// WithStartupEndpoint sets the startup endpoint path
+func WithStartupEndpoint(endpoint string) Option {
+	return func(c *Config) {
+		c.StartupEndpoint = endpoint
+	}
+}
+
+// WithStartupHandler sets the startup handler
+func WithStartupHandler(handler zh.HandlerFunc) Option {
+	return func(c *Config) {
+		c.StartupHandler = handler
+	}
+}
+
+// New creates and registers all healthcheck endpoints
+func New(app *zh.Server, opts ...Option) {
+	cfg := defaultConfig()
+
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	app.GET(cfg.LivenessEndpoint, cfg.LivenessHandler)
 	app.GET(cfg.ReadinessEndpoint, cfg.ReadinessHandler)
 	app.GET(cfg.StartupEndpoint, cfg.StartupHandler)

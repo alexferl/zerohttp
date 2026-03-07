@@ -99,96 +99,74 @@ func TestPermissionPolicyFeatures(t *testing.T) {
 	}
 }
 
-func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
-	t.Run("basic header fields", func(t *testing.T) {
-		cfg := SecurityHeadersConfig{
-			ContentSecurityPolicy:           "default-src 'self'; script-src 'self' 'unsafe-inline'",
-			ContentSecurityPolicyReportOnly: true,
-			CrossOriginEmbedderPolicy:       "unsafe-none",
-			CrossOriginOpenerPolicy:         "unsafe-none",
-			CrossOriginResourcePolicy:       "cross-origin",
-			PermissionsPolicy:               "camera=(), microphone=()",
-			ReferrerPolicy:                  "strict-origin",
-			Server:                          "nginx/1.18.0",
-			StrictTransportSecurity: StrictTransportSecurity{
-				MaxAge:            31536000,
-				ExcludeSubdomains: true,
-				PreloadEnabled:    true,
-			},
-			XContentTypeOptions: "nosniff",
-			XFrameOptions:       "SAMEORIGIN",
-			ExemptPaths:         []string{},
+func TestSecurityHeadersOptions(t *testing.T) {
+	t.Run("basic header options", func(t *testing.T) {
+		cfg := DefaultSecurityHeadersConfig
+
+		customCSP := "default-src 'self'; script-src 'self' 'unsafe-inline'"
+		WithSecurityHeadersCSP(customCSP)(&cfg)
+		if cfg.ContentSecurityPolicy != customCSP {
+			t.Errorf("expected CSP = %s, got %s", customCSP, cfg.ContentSecurityPolicy)
 		}
 
-		if cfg.ContentSecurityPolicy != "default-src 'self'; script-src 'self' 'unsafe-inline'" {
-			t.Errorf("expected CSP to be set correctly")
-		}
+		WithSecurityHeadersCSPReportOnly(true)(&cfg)
 		if cfg.ContentSecurityPolicyReportOnly != true {
-			t.Errorf("expected CSP report only to be true, got %t", cfg.ContentSecurityPolicyReportOnly)
+			t.Errorf("expected CSP report only = true, got %t", cfg.ContentSecurityPolicyReportOnly)
 		}
+
+		WithSecurityHeadersCrossOriginEmbedderPolicy("unsafe-none")(&cfg)
 		if cfg.CrossOriginEmbedderPolicy != "unsafe-none" {
 			t.Errorf("expected COEP = 'unsafe-none', got %s", cfg.CrossOriginEmbedderPolicy)
 		}
+
+		WithSecurityHeadersCrossOriginOpenerPolicy("unsafe-none")(&cfg)
 		if cfg.CrossOriginOpenerPolicy != "unsafe-none" {
 			t.Errorf("expected COOP = 'unsafe-none', got %s", cfg.CrossOriginOpenerPolicy)
 		}
+
+		WithSecurityHeadersCrossOriginResourcePolicy("cross-origin")(&cfg)
 		if cfg.CrossOriginResourcePolicy != "cross-origin" {
 			t.Errorf("expected CORP = 'cross-origin', got %s", cfg.CrossOriginResourcePolicy)
 		}
 	})
 
-	t.Run("policy and server fields", func(t *testing.T) {
-		cfg := SecurityHeadersConfig{
-			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-			ContentSecurityPolicyReportOnly: false,
-			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-			PermissionsPolicy:               "camera=(), microphone=(), geolocation=()",
-			ReferrerPolicy:                  "strict-origin",
-			Server:                          "nginx/1.18.0",
-			StrictTransportSecurity:         DefaultStrictTransportSecurity,
-			XContentTypeOptions:             "nosniff",
-			XFrameOptions:                   "SAMEORIGIN",
-			ExemptPaths:                     []string{},
+	t.Run("policy and server options", func(t *testing.T) {
+		cfg := DefaultSecurityHeadersConfig
+
+		customPolicy := "camera=(), microphone=(), geolocation=()"
+		WithSecurityHeadersPermissionsPolicy(customPolicy)(&cfg)
+		if cfg.PermissionsPolicy != customPolicy {
+			t.Errorf("expected permissions policy = %s, got %s", customPolicy, cfg.PermissionsPolicy)
 		}
 
-		if cfg.PermissionsPolicy != "camera=(), microphone=(), geolocation=()" {
-			t.Errorf("expected permissions policy = %s, got %s", "camera=(), microphone=(), geolocation=()", cfg.PermissionsPolicy)
-		}
+		WithSecurityHeadersReferrerPolicy("strict-origin")(&cfg)
 		if cfg.ReferrerPolicy != "strict-origin" {
 			t.Errorf("expected referrer policy = 'strict-origin', got %s", cfg.ReferrerPolicy)
 		}
+
+		WithSecurityHeadersServer("nginx/1.18.0")(&cfg)
 		if cfg.Server != "nginx/1.18.0" {
 			t.Errorf("expected server = 'nginx/1.18.0', got %s", cfg.Server)
 		}
-		if cfg.XContentTypeOptions != "nosniff" {
-			t.Errorf("expected X-Content-Type-Options = 'nosniff', got %s", cfg.XContentTypeOptions)
+
+		WithSecurityHeadersXContentTypeOptions("")(&cfg) // Disable
+		if cfg.XContentTypeOptions != "" {
+			t.Errorf("expected X-Content-Type-Options = '', got %s", cfg.XContentTypeOptions)
 		}
+
+		WithSecurityHeadersXFrameOptions("SAMEORIGIN")(&cfg)
 		if cfg.XFrameOptions != "SAMEORIGIN" {
 			t.Errorf("expected X-Frame-Options = 'SAMEORIGIN', got %s", cfg.XFrameOptions)
 		}
 	})
 
-	t.Run("HSTS fields", func(t *testing.T) {
-		cfg := SecurityHeadersConfig{
-			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-			ContentSecurityPolicyReportOnly: false,
-			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-			PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-			ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
-			Server:                          "",
-			StrictTransportSecurity: StrictTransportSecurity{
-				MaxAge:            31536000,
-				ExcludeSubdomains: true,
-				PreloadEnabled:    true,
-			},
-			XContentTypeOptions: "nosniff",
-			XFrameOptions:       "DENY",
-			ExemptPaths:         []string{},
-		}
+	t.Run("HSTS options", func(t *testing.T) {
+		cfg := DefaultSecurityHeadersConfig
+		WithSecurityHeadersHSTS(
+			WithHSTSMaxAge(31536000),
+			WithHSTSExcludeSubdomains(true),
+			WithHSTSPreload(true),
+		)(&cfg)
 
 		if cfg.StrictTransportSecurity.MaxAge != 31536000 {
 			t.Errorf("expected HSTS max age = 31536000, got %d", cfg.StrictTransportSecurity.MaxAge)
@@ -199,24 +177,21 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 		if cfg.StrictTransportSecurity.PreloadEnabled != true {
 			t.Errorf("expected HSTS preload = true, got %t", cfg.StrictTransportSecurity.PreloadEnabled)
 		}
+
+		// Test individual HSTS options
+		hsts := DefaultStrictTransportSecurity
+		WithHSTSMaxAge(31536000)(&hsts)
+		WithHSTSExcludeSubdomains(true)(&hsts)
+		WithHSTSPreload(true)(&hsts)
+		if hsts.MaxAge != 31536000 || hsts.ExcludeSubdomains != true || hsts.PreloadEnabled != true {
+			t.Error("expected individual HSTS options to work correctly")
+		}
 	})
 
-	t.Run("exempt paths field", func(t *testing.T) {
+	t.Run("exempt paths option", func(t *testing.T) {
 		exemptPaths := []string{"/api/webhook", "/health", "/metrics"}
-		cfg := SecurityHeadersConfig{
-			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-			ContentSecurityPolicyReportOnly: false,
-			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-			PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-			ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
-			Server:                          "",
-			StrictTransportSecurity:         DefaultStrictTransportSecurity,
-			XContentTypeOptions:             "nosniff",
-			XFrameOptions:                   "DENY",
-			ExemptPaths:                     exemptPaths,
-		}
+		cfg := DefaultSecurityHeadersConfig
+		WithSecurityHeadersExemptPaths(exemptPaths)(&cfg)
 		if len(cfg.ExemptPaths) != 3 {
 			t.Errorf("expected 3 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -226,22 +201,16 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 	})
 }
 
-func TestSecurityHeadersConfig_MultipleFields(t *testing.T) {
+func TestSecurityHeadersConfig_MultipleOptions(t *testing.T) {
 	exemptPaths := []string{"/public", "/api/webhook"}
-	cfg := SecurityHeadersConfig{
-		ContentSecurityPolicy:           "default-src 'self'",
-		ContentSecurityPolicyReportOnly: true,
-		CrossOriginEmbedderPolicy:       "unsafe-none",
-		CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-		CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-		PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-		ReferrerPolicy:                  "strict-origin",
-		Server:                          "MyServer/1.0",
-		StrictTransportSecurity:         DefaultStrictTransportSecurity,
-		XContentTypeOptions:             "nosniff",
-		XFrameOptions:                   "SAMEORIGIN",
-		ExemptPaths:                     exemptPaths,
-	}
+	cfg := DefaultSecurityHeadersConfig
+	WithSecurityHeadersCSP("default-src 'self'")(&cfg)
+	WithSecurityHeadersCSPReportOnly(true)(&cfg)
+	WithSecurityHeadersCrossOriginEmbedderPolicy("unsafe-none")(&cfg)
+	WithSecurityHeadersReferrerPolicy("strict-origin")(&cfg)
+	WithSecurityHeadersServer("MyServer/1.0")(&cfg)
+	WithSecurityHeadersXFrameOptions("SAMEORIGIN")(&cfg)
+	WithSecurityHeadersExemptPaths(exemptPaths)(&cfg)
 
 	if cfg.ContentSecurityPolicy != "default-src 'self'" {
 		t.Error("expected CSP to be set correctly")
@@ -281,20 +250,8 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				cfg := SecurityHeadersConfig{
-					ContentSecurityPolicy:           tt.csp,
-					ContentSecurityPolicyReportOnly: false,
-					CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-					CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-					CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-					PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-					ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
-					Server:                          "",
-					StrictTransportSecurity:         DefaultStrictTransportSecurity,
-					XContentTypeOptions:             "nosniff",
-					XFrameOptions:                   "DENY",
-					ExemptPaths:                     []string{},
-				}
+				cfg := DefaultSecurityHeadersConfig
+				WithSecurityHeadersCSP(tt.csp)(&cfg)
 				if cfg.ContentSecurityPolicy != tt.csp {
 					t.Errorf("expected CSP = %s, got %s", tt.csp, cfg.ContentSecurityPolicy)
 				}
@@ -316,20 +273,10 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				cfg := SecurityHeadersConfig{
-					ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-					ContentSecurityPolicyReportOnly: false,
-					CrossOriginEmbedderPolicy:       tt.coep,
-					CrossOriginOpenerPolicy:         tt.coop,
-					CrossOriginResourcePolicy:       tt.corp,
-					PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-					ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
-					Server:                          "",
-					StrictTransportSecurity:         DefaultStrictTransportSecurity,
-					XContentTypeOptions:             "nosniff",
-					XFrameOptions:                   "DENY",
-					ExemptPaths:                     []string{},
-				}
+				cfg := DefaultSecurityHeadersConfig
+				WithSecurityHeadersCrossOriginEmbedderPolicy(tt.coep)(&cfg)
+				WithSecurityHeadersCrossOriginOpenerPolicy(tt.coop)(&cfg)
+				WithSecurityHeadersCrossOriginResourcePolicy(tt.corp)(&cfg)
 
 				if cfg.CrossOriginEmbedderPolicy != tt.coep {
 					t.Errorf("expected COEP = %s, got %s", tt.coep, cfg.CrossOriginEmbedderPolicy)
@@ -352,20 +299,8 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 
 		for _, policy := range policies {
 			t.Run(policy, func(t *testing.T) {
-				cfg := SecurityHeadersConfig{
-					ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-					ContentSecurityPolicyReportOnly: false,
-					CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-					CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-					CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-					PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-					ReferrerPolicy:                  policy,
-					Server:                          "",
-					StrictTransportSecurity:         DefaultStrictTransportSecurity,
-					XContentTypeOptions:             "nosniff",
-					XFrameOptions:                   "DENY",
-					ExemptPaths:                     []string{},
-				}
+				cfg := DefaultSecurityHeadersConfig
+				WithSecurityHeadersReferrerPolicy(policy)(&cfg)
 				if cfg.ReferrerPolicy != policy {
 					t.Errorf("expected referrer policy = %s, got %s", policy, cfg.ReferrerPolicy)
 				}
@@ -378,20 +313,8 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 
 		for _, option := range options {
 			t.Run(option, func(t *testing.T) {
-				cfg := SecurityHeadersConfig{
-					ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-					ContentSecurityPolicyReportOnly: false,
-					CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-					CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-					CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-					PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-					ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
-					Server:                          "",
-					StrictTransportSecurity:         DefaultStrictTransportSecurity,
-					XContentTypeOptions:             "nosniff",
-					XFrameOptions:                   option,
-					ExemptPaths:                     []string{},
-				}
+				cfg := DefaultSecurityHeadersConfig
+				WithSecurityHeadersXFrameOptions(option)(&cfg)
 				if cfg.XFrameOptions != option {
 					t.Errorf("expected X-Frame-Options = %s, got %s", option, cfg.XFrameOptions)
 				}
@@ -402,20 +325,8 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 
 func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 	t.Run("empty exempt paths", func(t *testing.T) {
-		cfg := SecurityHeadersConfig{
-			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-			ContentSecurityPolicyReportOnly: false,
-			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-			PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-			ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
-			Server:                          "",
-			StrictTransportSecurity:         DefaultStrictTransportSecurity,
-			XContentTypeOptions:             "nosniff",
-			XFrameOptions:                   "DENY",
-			ExemptPaths:                     []string{},
-		}
+		cfg := DefaultSecurityHeadersConfig
+		WithSecurityHeadersExemptPaths([]string{})(&cfg)
 		if cfg.ExemptPaths == nil {
 			t.Error("expected exempt paths slice to be initialized, not nil")
 		}
@@ -425,20 +336,8 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil exempt paths", func(t *testing.T) {
-		cfg := SecurityHeadersConfig{
-			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
-			ContentSecurityPolicyReportOnly: false,
-			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
-			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
-			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
-			PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
-			ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
-			Server:                          "",
-			StrictTransportSecurity:         DefaultStrictTransportSecurity,
-			XContentTypeOptions:             "nosniff",
-			XFrameOptions:                   "DENY",
-			ExemptPaths:                     nil,
-		}
+		cfg := DefaultSecurityHeadersConfig
+		WithSecurityHeadersExemptPaths(nil)(&cfg)
 		if cfg.ExemptPaths != nil {
 			t.Error("expected exempt paths to remain nil when nil is passed")
 		}
@@ -461,7 +360,7 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 	})
 }
 
-func TestSecurityHeadersConfig_StructCreation(t *testing.T) {
+func TestSecurityHeadersConfigToOptions(t *testing.T) {
 	cfg := SecurityHeadersConfig{
 		ContentSecurityPolicy:           "default-src 'self'",
 		ContentSecurityPolicyReportOnly: true,
@@ -481,16 +380,27 @@ func TestSecurityHeadersConfig_StructCreation(t *testing.T) {
 		ExemptPaths:         []string{"/public"},
 	}
 
-	if cfg.ContentSecurityPolicy != "default-src 'self'" {
-		t.Error("expected CSP to be set correctly")
+	options := securityHeadersConfigToOptions(cfg)
+	if len(options) != 12 {
+		t.Errorf("expected 12 options, got %d", len(options))
 	}
-	if cfg.ContentSecurityPolicyReportOnly != true {
-		t.Error("expected CSP report only to be set correctly")
+
+	// Apply the options to a new config to test they work correctly
+	newCfg := DefaultSecurityHeadersConfig
+	for _, option := range options {
+		option(&newCfg)
 	}
-	if cfg.StrictTransportSecurity.MaxAge != 31536000 {
-		t.Error("expected HSTS max age to be set correctly")
+
+	if newCfg.ContentSecurityPolicy != cfg.ContentSecurityPolicy {
+		t.Error("expected CSP to be converted correctly")
 	}
-	if !reflect.DeepEqual(cfg.ExemptPaths, []string{"/public"}) {
-		t.Error("expected exempt paths to be set correctly")
+	if newCfg.ContentSecurityPolicyReportOnly != cfg.ContentSecurityPolicyReportOnly {
+		t.Error("expected CSP report only to be converted correctly")
+	}
+	if newCfg.StrictTransportSecurity.MaxAge != cfg.StrictTransportSecurity.MaxAge {
+		t.Error("expected HSTS max age to be converted correctly")
+	}
+	if !reflect.DeepEqual(newCfg.ExemptPaths, cfg.ExemptPaths) {
+		t.Error("expected exempt paths to be converted correctly")
 	}
 }

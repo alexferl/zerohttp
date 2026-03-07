@@ -8,19 +8,20 @@ import (
 )
 
 // RealIP middleware sets r.RemoteAddr to the extracted real client IP.
-func RealIP(cfg ...config.RealIPConfig) func(http.Handler) http.Handler {
-	c := config.DefaultRealIPConfig
-	if len(cfg) > 0 {
-		c = cfg[0]
+func RealIP(opts ...config.RealIPOption) func(http.Handler) http.Handler {
+	cfg := config.DefaultRealIPConfig
+
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
-	if c.IPExtractor == nil {
-		c.IPExtractor = config.DefaultRealIPConfig.IPExtractor
+	if cfg.IPExtractor == nil {
+		cfg.IPExtractor = config.DefaultRealIPConfig.IPExtractor
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			realIP := c.IPExtractor(r)
+			realIP := cfg.IPExtractor(r)
 			// Set RemoteAddr to real IP, preserving the port for consistency
 			_, port, err := net.SplitHostPort(r.RemoteAddr)
 			if err == nil && port != "" {

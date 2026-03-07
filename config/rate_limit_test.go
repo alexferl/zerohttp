@@ -65,31 +65,37 @@ func TestDefaultKeyExtractorFunction(t *testing.T) {
 	}
 }
 
-func TestRateLimitConfig_StructAssignment(t *testing.T) {
-	t.Run("basic fields", func(t *testing.T) {
-		cfg := RateLimitConfig{
-			Rate:           50,
-			Window:         30 * time.Second,
-			Algorithm:      SlidingWindow,
-			StatusCode:     http.StatusServiceUnavailable,
-			Message:        "Too many requests, please try again later",
-			IncludeHeaders: false,
-		}
+func TestRateLimitOptions(t *testing.T) {
+	t.Run("basic options", func(t *testing.T) {
+		cfg := DefaultRateLimitConfig
+		WithRateLimitRate(50)(&cfg)
 		if cfg.Rate != 50 {
 			t.Errorf("expected rate = 50, got %d", cfg.Rate)
 		}
-		if cfg.Window != 30*time.Second {
-			t.Errorf("expected window = %v, got %v", 30*time.Second, cfg.Window)
+
+		window := 30 * time.Second
+		WithRateLimitWindow(window)(&cfg)
+		if cfg.Window != window {
+			t.Errorf("expected window = %v, got %v", window, cfg.Window)
 		}
+
+		WithRateLimitAlgorithm(SlidingWindow)(&cfg)
 		if cfg.Algorithm != SlidingWindow {
 			t.Errorf("expected algorithm = %s, got %s", SlidingWindow, cfg.Algorithm)
 		}
+
+		WithRateLimitStatusCode(http.StatusServiceUnavailable)(&cfg)
 		if cfg.StatusCode != http.StatusServiceUnavailable {
 			t.Errorf("expected status code = %d, got %d", http.StatusServiceUnavailable, cfg.StatusCode)
 		}
-		if cfg.Message != "Too many requests, please try again later" {
-			t.Errorf("expected message = %s, got %s", "Too many requests, please try again later", cfg.Message)
+
+		message := "Too many requests, please try again later"
+		WithRateLimitMessage(message)(&cfg)
+		if cfg.Message != message {
+			t.Errorf("expected message = %s, got %s", message, cfg.Message)
 		}
+
+		WithRateLimitIncludeHeaders(false)(&cfg)
 		if cfg.IncludeHeaders != false {
 			t.Errorf("expected include headers = false, got %t", cfg.IncludeHeaders)
 		}
@@ -99,9 +105,8 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 		customExtractor := func(r *http.Request) string {
 			return r.Header.Get("X-User-ID")
 		}
-		cfg := RateLimitConfig{
-			KeyExtractor: customExtractor,
-		}
+		cfg := DefaultRateLimitConfig
+		WithRateLimitKeyExtractor(customExtractor)(&cfg)
 		if cfg.KeyExtractor == nil {
 			t.Error("expected key extractor to be set")
 		}
@@ -116,9 +121,8 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 
 	t.Run("exempt paths", func(t *testing.T) {
 		exemptPaths := []string{"/health", "/metrics", "/ping", "/status"}
-		cfg := RateLimitConfig{
-			ExemptPaths: exemptPaths,
-		}
+		cfg := DefaultRateLimitConfig
+		WithRateLimitExemptPaths(exemptPaths)(&cfg)
 		if len(cfg.ExemptPaths) != 4 {
 			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -130,9 +134,8 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 	t.Run("all algorithms", func(t *testing.T) {
 		algorithms := []RateLimitAlgorithm{TokenBucket, SlidingWindow, FixedWindow}
 		for _, algorithm := range algorithms {
-			cfg := RateLimitConfig{
-				Algorithm: algorithm,
-			}
+			cfg := DefaultRateLimitConfig
+			WithRateLimitAlgorithm(algorithm)(&cfg)
 			if cfg.Algorithm != algorithm {
 				t.Errorf("expected algorithm = %s, got %s", algorithm, cfg.Algorithm)
 			}
@@ -140,21 +143,20 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 	})
 }
 
-func TestRateLimitConfig_MultipleFields(t *testing.T) {
+func TestRateLimitConfig_MultipleOptions(t *testing.T) {
 	customExtractor := func(r *http.Request) string {
 		return r.Header.Get("Authorization")
 	}
 	exemptPaths := []string{"/public", "/health"}
-	cfg := RateLimitConfig{
-		Rate:           200,
-		Window:         5 * time.Minute,
-		Algorithm:      FixedWindow,
-		KeyExtractor:   customExtractor,
-		StatusCode:     http.StatusForbidden,
-		Message:        "Rate limit reached",
-		IncludeHeaders: false,
-		ExemptPaths:    exemptPaths,
-	}
+	cfg := DefaultRateLimitConfig
+	WithRateLimitRate(200)(&cfg)
+	WithRateLimitWindow(5 * time.Minute)(&cfg)
+	WithRateLimitAlgorithm(FixedWindow)(&cfg)
+	WithRateLimitKeyExtractor(customExtractor)(&cfg)
+	WithRateLimitStatusCode(http.StatusForbidden)(&cfg)
+	WithRateLimitMessage("Rate limit reached")(&cfg)
+	WithRateLimitIncludeHeaders(false)(&cfg)
+	WithRateLimitExemptPaths(exemptPaths)(&cfg)
 
 	if cfg.Rate != 200 {
 		t.Errorf("expected rate = 200, got %d", cfg.Rate)
@@ -192,11 +194,10 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 	t.Run("rate boundary values", func(t *testing.T) {
 		testCases := []int{1, 10, 100, 1000, 0, -1}
 		for _, rate := range testCases {
-			cfg := RateLimitConfig{
-				Rate: rate,
-			}
+			cfg := DefaultRateLimitConfig
+			WithRateLimitRate(rate)(&cfg)
 			if cfg.Rate != rate {
-				t.Errorf("Rate %d: expected rate = %d, got %d", rate, rate, cfg.Rate)
+				t.Errorf("WithRateLimitRate(%d): expected rate = %d, got %d", rate, rate, cfg.Rate)
 			}
 		}
 	})
@@ -204,11 +205,10 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 	t.Run("window boundary values", func(t *testing.T) {
 		testCases := []time.Duration{time.Second, 30 * time.Second, time.Minute, 5 * time.Minute, time.Hour, 0}
 		for _, window := range testCases {
-			cfg := RateLimitConfig{
-				Window: window,
-			}
+			cfg := DefaultRateLimitConfig
+			WithRateLimitWindow(window)(&cfg)
 			if cfg.Window != window {
-				t.Errorf("Window %v: expected window = %v, got %v", window, window, cfg.Window)
+				t.Errorf("WithRateLimitWindow(%v): expected window = %v, got %v", window, window, cfg.Window)
 			}
 		}
 	})
@@ -216,52 +216,44 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 	t.Run("status code options", func(t *testing.T) {
 		testCases := []int{http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusForbidden, http.StatusBadRequest, http.StatusInternalServerError, 0}
 		for _, statusCode := range testCases {
-			cfg := RateLimitConfig{
-				StatusCode: statusCode,
-			}
+			cfg := DefaultRateLimitConfig
+			WithRateLimitStatusCode(statusCode)(&cfg)
 			if cfg.StatusCode != statusCode {
-				t.Errorf("StatusCode %d: expected %d, got %d", statusCode, statusCode, cfg.StatusCode)
+				t.Errorf("WithRateLimitStatusCode(%d): expected %d, got %d", statusCode, statusCode, cfg.StatusCode)
 			}
 		}
 	})
 
 	t.Run("message options", func(t *testing.T) {
-		cfg := RateLimitConfig{
-			Message: "",
-		}
+		cfg := DefaultRateLimitConfig
+		WithRateLimitMessage("")(&cfg)
 		if cfg.Message != "" {
 			t.Errorf("expected empty message, got %s", cfg.Message)
 		}
 
 		longMessage := "This is a very long rate limit message that explains in detail why the request was rejected and what the client should do to resolve the issue including waiting for the rate limit window to reset."
-		cfg2 := RateLimitConfig{
-			Message: longMessage,
-		}
-		if cfg2.Message != longMessage {
+		WithRateLimitMessage(longMessage)(&cfg)
+		if cfg.Message != longMessage {
 			t.Errorf("expected long message to be preserved")
 		}
 	})
 
 	t.Run("empty and nil exempt paths", func(t *testing.T) {
-		cfg := RateLimitConfig{
-			ExemptPaths: []string{},
-		}
+		cfg := DefaultRateLimitConfig
+		WithRateLimitExemptPaths([]string{})(&cfg)
 		if cfg.ExemptPaths == nil || len(cfg.ExemptPaths) != 0 {
 			t.Errorf("expected empty exempt paths slice, got %v", cfg.ExemptPaths)
 		}
 
-		cfg2 := RateLimitConfig{
-			ExemptPaths: nil,
-		}
-		if cfg2.ExemptPaths != nil {
+		WithRateLimitExemptPaths(nil)(&cfg)
+		if cfg.ExemptPaths != nil {
 			t.Error("expected exempt paths to remain nil when nil is passed")
 		}
 	})
 
 	t.Run("nil key extractor", func(t *testing.T) {
-		cfg := RateLimitConfig{
-			KeyExtractor: nil,
-		}
+		cfg := DefaultRateLimitConfig
+		WithRateLimitKeyExtractor(nil)(&cfg)
 		if cfg.KeyExtractor != nil {
 			t.Error("expected key extractor to remain nil when nil is passed")
 		}
@@ -325,9 +317,8 @@ func TestRateLimitConfig_CustomKeyExtractors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := RateLimitConfig{
-				KeyExtractor: tt.extractor,
-			}
+			cfg := DefaultRateLimitConfig
+			WithRateLimitKeyExtractor(tt.extractor)(&cfg)
 			req, _ := http.NewRequest(http.MethodGet, "/", nil)
 			tt.setupRequest(req)
 			result := cfg.KeyExtractor(req)
@@ -348,9 +339,8 @@ func TestRateLimitConfig_PathPatterns(t *testing.T) {
 		"/admin/debug/*",
 		"/internal/status",
 	}
-	cfg := RateLimitConfig{
-		ExemptPaths: exemptPaths,
-	}
+	cfg := DefaultRateLimitConfig
+	WithRateLimitExemptPaths(exemptPaths)(&cfg)
 	if len(cfg.ExemptPaths) != len(exemptPaths) {
 		t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
 	}

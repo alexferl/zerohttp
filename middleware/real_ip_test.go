@@ -53,11 +53,9 @@ func TestRealIPMiddlewareNoPort(t *testing.T) {
 }
 
 func TestRealIPCustomExtractor(t *testing.T) {
-	middleware := RealIP(config.RealIPConfig{
-		IPExtractor: func(r *http.Request) string {
-			return "custom.ip.address"
-		},
-	})
+	middleware := RealIP(config.WithRealIPExtractor(func(r *http.Request) string {
+		return "custom.ip.address"
+	}))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "192.168.1.1:12345"
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,9 +68,7 @@ func TestRealIPCustomExtractor(t *testing.T) {
 }
 
 func TestRealIPNilExtractor(t *testing.T) {
-	middleware := RealIP(config.RealIPConfig{
-		IPExtractor: nil,
-	})
+	middleware := RealIP(config.WithRealIPExtractor(nil))
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "203.0.113.1").Build()
 	req.RemoteAddr = "192.168.1.1:12345"
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -212,9 +208,7 @@ func TestRealIPWithDifferentExtractors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			middleware := RealIP(config.RealIPConfig{
-				IPExtractor: tt.extractor,
-			})
+			middleware := RealIP(config.WithRealIPExtractor(tt.extractor))
 			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = "192.168.1.1:12345"
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

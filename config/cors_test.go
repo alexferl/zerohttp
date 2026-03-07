@@ -49,7 +49,7 @@ func TestCORSConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestCORSConfig_StructAssignment(t *testing.T) {
+func TestCORSOptions(t *testing.T) {
 	t.Run("allowed origins", func(t *testing.T) {
 		tests := []struct {
 			name     string
@@ -63,11 +63,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				cfg := CORSConfig{
-					AllowedOrigins: tt.input,
-					AllowedMethods: DefaultCORSConfig.AllowedMethods,
-					AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-				}
+				cfg := DefaultCORSConfig
+				WithCORSAllowedOrigins(tt.input)(&cfg)
 				if len(cfg.AllowedOrigins) != len(tt.expected) {
 					t.Errorf("expected %d allowed origins, got %d", len(tt.expected), len(cfg.AllowedOrigins))
 				}
@@ -80,11 +77,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 
 	t.Run("allowed methods", func(t *testing.T) {
 		methods := []string{http.MethodGet, http.MethodPost, http.MethodPost, http.MethodDelete}
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: methods,
-			AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowedMethods(methods)(&cfg)
 		if len(cfg.AllowedMethods) != 4 {
 			t.Errorf("expected 4 allowed methods, got %d", len(cfg.AllowedMethods))
 		}
@@ -95,11 +89,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 
 	t.Run("all HTTP methods", func(t *testing.T) {
 		methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, http.MethodOptions, http.MethodConnect, http.MethodTrace}
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: methods,
-			AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowedMethods(methods)(&cfg)
 		if len(cfg.AllowedMethods) != 9 {
 			t.Errorf("expected 9 methods, got %d", len(cfg.AllowedMethods))
 		}
@@ -110,11 +101,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 
 	t.Run("allowed headers", func(t *testing.T) {
 		headers := []string{"Content-Type", "Authorization", "X-API-Key", "X-Client-Version"}
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: DefaultCORSConfig.AllowedMethods,
-			AllowedHeaders: headers,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowedHeaders(headers)(&cfg)
 		if len(cfg.AllowedHeaders) != 4 {
 			t.Errorf("expected 4 allowed headers, got %d", len(cfg.AllowedHeaders))
 		}
@@ -125,11 +113,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 
 	t.Run("common headers", func(t *testing.T) {
 		headers := []string{"Accept", "Accept-Language", "Authorization", "Cache-Control", "Content-Language", "Content-Type", "X-CSRF-Token", "X-Requested-With", "X-API-Key", "X-Client-Version"}
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: DefaultCORSConfig.AllowedMethods,
-			AllowedHeaders: headers,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowedHeaders(headers)(&cfg)
 		if len(cfg.AllowedHeaders) != 10 {
 			t.Errorf("expected 10 common headers, got %d", len(cfg.AllowedHeaders))
 		}
@@ -140,12 +125,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 
 	t.Run("exposed headers", func(t *testing.T) {
 		headers := []string{"X-Total-Count", "X-Rate-Limit", "Link", "ETag"}
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: DefaultCORSConfig.AllowedMethods,
-			AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-			ExposedHeaders: headers,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSExposedHeaders(headers)(&cfg)
 		if len(cfg.ExposedHeaders) != 4 {
 			t.Errorf("expected 4 exposed headers, got %d", len(cfg.ExposedHeaders))
 		}
@@ -155,28 +136,25 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 	})
 
 	t.Run("boolean options", func(t *testing.T) {
-		cfg := CORSConfig{
-			AllowedOrigins:     DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods:     DefaultCORSConfig.AllowedMethods,
-			AllowedHeaders:     DefaultCORSConfig.AllowedHeaders,
-			AllowCredentials:   true,
-			OptionsPassthrough: true,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowCredentials(true)(&cfg)
 		if cfg.AllowCredentials != true {
 			t.Errorf("expected allow credentials = true, got %t", cfg.AllowCredentials)
 		}
+		WithCORSOptionsPassthrough(true)(&cfg)
 		if cfg.OptionsPassthrough != true {
 			t.Errorf("expected options passthrough = true, got %t", cfg.OptionsPassthrough)
+		}
+		WithCORSAllowCredentials(false)(&cfg)
+		WithCORSOptionsPassthrough(false)(&cfg)
+		if cfg.AllowCredentials != false || cfg.OptionsPassthrough != false {
+			t.Error("expected boolean values to be set back to false")
 		}
 	})
 
 	t.Run("max age", func(t *testing.T) {
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: DefaultCORSConfig.AllowedMethods,
-			AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-			MaxAge:         3600,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSMaxAge(3600)(&cfg)
 		if cfg.MaxAge != 3600 {
 			t.Errorf("expected max age = 3600, got %d", cfg.MaxAge)
 		}
@@ -184,12 +162,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 
 	t.Run("exempt paths", func(t *testing.T) {
 		exemptPaths := []string{"/health", "/metrics", "/internal", "/debug"}
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: DefaultCORSConfig.AllowedMethods,
-			AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-			ExemptPaths:    exemptPaths,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSExemptPaths(exemptPaths)(&cfg)
 		if len(cfg.ExemptPaths) != 4 {
 			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -199,22 +173,21 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 	})
 }
 
-func TestCORSConfig_MultipleFields(t *testing.T) {
+func TestCORSConfig_MultipleOptions(t *testing.T) {
 	origins := []string{"https://example.com"}
 	methods := []string{http.MethodGet, http.MethodPost}
 	headers := []string{"Content-Type"}
 	exposedHeaders := []string{"X-Total-Count"}
 	exemptPaths := []string{"/health"}
-	cfg := CORSConfig{
-		AllowedOrigins:     origins,
-		AllowedMethods:     methods,
-		AllowedHeaders:     headers,
-		ExposedHeaders:     exposedHeaders,
-		AllowCredentials:   true,
-		MaxAge:             7200,
-		OptionsPassthrough: true,
-		ExemptPaths:        exemptPaths,
-	}
+	cfg := DefaultCORSConfig
+	WithCORSAllowedOrigins(origins)(&cfg)
+	WithCORSAllowedMethods(methods)(&cfg)
+	WithCORSAllowedHeaders(headers)(&cfg)
+	WithCORSExposedHeaders(exposedHeaders)(&cfg)
+	WithCORSAllowCredentials(true)(&cfg)
+	WithCORSMaxAge(7200)(&cfg)
+	WithCORSOptionsPassthrough(true)(&cfg)
+	WithCORSExemptPaths(exemptPaths)(&cfg)
 
 	if !reflect.DeepEqual(cfg.AllowedOrigins, origins) {
 		t.Error("expected origins to be set correctly")
@@ -244,13 +217,12 @@ func TestCORSConfig_MultipleFields(t *testing.T) {
 
 func TestCORSConfig_EdgeCases(t *testing.T) {
 	t.Run("empty slices", func(t *testing.T) {
-		cfg := CORSConfig{
-			AllowedOrigins: []string{},
-			AllowedMethods: []string{},
-			AllowedHeaders: []string{},
-			ExposedHeaders: []string{},
-			ExemptPaths:    []string{},
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowedOrigins([]string{})(&cfg)
+		WithCORSAllowedMethods([]string{})(&cfg)
+		WithCORSAllowedHeaders([]string{})(&cfg)
+		WithCORSExposedHeaders([]string{})(&cfg)
+		WithCORSExemptPaths([]string{})(&cfg)
 
 		if cfg.AllowedOrigins == nil || len(cfg.AllowedOrigins) != 0 {
 			t.Errorf("expected empty allowed origins slice, got %v", cfg.AllowedOrigins)
@@ -270,53 +242,45 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil slices", func(t *testing.T) {
-		cfg := CORSConfig{
-			AllowedOrigins: nil,
-			AllowedMethods: nil,
-			AllowedHeaders: nil,
-			ExposedHeaders: nil,
-			ExemptPaths:    nil,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowedOrigins(nil)(&cfg)
+		WithCORSAllowedMethods(nil)(&cfg)
+		WithCORSAllowedHeaders(nil)(&cfg)
+		WithCORSExposedHeaders(nil)(&cfg)
+		WithCORSExemptPaths(nil)(&cfg)
 
 		if cfg.AllowedOrigins != nil {
-			t.Error("expected allowed origins to be nil when nil is passed")
+			t.Error("expected allowed origins to remain nil when nil is passed")
 		}
 		if cfg.AllowedMethods != nil {
-			t.Error("expected allowed methods to be nil when nil is passed")
+			t.Error("expected allowed methods to remain nil when nil is passed")
 		}
 		if cfg.AllowedHeaders != nil {
-			t.Error("expected allowed headers to be nil when nil is passed")
+			t.Error("expected allowed headers to remain nil when nil is passed")
 		}
 		if cfg.ExposedHeaders != nil {
-			t.Error("expected exposed headers to be nil when nil is passed")
+			t.Error("expected exposed headers to remain nil when nil is passed")
 		}
 		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to be nil when nil is passed")
+			t.Error("expected exempt paths to remain nil when nil is passed")
 		}
 	})
 
 	t.Run("max age boundary values", func(t *testing.T) {
 		testCases := []int{0, 1, 3600, 86400, 604800, -1}
 		for _, maxAge := range testCases {
-			cfg := CORSConfig{
-				AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-				AllowedMethods: DefaultCORSConfig.AllowedMethods,
-				AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-				MaxAge:         maxAge,
-			}
+			cfg := DefaultCORSConfig
+			WithCORSMaxAge(maxAge)(&cfg)
 			if cfg.MaxAge != maxAge {
-				t.Errorf("expected max age = %d, got %d", maxAge, cfg.MaxAge)
+				t.Errorf("WithCORSMaxAge(%d): expected max age = %d, got %d", maxAge, maxAge, cfg.MaxAge)
 			}
 		}
 	})
 
 	t.Run("case sensitive headers", func(t *testing.T) {
 		headers := []string{"Content-Type", "content-type", "CONTENT-TYPE", "Content-type"}
-		cfg := CORSConfig{
-			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
-			AllowedMethods: DefaultCORSConfig.AllowedMethods,
-			AllowedHeaders: headers,
-		}
+		cfg := DefaultCORSConfig
+		WithCORSAllowedHeaders(headers)(&cfg)
 		if len(cfg.AllowedHeaders) != 4 {
 			t.Errorf("expected 4 headers, got %d", len(cfg.AllowedHeaders))
 		}

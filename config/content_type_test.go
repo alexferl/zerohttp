@@ -32,8 +32,8 @@ func TestContentTypeConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestContentTypeConfig_StructAssignment(t *testing.T) {
-	t.Run("content types assignment", func(t *testing.T) {
+func TestContentTypeOptions(t *testing.T) {
+	t.Run("content types option", func(t *testing.T) {
 		tests := []struct {
 			name     string
 			input    []string
@@ -49,9 +49,8 @@ func TestContentTypeConfig_StructAssignment(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				cfg := ContentTypeConfig{
-					ContentTypes: tt.input,
-				}
+				cfg := DefaultContentTypeConfig
+				WithContentTypeContentTypes(tt.input)(&cfg)
 				if len(cfg.ContentTypes) != len(tt.expected) {
 					t.Errorf("expected %d content types, got %d", len(tt.expected), len(cfg.ContentTypes))
 				}
@@ -62,11 +61,10 @@ func TestContentTypeConfig_StructAssignment(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths assignment", func(t *testing.T) {
+	t.Run("exempt paths option", func(t *testing.T) {
 		exemptPaths := []string{"/api/upload", "/health", "/webhook", "/files"}
-		cfg := ContentTypeConfig{
-			ExemptPaths: exemptPaths,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeExemptPaths(exemptPaths)(&cfg)
 		if len(cfg.ExemptPaths) != 4 {
 			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -76,13 +74,12 @@ func TestContentTypeConfig_StructAssignment(t *testing.T) {
 	})
 }
 
-func TestContentTypeConfig_MultipleFields(t *testing.T) {
+func TestContentTypeConfig_MultipleOptions(t *testing.T) {
 	contentTypes := []string{"application/json", "text/xml"}
 	exemptPaths := []string{"/upload", "/download"}
-	cfg := ContentTypeConfig{
-		ContentTypes: contentTypes,
-		ExemptPaths:  exemptPaths,
-	}
+	cfg := DefaultContentTypeConfig
+	WithContentTypeContentTypes(contentTypes)(&cfg)
+	WithContentTypeExemptPaths(exemptPaths)(&cfg)
 
 	if len(cfg.ContentTypes) != 2 {
 		t.Errorf("expected 2 content types, got %d", len(cfg.ContentTypes))
@@ -100,10 +97,9 @@ func TestContentTypeConfig_MultipleFields(t *testing.T) {
 
 func TestContentTypeConfig_EdgeCases(t *testing.T) {
 	t.Run("empty slices", func(t *testing.T) {
-		cfg := ContentTypeConfig{
-			ContentTypes: []string{},
-			ExemptPaths:  []string{},
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeContentTypes([]string{})(&cfg)
+		WithContentTypeExemptPaths([]string{})(&cfg)
 
 		if cfg.ContentTypes == nil || len(cfg.ContentTypes) != 0 {
 			t.Errorf("expected empty content types slice, got %v", cfg.ContentTypes)
@@ -114,10 +110,9 @@ func TestContentTypeConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil slices", func(t *testing.T) {
-		cfg := ContentTypeConfig{
-			ContentTypes: nil,
-			ExemptPaths:  nil,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeContentTypes(nil)(&cfg)
+		WithContentTypeExemptPaths(nil)(&cfg)
 
 		if cfg.ContentTypes != nil {
 			t.Error("expected content types to remain nil when nil is passed")
@@ -129,9 +124,8 @@ func TestContentTypeConfig_EdgeCases(t *testing.T) {
 
 	t.Run("case sensitivity", func(t *testing.T) {
 		contentTypes := []string{"application/json", "Application/JSON", "APPLICATION/JSON", "application/Json"}
-		cfg := ContentTypeConfig{
-			ContentTypes: contentTypes,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeContentTypes(contentTypes)(&cfg)
 		if len(cfg.ContentTypes) != 4 {
 			t.Errorf("expected 4 content types, got %d", len(cfg.ContentTypes))
 		}
@@ -144,9 +138,8 @@ func TestContentTypeConfig_EdgeCases(t *testing.T) {
 
 	t.Run("duplicate content types", func(t *testing.T) {
 		contentTypes := []string{"application/json", "text/plain", "application/json", "text/html", "text/plain"}
-		cfg := ContentTypeConfig{
-			ContentTypes: contentTypes,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeContentTypes(contentTypes)(&cfg)
 		if len(cfg.ContentTypes) != 5 {
 			t.Errorf("expected 5 content types (including duplicates), got %d", len(cfg.ContentTypes))
 		}
@@ -164,9 +157,8 @@ func TestContentTypeConfig_EdgeCases(t *testing.T) {
 			"multipart/form-data; boundary=something",
 			"application/json",
 		}
-		cfg := ContentTypeConfig{
-			ContentTypes: contentTypes,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeContentTypes(contentTypes)(&cfg)
 		if len(cfg.ContentTypes) != 4 {
 			t.Errorf("expected 4 content types, got %d", len(cfg.ContentTypes))
 		}
@@ -180,10 +172,9 @@ func TestContentTypeConfig_EdgeCases(t *testing.T) {
 	t.Run("empty string values", func(t *testing.T) {
 		contentTypes := []string{"", "application/json", ""}
 		exemptPaths := []string{"", "/health", ""}
-		cfg := ContentTypeConfig{
-			ContentTypes: contentTypes,
-			ExemptPaths:  exemptPaths,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeContentTypes(contentTypes)(&cfg)
+		WithContentTypeExemptPaths(exemptPaths)(&cfg)
 
 		if len(cfg.ContentTypes) != 3 {
 			t.Errorf("expected 3 content types, got %d", len(cfg.ContentTypes))
@@ -217,9 +208,8 @@ func TestContentTypeConfig_PathPatterns(t *testing.T) {
 			"/admin/files/*",
 			"/webhook/*",
 		}
-		cfg := ContentTypeConfig{
-			ExemptPaths: exemptPaths,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeExemptPaths(exemptPaths)(&cfg)
 		if len(cfg.ExemptPaths) != len(exemptPaths) {
 			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
 		}
@@ -239,9 +229,8 @@ func TestContentTypeConfig_PathPatterns(t *testing.T) {
 			"/path/with/unicode-ñ",
 			"/files/test@example.com",
 		}
-		cfg := ContentTypeConfig{
-			ExemptPaths: exemptPaths,
-		}
+		cfg := DefaultContentTypeConfig
+		WithContentTypeExemptPaths(exemptPaths)(&cfg)
 		if len(cfg.ExemptPaths) != len(exemptPaths) {
 			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
 		}

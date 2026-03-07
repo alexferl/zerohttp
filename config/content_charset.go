@@ -11,3 +11,13 @@ type ContentCharsetConfig struct {
 var DefaultContentCharsetConfig = ContentCharsetConfig{
 	Charsets: []string{"utf-8", ""}, // Default allows UTF-8 and no charset
 }
+
+// ContentCharsetOption configures content charset middleware.
+type ContentCharsetOption func(*ContentCharsetConfig)
+
+// WithContentCharsetCharsets sets the list of allowed character encodings.
+func WithContentCharsetCharsets(charsets []string) ContentCharsetOption {
+	return func(c *ContentCharsetConfig) {
+		c.Charsets = charsets
+	}
+}

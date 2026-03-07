@@ -86,11 +86,9 @@ func main() {
 
 	// Create zerohttp server with autocert manager
 	app := zh.New(
-		config.Config{
-			Addr:            ":80",
-			TLSAddr:         ":443",
-			AutocertManager: wrappedManager,
-		},
+		config.WithAddr(":80"),
+		config.WithTLSAddr(":443"),
+		config.WithAutocertManager(wrappedManager),
 	)
 
 	// Add Alt-Svc header to advertise HTTP/3 support

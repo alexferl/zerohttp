@@ -34,3 +34,20 @@ var DefaultNoCacheConfig = NoCacheConfig{
 	NoCacheHeaders: DefaultNoCacheHeaders,
 	ETagHeaders:    DefaultETagHeaders,
 }
+
+// NoCacheOption configures no-cache middleware.
+type NoCacheOption func(*NoCacheConfig)
+
+// WithNoCacheHeaders sets the headers to apply for no-cache behavior.
+func WithNoCacheHeaders(headers map[string]string) NoCacheOption {
+	return func(c *NoCacheConfig) {
+		c.NoCacheHeaders = headers
+	}
+}
+
+// WithNoCacheETagHeaders sets the ETag-related headers to delete.
+func WithNoCacheETagHeaders(headers []string) NoCacheOption {
+	return func(c *NoCacheConfig) {
+		c.ETagHeaders = headers
+	}
+}
