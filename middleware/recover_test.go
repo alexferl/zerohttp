@@ -3,7 +3,9 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
@@ -296,5 +298,106 @@ func TestRecover_PanicFieldLogging(t *testing.T) {
 	}
 	if !foundPanicField {
 		t.Error("Expected panic field to be logged using log.P() helper")
+	}
+}
+
+// mockValidationErrors implements ValidationErrorer interface
+type mockValidationErrors map[string][]string
+
+func (m mockValidationErrors) Error() string                         { return "validation failed" }
+func (m mockValidationErrors) ValidationErrors() map[string][]string { return m }
+
+func TestRecover_HandlerError_ValidationError(t *testing.T) {
+	logger := &mockLogger{}
+	// Handler errors are wrapped as: fmt.Errorf("handler error: %w", err)
+	validationErr := mockValidationErrors{"field": {"required"}}
+	handlerErr := fmt.Errorf("handler error: %w", validationErr)
+	handler := Recover(logger)(panicHandler(handlerErr))
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(handler, req)
+
+	// Should return 422, not 500
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("Expected 422 Unprocessable Entity, got %d", w.Code)
+	}
+
+	// Should NOT log as error
+	if len(logger.errorLogs) != 0 {
+		t.Errorf("Expected no error logs for validation errors, got %d", len(logger.errorLogs))
+	}
+
+	// Check response body contains validation errors
+	body := w.Body.String()
+	if !strings.Contains(body, `"status":422`) {
+		t.Errorf("Expected status 422 in response body, got: %s", body)
+	}
+	if !strings.Contains(body, `"field":["required"]`) {
+		t.Errorf("Expected validation errors in response body, got: %s", body)
+	}
+}
+
+func TestRecover_HandlerError_BindingError(t *testing.T) {
+	logger := &mockLogger{}
+	// Binding errors have prefix "bind error: "
+	bindErr := errors.New("bind error: invalid JSON")
+	handlerErr := fmt.Errorf("handler error: %w", bindErr)
+	handler := Recover(logger)(panicHandler(handlerErr))
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(handler, req)
+
+	// Should return 400, not 500
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 Bad Request, got %d", w.Code)
+	}
+
+	// Should NOT log as error
+	if len(logger.errorLogs) != 0 {
+		t.Errorf("Expected no error logs for binding errors, got %d", len(logger.errorLogs))
+	}
+
+	// Check response body
+	body := w.Body.String()
+	if !strings.Contains(body, `"status":400`) {
+		t.Errorf("Expected status 400 in response body, got: %s", body)
+	}
+	if !strings.Contains(body, `"detail":"Invalid request body"`) {
+		t.Errorf("Expected sanitized detail in response body, got: %s", body)
+	}
+}
+
+func TestRecover_HandlerError_UnknownError(t *testing.T) {
+	logger := &mockLogger{}
+	// Unknown handler error (not validation or binding)
+	unknownErr := errors.New("handler error: some unexpected error")
+	handler := Recover(logger)(panicHandler(unknownErr))
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(handler, req)
+
+	// Should return 500
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected 500 Internal Server Error, got %d", w.Code)
+	}
+
+	// Should log as error
+	if len(logger.errorLogs) != 1 {
+		t.Errorf("Expected 1 error log for unknown handler errors, got %d", len(logger.errorLogs))
+	}
+}
+
+func TestRecover_NonHandlerError(t *testing.T) {
+	logger := &mockLogger{}
+	// Regular panic (not a handler error wrapper)
+	handler := Recover(logger)(panicHandler("random panic"))
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	w := zhtest.Serve(handler, req)
+
+	// Should return 500
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected 500 Internal Server Error, got %d", w.Code)
+	}
+
+	// Should log as error with stack trace
+	if len(logger.errorLogs) != 1 {
+		t.Errorf("Expected 1 error log for panics, got %d", len(logger.errorLogs))
 	}
 }

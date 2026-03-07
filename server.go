@@ -63,6 +63,11 @@ type Server struct {
 	// postShutdownHooks execute sequentially after all servers are shut down.
 	postShutdownHooks []config.ShutdownHookConfig
 
+	// validator is an optional struct validator for validating request data.
+	// Users can inject their own implementation (e.g., go-playground/validator/v10).
+	// If nil, the default built-in validator will be used.
+	validator config.Validator
+
 	// autocertManager handles automatic certificate provisioning and renewal
 	// using Let's Encrypt ACME protocol. If set, enables automatic TLS.
 	// Users must provide their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager).
@@ -173,6 +178,9 @@ func New(cfg ...config.Config) *Server {
 		if userCfg.WebTransportServer != nil {
 			c.WebTransportServer = userCfg.WebTransportServer
 		}
+		if userCfg.Validator != nil {
+			c.Validator = userCfg.Validator
+		}
 	}
 
 	router := NewRouter()
@@ -224,6 +232,7 @@ func New(cfg ...config.Config) *Server {
 		webTransportServer: c.WebTransportServer,
 		webSocketUpgrader:  c.WebSocketUpgrader,
 		sseProvider:        c.SSEProvider,
+		validator:          c.Validator,
 		logger:             logger,
 		preShutdownHooks:   c.PreShutdownHooks,
 		shutdownHooks:      c.ShutdownHooks,
@@ -838,6 +847,34 @@ func (s *Server) RegisterPostShutdownHook(name string, hook config.ShutdownHook)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.postShutdownHooks = append(s.postShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+}
+
+// SetValidator sets the struct validator instance. This can be used to inject
+// a custom validation implementation (e.g., go-playground/validator/v10) after
+// creating the server. If nil, the default built-in validator will be used.
+//
+// Example:
+//
+//	import "github.com/go-playground/validator/v10"
+//
+//	app := zerohttp.New()
+//	app.SetValidator(&myValidator{v: validator.New()})
+//
+// Parameters:
+//   - validator: A validator instance implementing the config.Validator interface
+func (s *Server) SetValidator(validator config.Validator) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.validator = validator
+}
+
+// Validator returns the configured struct validator (if any).
+// Returns nil if no custom validator has been configured - in this case,
+// the default built-in validator (zh.V) should be used.
+func (s *Server) Validator() config.Validator {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.validator
 }
 
 // ListenAndServeHTTP3 starts the HTTP/3 server with the specified certificate files.

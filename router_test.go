@@ -140,7 +140,7 @@ func TestHandlerFunc(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusOK).
-			Header(HeaderContentType, MIMETextPlain).
+			Header(HeaderContentType, MIMETextPlainCharset).
 			BodyEmpty()
 	})
 

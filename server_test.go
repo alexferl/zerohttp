@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -2033,4 +2034,65 @@ func TestConfigMerging(t *testing.T) {
 			t.Fatal("server should not be nil")
 		}
 	})
+}
+
+// mockValidator is a mock implementation of config.Validator for testing.
+type mockValidator struct {
+	structCalled   bool
+	registerCalled bool
+	lastDst        any
+	lastName       string
+	structErr      error
+}
+
+func (m *mockValidator) Struct(dst any) error {
+	m.structCalled = true
+	m.lastDst = dst
+	return m.structErr
+}
+
+func (m *mockValidator) Register(name string, fn func(reflect.Value, string) error) {
+	m.registerCalled = true
+	m.lastName = name
+}
+
+func TestServerValidator(t *testing.T) {
+	// Test that validator can be set and retrieved
+	app := New()
+
+	// Initially should be nil
+	if app.Validator() != nil {
+		t.Error("Validator should be nil initially")
+	}
+
+	// Set validator
+	mockVal := &mockValidator{}
+	app.SetValidator(mockVal)
+
+	// Should be retrievable
+	if app.Validator() != mockVal {
+		t.Error("Validator should be retrievable")
+	}
+
+	// Test that it works
+	type testStruct struct {
+		Name string
+	}
+	ts := testStruct{Name: "test"}
+	if err := app.Validator().Struct(&ts); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !mockVal.structCalled {
+		t.Error("expected Struct to be called")
+	}
+}
+
+func TestServerWithValidator(t *testing.T) {
+	// Test that validator can be set via config option
+	mockVal := &mockValidator{}
+	app := New(config.Config{Validator: mockVal})
+
+	if app.Validator() != mockVal {
+		t.Error("Validator should be set via config option")
+	}
 }

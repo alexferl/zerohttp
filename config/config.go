@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/alexferl/zerohttp/log"
@@ -87,6 +88,13 @@ type Config struct {
 	// SecurityHeaders holds the configuration for the security headers middleware.
 	SecurityHeaders SecurityHeadersConfig
 
+	// Validator is an optional struct validator for validating request data.
+	// Users can inject their own implementation (e.g., github.com/go-playground/validator/v10).
+	// The validator must implement the Validator interface.
+	// If nil, the default built-in validator will be used.
+	// Default: nil
+	Validator Validator
+
 	// AutocertManager is an optional autocert manager for automatic certificate management (AutoTLS).
 	// Users can inject their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager)
 	// by implementing the AutocertManager interface.
@@ -153,6 +161,41 @@ type ShutdownHook func(ctx context.Context) error
 type ShutdownHookConfig struct {
 	Name string
 	Hook ShutdownHook
+}
+
+// ============================================================================
+// Validator Interface
+// ============================================================================
+
+// Validator is the interface for struct validation.
+// Users can implement this interface to provide their own validation logic
+// (e.g., wrapping github.com/go-playground/validator/v10).
+//
+// Example with go-playground/validator:
+//
+//	import "github.com/go-playground/validator/v10"
+//
+//	type myValidator struct {
+//	    v *validator.Validate
+//	}
+//
+//	func (m *myValidator) Struct(dst any) error {
+//	    return m.v.Struct(dst)
+//	}
+//
+//	func (m *myValidator) Register(name string, fn func(reflect.Value, string) error) {
+//	    // Custom registration or no-op
+//	}
+//
+//	app := zerohttp.New(config.Config{Validator: &myValidator{v: validator.New()}})
+type Validator interface {
+	// Struct validates a struct using `validate` struct tags.
+	// It returns an error containing all validation failures, or nil if valid.
+	Struct(dst any) error
+
+	// Register adds a custom validation function with the given name.
+	// The name can be used in struct tags like `validate:"customName"`.
+	Register(name string, fn func(reflect.Value, string) error)
 }
 
 // ============================================================================

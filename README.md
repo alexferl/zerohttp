@@ -12,39 +12,30 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Response Rendering](#response-rendering)
-- [Request Binding](#request-binding)
-- [Path Parameters](#path-parameters)
-- [Query Parameters](#query-parameters)
-- [Middleware](#middleware)
-- [Route Groups](#route-groups)
-- [Static File Serving](#static-file-serving)
-    - [Static File Methods](#static-file-methods)
+- [Request Binding & Parameters](docs/BINDING.md)
+- [Validation](docs/VALIDATION.md)
 - [Error Handling](#error-handling)
-    - [Validation Errors](#validation-errors)
-- [Configuration](#configuration)
-- [Disabling Default Security](#disabling-default-security)
-- [Available Middlewares](#available-middlewares)
-- [Extensible Interfaces](#extensible-interfaces)
-- [Pluggable Features](#pluggable-features)
-    - [Auto-TLS](#auto-tls)
-    - [HTTP/3 Support](#http3-support)
-    - [SSE Support](#sse-support)
-    - [WebSocket Support](#websocket-support)
-    - [WebTransport Support](#webtransport-support)
+  - [Validation Errors](#validation-errors)
+- [Route Groups](#route-groups)
+- [Middleware](#middleware)
+  - [Available Middlewares](#available-middlewares)
+- [Graceful Shutdown](#graceful-shutdown)
+  - [Hook Execution Order](#hook-execution-order)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
-- [Graceful Shutdown](#graceful-shutdown)
-- [Testing Utilities](#testing-utilities)
-    - [Request Builder](#request-builder)
-    - [Response Assertions](#response-assertions)
-    - [Testing Handlers and Middleware](#testing-handlers-and-middleware)
-    - [Problem Details Assertions](#problem-details-assertions)
-    - [Template Testing](#template-testing)
-    - [Response Wrapper](#response-wrapper)
-- [Configuration Reference](#configuration-reference)
-    - [Server Configuration](#server-configuration)
-    - [Middleware Configuration](#middleware-configuration)
-    - [Shutdown Hooks](#shutdown-hooks)
+- [Static File Serving](#static-file-serving)
+  - [Static File Methods](#static-file-methods)
+  - [Fallback Behavior](#fallback-behavior)
+  - [API Prefix Exclusions](#api-prefix-exclusions)
+- [Extensibility](#extensibility)
+  - [Extensible Interfaces](#extensible-interfaces)
+  - [Pluggable Features](#pluggable-features)
+- [Testing Utilities](docs/TESTING.md)
+- [Configuration](#configuration)
+  - [Server Configuration](#server-configuration)
+  - [Middleware Configuration](#middleware-configuration)
+  - [Disabling Default Security](#disabling-default-security)
+  - [Shutdown Hooks](#shutdown-hooks)
 
 
 ## Features
@@ -54,12 +45,13 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Secure by Default**: Automatically applies essential security middlewares out of the box
 - **Response Rendering**: Built-in support for JSON, HTML, text, and file responses
 - **Request Binding**: JSON, form, multipart form, and query parameter parsing with struct tag binding
+- **Validation**: Built-in struct tag-based validation with 40+ validators
 - **Problem Details**: RFC 9457 Problem Details for HTTP APIs error responses
 - **Flexible Routing**: Method-based routing with route groups and parameter support
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
 - **HTTP/2 & HTTP/3**: Automatic HTTP/2 support for TLS; optional HTTP/3 via pluggable interface
-- **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, WebSocket, WebTransport, and SSE - bring your own implementations
+- **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, WebSocket, WebTransport, SSE, and Validator - bring your own implementations
 - **Server-Sent Events**: Built-in SSE support with event replay and broadcast hub for real-time server-to-client streaming
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
@@ -70,7 +62,6 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 ## Requirements
 
 - **Go 1.25 or later**
-
 
 ## Secure by Default
 
@@ -84,13 +75,11 @@ zerohttp applies security best practices automatically with these default middle
 
 These middlewares are enabled by default but can be customized or disabled as needed.
 
-
 ## Installation
 
 ```bash
 go get github.com/alexferl/zerohttp
 ```
-
 
 ## Quick Start
 
@@ -127,265 +116,126 @@ func main() {
 
 > **💡 More Examples:** Check out the [`examples/`](examples/) folder for complete working examples including template rendering, static file serving, middleware usage, advanced configurations and more.
 
-
 ## Response Rendering
 
 Clean, extensible interfaces for all response types:
 
 ```go
 // JSON responses (most common)
-zh.Render.JSON(w, 200, zh.M{"message": "Hello, World!"})
+zh.Render.JSON(w, http.StatusOK, zh.M{"message": "Hello, World!"})
 
 // Text responses
-zh.Render.Text(w, 200, "Plain text response")
+zh.Render.Text(w, http.StatusOK, "Plain text response")
 
 // HTML responses
-zh.Render.HTML(w, 200, "<h1>Welcome</h1>")
+zh.Render.HTML(w, http.StatusOK, "<h1>Welcome</h1>")
 
 // Template rendering with parsed templates
 tmpl := template.Must(template.ParseFS(templatesFS, "templates/*.html"))
-zh.R.Template(w, 200, tmpl, "index.html", zh.M{"title": "Welcome"})
+zh.Render.Template(w, http.StatusOK, tmpl, "index.html", zh.M{"title": "Welcome"})
 
 // Binary data
-zh.Render.Blob(w, 200, "image/png", pngData)
+zh.Render.Blob(w, http.StatusOK, "image/png", pngData)
 
 // Streaming responses
-zh.Render.Stream(w, 200, "text/plain", reader)
+zh.Render.Stream(w, http.StatusOK, "text/plain", reader)
 
 // File serving with proper headers
 zh.Render.File(w, r, "path/to/document.pdf")
 
 // RFC 9457 Problem Details
-problem := zh.NewProblemDetail(404, "User not found")
+problem := zh.NewProblemDetail(http.StatusUnprocessableEntity, "User not found")
 problem.Set("user_id", "123")
 zh.Render.ProblemDetail(w, problem)
 ```
 
 **Short alias available**: Use `zh.R` instead of `zh.Render` for brevity.
 
-## Request Binding
+## Request Binding & Parameters
 
-Structured request parsing with validation for JSON, form data, and multipart forms:
+Parse request bodies (JSON, forms, multipart) and extract path/query parameters. See [BINDING.md](docs/BINDING.md) for details.
 
-### JSON Binding
+## Validation
 
-```go
-app.POST("/api/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    var user struct {
-        Name  string `json:"name"`
-        Email string `json:"email"`
-        Age   int    `json:"age"`
-    }
-
-    // Bind JSON with unknown field validation
-    if err := zh.Bind.JSON(r.Body, &user); err != nil {
-        problem := zh.NewProblemDetail(400, "Invalid request body")
-        problem.Set("error", err.Error())
-        return zh.Render.ProblemDetail(w, problem)
-    }
-
-    // Process user...
-    return zh.Render.JSON(w, 201, user)
-}))
-```
-
-### Form Binding
+Built-in struct tag-based validation with 40+ validators:
 
 ```go
-app.POST("/login", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    var form struct {
-        Username string   `form:"username"`
-        Password string   `form:"password"`
-        Remember bool     `form:"remember"`
-        Tags     []string `form:"tags"`       // Supports slices
-    }
-
-    // Bind application/x-www-form-urlencoded or query parameters
-    if err := zh.Bind.Form(r, &form); err != nil {
-        return zh.NewProblemDetail(400, err.Error()).Render(w)
-    }
-
-    // Process form data...
-    return zh.R.JSON(w, 200, zh.M{"user": form.Username})
-}))
-```
-
-### Multipart Form Binding (File Uploads)
-
-```go
-app.POST("/upload", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    var form struct {
-        Description string            `form:"description"`
-        Document    *zh.FileHeader    `form:"document"`    // Single file
-        Images      []*zh.FileHeader  `form:"images"`      // Multiple files
-    }
-
-    // Bind multipart/form-data with file uploads
-    // maxMemory controls how much is stored in memory vs temp files
-    if err := zh.Bind.MultipartForm(r, &form, 32<<20); err != nil {
-        return zh.NewProblemDetail(400, err.Error()).Render(w)
-    }
-
-    // Access uploaded files
-    if form.Document != nil {
-        file, err := form.Document.Open()
-        if err != nil {
-            return err
-        }
-        defer file.Close()
-
-        // Process file...
-    }
-
-    return zh.R.JSON(w, 200, zh.M{
-        "description": form.Description,
-        "files":       len(form.Images),
-    })
-}))
-```
-
-**Short alias available**: Use `zh.B` instead of `zh.Bind` for convenience.
-
-The JSON binder uses `json.Decoder` with `DisallowUnknownFields()` for stricter validation.
-Form binding supports automatic type conversion for int, uint, float, bool, and slice types.
-
-## Path Parameters
-
-Type-safe path parameter extraction with generic support:
-
-```go
-// Basic string extraction
-app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    id := zh.Param(r, "id")  // Returns string
-    return zh.R.JSON(w, 200, zh.M{"user_id": id})
-}))
-
-// Typed extraction with error handling
-app.GET("/items/{itemID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    itemID, err := zh.ParamAs[int](r, "itemID")
-    if err != nil {
-        return zh.R.ProblemDetail(w, zh.NewProblemDetail(400, "Invalid itemID"))
-    }
-    return zh.R.JSON(w, 200, zh.M{"item_id": itemID})
-}))
-
-// Multiple parameters
-app.GET("/users/{userID}/posts/{postID}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    userID, _ := zh.ParamAs[int](r, "userID")
-    postID, _ := zh.ParamAs[int](r, "postID")
-    return zh.R.JSON(w, 200, zh.M{"user_id": userID, "post_id": postID})
-}))
-
-// With default value (returns default if param missing or invalid)
-app.GET("/products/{category}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    category := zh.ParamOrDefault(r, "category", "all")
-    return zh.R.JSON(w, 200, zh.M{"category": category})
-}))
-```
-
-**Available Functions:**
-
-- `Param(r, "name")` - Extract parameter as string
-- `ParamAs[T](r, "name")` - Extract and convert to type T (int, int64, uint, float64, bool, etc.)
-- `ParamAsOrDefault[T](r, "name", defaultVal)` - Extract with fallback value
-- `ParamOrDefault(r, "name", "default")` - String extraction with fallback
-
-**Supported Types:** `string`, `int`, `int8`, `int16`, `int32`, `int64`, `uint`, `uint8`, `uint16`, `uint32`, `uint64`, `float32`, `float64`, `bool`
-
-
-## Query Parameters
-
-Structured query parameter binding with struct tags and type-safe extraction:
-
-```go
-// Struct-based binding
-app.GET("/search", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    var req struct {
-        Query    string   `query:"q"`
-        Category string   `query:"category"`
-        Tags     []string `query:"tags"`      // Supports multiple values
-        Page     int      `query:"page"`
-        Limit    int      `query:"limit"`
-        IsActive *bool    `query:"is_active"` // Pointer = optional
-    }
-
-    if err := zh.Bind.Query(r, &req); err != nil {
-        return zh.NewProblemDetail(400, err.Error()).Render(w)
-    }
-
-    // Set defaults
-    if req.Page < 1 {
-        req.Page = 1
-    }
-    if req.Limit < 1 {
-        req.Limit = 20
-    }
-
-    return zh.R.JSON(w, 200, zh.M{
-        "query":    req.Query,
-        "category": req.Category,
-        "tags":     req.Tags,
-        "page":     req.Page,
-    })
-}))
-
-// Embedded structs for reusable pagination
-type Pagination struct {
-    Page  int `query:"page"`
-    Limit int `query:"limit"`
+type CreateUserRequest struct {
+    Name  string `json:"name" validate:"required,min=2,max=50"`
+    Email string `json:"email" validate:"required,email"`
+    Age   int    `json:"age" validate:"min=13,max=120"`
 }
 
-type ListRequest struct {
-    Pagination        // Embeds page, limit fields
-    Search string `query:"search"`
-}
-
-app.GET("/items", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    var req ListRequest
-    if err := zh.B.Query(r, &req); err != nil {
-        return err
+app.POST("/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    var req CreateUserRequest
+    if err := zh.Bind.JSON(r, &req); err != nil {
+        return err // Automatic Problem Details response
     }
-    return zh.R.JSON(w, 200, req)
+
+    if err := zh.Validate.Struct(&req); err != nil {
+        return err // Automatic validation error response
+    }
+
+    // Process valid request...
+    return zh.Render.JSON(w, http.StatusCreate, req)
 }))
 ```
 
-### Individual Parameter Extraction
+See [VALIDATION.md](docs/VALIDATION.md) for full documentation including all validators, custom validators, and advanced usage.
 
-For simple cases, extract individual parameters with type conversion:
+## Error Handling
+
+Built-in support for RFC 9457 Problem Details:
 
 ```go
-app.GET("/extract", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    // Extract with type conversion and error handling
-    userID, err := zh.QueryParamAs[int](r, "user_id")
-    if err != nil {
-        return zh.NewProblemDetail(400, "Invalid user_id").Render(w)
-    }
-
-    // Extract with default value
-    page := zh.QueryParamAsOrDefault(r, "page", 1)
-    limit := zh.QueryParamAsOrDefault(r, "limit", 20)
-
-    // Simple string extraction
-    sort := zh.QueryParam(r, "sort") // Empty string if missing
-
-    return zh.R.JSON(w, 200, zh.M{
-        "user_id": userID,
-        "page":    page,
-        "limit":   limit,
-        "sort":    sort,
-    })
+app.GET("/error", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    problem := zh.NewProblemDetail(http.StatusUnprocessableEntity, "Invalid request")
+    problem.Set("field", "email")
+    problem.Set("reason", "Email address is required")
+    return zh.Render.ProblemDetail(w, problem)
 }))
 ```
 
-**Available Functions:**
+### Validation Errors
 
-- `Bind.Query(r, &dst)` - Bind all query params to struct with `query` tags
-- `QueryParam(r, "name")` - Extract parameter as string
-- `QueryParamAs[T](r, "name")` - Extract and convert to type T
-- `QueryParamAsOrDefault[T](r, "name", defaultVal)` - Extract with fallback
+Built-in support for validation error responses:
 
-**Supported Types:** Same as Path Parameters - all primitives, slices, and pointers
+```go
+// Using default validation errors
+errors := []zh.ValidationError{
+    {Detail: "must be a valid email", Pointer: "#/email"},
+    {Detail: "must be at least 8 characters", Field: "password"},
+}
+// Using Render shortcut
+return zh.NewValidationProblemDetail("Validation failed", errors).Render(w)
 
+// Using custom error structures
+type CustomError struct {
+    Code    string `json:"code"`
+    Field   string `json:"field"`
+    Message string `json:"message"`
+}
+
+customErrors := []CustomError{
+    {Code: "INVALID_EMAIL", Field: "email", Message: "Email format is invalid"},
+}
+return zh.NewValidationProblemDetail("Validation failed", customErrors).Render(w)
+```
+
+## Route Groups
+
+Organize your routes with groups:
+
+```go
+app.Group(func(api zh.Router) {
+    api.Use(middleware.RequireAuth())
+
+    api.GET("/users", listUsers)
+    api.POST("/users", createUser)
+    api.PUT("/users/{id}", updateUser)
+    api.DELETE("/users/{id}", deleteUser)
+})
+```
 
 ## Middleware
 
@@ -417,198 +267,7 @@ app.GET("/admin", adminHandler,
 )
 ```
 
-
-## Route Groups
-
-Organize your routes with groups:
-
-```go
-app.Group(func(api zh.Router) {
-    api.Use(middleware.RequireAuth())
-
-    api.GET("/users", listUsers)
-    api.POST("/users", createUser)
-    api.PUT("/users/{id}", updateUser)
-    api.DELETE("/users/{id}", deleteUser)
-})
-```
-
-
-## Static File Serving
-
-Serve static files from embedded filesystems or directories with configurable fallback behavior:
-
-```go
-//go:embed static
-var staticFiles embed.FS
-
-//go:embed dist
-var appFiles embed.FS
-
-app := zh.New()
-
-// API routes
-app.GET("/api/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    return zh.R.JSON(w, 200, zh.M{"status": "healthy"})
-}))
-
-// Serve static assets (CSS, JS, images) from embedded FS
-app.Files("/static/", staticFiles, "static")
-
-// Serve files from directory (uploads, user content)
-app.FilesDir("/uploads/", "./uploads")
-
-// Serve SPA with client-side routing fallback (fallback=true)
-app.Static(appFiles, "dist", true, "/api/")
-
-// Serve static website with custom 404 handler (fallback=false)
-app.Static(appFiles, "dist", false, "/api/")
-
-// Or serve from directory for development
-// app.StaticDir("./dist", true, "/api/")
-// app.StaticDir("./dist", false, "/api/")
-
-log.Fatal(app.Start())
-```
-
-
-### Static File Methods
-
-- **`Files(prefix, embedFS, dir)`** - Serves files from embedded FS without fallback (returns 404 for missing files)
-- **`FilesDir(prefix, dir)`** - Serves files from directory without fallback (returns 404 for missing files)
-- **`Static(embedFS, dir, fallback, apiPrefixes...)`** - Serves web app from embedded FS with configurable fallback:
-    - `fallback: true` - Falls back to index.html for missing files (SPA behavior)
-    - `fallback: false` - Uses custom NotFound handler for missing files (static site behavior)
-- **`StaticDir(dir, fallback, apiPrefixes...)`** - Serves web app from directory with configurable fallback behavior
-
-
-### Fallback Behavior
-
-**With `fallback: true` (Single Page Applications):**
-
-- Missing files return `index.html` to support client-side routing
-- Perfect for React, Vue, Angular apps
-
-**With `fallback: false` (Static Websites):**
-
-- Missing files use your custom `NotFound` handler
-- Perfect for traditional static websites with custom 404 pages
-
-
-### API Prefix Exclusions
-
-The `Static` methods support API prefix exclusions - requests matching specified prefixes return 404 instead of falling back to index.html, allowing API and static routes to coexist cleanly:
-
-```go
-// API routes return proper 404s, SPA routes fallback to index.html
-app.Static(appFiles, "dist", true, "/api/", "/auth/", "/uploads/")
-```
-
-This prevents API endpoints from accidentally serving your SPA's index.html when routes don't exist.
-
-
-## Error Handling
-
-Built-in support for RFC 9457 Problem Details:
-
-```go
-app.GET("/error", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-    problem := zh.NewProblemDetail(400, "Invalid request")
-    problem.Set("field", "email")
-    problem.Set("reason", "Email address is required")
-    return zh.R.ProblemDetail(w, problem)
-}))
-```
-
-
-### Validation Errors
-
-Built-in support for validation error responses:
-
-```go
-// Using default validation errors
-errors := []zh.ValidationError{
-    {Detail: "must be a valid email", Pointer: "#/email"},
-    {Detail: "must be at least 8 characters", Field: "password"},
-}
-// Using Render shortcut
-return zh.NewValidationProblemDetail("Validation failed", errors).Render(w)
-
-// Using custom error structures
-type CustomError struct {
-    Code    string `json:"code"`
-    Field   string `json:"field"`
-    Message string `json:"message"`
-}
-
-customErrors := []CustomError{
-    {Code: "INVALID_EMAIL", Field: "email", Message: "Email format is invalid"},
-}
-return zh.NewValidationProblemDetail("Validation failed", customErrors).Render(w)
-```
-
-
-## Configuration
-
-Flexible configuration system with struct-based config:
-
-```go
-app := zh.New(config.Config{
-    // Server configuration
-    Addr: ":8080",
-    Server: &http.Server{
-        ReadTimeout:  10 * time.Second,
-        WriteTimeout: 10 * time.Second,
-    },
-    TLSAddr: ":8443",
-    TLSServer: &http.Server{
-        ReadTimeout:  10 * time.Second,
-        WriteTimeout: 10 * time.Second,
-    },
-    CertFile: "cert.pem",
-    KeyFile:  "key.pem",
-    Logger:   myCustomLogger,
-
-    // Configure default middlewares
-    RequestBodySize: config.RequestBodySizeConfig{
-        MaxBytes: 10 * 1024 * 1024, // 10MB
-    },
-    RequestID: config.RequestIDConfig{
-        Header: "X-Request-ID",
-    },
-    Recover: config.RecoverConfig{
-        StackSize:         8192,
-        EnableStackTrace: true,
-    },
-    SecurityHeaders: config.SecurityHeadersConfig{
-        CSP:           "default-src 'self'",
-        XFrameOptions: "SAMEORIGIN",
-        HSTS: config.HSTSConfig{
-            MaxAge:   31536000, // 1 year
-            Preload:  true,
-        },
-    },
-})
-```
-
-
-## Disabling Default Security
-
-If you need to disable default middlewares:
-
-```go
-app := zh.New(config.Config{
-    DisableDefaultMiddlewares: true, // Disable all defaults
-    // Or provide custom defaults
-    DefaultMiddlewares: []func(http.Handler) http.Handler{
-        middleware.RequestID(config.DefaultRequestIDConfig),
-        middleware.CORS(config.DefaultCORSConfig),
-    },
-})
-```
-
-
-## Available Middlewares
+### Available Middlewares
 
 - **Authentication**: Basic Auth
 - **Security**: CORS, Security Headers, Request Body Size Limits
@@ -648,374 +307,6 @@ middleware.SecurityHeaders(config.SecurityHeadersConfig{
     },
 })
 ```
-
-
-## Extensible Interfaces
-
-Both rendering and binding use interfaces, making them easy to customize:
-
-```go
-// Custom renderer
-type MyRenderer struct{}
-
-func (r *MyRenderer) JSON(w http.ResponseWriter, code int, data any) error {
-    // Custom JSON rendering logic
-    w.Header().Set("X-Custom-JSON", "true")
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(code)
-    return json.NewEncoder(w).Encode(data)
-}
-
-// Replace default
-zh.Render = &MyRenderer{}
-
-// Custom binder
-type MyBinder struct{}
-
-func (b *MyBinder) JSON(r io.Reader, dst any) error {
-    // Custom JSON binding logic
-    decoder := json.NewDecoder(r)
-    decoder.UseNumber() // Use json.Number instead of float64
-    return decoder.Decode(dst)
-}
-
-func (b *MyBinder) Form(r *http.Request, dst any) error {
-    // Custom form binding logic
-    return nil
-}
-
-func (b *MyBinder) MultipartForm(r *http.Request, dst any, maxMemory int64) error {
-    // Custom multipart form binding logic
-    return nil
-}
-
-func (b *MyBinder) Query(r *http.Request, dst any) error {
-    // Custom query parameter binding logic
-    return nil
-}
-
-// Replace default
-zh.Bind = &MyBinder{}
-```
-
-
-## Pluggable Features
-
-zerohttp provides several pluggable features that extend the core functionality through interfaces.
-These features require external dependencies and are opt-in:
-
-- **Auto-TLS** - Automatic certificate management (e.g., Let's Encrypt)
-- **HTTP/3** - HTTP/3 support over QUIC (HTTP/2 is enabled by default for TLS)
-- **WebTransport** - Low-latency bidirectional communication over HTTP/3
-
-Each feature uses a pluggable interface pattern - you bring your own implementation.
-
-### Interface Overview
-
-zerohttp defines minimal interfaces for each pluggable feature. Implement these interfaces
-or use existing implementations from the Go ecosystem:
-
-```go
-// AutocertManager - Automatic certificate management
-interface {
-    GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error)
-    HTTPHandler(fallback http.Handler) http.Handler
-}
-
-// HTTP3Server - HTTP/3 over QUIC support
-interface {
-    ListenAndServeTLS(certFile, keyFile string) error
-    Shutdown(ctx context.Context) error
-    Close() error
-}
-
-// WebTransportServer - WebTransport over HTTP/3
-interface {
-    ListenAndServeTLS(certFile, keyFile string) error
-    Close() error
-}
-```
-
-All pluggable features are configured via the Config struct:
-
-```go
-app := zh.New(config.Config{
-    AutocertManager:    myCertManager,
-    HTTP3Server:        myH3Server,
-    WebTransportServer: myWTServer,
-})
-```
-
-### Auto-TLS
-
-AutoTLS provides automatic certificate management via a pluggable interface. You can use
-[golang.org/x/crypto/acme/autocert](https://pkg.go.dev/golang.org/x/crypto/acme/autocert)
-for Let's Encrypt, or any other provider that implements the `AutocertManager` interface:
-
-```go
-import (
-    "golang.org/x/crypto/acme/autocert"
-)
-
-// Create autocert manager (implements config.AutocertManager interface)
-manager := &autocert.Manager{
-    Cache:      autocert.DirCache("/tmp/certs"),
-    Prompt:     autocert.AcceptTOS,
-    HostPolicy: autocert.HostWhitelist("example.com", "www.example.com"),
-}
-
-app := zh.New(config.Config{
-    AutocertManager: manager,
-})
-
-// StartAutoTLS starts HTTP (for ACME challenges) and HTTPS servers
-app.StartAutoTLS()
-```
-
-
-### HTTP/3 Support
-
-zerohttp supports HTTP/3 through a pluggable interface. Users can inject their own HTTP/3
-implementation (e.g., [quic-go/http3](https://github.com/quic-go/quic-go)).
-
-#### Basic HTTP/3 with TLS certificates
-
-```go
-import "github.com/quic-go/quic-go/http3"
-
-// Create your zerohttp server
-app := zh.New()
-
-// Add routes
-app.GET("/", handler)
-
-// Create HTTP/3 server using quic-go
-h3Server := &http3.Server{
-    Addr:    ":443",
-    Handler: app,
-}
-
-// Inject the HTTP/3 server
-app.SetHTTP3Server(h3Server)
-
-// Start HTTPS - HTTP/3 starts automatically!
-app.StartTLS("cert.pem", "key.pem")
-```
-
-
-### SSE Support
-
-Server-Sent Events (SSE) provides real-time unidirectional server-to-client streaming over HTTP.
-zerohttp includes a built-in stdlib implementation with support for event replay and broadcast hubs.
-
-```go
-import (
-    "time"
-
-    zh "github.com/alexferl/zerohttp"
-    "github.com/alexferl/zerohttp/config"
-)
-
-func main() {
-    app := zh.New(config.Config{
-        SSEProvider: zh.NewDefaultProvider(),
-    })
-
-    app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-        stream, err := app.SSEProvider().NewSSE(w, r)
-        if err != nil { return err }
-        defer stream.Close()
-
-        for i := 0; i < 10; i++ {
-            stream.Send(zh.SSEEvent{Name: "message", Data: []byte("hello")})
-            time.Sleep(1 * time.Second)
-        }
-        return nil
-    }))
-```
-
-See [`examples/sse/`](examples/sse/) for a complete example with event replay and broadcast hub.
-
-
-### WebSocket Support
-
-WebSocket provides real-time bidirectional communication over TCP. zerohttp supports WebSocket
-through a pluggable interface - you bring your own WebSocket library (e.g., [gorilla/websocket](https://github.com/gorilla/websocket),
-[nhooyr/websocket](https://github.com/nhooyr/websocket)).
-
-```go
-import (
-    "github.com/gorilla/websocket"
-    zh "github.com/alexferl/zerohttp"
-    "github.com/alexferl/zerohttp/config"
-)
-
-// Wrap gorilla/websocket to implement config.WebSocketUpgrader
-type myUpgrader struct {
-    upgrader *websocket.Upgrader
-}
-
-func (m *myUpgrader) Upgrade(w http.ResponseWriter, r *http.Request) (config.WebSocketConn, error) {
-    conn, err := m.upgrader.Upgrade(w, r, nil)
-    if err != nil {
-        return nil, err
-    }
-    return &myConn{conn: conn}, nil
-}
-
-type myConn struct {
-    conn *websocket.Conn
-}
-
-func (c *myConn) ReadMessage() (int, []byte, error)  { return c.conn.ReadMessage() }
-func (c *myConn) WriteMessage(mt int, data []byte) error { return c.conn.WriteMessage(mt, data) }
-func (c *myConn) Close() error                        { return c.conn.Close() }
-func (c *myConn) RemoteAddr() net.Addr               { return c.conn.RemoteAddr() }
-
-func main() {
-    // Create server with WebSocket support
-    gupgrader := &websocket.Upgrader{
-        CheckOrigin: func(r *http.Request) bool { return true },
-    }
-
-    app := zh.New(config.Config{
-        WebSocketUpgrader: &myUpgrader{upgrader: gupgrader},
-    })
-
-    // WebSocket endpoint
-    app.GET("/ws", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-        ws, err := app.WebSocketUpgrader().Upgrade(w, r)
-        if err != nil {
-            return err
-        }
-        defer ws.Close()
-
-        // Echo loop
-        for {
-            mt, msg, err := ws.ReadMessage()
-            if err != nil {
-                break
-            }
-            if err := ws.WriteMessage(mt, msg); err != nil {
-                break
-            }
-        }
-        return nil
-    }))
-
-    app.ListenAndServe()
-}
-```
-
-> **💡 Complete Example:** See [`examples/websocket/`](examples/websocket/) for a full working server with HTML client.
-
-
-### WebTransport Support
-
-WebTransport provides low-latency, bidirectional communication over HTTP/3:
-
-```go
-import (
-    "github.com/quic-go/quic-go/http3"
-    webtransport "github.com/quic-go/webtransport-go"
-)
-
-func main() {
-    app := zh.New()
-
-    // Create HTTP/3 server
-    h3 := &http3.Server{Addr: ":8443", Handler: app}
-
-    // Create WebTransport server
-    wtServer := &webtransport.Server{
-        H3:          h3,
-        CheckOrigin: func(r *http.Request) bool { return true },
-    }
-    webtransport.ConfigureHTTP3Server(h3)
-
-    // Set WebTransport server - zerohttp starts it automatically
-    app.SetWebTransportServer(wtServer)
-
-    // Register WebTransport endpoint
-    app.CONNECT("/wt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        sess, err := wtServer.Upgrade(w, r)
-        if err != nil {
-            w.WriteHeader(http.StatusInternalServerError)
-            return
-        }
-        go handleSession(sess) // Handle streams/datagrams
-    }))
-
-    app.ListenAndServeTLS("cert.pem", "key.pem")
-}
-
-```
-
-> **💡 Complete Example:** See [`examples/webtransport/`](examples/webtransport/) for a full working server with HTML client.
-
-
-## Health Checks
-
-Add Kubernetes-compatible health check endpoints with minimal setup:
-
-```go
-import (
-    "log"
-    "net/http"
-
-    zh "github.com/alexferl/zerohttp"
-    "github.com/alexferl/zerohttp/healthcheck"
-)
-
-func main() {
-    app := zh.New()
-
-    // Add default health endpoints: /livez, /readyz, /startupz
-    healthcheck.New(app, healthcheck.DefaultConfig)
-
-    // Or customize endpoints and handlers
-    cfg := healthcheck.DefaultConfig
-    cfg.LivenessEndpoint = "/health/live"
-    cfg.ReadinessEndpoint = "/health/ready"
-    cfg.ReadinessHandler = func(w http.ResponseWriter, r *http.Request) error {
-        // Check database connections, dependencies, etc.
-        if !isAppReady() {
-            return zh.R.Text(w, http.StatusServiceUnavailable, "not ready")
-        }
-        return zh.R.Text(w, http.StatusOK, "ready")
-    }
-    cfg.StartupEndpoint = "/health/startup"
-    healthcheck.New(app, cfg)
-
-    log.Fatal(app.Start())
-}
-```
-
-The health check package provides three standard endpoints:
-
-- **`/livez`** - Liveness probe (is the app running?)
-- **`/readyz`** - Readiness probe (is the app ready to handle traffic?)
-- **`/startupz`** - Startup probe (has the app finished initializing?)
-
-
-## Circuit Breaker
-
-Prevent cascading failures with configurable circuit breaker middleware:
-
-```go
-// Basic circuit breaker - breaks after 5 failures, recovers after 30s
-app.Use(middleware.CircuitBreaker())
-
-// Custom configuration
-app.Use(middleware.CircuitBreaker(config.CircuitBreakerConfig{
-    FailureThreshold:  3,                // Break after 3 failures
-    RecoveryTimeout:   10 * time.Second, // Try recovery after 10s
-    OpenStatusCode:    503,              // Return 503 when open
-}))
-```
-
-The circuit breaker operates in three states: **Closed** (normal), **Open** (blocked), and **Half-Open** (testing recovery). It prevents cascading failures when downstream services are unavailable.
-
 
 ## Graceful Shutdown
 
@@ -1086,196 +377,210 @@ app.RegisterShutdownHook("metrics", func(ctx context.Context) error {
 Hook errors are logged but do not stop the shutdown process. Context errors (`context.Canceled` or `context.DeadlineExceeded`) from pre-shutdown hooks will abort shutdown early.
 
 
-## Testing Utilities
+## Health Checks
 
-zerohttp includes a `zhtest` package with helpers for testing HTTP handlers and middleware:
+Add Kubernetes-compatible health check endpoints with minimal setup:
 
 ```go
 import (
+    "log"
     "net/http"
-    "testing"
 
     zh "github.com/alexferl/zerohttp"
-    "github.com/alexferl/zerohttp/zhtest"
+    "github.com/alexferl/zerohttp/healthcheck"
 )
 
-func TestGetUser(t *testing.T) {
-    router := zh.NewRouter()
-    router.GET("/users/:id", getUserHandler)
+func main() {
+    app := zh.New()
 
-    // Build request fluently
-    req := zhtest.NewRequest("GET", "/users/123").
-        WithHeader("Authorization", "Bearer token").
-        Build()
+    // Add default health endpoints: /livez, /readyz, /startupz
+    healthcheck.New(app, healthcheck.DefaultConfig)
 
-    // Serve and assert
-    w := zhtest.Serve(router, req)
-    zhtest.AssertWith(t, w).
-        Status(http.StatusOK).
-        Header("Content-Type", zh.MIMEApplicationJSON).
-        JSONPathEqual("user.name", "John")
+    // Or customize endpoints and handlers
+    cfg := healthcheck.DefaultConfig
+    cfg.LivenessEndpoint = "/health/live"
+    cfg.ReadinessEndpoint = "/health/ready"
+    cfg.ReadinessHandler = func(w http.ResponseWriter, r *http.Request) error {
+        // Check database connections, dependencies, etc.
+        if !isAppReady() {
+            return zh.Render.Text(w, http.StatusServiceUnavailable, "not ready")
+        }
+        return zh.Render.Text(w, http.StatusOK, "ready")
+    }
+    cfg.StartupEndpoint = "/health/startup"
+    healthcheck.New(app, cfg)
+
+    log.Fatal(app.Start())
 }
 ```
 
-### Request Builder
+The health check package provides three standard endpoints:
 
-Build test requests fluently:
+- **`/livez`** - Liveness probe (is the app running?)
+- **`/readyz`** - Readiness probe (is the app ready to handle traffic?)
+- **`/startupz`** - Startup probe (has the app finished initializing?)
+
+
+## Circuit Breaker
+
+Prevent cascading failures with configurable circuit breaker middleware:
 
 ```go
-// Simple GET request
-req := zhtest.NewRequest("GET", "/users").Build()
+// Basic circuit breaker - breaks after 5 failures, recovers after 30s
+app.Use(middleware.CircuitBreaker())
 
-// With query parameters
-req := zhtest.NewRequest("GET", "/users").
-    WithQuery("page", "1").
-    WithQuery("limit", "10").
-    Build()
-
-// With headers
-req := zhtest.NewRequest("GET", "/api/data").
-    WithHeader("Authorization", "Bearer token").
-    WithHeader("X-Request-ID", "abc123").
-    Build()
-
-// With JSON body
-req := zhtest.NewRequest("POST", "/users").
-    WithJSON(zh.M{"name": "John", "email": "john@example.com"}).
-    Build()
-
-// With form data
-req := zhtest.NewRequest("POST", "/login").
-    WithForm(url.Values{"username": []string{"john"}}).
-    Build()
-
-// With cookies
-req := zhtest.NewRequest("GET", "/profile").
-    WithCookie(&http.Cookie{Name: "session", Value: "abc123"}).
-    Build()
+// Custom configuration
+app.Use(middleware.CircuitBreaker(config.CircuitBreakerConfig{
+    FailureThreshold:  3,                // Break after 3 failures
+    RecoveryTimeout:   10 * time.Second, // Try recovery after 10s
+    OpenStatusCode:    503,              // Return 503 when open
+}))
 ```
 
-### Response Assertions
+The circuit breaker operates in three states: **Closed** (normal), **Open** (blocked), and **Half-Open** (testing recovery). It prevents cascading failures when downstream services are unavailable.
 
-Assert on response status, headers, body, and JSON:
+## Static File Serving
+
+Serve static files from embedded filesystems or directories with configurable fallback behavior:
 
 ```go
-w := zhtest.Serve(handler, req)
+//go:embed static
+var staticFiles embed.FS
 
-// Status assertions
-zhtest.AssertWith(t, w).Status(200)
-zhtest.AssertWith(t, w).StatusBetween(200, 299)
-zhtest.AssertWith(t, w).IsSuccess()
-zhtest.AssertWith(t, w).IsClientError()
-zhtest.AssertWith(t, w).IsServerError()
+//go:embed dist
+var appFiles embed.FS
 
-// Header assertions
-zhtest.AssertWith(t, w).
-    Header("Content-Type", "application/json").
-    HeaderContains("Content-Type", "json").
-    HeaderExists("X-Request-ID")
+app := zh.New()
 
-// Body assertions
-zhtest.AssertWith(t, w).Body("exact match")
-zhtest.AssertWith(t, w).BodyContains("partial")
-zhtest.AssertWith(t, w).BodyEmpty()
-zhtest.AssertWith(t, w).BodyNotEmpty()
+// API routes
+app.GET("/api/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    return zh.Render.JSON(w, 200, zh.M{"status": "healthy"})
+}))
 
-// JSON assertions
-var user User
-zhtest.AssertWith(t, w).JSON(&user)
-zhtest.AssertWith(t, w).JSONEquals(zh.M{"name": "John"})
-zhtest.AssertWith(t, w).JSONPathEqual("user.name", "John")
+// Serve static assets (CSS, JS, images) from embedded FS
+app.Files("/static/", staticFiles, "static")
+
+// Serve files from directory (uploads, user content)
+app.FilesDir("/uploads/", "./uploads")
+
+// Serve SPA with client-side routing fallback (fallback=true)
+app.Static(appFiles, "dist", true, "/api/")
+
+// Serve static website with custom 404 handler (fallback=false)
+app.Static(appFiles, "dist", false, "/api/")
+
+// Or serve from directory for development
+// app.StaticDir("./dist", true, "/api/")
+// app.StaticDir("./dist", false, "/api/")
+
+log.Fatal(app.Start())
 ```
 
-### Testing Handlers and Middleware
+### Static File Methods
+
+- **`Files(prefix, embedFS, dir)`** - Serves files from embedded FS without fallback (returns 404 for missing files)
+- **`FilesDir(prefix, dir)`** - Serves files from directory without fallback (returns 404 for missing files)
+- **`Static(embedFS, dir, fallback, apiPrefixes...)`** - Serves web app from embedded FS with configurable fallback:
+    - `fallback: true` - Falls back to index.html for missing files (SPA behavior)
+    - `fallback: false` - Uses custom NotFound handler for missing files (static site behavior)
+- **`StaticDir(dir, fallback, apiPrefixes...)`** - Serves web app from directory with configurable fallback behavior
+
+
+### Fallback Behavior
+
+**With `fallback: true` (Single Page Applications):**
+
+- Missing files return `index.html` to support client-side routing
+- Perfect for React, Vue, Angular apps
+
+**With `fallback: false` (Static Websites):**
+
+- Missing files use your custom `NotFound` handler
+- Perfect for traditional static websites with custom 404 pages
+
+
+### API Prefix Exclusions
+
+The `Static` methods support API prefix exclusions - requests matching specified prefixes return 404 instead of falling back to index.html, allowing API and static routes to coexist cleanly:
 
 ```go
-// Test handler directly
-handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-    zh.R.JSON(w, 200, zh.M{"ok": true})
-})
+// API routes return proper 404s, SPA routes fallback to index.html
+app.Static(appFiles, "dist", true, "/api/", "/auth/", "/uploads/")
+```
 
-req := zhtest.NewRequest("GET", "/").Build()
-w := zhtest.TestHandler(handler, req)
-zhtest.AssertWith(t, w).Status(200)
+This prevents API endpoints from accidentally serving your SPA's index.html when routes don't exist.
 
-// Test middleware
-mw := func(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("X-Custom", "value")
-        next.ServeHTTP(w, r)
-    })
+## Extensibility
+
+zerohttp provides multiple ways to customize its behavior through interfaces.
+
+### Extensible Interfaces
+
+Replace core components by implementing interfaces:
+
+```go
+// Custom renderer
+type MyRenderer struct{}
+
+func (r *MyRenderer) JSON(w http.ResponseWriter, code int, data any) error {
+    // Custom JSON rendering logic
+    w.Header().Set("X-Custom-JSON", "true")
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(code)
+    return json.NewEncoder(w).Encode(data)
 }
 
-req := zhtest.NewRequest("GET", "/").Build()
-w := zhtest.TestMiddleware(mw, req)
-zhtest.AssertWith(t, w).Header("X-Custom", "value")
+// Replace default
+zh.Render = &MyRenderer{}
 
-// Test middleware chain
-mw1 := func(next http.Handler) http.Handler { /* ... */ }
-mw2 := func(next http.Handler) http.Handler { /* ... */ }
+// Custom binder
+type MyBinder struct{}
 
-req := zhtest.NewRequest("GET", "/").Build()
-w := zhtest.TestMiddlewareChain([]func(http.Handler) http.Handler{mw1, mw2}, req)
+func (b *MyBinder) JSON(r io.Reader, dst any) error {
+    decoder := json.NewDecoder(r)
+    decoder.UseNumber() // Use json.Number instead of float64
+    return decoder.Decode(dst)
+}
+
+func (b *MyBinder) Form(r *http.Request, dst any) error { return nil }
+func (b *MyBinder) MultipartForm(r *http.Request, dst any, maxMemory int64) error { return nil }
+func (b *MyBinder) Query(r *http.Request, dst any) error { return nil }
+
+// Replace default
+zh.Bind = &MyBinder{}
+
+// Custom validator
+type MyValidator struct{}
+
+func (v *MyValidator) Struct(dst any) error {
+    // Custom validation logic
+    return nil
+}
+
+func (v *MyValidator) Register(name string, fn func(reflect.Value, string) error) {
+    // Custom validator registration
+}
+
+// Replace default
+zh.Validate = &MyValidator{}
 ```
 
-### Problem Details Assertions
+### Pluggable Features
 
-```go
-// Test RFC 9457 Problem Detail responses
-zhtest.AssertWith(t, w).
-    IsProblemDetail().
-    ProblemDetailStatus(422).
-    ProblemDetailTitle("Unprocessable Entity").
-    ProblemDetailDetail("Validation failed").
-    ProblemDetailType("https://api.example.com/errors/validation").
-    ProblemDetailExtension("errors", []string{"field required"})
-```
+Optional features that require external dependencies. See [PLUGGABLE.md](docs/PLUGGABLE.md) for full documentation and examples.
 
-### Template Testing
+- **Validator** - External validation libraries (e.g., go-playground/validator)
+- **Auto-TLS** - Let's Encrypt automatic certificates
+- **HTTP/3** - QUIC support (e.g., quic-go)
+- **Server-Sent Events (SSE)** - Real-time streaming
+- **WebSocket** - Bidirectional communication (e.g., gorilla/websocket)
+- **WebTransport** - HTTP/3 bidirectional streams (e.g., quic-go/webtransport-go)
 
-```go
-// Test template rendering
-w := zhtest.TestTemplate(`<h1>{{.Title}}</h1>`, map[string]string{"Title": "Hello"})
-zhtest.AssertTemplateWith(t, w).
-    Contains("<h1>Hello</h1>").
-    HasTitle("Page Title")
+## Testing Utilities
 
-// Or use the renderer for complex templates
-tmpl := template.Must(template.New("test").Parse(templates))
-tr := zhtest.NewTemplateRenderer(tmpl)
-w := tr.Render("index.html", data)
-```
+The `zhtest` package provides fluent, chainable helpers for testing HTTP handlers and middleware. See [TESTING.md](docs/TESTING.md) for details.
 
-### Response Wrapper
-
-The `Response` wrapper provides helper methods for common checks:
-
-```go
-w := zhtest.ServeWithRecorder(handler, req)
-
-// Body access
-bodyStr := w.BodyString()
-bodyBytes := w.BodyBytes()
-
-// JSON decoding
-var result MyStruct
-err := w.JSON(&result)
-
-// Cookie access
-cookie := w.Cookie("session")
-cookieValue := w.CookieValue("session")
-
-// Header access
-headerValue := w.HeaderValue("Content-Type")
-
-// Status checks
-isSuccess := w.IsSuccess()
-isRedirect := w.IsRedirect()
-isClientError := w.IsClientError()
-isServerError := w.IsServerError()
-```
-
-## Configuration Reference
+## Configuration
 
 zerohttp uses struct-based configuration. Pass a `config.Config` struct to `zh.New()`:
 
@@ -1283,20 +588,34 @@ zerohttp uses struct-based configuration. Pass a `config.Config` struct to `zh.N
 
 ```go
 app := zh.New(config.Config{
+    // Server addresses
     Addr:                   ":8080",                    // HTTP server address
     TLSAddr:                ":8443",                    // HTTPS server address
+
+    // Custom server instances (optional)
     Server:                 &http.Server{...},          // Custom HTTP server instance
     TLSServer:              &http.Server{...},          // Custom HTTPS server instance
+
+    // Custom listeners (optional)
     Listener:               myListener,                  // Custom HTTP listener
     TLSListener:            myTLSListener,               // Custom HTTPS listener
+
+    // TLS certificates
     CertFile:               "cert.pem",                  // TLS certificate file path
     KeyFile:                "key.pem",                   // TLS key file path
+
+    // Logger and validator
     Logger:                 myLogger,                    // Custom logger instance
+    Validator:              myValidator,                 // Custom struct validator
+
+    // Pluggable features
     AutocertManager:        myCertManager,               // Let's Encrypt integration
     HTTP3Server:            myH3Server,                  // HTTP/3 server (e.g., quic-go)
     SSEProvider:            mySSEProvider,               // SSE provider for server-sent events
     WebSocketUpgrader:      myWSUpgrader,                // WebSocket upgrader
     WebTransportServer:     myWTServer,                  // WebTransport server
+
+    // Middleware options
     DisableDefaultMiddlewares: false,                    // Disable built-in middlewares
     DefaultMiddlewares:     []func(http.Handler) http.Handler{...}, // Custom middleware chain
 })
@@ -1329,6 +648,21 @@ app := zh.New(config.Config{
     RequestLogger: config.RequestLoggerConfig{
         LogErrors: true,
         Fields:    []string{"method", "uri", "status", "duration"},
+    },
+})
+```
+
+### Disabling Default Security
+
+If you need to disable default middlewares:
+
+```go
+app := zh.New(config.Config{
+    DisableDefaultMiddlewares: true, // Disable all defaults
+    // Or provide custom defaults
+    DefaultMiddlewares: []func(http.Handler) http.Handler{
+        middleware.RequestID(config.DefaultRequestIDConfig),
+        middleware.CORS(config.DefaultCORSConfig),
     },
 })
 ```

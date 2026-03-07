@@ -2,6 +2,8 @@ package zerohttp
 
 import (
 	"embed"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -29,8 +31,48 @@ func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h(w, r); err != nil {
+		// Handle validation and binding errors directly
+		// This ensures consistent behavior regardless of Recover middleware
+		if handleHandlerError(w, err) {
+			return
+		}
+		// For other errors, panic to let Recover middleware handle it
 		panic(fmt.Errorf("handler error: %w", err))
 	}
+}
+
+// handleHandlerError handles validation and binding errors.
+// Returns true if the error was handled, false otherwise.
+func handleHandlerError(w http.ResponseWriter, err error) bool {
+	// Check for validation errors (422)
+	var verr ValidationErrorer
+	if errors.As(err, &verr) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		response := map[string]any{
+			"title":  "Unprocessable Entity",
+			"status": http.StatusUnprocessableEntity,
+			"detail": "Validation failed",
+			"errors": verr.ValidationErrors(),
+		}
+		_ = json.NewEncoder(w).Encode(response)
+		return true
+	}
+
+	// Check for binding errors (400)
+	if strings.HasPrefix(err.Error(), "bind error: ") {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusBadRequest)
+		response := map[string]any{
+			"title":  "Bad Request",
+			"status": http.StatusBadRequest,
+			"detail": "Invalid request body",
+		}
+		_ = json.NewEncoder(w).Encode(response)
+		return true
+	}
+
+	return false
 }
 
 // headResponseWriter wraps a ResponseWriter and discards body writes for HEAD requests

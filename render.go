@@ -63,14 +63,14 @@ type defaultRenderer struct{}
 
 // JSON writes a JSON response with the given status code and data
 func (r *defaultRenderer) JSON(w http.ResponseWriter, statusCode int, data any) error {
-	w.Header().Set(HeaderContentType, MIMEApplicationJSON)
+	w.Header().Set(HeaderContentType, MIMEApplicationJSONCharset)
 	w.WriteHeader(statusCode)
 	return json.NewEncoder(w).Encode(data)
 }
 
 // Text writes a plain text response with the given status code and data
 func (r *defaultRenderer) Text(w http.ResponseWriter, statusCode int, data string) error {
-	w.Header().Set(HeaderContentType, MIMETextPlain)
+	w.Header().Set(HeaderContentType, MIMETextPlainCharset)
 	w.WriteHeader(statusCode)
 	_, err := w.Write([]byte(data))
 	return err
@@ -78,7 +78,7 @@ func (r *defaultRenderer) Text(w http.ResponseWriter, statusCode int, data strin
 
 // HTML writes an HTML response with the given status code and data
 func (r *defaultRenderer) HTML(w http.ResponseWriter, statusCode int, data string) error {
-	w.Header().Set(HeaderContentType, MIMETextHTML)
+	w.Header().Set(HeaderContentType, MIMETextHTMLCharset)
 	w.WriteHeader(statusCode)
 	_, err := w.Write([]byte(data))
 	return err
@@ -86,7 +86,7 @@ func (r *defaultRenderer) HTML(w http.ResponseWriter, statusCode int, data strin
 
 // Template writes an HTML response with the given status code, rendered from the specified template and data
 func (r *defaultRenderer) Template(w http.ResponseWriter, code int, tmpl *template.Template, name string, data any) error {
-	w.Header().Set(HeaderContentType, MIMETextHTML)
+	w.Header().Set(HeaderContentType, MIMETextHTMLCharset)
 	w.WriteHeader(code)
 	return tmpl.ExecuteTemplate(w, name, data)
 }
@@ -134,7 +134,7 @@ func (r *defaultRenderer) File(w http.ResponseWriter, req *http.Request, filenam
 	contentType := mime.TypeByExtension(filepath.Ext(filename))
 	// Use charset-aware constants for known types
 	if contentType == "application/json" {
-		contentType = MIMEApplicationJSON
+		contentType = MIMEApplicationJSONCharset
 	}
 	if contentType == "" {
 		buffer := make([]byte, 512)

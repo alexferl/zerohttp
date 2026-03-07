@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -168,6 +169,56 @@ func TestShutdownHookContextCancellation(t *testing.T) {
 	err := cfg.ShutdownHooks[0].Hook(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("Expected context.Canceled error, got %v", err)
+	}
+}
+
+// mockValidator is a mock implementation of Validator for testing
+type mockValidator struct {
+	structCalled   bool
+	registerCalled bool
+	lastDst        any
+	lastName       string
+}
+
+func (m *mockValidator) Struct(dst any) error {
+	m.structCalled = true
+	m.lastDst = dst
+	return nil
+}
+
+func (m *mockValidator) Register(name string, fn func(reflect.Value, string) error) {
+	m.registerCalled = true
+	m.lastName = name
+}
+
+func TestValidator(t *testing.T) {
+	cfg := DefaultConfig
+	mockVal := &mockValidator{}
+	cfg.Validator = mockVal
+
+	if cfg.Validator == nil {
+		t.Error("expected Validator to be set")
+	}
+
+	// Test that the mock works
+	type testStruct struct {
+		Name string
+	}
+	ts := testStruct{Name: "test"}
+	if err := cfg.Validator.Struct(&ts); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !mockVal.structCalled {
+		t.Error("expected Struct to be called")
+	}
+
+	// Test Register
+	cfg.Validator.Register("custom", func(v reflect.Value, s string) error { return nil })
+	if !mockVal.registerCalled {
+		t.Error("expected Register to be called")
+	}
+	if mockVal.lastName != "custom" {
+		t.Errorf("expected name to be 'custom', got %s", mockVal.lastName)
 	}
 }
 
