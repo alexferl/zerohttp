@@ -374,7 +374,7 @@ func TestInvalidValidatorParams(t *testing.T) {
 				}
 				return &Test{Value: 5}
 			},
-			wantErr: false, // integer 5 is >= 5.5 when parsed as float
+			wantErr: true, // float parameters not valid for int fields
 		},
 		{
 			name: "lte with multiple decimals",

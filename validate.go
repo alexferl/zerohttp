@@ -524,31 +524,46 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// min - minimum value for numbers, minimum length for strings/slices/arrays/maps
 	v.validators["min"] = func(value reflect.Value, tag string) error {
-		f, err := strconv.ParseFloat(tag, 64)
-		if err != nil {
-			return fmt.Errorf("invalid f parameter: %s", tag)
-		}
-
 		switch value.Kind() {
 		case reflect.String:
-			if utf8.RuneCountInString(value.String()) < int(f) {
-				return fmt.Errorf("must be at least %d characters", int(f))
+			length, err := strconv.Atoi(tag)
+			if err != nil {
+				return fmt.Errorf("invalid min parameter: %s", tag)
+			}
+			if utf8.RuneCountInString(value.String()) < length {
+				return fmt.Errorf("must be at least %d characters", length)
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if value.Int() < int64(f) {
-				return fmt.Errorf("must be at least %d", int64(f))
+			target, err := strconv.ParseInt(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid min parameter: %s", tag)
+			}
+			if value.Int() < target {
+				return fmt.Errorf("must be at least %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if value.Uint() < uint64(f) {
-				return fmt.Errorf("must be at least %d", uint64(f))
+			target, err := strconv.ParseUint(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid min parameter: %s", tag)
+			}
+			if value.Uint() < target {
+				return fmt.Errorf("must be at least %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			if value.Float() < f {
-				return fmt.Errorf("must be at least %v", f)
+			target, err := strconv.ParseFloat(tag, 64)
+			if err != nil {
+				return fmt.Errorf("invalid min parameter: %s", tag)
+			}
+			if value.Float() < target {
+				return fmt.Errorf("must be at least %v", target)
 			}
 		case reflect.Slice, reflect.Array, reflect.Map:
-			if value.Len() < int(f) {
-				return fmt.Errorf("must have at least %d items", int(f))
+			length, err := strconv.Atoi(tag)
+			if err != nil {
+				return fmt.Errorf("invalid min parameter: %s", tag)
+			}
+			if value.Len() < length {
+				return fmt.Errorf("must have at least %d items", length)
 			}
 		default:
 			return fmt.Errorf("min not supported for type %s", value.Kind())
@@ -558,31 +573,46 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// max - maximum value for numbers, maximum length for strings/slices/arrays/maps
 	v.validators["max"] = func(value reflect.Value, tag string) error {
-		f, err := strconv.ParseFloat(tag, 64)
-		if err != nil {
-			return fmt.Errorf("invalid f parameter: %s", tag)
-		}
-
 		switch value.Kind() {
 		case reflect.String:
-			if utf8.RuneCountInString(value.String()) > int(f) {
-				return fmt.Errorf("must be at most %d characters", int(f))
+			length, err := strconv.Atoi(tag)
+			if err != nil {
+				return fmt.Errorf("invalid max parameter: %s", tag)
+			}
+			if utf8.RuneCountInString(value.String()) > length {
+				return fmt.Errorf("must be at most %d characters", length)
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if value.Int() > int64(f) {
-				return fmt.Errorf("must be at most %d", int64(f))
+			target, err := strconv.ParseInt(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid max parameter: %s", tag)
+			}
+			if value.Int() > target {
+				return fmt.Errorf("must be at most %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if value.Uint() > uint64(f) {
-				return fmt.Errorf("must be at most %d", uint64(f))
+			target, err := strconv.ParseUint(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid max parameter: %s", tag)
+			}
+			if value.Uint() > target {
+				return fmt.Errorf("must be at most %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			if value.Float() > f {
-				return fmt.Errorf("must be at most %v", f)
+			target, err := strconv.ParseFloat(tag, 64)
+			if err != nil {
+				return fmt.Errorf("invalid max parameter: %s", tag)
+			}
+			if value.Float() > target {
+				return fmt.Errorf("must be at most %v", target)
 			}
 		case reflect.Slice, reflect.Array, reflect.Map:
-			if value.Len() > int(f) {
-				return fmt.Errorf("must have at most %d items", int(f))
+			length, err := strconv.Atoi(tag)
+			if err != nil {
+				return fmt.Errorf("invalid max parameter: %s", tag)
+			}
+			if value.Len() > length {
+				return fmt.Errorf("must have at most %d items", length)
 			}
 		default:
 			return fmt.Errorf("max not supported for type %s", value.Kind())
@@ -811,21 +841,28 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// gt - greater than
 	v.validators["gt"] = func(value reflect.Value, tag string) error {
-		target, err := strconv.ParseFloat(tag, 64)
-		if err != nil {
-			return fmt.Errorf("invalid gt parameter: %s", tag)
-		}
-
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if value.Int() <= int64(target) {
-				return fmt.Errorf("must be greater than %d", int64(target))
+			target, err := strconv.ParseInt(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid gt parameter: %s", tag)
+			}
+			if value.Int() <= target {
+				return fmt.Errorf("must be greater than %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if value.Uint() <= uint64(target) {
-				return fmt.Errorf("must be greater than %d", uint64(target))
+			target, err := strconv.ParseUint(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid gt parameter: %s", tag)
+			}
+			if value.Uint() <= target {
+				return fmt.Errorf("must be greater than %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
+			target, err := strconv.ParseFloat(tag, 64)
+			if err != nil {
+				return fmt.Errorf("invalid gt parameter: %s", tag)
+			}
 			if value.Float() <= target {
 				return fmt.Errorf("must be greater than %v", target)
 			}
@@ -837,21 +874,28 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// lt - less than
 	v.validators["lt"] = func(value reflect.Value, tag string) error {
-		target, err := strconv.ParseFloat(tag, 64)
-		if err != nil {
-			return fmt.Errorf("invalid lt parameter: %s", tag)
-		}
-
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if value.Int() >= int64(target) {
-				return fmt.Errorf("must be less than %d", int64(target))
+			target, err := strconv.ParseInt(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid lt parameter: %s", tag)
+			}
+			if value.Int() >= target {
+				return fmt.Errorf("must be less than %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if value.Uint() >= uint64(target) {
-				return fmt.Errorf("must be less than %d", uint64(target))
+			target, err := strconv.ParseUint(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid lt parameter: %s", tag)
+			}
+			if value.Uint() >= target {
+				return fmt.Errorf("must be less than %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
+			target, err := strconv.ParseFloat(tag, 64)
+			if err != nil {
+				return fmt.Errorf("invalid lt parameter: %s", tag)
+			}
 			if value.Float() >= target {
 				return fmt.Errorf("must be less than %v", target)
 			}
@@ -863,21 +907,28 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// gte - greater than or equal
 	v.validators["gte"] = func(value reflect.Value, tag string) error {
-		target, err := strconv.ParseFloat(tag, 64)
-		if err != nil {
-			return fmt.Errorf("invalid gte parameter: %s", tag)
-		}
-
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if value.Int() < int64(target) {
-				return fmt.Errorf("must be greater than or equal to %d", int64(target))
+			target, err := strconv.ParseInt(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid gte parameter: %s", tag)
+			}
+			if value.Int() < target {
+				return fmt.Errorf("must be greater than or equal to %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if value.Uint() < uint64(target) {
-				return fmt.Errorf("must be greater than or equal to %d", uint64(target))
+			target, err := strconv.ParseUint(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid gte parameter: %s", tag)
+			}
+			if value.Uint() < target {
+				return fmt.Errorf("must be greater than or equal to %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
+			target, err := strconv.ParseFloat(tag, 64)
+			if err != nil {
+				return fmt.Errorf("invalid gte parameter: %s", tag)
+			}
 			if value.Float() < target {
 				return fmt.Errorf("must be greater than or equal to %v", target)
 			}
@@ -889,21 +940,28 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// lte - less than or equal
 	v.validators["lte"] = func(value reflect.Value, tag string) error {
-		target, err := strconv.ParseFloat(tag, 64)
-		if err != nil {
-			return fmt.Errorf("invalid lte parameter: %s", tag)
-		}
-
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if value.Int() > int64(target) {
-				return fmt.Errorf("must be less than or equal to %d", int64(target))
+			target, err := strconv.ParseInt(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid lte parameter: %s", tag)
+			}
+			if value.Int() > target {
+				return fmt.Errorf("must be less than or equal to %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if value.Uint() > uint64(target) {
-				return fmt.Errorf("must be less than or equal to %d", uint64(target))
+			target, err := strconv.ParseUint(tag, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid lte parameter: %s", tag)
+			}
+			if value.Uint() > target {
+				return fmt.Errorf("must be less than or equal to %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
+			target, err := strconv.ParseFloat(tag, 64)
+			if err != nil {
+				return fmt.Errorf("invalid lte parameter: %s", tag)
+			}
 			if value.Float() > target {
 				return fmt.Errorf("must be less than or equal to %v", target)
 			}
