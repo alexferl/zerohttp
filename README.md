@@ -31,6 +31,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
   - [Extensible Interfaces](#extensible-interfaces)
   - [Pluggable Features](#pluggable-features)
 - [Testing Utilities](docs/TESTING.md)
+- [Profiling](#profiling)
 - [Configuration](#configuration)
   - [Server Configuration](#server-configuration)
   - [Middleware Configuration](#middleware-configuration)
@@ -579,6 +580,54 @@ Optional features that require external dependencies. See [PLUGGABLE.md](docs/PL
 ## Testing Utilities
 
 The `zhtest` package provides fluent, chainable helpers for testing HTTP handlers and middleware. See [TESTING.md](docs/TESTING.md) for details.
+
+## Profiling
+
+Built-in Go profiling endpoints via `net/http/pprof`, secured by default with auto-generated passwords:
+
+```go
+import (
+    "log"
+
+    zh "github.com/alexferl/zerohttp"
+    "github.com/alexferl/zerohttp/pprof"
+)
+
+func main() {
+    app := zh.New()
+
+    // Default: auto-generates secure password
+    pp := pprof.New(app, pprof.DefaultConfig)
+    log.Printf("pprof credentials - username: %s, password: %s", pp.Auth.Username, pp.Auth.Password)
+
+    // With custom credentials
+    cfg := pprof.DefaultConfig
+    cfg.Auth = &pprof.AuthConfig{
+        Username: "admin",
+        Password: "secret",
+    }
+    pp = pprof.New(app, cfg)
+
+    // Disable authentication (not recommended for production)
+    cfg = pprof.DefaultConfig
+    cfg.Auth = &pprof.AuthConfig{} // empty = disabled
+    pp = pprof.New(app, cfg)
+
+    log.Fatal(app.Start())
+}
+```
+
+Available endpoints at `/debug/pprof/`:
+
+- `/debug/pprof/` - Index page listing all profiles
+- `/debug/pprof/profile` - CPU profile (use `?seconds=30`)
+- `/debug/pprof/heap` - Memory heap profile
+- `/debug/pprof/goroutine` - Goroutine profile
+- `/debug/pprof/trace` - Execution trace (use `?seconds=5`)
+- `/debug/pprof/block` - Block profile
+- `/debug/pprof/mutex` - Mutex profile
+
+Access credentials via the returned `PProf` struct: `pp.Auth.Username`, `pp.Auth.Password`.
 
 ## Configuration
 
