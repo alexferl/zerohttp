@@ -9,28 +9,27 @@ import (
 
 // ContentType enforces a whitelist of request Content-Types otherwise responds
 // with a 415 Unsupported Media Type status.
-func ContentType(opts ...config.ContentTypeOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultContentTypeConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func ContentType(cfg ...config.ContentTypeConfig) func(http.Handler) http.Handler {
+	c := config.DefaultContentTypeConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
-	if cfg.ContentTypes == nil {
-		cfg.ContentTypes = config.DefaultContentTypeConfig.ContentTypes
+	if c.ContentTypes == nil {
+		c.ContentTypes = config.DefaultContentTypeConfig.ContentTypes
 	}
-	if cfg.ExemptPaths == nil {
-		cfg.ExemptPaths = config.DefaultContentTypeConfig.ExemptPaths
+	if c.ExemptPaths == nil {
+		c.ExemptPaths = config.DefaultContentTypeConfig.ExemptPaths
 	}
 
-	allowedContentTypes := make(map[string]struct{}, len(cfg.ContentTypes))
-	for _, ctype := range cfg.ContentTypes {
+	allowedContentTypes := make(map[string]struct{}, len(c.ContentTypes))
+	for _, ctype := range c.ContentTypes {
 		allowedContentTypes[strings.TrimSpace(strings.ToLower(ctype))] = struct{}{}
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range cfg.ExemptPaths {
+			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return

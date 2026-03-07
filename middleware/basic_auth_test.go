@@ -51,64 +51,83 @@ func TestBasicAuth(t *testing.T) {
 			expectedRealm:  `Basic realm="Restricted"`,
 		},
 		{
-			name:           "valid credentials",
-			middleware:     BasicAuth(config.WithBasicAuthCredentials(map[string]string{"admin": "secret"})),
+			name: "valid credentials",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Credentials: map[string]string{"admin": "secret"},
+			}),
 			path:           "/test",
 			authHeader:     createAuthHeader("admin", "secret"),
 			expectAuth:     true,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "invalid password",
-			middleware:     BasicAuth(config.WithBasicAuthCredentials(map[string]string{"admin": "secret"})),
+			name: "invalid password",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Credentials: map[string]string{"admin": "secret"},
+			}),
 			path:           "/test",
 			authHeader:     createAuthHeader("admin", "wrong"),
 			expectAuth:     false,
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "unknown user",
-			middleware:     BasicAuth(config.WithBasicAuthCredentials(map[string]string{"admin": "secret"})),
+			name: "unknown user",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Credentials: map[string]string{"admin": "secret"},
+			}),
 			path:           "/test",
 			authHeader:     createAuthHeader("hacker", "password"),
 			expectAuth:     false,
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "validator accepts valid credentials",
-			middleware:     BasicAuth(config.WithBasicAuthValidator(func(u, p string) bool { return u == "test" && p == "pass" })),
+			name: "validator accepts valid credentials",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Validator: func(u, p string) bool { return u == "test" && p == "pass" },
+			}),
 			path:           "/test",
 			authHeader:     createAuthHeader("test", "pass"),
 			expectAuth:     true,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "validator rejects invalid credentials",
-			middleware:     BasicAuth(config.WithBasicAuthValidator(func(u, p string) bool { return u == "test" && p == "pass" })),
+			name: "validator rejects invalid credentials",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Validator: func(u, p string) bool { return u == "test" && p == "pass" },
+			}),
 			path:           "/test",
 			authHeader:     createAuthHeader("wrong", "pass"),
 			expectAuth:     false,
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "exempt path allows access",
-			middleware:     BasicAuth(config.WithBasicAuthCredentials(map[string]string{"admin": "secret"}), config.WithBasicAuthExemptPaths([]string{"/health"})),
+			name: "exempt path allows access",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Credentials: map[string]string{"admin": "secret"},
+				ExemptPaths: []string{"/health"},
+			}),
 			path:           "/health",
 			authHeader:     "",
 			expectAuth:     true,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "non-exempt path requires auth",
-			middleware:     BasicAuth(config.WithBasicAuthCredentials(map[string]string{"admin": "secret"}), config.WithBasicAuthExemptPaths([]string{"/health"})),
+			name: "non-exempt path requires auth",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Credentials: map[string]string{"admin": "secret"},
+				ExemptPaths: []string{"/health"},
+			}),
 			path:           "/admin",
 			authHeader:     "",
 			expectAuth:     false,
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "custom realm",
-			middleware:     BasicAuth(config.WithBasicAuthRealm("Custom Realm"), config.WithBasicAuthCredentials(map[string]string{"admin": "secret"})),
+			name: "custom realm",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Realm:       "Custom Realm",
+				Credentials: map[string]string{"admin": "secret"},
+			}),
 			path:           "/test",
 			authHeader:     "",
 			expectAuth:     false,
@@ -117,8 +136,11 @@ func TestBasicAuth(t *testing.T) {
 			expectedRealm:  `Basic realm="Custom Realm"`,
 		},
 		{
-			name:           "empty realm falls back to default",
-			middleware:     BasicAuth(config.WithBasicAuthRealm(""), config.WithBasicAuthCredentials(map[string]string{"admin": "secret"})),
+			name: "empty realm falls back to default",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Realm:       "",
+				Credentials: map[string]string{"admin": "secret"},
+			}),
 			path:           "/test",
 			authHeader:     "",
 			expectAuth:     false,
@@ -127,8 +149,11 @@ func TestBasicAuth(t *testing.T) {
 			expectedRealm:  `Basic realm="Restricted"`,
 		},
 		{
-			name:           "validator takes precedence over credentials",
-			middleware:     BasicAuth(config.WithBasicAuthCredentials(map[string]string{"admin": "secret"}), config.WithBasicAuthValidator(func(u, p string) bool { return u == "validator" && p == "test" })),
+			name: "validator takes precedence over credentials",
+			middleware: BasicAuth(config.BasicAuthConfig{
+				Credentials: map[string]string{"admin": "secret"},
+				Validator:   func(u, p string) bool { return u == "validator" && p == "test" },
+			}),
 			path:           "/test",
 			authHeader:     createAuthHeader("admin", "secret"),
 			expectAuth:     false,
@@ -161,7 +186,9 @@ func TestBasicAuth(t *testing.T) {
 }
 
 func TestBasicAuthMalformedHeaders(t *testing.T) {
-	middleware := BasicAuth(config.WithBasicAuthCredentials(map[string]string{"admin": "secret"}))
+	middleware := BasicAuth(config.BasicAuthConfig{
+		Credentials: map[string]string{"admin": "secret"},
+	})
 	malformedHeaders := []string{"", "InvalidFormat", "Bearer token123", "Basic invalidbase64!!!"}
 
 	for _, header := range malformedHeaders {
@@ -176,10 +203,10 @@ func TestBasicAuthMalformedHeaders(t *testing.T) {
 }
 
 func TestBasicAuthExemptPaths(t *testing.T) {
-	middleware := BasicAuth(
-		config.WithBasicAuthCredentials(map[string]string{"admin": "secret"}),
-		config.WithBasicAuthExemptPaths([]string{"/health", "/metrics", "/api/public/"}),
-	)
+	middleware := BasicAuth(config.BasicAuthConfig{
+		Credentials: map[string]string{"admin": "secret"},
+		ExemptPaths: []string{"/health", "/metrics", "/api/public/"},
+	})
 
 	pathTests := []struct {
 		path   string
@@ -206,7 +233,9 @@ func TestBasicAuthExemptPaths(t *testing.T) {
 }
 
 func TestBasicAuthNoAuthConfigured(t *testing.T) {
-	middleware := BasicAuth(config.WithBasicAuthRealm("Test Realm"))
+	middleware := BasicAuth(config.BasicAuthConfig{
+		Realm: "Test Realm",
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	auth := base64.StdEncoding.EncodeToString([]byte("user:password"))
@@ -224,10 +253,10 @@ func TestBasicAuthNoAuthConfigured(t *testing.T) {
 }
 
 func TestBasicAuthNilExemptPathsFallback(t *testing.T) {
-	middleware := BasicAuth(
-		config.WithBasicAuthCredentials(map[string]string{"admin": "secret"}),
-		config.WithBasicAuthExemptPaths(nil),
-	)
+	middleware := BasicAuth(config.BasicAuthConfig{
+		Credentials: map[string]string{"admin": "secret"},
+		ExemptPaths: nil,
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()

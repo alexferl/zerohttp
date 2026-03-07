@@ -20,23 +20,25 @@ func TestBasicAuthConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestBasicAuthOptions(t *testing.T) {
-	t.Run("realm option", func(t *testing.T) {
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthRealm("Admin Area")(&cfg)
+func TestBasicAuthConfig_CustomValues(t *testing.T) {
+	t.Run("custom realm", func(t *testing.T) {
+		cfg := BasicAuthConfig{
+			Realm: "Admin Area",
+		}
 		if cfg.Realm != "Admin Area" {
 			t.Errorf("expected realm = Admin Area, got %s", cfg.Realm)
 		}
 	})
 
-	t.Run("credentials option", func(t *testing.T) {
+	t.Run("custom credentials", func(t *testing.T) {
 		credentials := map[string]string{
 			"admin":    "password123",
 			"user":     "userpass",
 			"readonly": "readonlypass",
 		}
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthCredentials(credentials)(&cfg)
+		cfg := BasicAuthConfig{
+			Credentials: credentials,
+		}
 		if cfg.Credentials == nil {
 			t.Error("expected credentials to be set")
 		}
@@ -50,12 +52,13 @@ func TestBasicAuthOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("validator option", func(t *testing.T) {
+	t.Run("custom validator", func(t *testing.T) {
 		mockValidator := func(username, password string) bool {
 			return username == "testuser" && password == "testpass"
 		}
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthValidator(mockValidator)(&cfg)
+		cfg := BasicAuthConfig{
+			Validator: mockValidator,
+		}
 		if cfg.Validator == nil {
 			t.Error("expected validator to be set")
 		}
@@ -67,10 +70,11 @@ func TestBasicAuthOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths option", func(t *testing.T) {
+	t.Run("custom exempt paths", func(t *testing.T) {
 		exemptPaths := []string{"/health", "/metrics", "/login", "/signup"}
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthExemptPaths(exemptPaths)(&cfg)
+		cfg := BasicAuthConfig{
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != 4 {
 			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -85,18 +89,19 @@ func TestBasicAuthOptions(t *testing.T) {
 	})
 }
 
-func TestBasicAuthConfig_MultipleOptions(t *testing.T) {
+func TestBasicAuthConfig_MultipleFields(t *testing.T) {
 	credentials := map[string]string{"admin": "secret123", "user": "pass456"}
 	exemptPaths := []string{"/public", "/health"}
 	validator := func(username, password string) bool {
 		return username == "custom" && password == "validate"
 	}
 
-	cfg := DefaultBasicAuthConfig
-	WithBasicAuthRealm("Custom Realm")(&cfg)
-	WithBasicAuthCredentials(credentials)(&cfg)
-	WithBasicAuthValidator(validator)(&cfg)
-	WithBasicAuthExemptPaths(exemptPaths)(&cfg)
+	cfg := BasicAuthConfig{
+		Realm:       "Custom Realm",
+		Credentials: credentials,
+		Validator:   validator,
+		ExemptPaths: exemptPaths,
+	}
 
 	if cfg.Realm != "Custom Realm" {
 		t.Errorf("expected realm = Custom Realm, got %s", cfg.Realm)
@@ -120,8 +125,9 @@ func TestBasicAuthConfig_MultipleOptions(t *testing.T) {
 
 func TestBasicAuthConfig_EdgeCases(t *testing.T) {
 	t.Run("empty credentials", func(t *testing.T) {
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthCredentials(map[string]string{})(&cfg)
+		cfg := BasicAuthConfig{
+			Credentials: map[string]string{},
+		}
 		if cfg.Credentials == nil {
 			t.Error("expected credentials map to be initialized, not nil")
 		}
@@ -131,16 +137,18 @@ func TestBasicAuthConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil credentials", func(t *testing.T) {
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthCredentials(nil)(&cfg)
+		cfg := BasicAuthConfig{
+			Credentials: nil,
+		}
 		if cfg.Credentials != nil {
 			t.Error("expected credentials to remain nil when nil is passed")
 		}
 	})
 
 	t.Run("empty exempt paths", func(t *testing.T) {
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthExemptPaths([]string{})(&cfg)
+		cfg := BasicAuthConfig{
+			ExemptPaths: []string{},
+		}
 		if cfg.ExemptPaths == nil {
 			t.Error("expected exempt paths slice to be initialized, not nil")
 		}
@@ -150,8 +158,9 @@ func TestBasicAuthConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil exempt paths", func(t *testing.T) {
-		cfg := DefaultBasicAuthConfig
-		WithBasicAuthExemptPaths(nil)(&cfg)
+		cfg := BasicAuthConfig{
+			ExemptPaths: nil,
+		}
 		if cfg.ExemptPaths != nil {
 			t.Error("expected exempt paths to remain nil when nil is passed")
 		}
@@ -170,8 +179,9 @@ func TestBasicAuthConfig_ValidatorFunctionality(t *testing.T) {
 		return exists && expectedPassword == password
 	}
 
-	cfg := DefaultBasicAuthConfig
-	WithBasicAuthValidator(validator)(&cfg)
+	cfg := BasicAuthConfig{
+		Validator: validator,
+	}
 
 	testCases := []struct {
 		username, password string

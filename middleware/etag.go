@@ -188,7 +188,7 @@ func (ew *etagResponseWriter) generateETag() string {
 		hashStr = hex.EncodeToString(ew.hash.Sum(nil))
 	}
 
-	if ew.config.Weak {
+	if ew.config.Weak != nil && *ew.config.Weak {
 		return `W/"` + hashStr + `"`
 	}
 	return `"` + hashStr + `"`
@@ -379,35 +379,47 @@ func (ew *etagResponseWriter) serveRange() {
 }
 
 // ETag creates ETag middleware with custom configuration
-func ETag(opts ...config.ETagOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultETagConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
+	c := config.DefaultETagConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
-	if cfg.Algorithm != config.FNV && cfg.Algorithm != config.MD5 {
-		cfg.Algorithm = config.FNV
+	if c.Algorithm != config.FNV && c.Algorithm != config.MD5 {
+		c.Algorithm = config.DefaultETagConfig.Algorithm
 	}
 
-	if cfg.SkipStatusCodes == nil {
-		cfg.SkipStatusCodes = config.DefaultETagConfig.SkipStatusCodes
+	if c.SkipStatusCodes == nil {
+		c.SkipStatusCodes = config.DefaultETagConfig.SkipStatusCodes
 	}
 
-	if cfg.SkipContentTypes == nil {
-		cfg.SkipContentTypes = config.DefaultETagConfig.SkipContentTypes
+	if c.SkipContentTypes == nil {
+		c.SkipContentTypes = config.DefaultETagConfig.SkipContentTypes
+	}
+
+	if c.ExemptPaths == nil {
+		c.ExemptPaths = config.DefaultETagConfig.ExemptPaths
+	}
+
+	if c.MaxBufferSize == 0 {
+		c.MaxBufferSize = config.DefaultETagConfig.MaxBufferSize
+	}
+
+	// For Weak: use provided value if set, otherwise use default
+	if c.Weak == nil {
+		c.Weak = config.DefaultETagConfig.Weak
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range cfg.ExemptPaths {
+			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return
 				}
 			}
 
-			if cfg.ExemptFunc != nil && cfg.ExemptFunc(r) {
+			if c.ExemptFunc != nil && c.ExemptFunc(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -423,7 +435,7 @@ func ETag(opts ...config.ETagOption) func(http.Handler) http.Handler {
 				// For PUT/PATCH/DELETE, check If-Match but don't generate/cache ETags
 				if ifMatch != "" {
 					// Pass through with a wrapper that checks If-Match
-					ew := newETagResponseWriter(w, cfg, "", ifMatch, "", "")
+					ew := newETagResponseWriter(w, c, "", ifMatch, "", "")
 					defer ew.release()
 					next.ServeHTTP(ew, r)
 					ew.finalize()
@@ -433,7 +445,7 @@ func ETag(opts ...config.ETagOption) func(http.Handler) http.Handler {
 				return
 			}
 
-			ew := newETagResponseWriter(w, cfg, ifNoneMatch, ifMatch, ifRange, rangeHeader)
+			ew := newETagResponseWriter(w, c, ifNoneMatch, ifMatch, ifRange, rangeHeader)
 			defer ew.release()
 
 			next.ServeHTTP(ew, r)

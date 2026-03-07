@@ -8,18 +8,17 @@ import (
 )
 
 // TrailingSlash is a middleware that handles trailing slashes in URLs
-func TrailingSlash(opts ...config.TrailingSlashOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultTrailingSlashConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func TrailingSlash(cfg ...config.TrailingSlashConfig) func(http.Handler) http.Handler {
+	c := config.DefaultTrailingSlashConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
-	if cfg.Action == "" {
-		cfg.Action = config.DefaultTrailingSlashConfig.Action
+	if c.Action == "" {
+		c.Action = config.DefaultTrailingSlashConfig.Action
 	}
-	if cfg.RedirectCode == 0 {
-		cfg.RedirectCode = config.DefaultTrailingSlashConfig.RedirectCode
+	if c.RedirectCode == 0 {
+		c.RedirectCode = config.DefaultTrailingSlashConfig.RedirectCode
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -36,11 +35,11 @@ func TrailingSlash(opts ...config.TrailingSlashOption) func(http.Handler) http.H
 			needsChange := false
 			var newPath string
 
-			if cfg.PreferTrailingSlash && !hasTrailingSlash {
+			if c.PreferTrailingSlash && !hasTrailingSlash {
 				// Want trailing slash but don't have it
 				needsChange = true
 				newPath = path + "/"
-			} else if !cfg.PreferTrailingSlash && hasTrailingSlash {
+			} else if !c.PreferTrailingSlash && hasTrailingSlash {
 				// Don't want trailing slash but have it
 				needsChange = true
 				newPath = strings.TrimSuffix(path, "/")
@@ -51,12 +50,12 @@ func TrailingSlash(opts ...config.TrailingSlashOption) func(http.Handler) http.H
 				return
 			}
 
-			switch cfg.Action {
+			switch c.Action {
 			case config.RedirectAction:
 				// Build new URL with corrected path
 				newURL := *r.URL
 				newURL.Path = newPath
-				http.Redirect(w, r, newURL.String(), cfg.RedirectCode)
+				http.Redirect(w, r, newURL.String(), c.RedirectCode)
 				return
 
 			case config.StripAction:

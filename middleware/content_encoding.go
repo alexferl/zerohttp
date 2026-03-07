@@ -8,29 +8,28 @@ import (
 )
 
 // ContentEncoding enforces a whitelist of request Content-Encoding
-func ContentEncoding(opts ...config.ContentEncodingOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultContentEncodingConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) http.Handler {
+	c := config.DefaultContentEncodingConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
-	if cfg.Encodings == nil {
-		cfg.Encodings = config.DefaultContentEncodingConfig.Encodings
+	if c.Encodings == nil {
+		c.Encodings = config.DefaultContentEncodingConfig.Encodings
 	}
-	if cfg.ExemptPaths == nil {
-		cfg.ExemptPaths = config.DefaultContentEncodingConfig.ExemptPaths
+	if c.ExemptPaths == nil {
+		c.ExemptPaths = config.DefaultContentEncodingConfig.ExemptPaths
 	}
 
-	allowedEncodings := make(map[string]struct{}, len(cfg.Encodings))
-	for _, encoding := range cfg.Encodings {
+	allowedEncodings := make(map[string]struct{}, len(c.Encodings))
+	for _, encoding := range c.Encodings {
 		allowedEncodings[strings.TrimSpace(strings.ToLower(encoding))] = struct{}{}
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check exempt paths
-			for _, exemptPath := range cfg.ExemptPaths {
+			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return

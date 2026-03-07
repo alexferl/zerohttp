@@ -69,7 +69,7 @@ func TestContentCharset(t *testing.T) {
 		{
 			name: "custom config allows iso-8859-1",
 			config: func() func(http.Handler) http.Handler {
-				return ContentCharset(config.WithContentCharsetCharsets([]string{"utf-8", "iso-8859-1", "windows-1252"}))
+				return ContentCharset(config.ContentCharsetConfig{Charsets: []string{"utf-8", "iso-8859-1", "windows-1252"}})
 			},
 			contentType: "text/html; charset=iso-8859-1",
 			expectNext:  true,
@@ -78,7 +78,7 @@ func TestContentCharset(t *testing.T) {
 		{
 			name: "custom config case insensitive",
 			config: func() func(http.Handler) http.Handler {
-				return ContentCharset(config.WithContentCharsetCharsets([]string{"utf-8", "iso-8859-1"}))
+				return ContentCharset(config.ContentCharsetConfig{Charsets: []string{"utf-8", "iso-8859-1"}})
 			},
 			contentType: "text/plain; charset=ISO-8859-1",
 			expectNext:  true,
@@ -87,7 +87,7 @@ func TestContentCharset(t *testing.T) {
 		{
 			name: "custom config rejects ascii",
 			config: func() func(http.Handler) http.Handler {
-				return ContentCharset(config.WithContentCharsetCharsets([]string{"utf-8", "iso-8859-1"}))
+				return ContentCharset(config.ContentCharsetConfig{Charsets: []string{"utf-8", "iso-8859-1"}})
 			},
 			contentType: "text/plain; charset=ascii",
 			expectNext:  false,
@@ -96,7 +96,7 @@ func TestContentCharset(t *testing.T) {
 		{
 			name: "empty config rejects all",
 			config: func() func(http.Handler) http.Handler {
-				return ContentCharset(config.WithContentCharsetCharsets([]string{}))
+				return ContentCharset(config.ContentCharsetConfig{Charsets: []string{}})
 			},
 			contentType: "application/json; charset=utf-8",
 			expectNext:  false,
@@ -105,7 +105,7 @@ func TestContentCharset(t *testing.T) {
 		{
 			name: "nil config uses defaults",
 			config: func() func(http.Handler) http.Handler {
-				return ContentCharset(config.WithContentCharsetCharsets(nil))
+				return ContentCharset(config.ContentCharsetConfig{Charsets: nil})
 			},
 			contentType: "application/json; charset=utf-8",
 			expectNext:  true,

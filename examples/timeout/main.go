@@ -38,10 +38,10 @@ func main() {
 
 	// Using zerohttp timeout middleware - more concise
 	app.Group(func(r zh.Router) {
-		r.Use(middleware.Timeout(
-			config.WithTimeoutDuration(2*time.Second),
-			config.WithTimeoutMessage(`Request timeout from zerohttp`),
-		))
+		r.Use(middleware.Timeout(config.TimeoutConfig{
+			Timeout: 2 * time.Second,
+			Message: `Request timeout from zerohttp`,
+		}))
 
 		r.GET("/slow", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 			ctx := r.Context()

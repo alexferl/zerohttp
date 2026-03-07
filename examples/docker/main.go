@@ -10,7 +10,9 @@ import (
 
 func main() {
 	app := zh.New(
-		config.WithAddr(":8080"),
+		config.Config{
+			Addr: ":8080",
+		},
 	)
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

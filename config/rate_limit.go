@@ -40,6 +40,15 @@ type RateLimitConfig struct {
 	ExemptPaths []string
 }
 
+// DefaultKeyExtractor extracts IP address as the rate limit key
+func DefaultKeyExtractor(r *http.Request) string {
+	// Use X-Forwarded-For if available, otherwise RemoteAddr
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
+	}
+	return r.RemoteAddr
+}
+
 // DefaultRateLimitConfig contains the default values for rate limit configuration.
 var DefaultRateLimitConfig = RateLimitConfig{
 	Rate:           100,
@@ -50,72 +59,4 @@ var DefaultRateLimitConfig = RateLimitConfig{
 	Message:        "Rate limit exceeded",
 	IncludeHeaders: true,
 	ExemptPaths:    []string{},
-}
-
-// DefaultKeyExtractor extracts IP address as the rate limit key
-func DefaultKeyExtractor(r *http.Request) string {
-	// Use X-Forwarded-For if available, otherwise RemoteAddr
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
-	}
-	return r.RemoteAddr
-}
-
-// RateLimitOption configures rate limit middleware.
-type RateLimitOption func(*RateLimitConfig)
-
-// WithRateLimitRate sets the number of requests per window.
-func WithRateLimitRate(rate int) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.Rate = rate
-	}
-}
-
-// WithRateLimitWindow sets the time window duration.
-func WithRateLimitWindow(window time.Duration) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.Window = window
-	}
-}
-
-// WithRateLimitAlgorithm sets the rate limiting algorithm.
-func WithRateLimitAlgorithm(algorithm RateLimitAlgorithm) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.Algorithm = algorithm
-	}
-}
-
-// WithRateLimitKeyExtractor sets the function to extract rate limit key from request.
-func WithRateLimitKeyExtractor(keyExtractor KeyExtractor) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.KeyExtractor = keyExtractor
-	}
-}
-
-// WithRateLimitStatusCode sets the status code to return when rate limited.
-func WithRateLimitStatusCode(statusCode int) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.StatusCode = statusCode
-	}
-}
-
-// WithRateLimitMessage sets the message to return when rate limited.
-func WithRateLimitMessage(message string) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.Message = message
-	}
-}
-
-// WithRateLimitIncludeHeaders sets whether to include rate limit headers in response.
-func WithRateLimitIncludeHeaders(include bool) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.IncludeHeaders = include
-	}
-}
-
-// WithRateLimitExemptPaths sets paths to skip rate limiting.
-func WithRateLimitExemptPaths(paths []string) RateLimitOption {
-	return func(c *RateLimitConfig) {
-		c.ExemptPaths = paths
-	}
 }

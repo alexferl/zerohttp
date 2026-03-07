@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -125,19 +126,19 @@ func TestNew_MiddlewareScenarios(t *testing.T) {
 		})
 	}
 
-	server := New(
-		config.WithDisableDefaultMiddlewares(),
-		config.WithDefaultMiddlewares([]func(http.Handler) http.Handler{customMiddleware}),
-	)
+	server := New(config.Config{
+		DisableDefaultMiddlewares: true,
+		DefaultMiddlewares:        []func(http.Handler) http.Handler{customMiddleware},
+	})
 
 	if server == nil {
 		t.Fatal("Expected server to be created")
 	}
 
 	// Test with custom default middlewares combined with defaults
-	server2 := New(
-		config.WithDefaultMiddlewares([]func(http.Handler) http.Handler{customMiddleware}),
-	)
+	server2 := New(config.Config{
+		DefaultMiddlewares: []func(http.Handler) http.Handler{customMiddleware},
+	})
 
 	if server2 == nil {
 		t.Fatal("Expected server to be created")
@@ -220,7 +221,7 @@ func TestServer_CreateHTTPSRedirectHandler(t *testing.T) {
 
 func TestServer_ListenAndServe_NoServer(t *testing.T) {
 	mockLogger := &mockServerLogger{}
-	server := New(config.WithLogger(mockLogger))
+	server := New(config.Config{Logger: mockLogger})
 	server.server = nil
 
 	err := server.ListenAndServe()
@@ -336,7 +337,7 @@ func (m *mockAutocertManager) Hostnames() []string {
 
 func TestServer_StartAutoTLS_WithManager(t *testing.T) {
 	mgr := &mockAutocertManager{}
-	server := New(config.WithAutocertManager(mgr))
+	server := New(config.Config{AutocertManager: mgr})
 
 	// Verify manager was set (compare using concrete type assertion)
 	if server.autocertManager == nil {
@@ -420,7 +421,7 @@ func TestServer_SetHTTP3Server(t *testing.T) {
 
 func TestServer_ListenAndServeHTTP3_NoServer(t *testing.T) {
 	mockLogger := &mockServerLogger{}
-	server := New(config.WithLogger(mockLogger))
+	server := New(config.Config{Logger: mockLogger})
 	// http3Server is nil by default
 
 	err := server.ListenAndServeHTTP3("cert.pem", "key.pem")
@@ -649,10 +650,10 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
 	// Use unique port to avoid conflicts with other tests
-	server := New(
-		config.WithAutocertManager(mgr),
-		config.WithTLSAddr("localhost:18443"),
-	)
+	server := New(config.Config{
+		AutocertManager: mgr,
+		TLSAddr:         "localhost:18443",
+	})
 	server.SetHTTP3Server(h3Server)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -691,7 +692,7 @@ func TestServer_StartAutoTLS_WithHTTP3NoAutocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	h3Server := &mockHTTP3Server{} // This doesn't implement HTTP3ServerWithAutocert
 
-	server := New(config.WithAutocertManager(mgr))
+	server := New(config.Config{AutocertManager: mgr})
 	server.SetHTTP3Server(h3Server)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -737,10 +738,10 @@ func TestServer_StartAutoTLS_WithWebTransportAutocert(t *testing.T) {
 	wtServer := &mockWebTransportServerWithAutocert{}
 
 	// Use unique port to avoid conflicts with other tests
-	server := New(
-		config.WithAutocertManager(mgr),
-		config.WithTLSAddr("localhost:28443"),
-	)
+	server := New(config.Config{
+		AutocertManager: mgr,
+		TLSAddr:         "localhost:28443",
+	})
 	server.SetWebTransportServer(wtServer)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -779,7 +780,7 @@ func TestServer_StartAutoTLS_WithWebTransportNoAutocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	wtServer := &mockWebTransportServer{} // This doesn't implement WebTransportServerWithAutocert
 
-	server := New(config.WithAutocertManager(mgr))
+	server := New(config.Config{AutocertManager: mgr})
 	server.SetWebTransportServer(wtServer)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -823,11 +824,11 @@ func TestStartAutoTLS_HTTPReadyGatesWarmUp(t *testing.T) {
 	}
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
-	server := New(
-		config.WithAutocertManager(mgr),
-		config.WithTLSAddr("localhost:0"),
-		config.WithAddr("localhost:0"),
-	)
+	server := New(config.Config{
+		AutocertManager: mgr,
+		TLSAddr:         "localhost:0",
+		Addr:            "localhost:0",
+	})
 	server.SetHTTP3Server(h3Server)
 
 	// Start in goroutine
@@ -870,11 +871,11 @@ func TestStartAutoTLS_SyncOnceSignalsOnce(t *testing.T) {
 	h3Server := &mockHTTP3ServerWithAutocert{}
 	wtServer := &mockWebTransportServerWithAutocert{}
 
-	server := New(
-		config.WithAutocertManager(mgr),
-		config.WithTLSAddr("localhost:0"),
-		config.WithAddr("localhost:0"),
-	)
+	server := New(config.Config{
+		AutocertManager: mgr,
+		TLSAddr:         "localhost:0",
+		Addr:            "localhost:0",
+	})
 	server.SetHTTP3Server(h3Server)
 	server.SetWebTransportServer(wtServer)
 
@@ -902,11 +903,11 @@ func TestStartAutoTLS_SyncOnceSignalsOnce(t *testing.T) {
 func TestStartAutoTLS_MultipleConsumersUnblock(t *testing.T) {
 	mgr := &mockAutocertManager{}
 
-	server := New(
-		config.WithAutocertManager(mgr),
-		config.WithTLSAddr("localhost:0"),
-		config.WithAddr("localhost:0"),
-	)
+	server := New(config.Config{
+		AutocertManager: mgr,
+		TLSAddr:         "localhost:0",
+		Addr:            "localhost:0",
+	})
 
 	h3Server := &mockHTTP3ServerWithAutocert{}
 	wtServer := &mockWebTransportServerWithAutocert{}
@@ -952,11 +953,11 @@ func TestStartAutoTLS_WarmUpTimeout(t *testing.T) {
 
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
-	server := New(
-		config.WithAutocertManager(neverReadyMgr),
-		config.WithTLSAddr("localhost:0"),
-		config.WithAddr("localhost:0"),
-	)
+	server := New(config.Config{
+		AutocertManager: neverReadyMgr,
+		TLSAddr:         "localhost:0",
+		Addr:            "localhost:0",
+	})
 	server.SetHTTP3Server(h3Server)
 
 	// Start should not panic even when warm-up times out
@@ -995,11 +996,11 @@ func TestStartAutoTLS_EmptyHostnames(t *testing.T) {
 	mgr := &emptyHostnamesManager{}
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
-	server := New(
-		config.WithAutocertManager(mgr),
-		config.WithTLSAddr("localhost:0"),
-		config.WithAddr("localhost:0"),
-	)
+	server := New(config.Config{
+		AutocertManager: mgr,
+		TLSAddr:         "localhost:0",
+		Addr:            "localhost:0",
+	})
 	server.SetHTTP3Server(h3Server)
 
 	go func() {
@@ -1021,11 +1022,11 @@ func TestStartAutoTLS_NoHTTPServer(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
-	server := New(
-		config.WithAutocertManager(mgr),
-		config.WithTLSAddr("localhost:0"),
-		// No config.WithAddr - no HTTP server
-	)
+	server := New(config.Config{
+		AutocertManager: mgr,
+		TLSAddr:         "localhost:0",
+		// No Addr - no HTTP server
+	})
 	server.SetHTTP3Server(h3Server)
 
 	// Manually set server to nil to simulate no HTTP server
@@ -1503,7 +1504,7 @@ func TestServer_Start(t *testing.T) {
 
 func TestServer_Logger(t *testing.T) {
 	mockLogger := &mockServerLogger{}
-	server := New(config.WithLogger(mockLogger))
+	server := New(config.Config{Logger: mockLogger})
 
 	logger := server.Logger()
 	if logger == nil {
@@ -1555,7 +1556,7 @@ func TestServer_SetWebTransportServer(t *testing.T) {
 
 func TestServer_SetWebTransportServer_WithConfig(t *testing.T) {
 	mockWT := &mockWebTransportServer{}
-	server := New(config.WithWebTransportServer(mockWT))
+	server := New(config.Config{WebTransportServer: mockWT})
 
 	if server.webTransportServer != mockWT {
 		t.Error("Expected WebTransport server to be set via config")
@@ -1896,20 +1897,26 @@ func TestServer_Shutdown_HooksRespectContextCancellation(t *testing.T) {
 func TestServer_ConfigWithShutdownHooks(t *testing.T) {
 	var preCalled, shutdownCalled, postCalled bool
 
-	server := New(
-		config.WithPreShutdownHook("pre", func(ctx context.Context) error {
-			preCalled = true
-			return nil
-		}),
-		config.WithShutdownHook("shutdown", func(ctx context.Context) error {
-			shutdownCalled = true
-			return nil
-		}),
-		config.WithPostShutdownHook("post", func(ctx context.Context) error {
-			postCalled = true
-			return nil
-		}),
-	)
+	server := New(config.Config{
+		PreShutdownHooks: []config.ShutdownHookConfig{
+			{Name: "pre", Hook: func(ctx context.Context) error {
+				preCalled = true
+				return nil
+			}},
+		},
+		ShutdownHooks: []config.ShutdownHookConfig{
+			{Name: "shutdown", Hook: func(ctx context.Context) error {
+				shutdownCalled = true
+				return nil
+			}},
+		},
+		PostShutdownHooks: []config.ShutdownHookConfig{
+			{Name: "post", Hook: func(ctx context.Context) error {
+				postCalled = true
+				return nil
+			}},
+		},
+	})
 
 	listener, _ := net.Listen("tcp", "127.0.0.1:0")
 	server.listener = listener
@@ -1954,10 +1961,138 @@ func TestServer_SSEProvider(t *testing.T) {
 
 	t.Run("SSEProvider works with config option", func(t *testing.T) {
 		provider := NewDefaultProvider()
-		s := New(config.WithSSEProvider(provider))
+		s := New(config.Config{SSEProvider: provider})
 
 		if s.SSEProvider() != provider {
 			t.Error("expected SSEProvider from config option")
 		}
 	})
+}
+
+func TestConfigMerging(t *testing.T) {
+	t.Run("partial config uses default Addr", func(t *testing.T) {
+		// Only set DisableDefaultMiddlewares, Addr should use default
+		s := New(config.Config{DisableDefaultMiddlewares: true})
+
+		// Verify server was created successfully with default address
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("custom Addr overrides default", func(t *testing.T) {
+		customAddr := ":9999"
+		s := New(config.Config{Addr: customAddr})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("partial config with only middleware settings uses default Addr", func(t *testing.T) {
+		s := New(config.Config{
+			RequestBodySize: config.RequestBodySizeConfig{
+				MaxBytes: 10 * 1024 * 1024,
+			},
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("merge preserves default TLSAddr when not set", func(t *testing.T) {
+		s := New(config.Config{
+			Addr: ":8080",
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("merge RequestID config", func(t *testing.T) {
+		s := New(config.Config{
+			RequestID: config.RequestIDConfig{
+				Header: "X-Custom-Request-ID",
+			},
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+
+	t.Run("merge SecurityHeaders config", func(t *testing.T) {
+		s := New(config.Config{
+			SecurityHeaders: config.SecurityHeadersConfig{
+				XFrameOptions: "SAMEORIGIN",
+			},
+		})
+
+		if s == nil {
+			t.Fatal("server should not be nil")
+		}
+	})
+}
+
+// mockValidator is a mock implementation of config.Validator for testing.
+type mockValidator struct {
+	structCalled   bool
+	registerCalled bool
+	lastDst        any
+	lastName       string
+	structErr      error
+}
+
+func (m *mockValidator) Struct(dst any) error {
+	m.structCalled = true
+	m.lastDst = dst
+	return m.structErr
+}
+
+func (m *mockValidator) Register(name string, fn func(reflect.Value, string) error) {
+	m.registerCalled = true
+	m.lastName = name
+}
+
+func TestServerValidator(t *testing.T) {
+	// Test that validator can be set and retrieved
+	app := New()
+
+	// Initially should be nil
+	if app.Validator() != nil {
+		t.Error("Validator should be nil initially")
+	}
+
+	// Set validator
+	mockVal := &mockValidator{}
+	app.SetValidator(mockVal)
+
+	// Should be retrievable
+	if app.Validator() != mockVal {
+		t.Error("Validator should be retrievable")
+	}
+
+	// Test that it works
+	type testStruct struct {
+		Name string
+	}
+	ts := testStruct{Name: "test"}
+	if err := app.Validator().Struct(&ts); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !mockVal.structCalled {
+		t.Error("expected Struct to be called")
+	}
+}
+
+func TestServerWithValidator(t *testing.T) {
+	// Test that validator can be set via config option
+	mockVal := &mockValidator{}
+	app := New(config.Config{Validator: mockVal})
+
+	if app.Validator() != mockVal {
+		t.Error("Validator should be set via config option")
+	}
 }

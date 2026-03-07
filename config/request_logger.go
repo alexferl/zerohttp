@@ -49,36 +49,3 @@ var DefaultRequestLoggerConfig = RequestLoggerConfig{
 	},
 	ExemptPaths: []string{},
 }
-
-// RequestLoggerOption configures request logging middleware.
-type RequestLoggerOption func(*RequestLoggerConfig)
-
-// WithRequestLoggerLogErrors sets whether errors should be logged.
-func WithRequestLoggerLogErrors(logErrors bool) RequestLoggerOption {
-	return func(c *RequestLoggerConfig) {
-		c.LogErrors = logErrors
-	}
-}
-
-// WithRequestLoggerFields sets the fields to include in logs.
-func WithRequestLoggerFields(fields []LogField) RequestLoggerOption {
-	return func(c *RequestLoggerConfig) {
-		c.Fields = fields
-	}
-}
-
-// WithRequestLoggerExemptPaths sets the paths to skip logging.
-func WithRequestLoggerExemptPaths(paths []string) RequestLoggerOption {
-	return func(c *RequestLoggerConfig) {
-		c.ExemptPaths = paths
-	}
-}
-
-// requestLoggerConfigToOptions converts a RequestLoggerConfig struct to a slice of RequestLoggerOption functions.
-func requestLoggerConfigToOptions(cfg RequestLoggerConfig) []RequestLoggerOption {
-	return []RequestLoggerOption{
-		WithRequestLoggerLogErrors(cfg.LogErrors),
-		WithRequestLoggerFields(cfg.Fields),
-		WithRequestLoggerExemptPaths(cfg.ExemptPaths),
-	}
-}

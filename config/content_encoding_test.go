@@ -25,8 +25,8 @@ func TestContentEncodingConfig_DefaultValues(t *testing.T) {
 	}
 }
 
-func TestContentEncodingOptions(t *testing.T) {
-	t.Run("encodings option", func(t *testing.T) {
+func TestContentEncodingConfig_StructAssignment(t *testing.T) {
+	t.Run("encodings assignment", func(t *testing.T) {
 		tests := []struct {
 			name     string
 			input    []string
@@ -41,8 +41,9 @@ func TestContentEncodingOptions(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				cfg := DefaultContentEncodingConfig
-				WithContentEncodingEncodings(tt.input)(&cfg)
+				cfg := ContentEncodingConfig{
+					Encodings: tt.input,
+				}
 				if len(cfg.Encodings) != len(tt.expected) {
 					t.Errorf("expected %d encodings, got %d", len(tt.expected), len(cfg.Encodings))
 				}
@@ -53,10 +54,11 @@ func TestContentEncodingOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths option", func(t *testing.T) {
+	t.Run("exempt paths assignment", func(t *testing.T) {
 		exemptPaths := []string{"/api/upload", "/health", "/metrics", "/static"}
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingExemptPaths(exemptPaths)(&cfg)
+		cfg := ContentEncodingConfig{
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != 4 {
 			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
 		}
@@ -68,8 +70,9 @@ func TestContentEncodingOptions(t *testing.T) {
 	t.Run("single encoding variants", func(t *testing.T) {
 		testCases := []string{"gzip", "deflate", "br", "compress", "identity"}
 		for _, encoding := range testCases {
-			cfg := DefaultContentEncodingConfig
-			WithContentEncodingEncodings([]string{encoding})(&cfg)
+			cfg := ContentEncodingConfig{
+				Encodings: []string{encoding},
+			}
 			if len(cfg.Encodings) != 1 {
 				t.Errorf("expected 1 encoding for %s, got %d", encoding, len(cfg.Encodings))
 			}
@@ -80,12 +83,13 @@ func TestContentEncodingOptions(t *testing.T) {
 	})
 }
 
-func TestContentEncodingConfig_MultipleOptions(t *testing.T) {
+func TestContentEncodingConfig_MultipleFields(t *testing.T) {
 	encodings := []string{"br", "gzip"}
 	exemptPaths := []string{"/upload", "/download"}
-	cfg := DefaultContentEncodingConfig
-	WithContentEncodingEncodings(encodings)(&cfg)
-	WithContentEncodingExemptPaths(exemptPaths)(&cfg)
+	cfg := ContentEncodingConfig{
+		Encodings:   encodings,
+		ExemptPaths: exemptPaths,
+	}
 
 	if len(cfg.Encodings) != 2 {
 		t.Errorf("expected 2 encodings, got %d", len(cfg.Encodings))
@@ -103,9 +107,10 @@ func TestContentEncodingConfig_MultipleOptions(t *testing.T) {
 
 func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 	t.Run("empty slices", func(t *testing.T) {
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingEncodings([]string{})(&cfg)
-		WithContentEncodingExemptPaths([]string{})(&cfg)
+		cfg := ContentEncodingConfig{
+			Encodings:   []string{},
+			ExemptPaths: []string{},
+		}
 
 		if cfg.Encodings == nil || len(cfg.Encodings) != 0 {
 			t.Errorf("expected empty encodings slice, got %v", cfg.Encodings)
@@ -116,9 +121,10 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("nil slices", func(t *testing.T) {
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingEncodings(nil)(&cfg)
-		WithContentEncodingExemptPaths(nil)(&cfg)
+		cfg := ContentEncodingConfig{
+			Encodings:   nil,
+			ExemptPaths: nil,
+		}
 
 		if cfg.Encodings != nil {
 			t.Error("expected encodings to remain nil when nil is passed")
@@ -130,8 +136,9 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 
 	t.Run("case sensitivity", func(t *testing.T) {
 		encodings := []string{"gzip", "GZIP", "Gzip", "br", "BR"}
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingEncodings(encodings)(&cfg)
+		cfg := ContentEncodingConfig{
+			Encodings: encodings,
+		}
 		if len(cfg.Encodings) != 5 {
 			t.Errorf("expected 5 encodings, got %d", len(cfg.Encodings))
 		}
@@ -144,8 +151,9 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 
 	t.Run("duplicate encodings", func(t *testing.T) {
 		encodings := []string{"gzip", "deflate", "gzip", "br", "deflate"}
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingEncodings(encodings)(&cfg)
+		cfg := ContentEncodingConfig{
+			Encodings: encodings,
+		}
 		if len(cfg.Encodings) != 5 {
 			t.Errorf("expected 5 encodings (including duplicates), got %d", len(cfg.Encodings))
 		}
@@ -159,9 +167,10 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 	t.Run("empty string values", func(t *testing.T) {
 		encodings := []string{"", "gzip", ""}
 		exemptPaths := []string{"", "/health", ""}
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingEncodings(encodings)(&cfg)
-		WithContentEncodingExemptPaths(exemptPaths)(&cfg)
+		cfg := ContentEncodingConfig{
+			Encodings:   encodings,
+			ExemptPaths: exemptPaths,
+		}
 
 		if len(cfg.Encodings) != 3 {
 			t.Errorf("expected 3 encodings, got %d", len(cfg.Encodings))
@@ -194,8 +203,9 @@ func TestContentEncodingConfig_PathPatterns(t *testing.T) {
 			"*.tar.gz",
 			"/admin/files/*",
 		}
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingExemptPaths(exemptPaths)(&cfg)
+		cfg := ContentEncodingConfig{
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != len(exemptPaths) {
 			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
 		}
@@ -214,8 +224,9 @@ func TestContentEncodingConfig_PathPatterns(t *testing.T) {
 			"/path with spaces",
 			"/path/with/unicode-ñ",
 		}
-		cfg := DefaultContentEncodingConfig
-		WithContentEncodingExemptPaths(exemptPaths)(&cfg)
+		cfg := ContentEncodingConfig{
+			ExemptPaths: exemptPaths,
+		}
 		if len(cfg.ExemptPaths) != len(exemptPaths) {
 			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
 		}

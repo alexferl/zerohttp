@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/alexferl/zerohttp/log"
@@ -72,35 +73,27 @@ type Config struct {
 	// Default: nil (means use built-in defaults)
 	DefaultMiddlewares []func(http.Handler) http.Handler
 
-	// RecoverOptions contains options for configuring the panic recovery middleware.
-	RecoverOptions []RecoverOption
-
-	// RequestBodySizeOptions contains options for configuring the request body size limiting middleware.
-	RequestBodySizeOptions []RequestBodySizeOption
-
-	// RequestIDOptions contains options for configuring the request ID generation middleware.
-	RequestIDOptions []RequestIDOption
-
-	// RequestLoggerOptions contains options for configuring the HTTP request logging middleware.
-	RequestLoggerOptions []RequestLoggerOption
-
-	// SecurityHeadersOptions contains options for configuring the security headers middleware.
-	SecurityHeadersOptions []SecurityHeadersOption
-
-	// Recover holds the built configuration for the panic recovery middleware.
+	// Recover holds the configuration for the panic recovery middleware.
 	Recover RecoverConfig
 
-	// RequestBodySize holds the built configuration for the request body size limiting middleware.
+	// RequestBodySize holds the configuration for the request body size limiting middleware.
 	RequestBodySize RequestBodySizeConfig
 
-	// RequestID holds the built configuration for the request ID generation middleware.
+	// RequestID holds the configuration for the request ID generation middleware.
 	RequestID RequestIDConfig
 
-	// RequestLogger holds the built configuration for the HTTP request logging middleware.
+	// RequestLogger holds the configuration for the HTTP request logging middleware.
 	RequestLogger RequestLoggerConfig
 
-	// SecurityHeaders holds the built configuration for the security headers middleware.
+	// SecurityHeaders holds the configuration for the security headers middleware.
 	SecurityHeaders SecurityHeadersConfig
+
+	// Validator is an optional struct validator for validating request data.
+	// Users can inject their own implementation (e.g., github.com/go-playground/validator/v10).
+	// The validator must implement the Validator interface.
+	// If nil, the default built-in validator will be used.
+	// Default: nil
+	Validator Validator
 
 	// AutocertManager is an optional autocert manager for automatic certificate management (AutoTLS).
 	// Users can inject their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager)
@@ -142,110 +135,18 @@ var DefaultConfig = Config{
 	TLSAddr:                   "localhost:8443",
 	DisableDefaultMiddlewares: false,
 	DefaultMiddlewares:        nil, // means use DefaultMiddlewares
-	RecoverOptions:            recoverConfigToOptions(DefaultRecoverConfig),
-	RequestBodySizeOptions:    requestBodySizeConfigToOptions(DefaultRequestBodySizeConfig),
-	RequestIDOptions:          requestIDConfigToOptions(DefaultRequestIDConfig),
-	RequestLoggerOptions:      requestLoggerConfigToOptions(DefaultRequestLoggerConfig),
-	SecurityHeadersOptions:    securityHeadersConfigToOptions(DefaultSecurityHeadersConfig),
+	Recover:                   DefaultRecoverConfig,
+	RequestBodySize:           DefaultRequestBodySizeConfig,
+	RequestID:                 DefaultRequestIDConfig,
+	RequestLogger:             DefaultRequestLoggerConfig,
+	SecurityHeaders:           DefaultSecurityHeadersConfig,
 	Logger:                    nil, // means use DefaultLogger
 	Server:                    nil,
 	TLSServer:                 nil,
 }
 
-// Build applies all configured options to populate the middleware configuration structs.
-func (c *Config) Build() {
-	c.Recover = DefaultRecoverConfig
-	for _, opt := range c.RecoverOptions {
-		opt(&c.Recover)
-	}
-
-	c.RequestBodySize = DefaultRequestBodySizeConfig
-	for _, opt := range c.RequestBodySizeOptions {
-		opt(&c.RequestBodySize)
-	}
-
-	c.RequestID = DefaultRequestIDConfig
-	for _, opt := range c.RequestIDOptions {
-		opt(&c.RequestID)
-	}
-
-	c.RequestLogger = DefaultRequestLoggerConfig
-	for _, opt := range c.RequestLoggerOptions {
-		opt(&c.RequestLogger)
-	}
-
-	c.SecurityHeaders = DefaultSecurityHeadersConfig
-	for _, opt := range c.SecurityHeadersOptions {
-		opt(&c.SecurityHeaders)
-	}
-}
-
-// Option is a function that sets a field in Config.
-type Option func(*Config)
-
 // ============================================================================
-// Server Address Options
-// ============================================================================
-
-// WithAddr sets the HTTP server address.
-func WithAddr(addr string) Option {
-	return func(c *Config) {
-		c.Addr = addr
-	}
-}
-
-// WithTLSAddr sets the HTTPS server address.
-func WithTLSAddr(addr string) Option {
-	return func(c *Config) {
-		c.TLSAddr = addr
-	}
-}
-
-// ============================================================================
-// Server Instance Options
-// ============================================================================
-
-// WithServer sets a custom HTTP server instance.
-func WithServer(server *http.Server) Option {
-	return func(c *Config) {
-		c.Server = server
-	}
-}
-
-// WithTLSServer sets a custom HTTPS server instance.
-func WithTLSServer(server *http.Server) Option {
-	return func(c *Config) {
-		c.TLSServer = server
-	}
-}
-
-// WithListener sets a custom network listener for HTTP traffic.
-func WithListener(listener net.Listener) Option {
-	return func(c *Config) {
-		c.Listener = listener
-	}
-}
-
-// WithTLSListener sets a custom network listener for HTTPS traffic.
-func WithTLSListener(listener net.Listener) Option {
-	return func(c *Config) {
-		c.TLSListener = listener
-	}
-}
-
-// ============================================================================
-// Logging Options
-// ============================================================================
-
-// WithLogger sets a custom logger instance.
-func WithLogger(logger log.Logger) Option {
-	return func(c *Config) {
-		c.Logger = logger
-	}
-}
-
-// ============================================================================
-// Shutdown Hook Options
+// Shutdown Hook Types
 // ============================================================================
 
 // ShutdownHook is a function called during server shutdown.
@@ -262,128 +163,44 @@ type ShutdownHookConfig struct {
 	Hook ShutdownHook
 }
 
-// WithPreShutdownHook registers a hook to run before server shutdown begins.
-// Pre-shutdown hooks execute sequentially in registration order.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	zerohttp.New(zerohttp.WithPreShutdownHook("health", func(ctx context.Context) error {
-//	    health.SetUnhealthy()
-//	    return nil
-//	}))
-func WithPreShutdownHook(name string, hook ShutdownHook) Option {
-	return func(c *Config) {
-		c.PreShutdownHooks = append(c.PreShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
-	}
-}
+// ============================================================================
+// Validator Interface
+// ============================================================================
 
-// WithShutdownHook registers a hook to run concurrently with server shutdown.
-// Shutdown hooks execute concurrently alongside server shutdown.
+// Validator is the interface for struct validation.
+// Users can implement this interface to provide their own validation logic
+// (e.g., wrapping github.com/go-playground/validator/v10).
 //
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
+// Example with go-playground/validator:
 //
-// Example:
+//	import "github.com/go-playground/validator/v10"
 //
-//	zerohttp.New(zerohttp.WithShutdownHook("close-db", func(ctx context.Context) error {
-//	    return db.Close()
-//	}))
-func WithShutdownHook(name string, hook ShutdownHook) Option {
-	return func(c *Config) {
-		c.ShutdownHooks = append(c.ShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
-	}
-}
+//	type myValidator struct {
+//	    v *validator.Validate
+//	}
+//
+//	func (m *myValidator) Struct(dst any) error {
+//	    return m.v.Struct(dst)
+//	}
+//
+//	func (m *myValidator) Register(name string, fn func(reflect.Value, string) error) {
+//	    // Custom registration or no-op
+//	}
+//
+//	app := zerohttp.New(config.Config{Validator: &myValidator{v: validator.New()}})
+type Validator interface {
+	// Struct validates a struct using `validate` struct tags.
+	// It returns an error containing all validation failures, or nil if valid.
+	Struct(dst any) error
 
-// WithPostShutdownHook registers a hook to run after servers are shut down.
-// Post-shutdown hooks execute sequentially in registration order.
-//
-// Hooks must respect context cancellation by checking ctx.Done().
-// If a hook blocks without respecting the context, shutdown will hang.
-//
-// Example:
-//
-//	zerohttp.New(zerohttp.WithPostShutdownHook("cleanup", func(ctx context.Context) error {
-//	    return os.RemoveAll("/tmp/app-*")
-//	}))
-func WithPostShutdownHook(name string, hook ShutdownHook) Option {
-	return func(c *Config) {
-		c.PostShutdownHooks = append(c.PostShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
-	}
+	// Register adds a custom validation function with the given name.
+	// The name can be used in struct tags like `validate:"customName"`.
+	Register(name string, fn func(reflect.Value, string) error)
 }
 
 // ============================================================================
-// Middleware Options
+// Autocert Manager Interface
 // ============================================================================
-
-// WithDisableDefaultMiddlewares disables all built-in default middlewares.
-func WithDisableDefaultMiddlewares() Option {
-	return func(c *Config) {
-		c.DisableDefaultMiddlewares = true
-	}
-}
-
-// WithDefaultMiddlewares sets custom default middlewares.
-func WithDefaultMiddlewares(mw []func(http.Handler) http.Handler) Option {
-	return func(c *Config) {
-		c.DefaultMiddlewares = mw
-	}
-}
-
-// WithRecoverOptions configures the panic recovery middleware.
-func WithRecoverOptions(opts ...RecoverOption) Option {
-	return func(c *Config) {
-		c.RecoverOptions = append([]RecoverOption{}, opts...)
-	}
-}
-
-// WithRequestBodySizeOptions configures the request body size limiting middleware.
-func WithRequestBodySizeOptions(opts ...RequestBodySizeOption) Option {
-	return func(c *Config) {
-		c.RequestBodySizeOptions = append([]RequestBodySizeOption{}, opts...)
-	}
-}
-
-// WithRequestIDOptions configures the request ID generation middleware.
-func WithRequestIDOptions(opts ...RequestIDOption) Option {
-	return func(c *Config) {
-		c.RequestIDOptions = append([]RequestIDOption{}, opts...)
-	}
-}
-
-// WithRequestLoggerOptions configures the HTTP request logging middleware.
-func WithRequestLoggerOptions(opts ...RequestLoggerOption) Option {
-	return func(c *Config) {
-		c.RequestLoggerOptions = append([]RequestLoggerOption{}, opts...)
-	}
-}
-
-// WithSecurityHeadersOptions configures the security headers middleware.
-func WithSecurityHeadersOptions(opts ...SecurityHeadersOption) Option {
-	return func(c *Config) {
-		c.SecurityHeadersOptions = append([]SecurityHeadersOption{}, opts...)
-	}
-}
-
-// ============================================================================
-// TLS Certificate Options
-// ============================================================================
-
-// WithCertFile sets the file path to the TLS certificate.
-func WithCertFile(path string) Option {
-	return func(c *Config) {
-		c.CertFile = path
-	}
-}
-
-// WithKeyFile sets the file path to the TLS private key.
-func WithKeyFile(path string) Option {
-	return func(c *Config) {
-		c.KeyFile = path
-	}
-}
 
 // AutocertManager is the interface for automatic TLS certificate management.
 // Users can implement this interface or use golang.org/x/crypto/acme/autocert.Manager
@@ -398,7 +215,7 @@ func WithKeyFile(path string) Option {
 //	    Prompt:     autocert.AcceptTOS,
 //	    HostPolicy: autocert.HostWhitelist("example.com"),
 //	}
-//	srv := zerohttp.New(config.WithAutocertManager(mgr))
+//	app := zerohttp.New(config.Config{AutocertManager: mgr})
 type AutocertManager interface {
 	// GetCertificate returns a TLS certificate for the given client hello.
 	// This is called by the TLS server during the handshake.
@@ -414,16 +231,8 @@ type AutocertManager interface {
 	Hostnames() []string
 }
 
-// WithAutocertManager sets an autocert manager for automatic TLS certificate management.
-// The manager must implement the AutocertManager interface.
-func WithAutocertManager(mgr AutocertManager) Option {
-	return func(c *Config) {
-		c.AutocertManager = mgr
-	}
-}
-
 // ============================================================================
-// HTTP/3 Options
+// HTTP/3 Interfaces
 // ============================================================================
 
 // HTTP3Server is the interface that HTTP/3 servers must implement to be used with zerohttp.
@@ -465,15 +274,8 @@ type HTTP3ServerWithAutocert interface {
 	ListenAndServeTLSWithAutocert(manager AutocertManager) error
 }
 
-// WithHTTP3Server sets a custom HTTP/3 server instance.
-func WithHTTP3Server(server HTTP3Server) Option {
-	return func(c *Config) {
-		c.HTTP3Server = server
-	}
-}
-
 // ============================================================================
-// SSE Options
+// SSE Interfaces
 // ============================================================================
 
 // SSEConnection represents an active Server-Sent Events connection.
@@ -513,38 +315,8 @@ type SSEEvent struct {
 	Retry time.Duration
 }
 
-// WithSSEProvider sets a custom SSE provider for Server-Sent Events connections.
-// Users bring their own SSE library and implement the SSEProvider interface,
-// or use a thin wrapper around their preferred library.
-//
-// Example with built-in stdlib provider:
-//
-//	app := zerohttp.New(
-//	    config.WithSSEProvider(zh.NewDefaultProvider()),
-//	)
-//
-//	app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-//	    provider := app.SSEProvider()
-//	    if provider == nil {
-//	        return fmt.Errorf("SSE not configured")
-//	    }
-//
-//	    sse, err := provider.NewSSE(w, r)
-//	    if err != nil {
-//	        return err
-//	    }
-//	    defer sse.Close()
-//
-//	    // Stream events...
-//	}))
-func WithSSEProvider(provider SSEProvider) Option {
-	return func(c *Config) {
-		c.SSEProvider = provider
-	}
-}
-
 // ============================================================================
-// WebSocket Options
+// WebSocket Interfaces
 // ============================================================================
 
 // WebSocketConn represents a WebSocket connection.
@@ -623,38 +395,8 @@ const (
 	PongMessage   MessageType = 10
 )
 
-// WithWebSocketUpgrader sets a WebSocket upgrader.
-// Users bring their own WebSocket library and implement the WebSocketUpgrader interface,
-// or use a thin wrapper around their preferred library.
-//
-// Example with gorilla/websocket:
-//
-//	import "github.com/gorilla/websocket"
-//
-//	upgrader := &websocket.Upgrader{
-//	    CheckOrigin: func(r *http.Request) bool { return true },
-//	}
-//
-//	app := zerohttp.New(
-//	    zerohttp.WithWebSocketUpgrader(&myUpgrader{upgrader}),
-//	)
-//
-//	app.GET("/ws", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-//	    ws, err := app.WebSocketUpgrader().Upgrade(w, r)
-//	    if err != nil {
-//	        return err
-//	    }
-//	    defer ws.Close()
-//	    // ... handle connection ...
-//	}))
-func WithWebSocketUpgrader(upgrader WebSocketUpgrader) Option {
-	return func(c *Config) {
-		c.WebSocketUpgrader = upgrader
-	}
-}
-
 // ============================================================================
-// WebTransport Options
+// WebTransport Interfaces
 // ============================================================================
 
 // WebTransportServer is the interface that WebTransport servers must implement
@@ -691,27 +433,4 @@ type WebTransportServerWithAutocert interface {
 	// certificate management using the provided autocert manager.
 	// The manager's GetCertificate function is used to obtain TLS certificates.
 	ListenAndServeTLSWithAutocert(manager AutocertManager) error
-}
-
-// WithWebTransportServer sets a custom WebTransport server instance.
-// WebTransport runs over HTTP/3 and provides low-latency, bidirectional communication.
-//
-// The WebTransport server will be started automatically when ListenAndServeTLS or Start
-// is called on the zerohttp server. You don't need to call ListenAndServeTLS on the
-// WebTransport server yourself.
-//
-// Example:
-//
-//	import "github.com/quic-go/webtransport-go"
-//
-//	app := zerohttp.New()
-//	wtServer := &webtransport.Server{
-//	    H3: &http3.Server{Addr: ":443", Handler: app},
-//	}
-//	app.SetWebTransportServer(wtServer)
-//	app.ListenAndServeTLS("cert.pem", "key.pem") // wtServer starts automatically
-func WithWebTransportServer(server WebTransportServer) Option {
-	return func(c *Config) {
-		c.WebTransportServer = server
-	}
 }

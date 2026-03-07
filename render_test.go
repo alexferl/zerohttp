@@ -39,7 +39,7 @@ func TestRenderer_JSON(t *testing.T) {
 
 			zhtest.AssertWith(t, w).
 				Status(tt.statusCode).
-				Header(HeaderContentType, MIMEApplicationJSON).
+				Header(HeaderContentType, MIMEApplicationJSONCharset).
 				JSONEq(tt.expected)
 		})
 	}
@@ -75,7 +75,7 @@ func TestRenderer_Text(t *testing.T) {
 			}
 
 			zhtest.AssertWith(t, w).
-				Header(HeaderContentType, MIMETextPlain).
+				Header(HeaderContentType, MIMETextPlainCharset).
 				Body(tt.data)
 		})
 	}
@@ -90,7 +90,7 @@ func TestRenderer_HTML(t *testing.T) {
 	}
 
 	zhtest.AssertWith(t, w).
-		Header(HeaderContentType, MIMETextHTML).
+		Header(HeaderContentType, MIMETextHTMLCharset).
 		Body(html)
 }
 
@@ -109,7 +109,7 @@ func TestRenderer_Template(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusOK).
-			Header(HeaderContentType, MIMETextHTML).
+			Header(HeaderContentType, MIMETextHTMLCharset).
 			BodyContains("<title>Test Page</title>")
 	})
 
@@ -163,7 +163,7 @@ func TestRenderer_Stream(t *testing.T) {
 	data := "streaming content"
 	w := httptest.NewRecorder()
 
-	if err := R.Stream(w, http.StatusOK, MIMETextPlain, strings.NewReader(data)); err != nil {
+	if err := R.Stream(w, http.StatusOK, MIMETextPlainCharset, strings.NewReader(data)); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
@@ -174,7 +174,7 @@ func TestRenderer_Stream_Error(t *testing.T) {
 	w := httptest.NewRecorder()
 	errorReader := &errorReader{err: errors.New("read error")}
 
-	err := R.Stream(w, http.StatusOK, MIMETextPlain, errorReader)
+	err := R.Stream(w, http.StatusOK, MIMETextPlainCharset, errorReader)
 	if err == nil {
 		t.Error("expected error from reader")
 	}
@@ -191,9 +191,9 @@ func TestRenderer_File(t *testing.T) {
 		content     string
 		contentType string
 	}{
-		{"text", "test.txt", "Hello!", MIMETextPlain},
-		{"json", "test.json", `{"test":"value"}`, MIMEApplicationJSON},
-		{"html", "test.html", "<h1>Test</h1>", MIMETextHTML},
+		{"text", "test.txt", "Hello!", MIMETextPlainCharset},
+		{"json", "test.json", `{"test":"value"}`, MIMEApplicationJSONCharset},
+		{"html", "test.html", "<h1>Test</h1>", MIMETextHTMLCharset},
 	}
 
 	tempDir := t.TempDir()

@@ -1,10 +1,13 @@
 package zerohttp
 
 const (
-	MIMETextHTML                  = "text/html; charset=utf-8"
-	MIMETextPlain                 = "text/plain; charset=utf-8"
+	MIMETextHTML                  = "text/html"
+	MIMETextHTMLCharset           = "text/html; charset=utf-8"
+	MIMETextPlain                 = "text/plain"
+	MIMETextPlainCharset          = "text/plain; charset=utf-8"
 	MIMETextEventStream           = "text/event-stream"
-	MIMEApplicationJSON           = "application/json; charset=utf-8"
+	MIMEApplicationJSON           = "application/json"
+	MIMEApplicationJSONCharset    = "application/json; charset=utf-8"
 	MIMEApplicationProblem        = "application/problem+json"
 	MIMEApplicationFormURLEncoded = "application/x-www-form-urlencoded"
 	MIMEMultipartFormData         = "multipart/form-data"

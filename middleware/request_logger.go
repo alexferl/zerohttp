@@ -8,26 +8,24 @@ import (
 	"github.com/alexferl/zerohttp/log"
 )
 
-// RequestLogger creates a request logging middleware with optional configuration.
-func RequestLogger(logger log.Logger, opts ...config.RequestLoggerOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultRequestLoggerConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+// RequestLogger creates a request logging middleware with the provided configuration.
+func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(http.Handler) http.Handler {
+	c := config.DefaultRequestLoggerConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-
-	if cfg.Fields == nil {
-		cfg.Fields = config.DefaultRequestLoggerConfig.Fields
+	if c.Fields == nil {
+		c.Fields = config.DefaultRequestLoggerConfig.Fields
 	}
 
 	fieldMap := make(map[config.LogField]bool)
-	for _, field := range cfg.Fields {
+	for _, field := range c.Fields {
 		fieldMap[field] = true
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range cfg.ExemptPaths {
+			for _, exemptPath := range c.ExemptPaths {
 				if r.URL.Path == exemptPath {
 					next.ServeHTTP(w, r)
 					return
@@ -46,7 +44,7 @@ func RequestLogger(logger log.Logger, opts ...config.RequestLoggerOption) func(h
 
 			duration := time.Since(start)
 
-			LogRequest(logger, cfg, r, wrapped.statusCode, duration)
+			LogRequest(logger, c, r, wrapped.statusCode, duration)
 		})
 	}
 }

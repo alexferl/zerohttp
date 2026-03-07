@@ -22,33 +22,32 @@ var ErrTimeoutWrite = errors.New("zerohttp: timeout middleware write failed")
 // context deadline has been reached. If you don't check this channel and return
 // appropriately, the timeout mechanism will be ineffective and the request will
 // continue processing beyond the intended timeout period.
-func Timeout(opts ...config.TimeoutOption) func(http.Handler) http.Handler {
-	cfg := config.DefaultTimeoutConfig
-
-	for _, opt := range opts {
-		opt(&cfg)
+func Timeout(cfg ...config.TimeoutConfig) func(http.Handler) http.Handler {
+	c := config.DefaultTimeoutConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
 
-	if cfg.Timeout <= 0 {
-		cfg.Timeout = config.DefaultTimeoutConfig.Timeout
+	if c.Timeout <= 0 {
+		c.Timeout = config.DefaultTimeoutConfig.Timeout
 	}
-	if cfg.StatusCode == 0 {
-		cfg.StatusCode = config.DefaultTimeoutConfig.StatusCode
+	if c.StatusCode == 0 {
+		c.StatusCode = config.DefaultTimeoutConfig.StatusCode
 	}
-	if cfg.ExemptPaths == nil {
-		cfg.ExemptPaths = config.DefaultTimeoutConfig.ExemptPaths
+	if c.ExemptPaths == nil {
+		c.ExemptPaths = config.DefaultTimeoutConfig.ExemptPaths
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range cfg.ExemptPaths {
+			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return
 				}
 			}
 
-			ctx, cancel := context.WithTimeout(r.Context(), cfg.Timeout)
+			ctx, cancel := context.WithTimeout(r.Context(), c.Timeout)
 			defer cancel()
 
 			done := make(chan struct{})
@@ -94,9 +93,9 @@ func Timeout(opts ...config.TimeoutOption) func(http.Handler) http.Handler {
 				defer tw.mu.Unlock()
 
 				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-					w.WriteHeader(cfg.StatusCode)
-					if cfg.Message != "" {
-						if _, err := w.Write([]byte(cfg.Message)); err != nil {
+					w.WriteHeader(c.StatusCode)
+					if c.Message != "" {
+						if _, err := w.Write([]byte(c.Message)); err != nil {
 							panic(fmt.Errorf("timeout message write failed: %w", err))
 						}
 					}

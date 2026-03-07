@@ -33,7 +33,7 @@ func TestNewEventStream(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		// Set Content-Type header to simulate headers already sent
-		w.Header().Set(HeaderContentType, MIMETextPlain)
+		w.Header().Set(HeaderContentType, MIMETextPlainCharset)
 		w.WriteHeader(http.StatusOK)
 
 		_, err := NewSSE(w, r)
@@ -356,7 +356,7 @@ func TestNewSSEWriter(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
-		w.Header().Set(HeaderContentType, MIMETextPlain)
+		w.Header().Set(HeaderContentType, MIMETextPlainCharset)
 		w.WriteHeader(http.StatusOK)
 
 		_, err := NewSSEWriter(w, r)
