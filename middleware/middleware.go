@@ -18,8 +18,9 @@ func DefaultMiddlewares(cfg config.Config, logger log.Logger) []func(http.Handle
 	}
 }
 
-// pathMatches checks if a request path matches an exempt path
-// Supports exact matches and prefix matches (paths ending with /)
+// pathMatches checks if a request path matches an exempt path.
+// Supports exact matches and prefix matches (paths ending with /).
+// For example, "/api/public/" matches "/api/public/users" and "/api/public/status".
 func pathMatches(requestPath, exemptPath string) bool {
 	if exemptPath == requestPath {
 		return true

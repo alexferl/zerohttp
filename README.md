@@ -270,12 +270,14 @@ app.GET("/admin", adminHandler,
 
 ### Available Middlewares
 
-- **Authentication**: Basic Auth
+- **Authentication**: [Basic Auth](docs/MIDDLEWARES.md#basic-auth), [HMAC Request Signing](docs/MIDDLEWARES.md#hmac-request-signing)
 - **Security**: CORS, Security Headers, Request Body Size Limits
 - **Rate Limiting**: Rate Limit with configurable algorithms
 - **Content Handling**: Compress, Content Charset, Content Encoding, Content Type
 - **Monitoring**: Request Logger, Circuit Breaker, Timeout, Recover
 - **Utilities**: Request ID, Real IP, Trailing Slash, Set Header, No Cache, With Value
+
+See [MIDDLEWARES.md](docs/MIDDLEWARES.md) for detailed documentation on each middleware.
 
 Each middleware accepts a config struct:
 
