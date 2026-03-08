@@ -42,6 +42,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // JWTAuthContextKey is the context key type for JWT auth
@@ -128,7 +129,8 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Skip OPTIONS requests (CORS preflight)
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			if r.Method == http.MethodOptions {
 				next.ServeHTTP(w, r)
 				return
@@ -147,24 +149,27 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 			}
 
 			if c.TokenStore == nil {
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleJWTError(w, r, errInvalidToken, errorHandler)
 				return
 			}
 
 			tokenString := c.TokenExtractor(r)
 			if tokenString == "" {
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("missing").Inc()
 				handleJWTError(w, r, errMissingToken, errorHandler)
 				return
 			}
 
 			claims, err := c.TokenStore.Validate(tokenString)
 			if err != nil {
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleJWTError(w, r, errInvalidToken, errorHandler)
 				return
 			}
 
-			// Check if token is revoked
 			if c.TokenStore.IsRevoked(claims) {
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleJWTError(w, r, &JWTAuthError{
 					Title:  "Token Revoked",
 					Status: http.StatusUnauthorized,
@@ -173,8 +178,8 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Prevent refresh tokens from being used as access tokens
 			if tokenType := getStringClaim(claims, config.JWTClaimType); tokenType == config.TokenTypeRefresh {
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleJWTError(w, r, &JWTAuthError{
 					Title:  "Invalid Token Type",
 					Status: http.StatusUnauthorized,
@@ -185,6 +190,7 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 
 			for _, claim := range c.RequiredClaims {
 				if !hasClaim(claims, claim) {
+					reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 					handleJWTError(w, r, &JWTAuthError{
 						Type:   errMissingRequiredClaim.Type,
 						Title:  errMissingRequiredClaim.Title,
@@ -194,6 +200,8 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 					return
 				}
 			}
+
+			reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("valid").Inc()
 
 			if onSuccess != nil {
 				onSuccess(r, claims)

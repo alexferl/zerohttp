@@ -8,6 +8,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // CircuitState represents the state of the circuit breaker
@@ -94,10 +95,15 @@ func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			key := c.KeyExtractor(r)
 			circ := cbm.getCircuit(key)
 
+			reg.Gauge("circuit_breaker_state", "key").WithLabelValues(key).Set(float64(circ.getState()))
+
 			if circ.isOpen() {
+				reg.Counter("circuit_breaker_requests_total", "key", "result").WithLabelValues(key, "rejected").Inc()
 				detail := problem.NewDetail(c.OpenStatusCode, c.OpenMessage)
 				if err := detail.Render(w); err != nil {
 					panic(fmt.Errorf("circuit breaker message write failed: %w", err))
@@ -112,7 +118,7 @@ func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.
 
 			next.ServeHTTP(wrapped, r)
 
-			circ.recordResult(r, wrapped.statusCode)
+			circ.recordResult(r, wrapped.statusCode, reg, key)
 		})
 	}
 }
@@ -140,6 +146,13 @@ func (cbm *circuitBreakerMiddleware) getCircuit(key string) *circuit {
 	return c
 }
 
+// getState returns the current state of the circuit
+func (c *circuit) getState() CircuitState {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.state
+}
+
 // isOpen checks if the circuit is open or should transition to half-open
 func (c *circuit) isOpen() bool {
 	c.mu.Lock()
@@ -164,7 +177,7 @@ func (c *circuit) isOpen() bool {
 }
 
 // recordResult records the result of a request and updates circuit state
-func (c *circuit) recordResult(r *http.Request, statusCode int) {
+func (c *circuit) recordResult(r *http.Request, statusCode int, reg metrics.Registry, key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -174,24 +187,28 @@ func (c *circuit) recordResult(r *http.Request, statusCode int) {
 	case StateClosed:
 		if isFailure {
 			c.failureCount++
+			reg.Counter("circuit_breaker_failures_total", "key").WithLabelValues(key).Inc()
 			if c.failureCount >= c.config.FailureThreshold {
 				c.state = StateOpen
 				c.lastFailureTime = time.Now()
+				reg.Counter("circuit_breaker_trips_total", "key").WithLabelValues(key).Inc()
 			}
 		} else {
-			c.failureCount = 0 // Reset on success
+			c.failureCount = 0
 		}
+		reg.Counter("circuit_breaker_requests_total", "key", "result").WithLabelValues(key, "allowed").Inc()
 
 	case StateOpen:
-		// In open state, we don't normally record results since requests are blocked
-		// But if somehow a request gets through (shouldn't happen), just ignore it
-		// The transition to half-open happens in isOpen() based on time
+		// In open state, requests are blocked
 
 	case StateHalfOpen:
 		if isFailure {
 			c.state = StateOpen
 			c.lastFailureTime = time.Now()
 			c.failureCount++
+			reg.Counter("circuit_breaker_failures_total", "key").WithLabelValues(key).Inc()
+			reg.Counter("circuit_breaker_trips_total", "key").WithLabelValues(key).Inc()
+			reg.Counter("circuit_breaker_requests_total", "key", "result").WithLabelValues(key, "rejected").Inc()
 		} else {
 			c.successCount++
 			if c.successCount >= c.config.SuccessThreshold {
@@ -199,6 +216,7 @@ func (c *circuit) recordResult(r *http.Request, statusCode int) {
 				c.failureCount = 0
 				c.successCount = 0
 			}
+			reg.Counter("circuit_breaker_requests_total", "key", "result").WithLabelValues(key, "allowed").Inc()
 		}
 	}
 }

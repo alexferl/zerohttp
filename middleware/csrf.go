@@ -12,6 +12,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // CSRFContextKey is the key type for CSRF token in context
@@ -85,6 +86,8 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
@@ -110,18 +113,21 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 
 			cookie, err := r.Cookie(c.CookieName)
 			if err != nil || cookie.Value == "" {
+				reg.Counter("csrf_rejected_total", "reason").WithLabelValues("missing_token").Inc()
 				errorHandler(w, r)
 				return
 			}
 
 			requestToken := extractToken(r, lookupSource, lookupName)
 			if requestToken == "" {
+				reg.Counter("csrf_rejected_total", "reason").WithLabelValues("missing_token").Inc()
 				errorHandler(w, r)
 				return
 			}
 
 			cookieToken := cookie.Value
 			if !compareTokens(cookieToken, requestToken, hmacKey) {
+				reg.Counter("csrf_rejected_total", "reason").WithLabelValues("invalid_token").Inc()
 				errorHandler(w, r)
 				return
 			}

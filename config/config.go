@@ -88,6 +88,9 @@ type Config struct {
 	// SecurityHeaders holds the configuration for the security headers middleware.
 	SecurityHeaders SecurityHeadersConfig
 
+	// Metrics holds the configuration for the metrics middleware.
+	Metrics MetricsConfig
+
 	// Validator is an optional struct validator for validating request data.
 	// Users can inject their own implementation (e.g., github.com/go-playground/validator/v10).
 	// The validator must implement the Validator interface.
@@ -140,6 +143,7 @@ var DefaultConfig = Config{
 	RequestID:                 DefaultRequestIDConfig,
 	RequestLogger:             DefaultRequestLoggerConfig,
 	SecurityHeaders:           DefaultSecurityHeadersConfig,
+	Metrics:                   DefaultMetricsConfig,
 	Logger:                    nil, // means use DefaultLogger
 	Server:                    nil,
 	TLSServer:                 nil,

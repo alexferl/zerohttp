@@ -19,6 +19,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // HMACAuthError represents an HMAC authentication error with RFC 9457 Problem Details
@@ -158,6 +159,8 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
@@ -170,13 +173,13 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 
 			authHeader := r.Header.Get(c.AuthHeaderName)
 			if authHeader == "" {
-				// Check for pre-signed URL parameters if enabled
 				if c.AllowPresignedURLs {
 					parsed, err = parsePresignedURLParams(r)
 					if err != nil {
 						if auditLogger != nil {
 							auditLogger("", time.Time{}, false, "invalid_presigned_url")
 						}
+						reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 						handleHMACError(w, r, errInvalidFormat, errorHandler)
 						return
 					}
@@ -184,6 +187,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 					if auditLogger != nil {
 						auditLogger("", time.Time{}, false, "missing_auth")
 					}
+					reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("missing").Inc()
 					handleHMACError(w, r, errMissingAuth, errorHandler)
 					return
 				}
@@ -194,6 +198,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				if auditLogger != nil {
 					auditLogger("", time.Time{}, false, "invalid_format")
 				}
+				reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleHMACError(w, r, errInvalidFormat, errorHandler)
 				return
 			}
@@ -203,17 +208,18 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				if auditLogger != nil {
 					auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "algorithm_mismatch")
 				}
+				reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleHMACError(w, r, errInvalidFormat, errorHandler)
 				return
 			}
 
 			for _, header := range requiredHeaders {
 				if header == "host" {
-					// Host is special - comes from r.Host
 					if r.Host == "" {
 						if auditLogger != nil {
 							auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "missing_header")
 						}
+						reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 						handleHMACError(w, r, &HMACAuthError{
 							Type:   errMissingHeader.Type,
 							Title:  errMissingHeader.Title,
@@ -228,6 +234,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 					if auditLogger != nil {
 						auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "missing_header")
 					}
+					reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 					handleHMACError(w, r, &HMACAuthError{
 						Type:   errMissingHeader.Type,
 						Title:  errMissingHeader.Title,
@@ -238,12 +245,12 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				}
 			}
 
-			// Validate timestamp - presigned URLs use the timestamp as expiration time
 			if parsed.IsPresigned {
 				if err := validatePresignedURLTimestamp(parsed.Timestamp, c.ClockSkewGrace); err != nil {
 					if auditLogger != nil {
 						auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "request_expired")
 					}
+					reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 					handleHMACError(w, r, errRequestExpired, errorHandler)
 					return
 				}
@@ -252,6 +259,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 					if auditLogger != nil {
 						auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "request_expired")
 					}
+					reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 					handleHMACError(w, r, errRequestExpired, errorHandler)
 					return
 				}
@@ -262,6 +270,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				if auditLogger != nil {
 					auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "invalid_credentials")
 				}
+				reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleHMACError(w, r, errInvalidCredentials, errorHandler)
 				return
 			}
@@ -275,6 +284,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 					if auditLogger != nil {
 						auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "body_too_large")
 					}
+					reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 					handleHMACError(w, r, &HMACAuthError{
 						Title:  "Request Body Too Large",
 						Status: http.StatusRequestEntityTooLarge,
@@ -299,6 +309,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				if auditLogger != nil {
 					auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "signature_mismatch")
 				}
+				reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleHMACError(w, r, errSignatureMismatch, errorHandler)
 				return
 			}
@@ -306,6 +317,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 			if auditLogger != nil {
 				auditLogger(parsed.AccessKeyID, parsed.Timestamp, true, "")
 			}
+			reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("valid").Inc()
 
 			ctx := context.WithValue(r.Context(), HMACAccessKeyIDContextKey, parsed.AccessKeyID)
 			next.ServeHTTP(w, r.WithContext(ctx))

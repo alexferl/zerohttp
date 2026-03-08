@@ -11,6 +11,7 @@ import (
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // ValidationErrorer is the interface for validation errors.
@@ -51,6 +52,8 @@ func Recover(logger log.Logger, cfg ...config.RecoverConfig) func(http.Handler) 
 							return
 						}
 					}
+
+					metrics.SafeRegistry(metrics.GetRegistry(r.Context())).Counter("recover_panics_total").Inc()
 
 					// Real panic - log as error with stack trace
 					reqID := r.Header.Get("X-Request-Id")

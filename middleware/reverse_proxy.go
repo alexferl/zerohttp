@@ -6,12 +6,14 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // reverseProxy manages the proxy state including load balancing
@@ -20,6 +22,17 @@ type reverseProxy struct {
 	backends  []*backend
 	current   uint64 // for round-robin
 	transport http.RoundTripper
+}
+
+// proxyResponseRecorder wraps http.ResponseWriter to capture status code
+type proxyResponseRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rec *proxyResponseRecorder) WriteHeader(code int) {
+	rec.statusCode = code
+	rec.ResponseWriter.WriteHeader(code)
 }
 
 // backend represents a single upstream with health tracking
@@ -64,6 +77,8 @@ func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			for _, exempt := range cfg.ExemptPaths {
 				if pathMatches(r.URL.Path, exempt) {
 					next.ServeHTTP(w, r)
@@ -71,10 +86,8 @@ func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler
 				}
 			}
 
-			// Get healthy backend
 			b := rp.selectBackend()
 			if b == nil {
-				// No healthy backends - use fallback or error
 				if cfg.FallbackHandler != nil {
 					cfg.FallbackHandler.ServeHTTP(w, r)
 				} else {
@@ -83,13 +96,19 @@ func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler
 				return
 			}
 
-			// Track active connections for least-connections LB
 			if cfg.LoadBalancer == config.LeastConnections {
 				atomic.AddInt64(&b.activeConns, 1)
 				defer atomic.AddInt64(&b.activeConns, -1)
 			}
 
-			b.proxy.ServeHTTP(w, r)
+			rec := &proxyResponseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+			start := time.Now()
+
+			b.proxy.ServeHTTP(rec, r)
+
+			duration := time.Since(start).Seconds()
+			reg.Counter("proxy_requests_total", "target", "status").WithLabelValues(b.Target, strconv.Itoa(rec.statusCode)).Inc()
+			reg.Histogram("proxy_request_duration_seconds", []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}, "target").WithLabelValues(b.Target).Observe(duration)
 		})
 	}
 }

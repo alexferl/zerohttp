@@ -6,6 +6,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // BasicAuth creates a basic authentication middleware with the provided configuration
@@ -23,6 +24,8 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
@@ -32,6 +35,7 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 
 			user, pass, ok := r.BasicAuth()
 			if !ok {
+				reg.Counter("basic_auth_requests_total", "result").WithLabelValues("missing").Inc()
 				basicAuthFailed(w, c.Realm)
 				return
 			}
@@ -44,15 +48,16 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 				credPass, credUserOk := c.Credentials[user]
 				isValid = credUserOk && subtle.ConstantTimeCompare([]byte(pass), []byte(credPass)) == 1
 			} else {
-				// No authentication configured - deny all
 				isValid = false
 			}
 
 			if !isValid {
+				reg.Counter("basic_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				basicAuthFailed(w, c.Realm)
 				return
 			}
 
+			reg.Counter("basic_auth_requests_total", "result").WithLabelValues("valid").Inc()
 			next.ServeHTTP(w, r)
 		})
 	}

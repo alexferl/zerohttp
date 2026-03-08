@@ -23,6 +23,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
   - [Hook Execution Order](#hook-execution-order)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
+- [Metrics](docs/METRICS.md)
 - [Static File Serving](#static-file-serving)
   - [Static File Methods](#static-file-methods)
   - [Fallback Behavior](#fallback-behavior)
@@ -56,6 +57,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Server-Sent Events**: Built-in SSE support with event replay and broadcast hub for real-time server-to-client streaming
 - **Request Tracing**: Built-in request ID generation and propagation
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
+- **Metrics**: Built-in Prometheus-compatible metrics with zero dependencies
 - **Structured Logging**: Integrated structured logging with customizable fields
 - **Health Checks**: Kubernetes-compatible health check endpoints with customizable handlers
 

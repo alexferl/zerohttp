@@ -9,6 +9,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // Bucket represents a token bucket for rate limiting
@@ -60,6 +61,8 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			for _, exemptPath := range c.ExemptPaths {
 				if r.URL.Path == exemptPath {
 					next.ServeHTTP(w, r)
@@ -161,7 +164,10 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 				w.Header().Set("X-RateLimit-Window", c.Window.String())
 			}
 
+			reg.Gauge("ratelimit_remaining", "key").WithLabelValues(key).Set(float64(remaining))
+
 			if !allowed {
+				reg.Counter("ratelimit_rejected_total", "key").WithLabelValues(key).Inc()
 				w.Header().Set("Retry-After", strconv.Itoa(int(time.Until(resetTime).Seconds())))
 				detail := problem.NewDetail(c.StatusCode, c.Message)
 				if err := detail.Render(w); err != nil {
@@ -169,6 +175,8 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 				}
 				return
 			}
+
+			reg.Counter("ratelimit_allowed_total", "key").WithLabelValues(key).Inc()
 
 			next.ServeHTTP(w, r)
 		})

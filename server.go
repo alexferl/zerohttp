@@ -12,6 +12,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -68,6 +69,10 @@ type Server struct {
 	// If nil, the default built-in validator will be used.
 	validator config.Validator
 
+	// metricsRegistry holds the metrics registry for collecting and exposing metrics.
+	// If nil, metrics collection is disabled.
+	metricsRegistry metrics.Registry
+
 	// autocertManager handles automatic certificate provisioning and renewal
 	// using Let's Encrypt ACME protocol. If set, enables automatic TLS.
 	// Users must provide their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager).
@@ -97,172 +102,6 @@ type Server struct {
 	// mu protects concurrent access to server fields during startup,
 	// shutdown, and configuration operations.
 	mu sync.RWMutex
-}
-
-// New creates and configures a new Server instance with the provided config.
-// It initializes the server with default configurations that can be overridden
-// using the provided config. The server includes HTTP and HTTPS support,
-// middleware integration, and structured logging.
-//
-// Example usage:
-//
-//	// Use defaults
-//	server := zerohttp.New()
-//
-//	// With custom config
-//	server := zerohttp.New(config.Config{
-//	    Addr: ":8080",
-//	    Logger: myLogger,
-//	})
-func New(cfg ...config.Config) *Server {
-	c := config.DefaultConfig
-	if len(cfg) > 0 {
-		userCfg := cfg[0]
-		if userCfg.Addr != "" {
-			c.Addr = userCfg.Addr
-		}
-		if userCfg.TLSAddr != "" {
-			c.TLSAddr = userCfg.TLSAddr
-		}
-		if userCfg.Server != nil {
-			c.Server = userCfg.Server
-		}
-		if userCfg.Listener != nil {
-			c.Listener = userCfg.Listener
-		}
-		if userCfg.TLSServer != nil {
-			c.TLSServer = userCfg.TLSServer
-		}
-		if userCfg.TLSListener != nil {
-			c.TLSListener = userCfg.TLSListener
-		}
-		if userCfg.CertFile != "" {
-			c.CertFile = userCfg.CertFile
-		}
-		if userCfg.KeyFile != "" {
-			c.KeyFile = userCfg.KeyFile
-		}
-		if userCfg.Logger != nil {
-			c.Logger = userCfg.Logger
-		}
-		if len(userCfg.PreShutdownHooks) > 0 {
-			c.PreShutdownHooks = userCfg.PreShutdownHooks
-		}
-		if len(userCfg.ShutdownHooks) > 0 {
-			c.ShutdownHooks = userCfg.ShutdownHooks
-		}
-		if len(userCfg.PostShutdownHooks) > 0 {
-			c.PostShutdownHooks = userCfg.PostShutdownHooks
-		}
-		c.DisableDefaultMiddlewares = userCfg.DisableDefaultMiddlewares
-		if len(userCfg.DefaultMiddlewares) > 0 {
-			c.DefaultMiddlewares = userCfg.DefaultMiddlewares
-		}
-		c.Recover = mergeRecoverConfig(c.Recover, userCfg.Recover)
-		c.RequestBodySize = mergeRequestBodySizeConfig(c.RequestBodySize, userCfg.RequestBodySize)
-		c.RequestID = mergeRequestIDConfig(c.RequestID, userCfg.RequestID)
-		c.RequestLogger = mergeRequestLoggerConfig(c.RequestLogger, userCfg.RequestLogger)
-		c.SecurityHeaders = mergeSecurityHeadersConfig(c.SecurityHeaders, userCfg.SecurityHeaders)
-		if userCfg.AutocertManager != nil {
-			c.AutocertManager = userCfg.AutocertManager
-		}
-		if userCfg.HTTP3Server != nil {
-			c.HTTP3Server = userCfg.HTTP3Server
-		}
-		if userCfg.SSEProvider != nil {
-			c.SSEProvider = userCfg.SSEProvider
-		}
-		if userCfg.WebSocketUpgrader != nil {
-			c.WebSocketUpgrader = userCfg.WebSocketUpgrader
-		}
-		if userCfg.WebTransportServer != nil {
-			c.WebTransportServer = userCfg.WebTransportServer
-		}
-		if userCfg.Validator != nil {
-			c.Validator = userCfg.Validator
-		}
-	}
-
-	router := NewRouter()
-
-	logger := c.Logger
-	if logger == nil {
-		logger = log.NewDefaultLogger()
-	}
-
-	router.SetLogger(logger)
-	router.SetConfig(c)
-
-	server := c.Server
-	if server == nil {
-		server = &http.Server{
-			Addr:           c.Addr,
-			ReadTimeout:    10 * time.Second,
-			WriteTimeout:   10 * time.Second,
-			IdleTimeout:    60 * time.Second,
-			MaxHeaderBytes: 1 << 20, // 1 MB
-		}
-	}
-
-	tlsServer := c.TLSServer
-	if tlsServer == nil {
-		tlsServer = &http.Server{
-			Addr:           c.TLSAddr,
-			ReadTimeout:    10 * time.Second,
-			WriteTimeout:   10 * time.Second,
-			IdleTimeout:    60 * time.Second,
-			MaxHeaderBytes: 1 << 20, // 1 MB
-			TLSConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-				NextProtos: []string{"h2", "http/1.1"},
-			},
-		}
-	}
-
-	s := &Server{
-		Router:             router,
-		server:             server,
-		listener:           c.Listener,
-		tlsServer:          tlsServer,
-		tlsListener:        c.TLSListener,
-		certFile:           c.CertFile,
-		keyFile:            c.KeyFile,
-		autocertManager:    c.AutocertManager,
-		http3Server:        c.HTTP3Server,
-		webTransportServer: c.WebTransportServer,
-		webSocketUpgrader:  c.WebSocketUpgrader,
-		sseProvider:        c.SSEProvider,
-		validator:          c.Validator,
-		logger:             logger,
-		preShutdownHooks:   c.PreShutdownHooks,
-		shutdownHooks:      c.ShutdownHooks,
-		postShutdownHooks:  c.PostShutdownHooks,
-	}
-
-	if s.server != nil {
-		s.server.Handler = router
-	}
-
-	if s.tlsServer != nil {
-		s.tlsServer.Handler = router
-	}
-
-	var middlewares []func(http.Handler) http.Handler
-
-	if c.DisableDefaultMiddlewares {
-		middlewares = c.DefaultMiddlewares
-	} else if c.DefaultMiddlewares == nil {
-		middlewares = middleware.DefaultMiddlewares(c, s.logger)
-	} else {
-		defaults := middleware.DefaultMiddlewares(c, s.logger)
-		middlewares = append(defaults, c.DefaultMiddlewares...)
-	}
-
-	if len(middlewares) > 0 {
-		s.Use(middlewares...)
-	}
-
-	return s
 }
 
 // mergeRecoverConfig merges user config with defaults
@@ -352,6 +191,210 @@ func mergeSecurityHeadersConfig(defaultCfg, userCfg config.SecurityHeadersConfig
 		defaultCfg.ExemptPaths = userCfg.ExemptPaths
 	}
 	return defaultCfg
+}
+
+// mergeMetricsConfig merges user config with defaults
+func mergeMetricsConfig(defaultCfg, userCfg config.MetricsConfig) config.MetricsConfig {
+	defaultCfg.Enabled = userCfg.Enabled
+	if userCfg.Endpoint != "" {
+		defaultCfg.Endpoint = userCfg.Endpoint
+	}
+	if len(userCfg.DurationBuckets) > 0 {
+		defaultCfg.DurationBuckets = userCfg.DurationBuckets
+	}
+	if len(userCfg.SizeBuckets) > 0 {
+		defaultCfg.SizeBuckets = userCfg.SizeBuckets
+	}
+	if len(userCfg.ExcludePaths) > 0 {
+		defaultCfg.ExcludePaths = userCfg.ExcludePaths
+	}
+	if userCfg.PathLabelFunc != nil {
+		defaultCfg.PathLabelFunc = userCfg.PathLabelFunc
+	}
+	if userCfg.CustomLabels != nil {
+		defaultCfg.CustomLabels = userCfg.CustomLabels
+	}
+	return defaultCfg
+}
+
+// New creates and configures a new Server instance with the provided config.
+// It initializes the server with default configurations that can be overridden
+// using the provided config. The server includes HTTP and HTTPS support,
+// middleware integration, and structured logging.
+//
+// Example usage:
+//
+//	// Use defaults
+//	server := zerohttp.New()
+//
+//	// With custom config
+//	server := zerohttp.New(config.Config{
+//	    Addr: ":8080",
+//	    Logger: myLogger,
+//	})
+func New(cfg ...config.Config) *Server {
+	c := config.DefaultConfig
+	if len(cfg) > 0 {
+		userCfg := cfg[0]
+		if userCfg.Addr != "" {
+			c.Addr = userCfg.Addr
+		}
+		if userCfg.TLSAddr != "" {
+			c.TLSAddr = userCfg.TLSAddr
+		}
+		if userCfg.Server != nil {
+			c.Server = userCfg.Server
+		}
+		if userCfg.Listener != nil {
+			c.Listener = userCfg.Listener
+		}
+		if userCfg.TLSServer != nil {
+			c.TLSServer = userCfg.TLSServer
+		}
+		if userCfg.TLSListener != nil {
+			c.TLSListener = userCfg.TLSListener
+		}
+		if userCfg.CertFile != "" {
+			c.CertFile = userCfg.CertFile
+		}
+		if userCfg.KeyFile != "" {
+			c.KeyFile = userCfg.KeyFile
+		}
+		if userCfg.Logger != nil {
+			c.Logger = userCfg.Logger
+		}
+		if len(userCfg.PreShutdownHooks) > 0 {
+			c.PreShutdownHooks = userCfg.PreShutdownHooks
+		}
+		if len(userCfg.ShutdownHooks) > 0 {
+			c.ShutdownHooks = userCfg.ShutdownHooks
+		}
+		if len(userCfg.PostShutdownHooks) > 0 {
+			c.PostShutdownHooks = userCfg.PostShutdownHooks
+		}
+		c.DisableDefaultMiddlewares = userCfg.DisableDefaultMiddlewares
+		if len(userCfg.DefaultMiddlewares) > 0 {
+			c.DefaultMiddlewares = userCfg.DefaultMiddlewares
+		}
+		c.Recover = mergeRecoverConfig(c.Recover, userCfg.Recover)
+		c.RequestBodySize = mergeRequestBodySizeConfig(c.RequestBodySize, userCfg.RequestBodySize)
+		c.RequestID = mergeRequestIDConfig(c.RequestID, userCfg.RequestID)
+		c.RequestLogger = mergeRequestLoggerConfig(c.RequestLogger, userCfg.RequestLogger)
+		c.SecurityHeaders = mergeSecurityHeadersConfig(c.SecurityHeaders, userCfg.SecurityHeaders)
+		if userCfg.AutocertManager != nil {
+			c.AutocertManager = userCfg.AutocertManager
+		}
+		if userCfg.HTTP3Server != nil {
+			c.HTTP3Server = userCfg.HTTP3Server
+		}
+		if userCfg.SSEProvider != nil {
+			c.SSEProvider = userCfg.SSEProvider
+		}
+		if userCfg.WebSocketUpgrader != nil {
+			c.WebSocketUpgrader = userCfg.WebSocketUpgrader
+		}
+		if userCfg.WebTransportServer != nil {
+			c.WebTransportServer = userCfg.WebTransportServer
+		}
+		if userCfg.Validator != nil {
+			c.Validator = userCfg.Validator
+		}
+		c.Metrics = mergeMetricsConfig(c.Metrics, userCfg.Metrics)
+	}
+
+	router := NewRouter()
+
+	logger := c.Logger
+	if logger == nil {
+		logger = log.NewDefaultLogger()
+	}
+
+	router.SetLogger(logger)
+	router.SetConfig(c)
+
+	server := c.Server
+	if server == nil {
+		server = &http.Server{
+			Addr:           c.Addr,
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+			IdleTimeout:    60 * time.Second,
+			MaxHeaderBytes: 1 << 20, // 1 MB
+		}
+	}
+
+	tlsServer := c.TLSServer
+	if tlsServer == nil {
+		tlsServer = &http.Server{
+			Addr:           c.TLSAddr,
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+			IdleTimeout:    60 * time.Second,
+			MaxHeaderBytes: 1 << 20, // 1 MB
+			TLSConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				NextProtos: []string{"h2", "http/1.1"},
+			},
+		}
+	}
+
+	// Initialize metrics registry if enabled
+	var registry metrics.Registry
+	if c.Metrics.Enabled {
+		registry = metrics.NewRegistry()
+	}
+
+	s := &Server{
+		Router:             router,
+		server:             server,
+		listener:           c.Listener,
+		tlsServer:          tlsServer,
+		tlsListener:        c.TLSListener,
+		certFile:           c.CertFile,
+		keyFile:            c.KeyFile,
+		autocertManager:    c.AutocertManager,
+		http3Server:        c.HTTP3Server,
+		webTransportServer: c.WebTransportServer,
+		webSocketUpgrader:  c.WebSocketUpgrader,
+		sseProvider:        c.SSEProvider,
+		metricsRegistry:    registry,
+		validator:          c.Validator,
+		logger:             logger,
+		preShutdownHooks:   c.PreShutdownHooks,
+		shutdownHooks:      c.ShutdownHooks,
+		postShutdownHooks:  c.PostShutdownHooks,
+	}
+
+	if s.server != nil {
+		s.server.Handler = router
+	}
+
+	if s.tlsServer != nil {
+		s.tlsServer.Handler = router
+	}
+
+	var middlewares []func(http.Handler) http.Handler
+
+	if c.DisableDefaultMiddlewares {
+		middlewares = c.DefaultMiddlewares
+	} else if c.DefaultMiddlewares == nil {
+		middlewares = middleware.DefaultMiddlewares(c, s.logger)
+	} else {
+		defaults := middleware.DefaultMiddlewares(c, s.logger)
+		middlewares = append(defaults, c.DefaultMiddlewares...)
+	}
+
+	if len(middlewares) > 0 {
+		s.Use(middlewares...)
+	}
+
+	// Add metrics middleware and endpoint if enabled
+	if c.Metrics.Enabled && registry != nil {
+		s.Use(metrics.NewMiddleware(registry, c.Metrics))
+		s.GET(c.Metrics.Endpoint, metrics.Handler(registry))
+	}
+
+	return s
 }
 
 // ListenAndServe starts the HTTP server and begins accepting connections.
@@ -875,6 +918,19 @@ func (s *Server) Validator() config.Validator {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.validator
+}
+
+// Metrics returns the metrics registry for collecting custom metrics.
+// Returns nil if metrics are not enabled.
+//
+// Use this to create custom metrics in your handlers or middleware:
+//
+//	requests := app.Metrics().Counter("my_requests_total", "status")
+//	requests.WithLabelValues("200").Inc()
+func (s *Server) Metrics() metrics.Registry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.metricsRegistry
 }
 
 // ListenAndServeHTTP3 starts the HTTP/3 server with the specified certificate files.
