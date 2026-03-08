@@ -13,6 +13,19 @@ import (
 	"github.com/alexferl/zerohttp/config"
 )
 
+// slicesEqual compares two string slices for equality
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // mockTokenStore is a test implementation of config.TokenStore
 type mockTokenStore struct {
 	validateFunc func(token string) (config.JWTClaims, error)
@@ -452,32 +465,37 @@ func TestGetJWTClaimsAudience(t *testing.T) {
 	tests := []struct {
 		name     string
 		claims   config.JWTClaims
-		expected string
+		expected []string
 	}{
 		{
 			name:     "has audience string",
 			claims:   map[string]any{"aud": "my-audience"},
-			expected: "my-audience",
+			expected: []string{"my-audience"},
 		},
 		{
 			name:     "has audience array",
 			claims:   map[string]any{"aud": []string{"aud1", "aud2"}},
-			expected: "aud1",
+			expected: []string{"aud1", "aud2"},
+		},
+		{
+			name:     "has audience any array",
+			claims:   map[string]any{"aud": []any{"aud1", "aud2"}},
+			expected: []string{"aud1", "aud2"},
 		},
 		{
 			name:     "missing audience",
 			claims:   map[string]any{},
-			expected: "",
+			expected: nil,
 		},
 		{
 			name:     "nil claims",
 			claims:   nil,
-			expected: "",
+			expected: nil,
 		},
 		{
 			name:     "non-map claims",
 			claims:   "not-a-map",
-			expected: "",
+			expected: nil,
 		},
 	}
 
@@ -486,8 +504,8 @@ func TestGetJWTClaimsAudience(t *testing.T) {
 			ctx := context.WithValue(context.Background(), JWTClaimsContextKey, tt.claims)
 			req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 			got := GetJWTClaims(req).Audience()
-			if got != tt.expected {
-				t.Errorf("GetJWTClaimsAudience() = %q, want %q", got, tt.expected)
+			if !slicesEqual(got, tt.expected) {
+				t.Errorf("GetJWTClaimsAudience() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -1500,8 +1518,32 @@ func TestClaimsWrapper_Audience(t *testing.T) {
 	claims := map[string]any{"aud": "my-audience"}
 	jwt := JWTClaims{claims: claims}
 
-	if got := jwt.Audience(); got != "my-audience" {
-		t.Errorf("Audience() = %q, want 'my-audience'", got)
+	if got := jwt.Audience(); !slicesEqual(got, []string{"my-audience"}) {
+		t.Errorf("Audience() = %v, want ['my-audience']", got)
+	}
+}
+
+func TestClaimsWrapper_Audience_Array(t *testing.T) {
+	claims := map[string]any{"aud": []string{"aud1", "aud2"}}
+	jwt := JWTClaims{claims: claims}
+
+	if got := jwt.Audience(); !slicesEqual(got, []string{"aud1", "aud2"}) {
+		t.Errorf("Audience() = %v, want ['aud1', 'aud2']", got)
+	}
+}
+
+func TestClaimsWrapper_HasAudience(t *testing.T) {
+	claims := map[string]any{"aud": []string{"aud1", "aud2"}}
+	jwt := JWTClaims{claims: claims}
+
+	if !jwt.HasAudience("aud1") {
+		t.Error("HasAudience('aud1') = false, want true")
+	}
+	if !jwt.HasAudience("aud2") {
+		t.Error("HasAudience('aud2') = false, want true")
+	}
+	if jwt.HasAudience("aud3") {
+		t.Error("HasAudience('aud3') = true, want false")
 	}
 }
 

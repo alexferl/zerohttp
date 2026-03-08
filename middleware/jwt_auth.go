@@ -269,9 +269,45 @@ func (j JWTClaims) Issuer() string {
 	return getStringClaim(j.claims, config.JWTClaimIssuer)
 }
 
-// Audience returns the 'aud' claim.
-func (j JWTClaims) Audience() string {
-	return getStringClaim(j.claims, config.JWTClaimAudience)
+// Audience returns the 'aud' claim as a string slice.
+// Returns all audiences if 'aud' is an array, or a single-element slice if it's a string.
+func (j JWTClaims) Audience() []string {
+	if j.claims == nil {
+		return nil
+	}
+
+	extractAud := func(m map[string]any) []string {
+		if aud, ok := m[config.JWTClaimAudience]; ok {
+			switch v := aud.(type) {
+			case string:
+				return []string{v}
+			case []string:
+				return v
+			case []any:
+				audiences := make([]string, 0, len(v))
+				for _, a := range v {
+					if s, ok := a.(string); ok {
+						audiences = append(audiences, s)
+					}
+				}
+				return audiences
+			}
+		}
+		return nil
+	}
+
+	switch c := j.claims.(type) {
+	case map[string]any:
+		return extractAud(c)
+	case HS256Claims:
+		return extractAud(c)
+	}
+	return nil
+}
+
+// HasAudience checks if the token has a specific audience.
+func (j JWTClaims) HasAudience(audience string) bool {
+	return slices.Contains(j.Audience(), audience)
 }
 
 // JTI returns the 'jti' claim (JWT ID).
