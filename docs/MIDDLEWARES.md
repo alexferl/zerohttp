@@ -9,6 +9,7 @@ zerohttp provides a comprehensive set of middleware for security, authentication
 - [Available Middlewares](#available-middlewares)
   - [Authentication](#authentication)
     - [Basic Auth](#basic-auth)
+    - [JWT Authentication](#jwt-authentication)
     - [HMAC Request Signing](#hmac-request-signing)
   - [Security](#security)
   - [Rate Limiting](#rate-limiting)
@@ -58,6 +59,178 @@ middleware.BasicAuth(config.BasicAuthConfig{
     Realm: "Restricted Area",
     ExemptPaths: []string{"/health", "/metrics"},
 })
+```
+
+#### JWT Authentication
+
+JSON Web Token (JWT) authentication with pluggable `TokenStore` interface. Includes a built-in HS256 implementation (zero dependencies) or bring your own JWT library.
+
+```go
+// Using built-in HS256 (zero dependencies)
+hp := middleware.HS256Options{
+    Secret: []byte("your-secret-key"),
+    Issuer: "my-app",
+}
+
+jwtCfg := config.JWTAuthConfig{
+    TokenStore:     middleware.NewHS256TokenStore(hp.Secret, hp),
+    RequiredClaims: []string{"sub"},
+    ExemptPaths:    []string{"/login", "/register"},
+}
+
+app.Use(middleware.JWTAuth(jwtCfg))
+```
+
+**TokenStore Interface:**
+
+Users implement the `TokenStore` interface to integrate their preferred JWT library:
+
+```go
+type TokenStore interface {
+    // Validate parses and validates a JWT token
+    Validate(token string) (JWTClaims, error)
+
+    // Generate creates a new signed JWT token
+    Generate(claims JWTClaims, tokenType TokenType) (string, error)
+
+    // Revoke invalidates a refresh token (called during logout)
+    Revoke(claims JWTClaims) error
+
+    // IsRevoked checks if a refresh token has been revoked
+    IsRevoked(claims JWTClaims) bool
+}
+```
+
+**Token Generation:**
+
+```go
+// In your login handler
+claims := middleware.HS256Claims{
+    "sub":   userID,
+    "scope": "read write",
+}
+
+accessToken, _ := middleware.GenerateAccessToken(r, claims, cfg)
+refreshToken, _ := middleware.GenerateRefreshToken(r, claims, cfg)
+```
+
+**Refresh Token Endpoint:**
+
+```go
+// Built-in refresh handler (calls TokenStore.IsRevoked to check revocation)
+app.POST("/auth/refresh", middleware.RefreshTokenHandler(jwtCfg))
+```
+
+**Logout Endpoint:**
+
+Use the built-in logout handler to revoke refresh tokens:
+
+```go
+// TokenStore.Revoke is called during logout
+app.POST("/auth/logout", middleware.LogoutTokenHandler(jwtCfg))
+```
+
+**Security Features:**
+
+- Revoked tokens are blocked immediately on all requests (not just at refresh)
+- Refresh tokens cannot be used as access tokens for protected endpoints
+- Constant-time signature verification to prevent timing attacks
+
+**Accessing Claims in Handlers:**
+
+```go
+func profileHandler(w http.ResponseWriter, r *http.Request) error {
+    jwt := middleware.GetJWTClaims(r)
+    subject := jwt.Subject()     // Get 'sub' claim
+    scopes := jwt.Scopes()       // Get 'scope' claim as []string
+
+    if !jwt.HasScope("admin") {
+        return zh.R.JSON(w, http.StatusForbidden, zh.M{"error": "admin required"})
+    }
+
+    return zh.R.JSON(w, http.StatusOK, zh.M{
+        "subject": subject,
+        "scopes":  scopes,
+    })
+}
+```
+
+**With External JWT Library:**
+
+```go
+// Using golang-jwt/jwt (bring your own)
+type MyTokenStore struct {
+    secret []byte
+}
+
+func (s *MyTokenStore) Validate(token string) (config.JWTClaims, error) {
+    return jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+        return s.secret, nil
+    })
+}
+
+func (s *MyTokenStore) Generate(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+    // Your signing logic
+}
+
+func (s *MyTokenStore) Revoke(claims config.JWTClaims) error {
+    // Store jti in Redis/DB
+    return nil
+}
+
+func (s *MyTokenStore) IsRevoked(claims config.JWTClaims) bool {
+    // Check jti in Redis/DB
+    return false
+}
+
+jwtCfg := config.JWTAuthConfig{
+    TokenStore:     &MyTokenStore{secret: secret},
+    RequiredClaims: []string{"sub"},
+}
+
+app.Use(middleware.JWTAuth(jwtCfg))
+```
+
+**Custom Token Extraction:**
+
+By default, tokens are extracted from the `Authorization: Bearer <token>` header. You can customize this with a `TokenExtractor` function:
+
+```go
+// Extract from cookie
+jwtCfg := config.JWTAuthConfig{
+    TokenStore: store,
+    TokenExtractor: func(r *http.Request) string {
+        if cookie, err := r.Cookie("jwt"); err == nil {
+            return cookie.Value
+        }
+        return ""
+    },
+}
+
+// Extract from custom header
+jwtCfg := config.JWTAuthConfig{
+    TokenStore: store,
+    TokenExtractor: func(r *http.Request) string {
+        return r.Header.Get("X-API-Token")
+    },
+}
+
+// Try cookie first, then fallback to Authorization header
+// Useful for supporting both browser (cookie) and API (Bearer) clients
+jwtCfg := config.JWTAuthConfig{
+    TokenStore: store,
+    TokenExtractor: func(r *http.Request) string {
+        if cookie, err := r.Cookie("jwt"); err == nil && cookie.Value != "" {
+            return cookie.Value
+        }
+        // Fallback to Authorization header
+        auth := r.Header.Get("Authorization")
+        if strings.HasPrefix(auth, "Bearer ") {
+            return strings.TrimPrefix(auth, "Bearer ")
+        }
+        return ""
+    },
+}
 ```
 
 #### HMAC Request Signing
