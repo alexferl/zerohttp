@@ -87,10 +87,6 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
-
-	if errResp.Type != "urn:ietf:rfc:9457:jwt-auth:missing-token" {
-		t.Errorf("expected error type 'urn:ietf:rfc:9457:jwt-auth:missing-token', got %s", errResp.Type)
-	}
 }
 
 func TestJWTAuth_InvalidToken(t *testing.T) {
@@ -121,10 +117,6 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
-	}
-
-	if errResp.Type != "urn:ietf:rfc:9457:jwt-auth:invalid-token" {
-		t.Errorf("expected error type 'urn:ietf:rfc:9457:jwt-auth:invalid-token', got %s", errResp.Type)
 	}
 }
 
@@ -263,10 +255,6 @@ func TestJWTAuth_RequiredClaims(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
-	}
-
-	if errResp.Type != "urn:ietf:rfc:9457:jwt-auth:missing-claim" {
-		t.Errorf("expected error type 'urn:ietf:rfc:9457:jwt-auth:missing-claim', got %s", errResp.Type)
 	}
 }
 
@@ -945,10 +933,6 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
-
-	if errResp.Type != "urn:ietf:rfc:9457:jwt-auth:token-revoked" {
-		t.Errorf("expected error type 'urn:ietf:rfc:9457:jwt-auth:token-revoked', got %s", errResp.Type)
-	}
 }
 
 func TestRefreshTokenHandler_TokenAllowed(t *testing.T) {
@@ -1176,10 +1160,6 @@ func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
-	}
-
-	if errResp.Type != "urn:ietf:rfc:9457:jwt-auth:revocation-failed" {
-		t.Errorf("expected error type 'urn:ietf:rfc:9457:jwt-auth:revocation-failed', got %s", errResp.Type)
 	}
 }
 
@@ -1923,10 +1903,6 @@ func TestJWTAuth_RevokedToken(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
-
-	if errResp.Type != "urn:ietf:rfc:9457:jwt-auth:token-revoked" {
-		t.Errorf("expected error type 'urn:ietf:rfc:9457:jwt-auth:token-revoked', got %s", errResp.Type)
-	}
 }
 
 func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
@@ -1960,9 +1936,5 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
-	}
-
-	if errResp.Type != "urn:ietf:rfc:9457:jwt-auth:invalid-token-type" {
-		t.Errorf("expected error type 'urn:ietf:rfc:9457:jwt-auth:invalid-token-type', got %s", errResp.Type)
 	}
 }

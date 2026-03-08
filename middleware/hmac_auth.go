@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"hash"
 	"io"
 	"net/http"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // HMACAuthError represents an HMAC authentication error with RFC 9457 Problem Details
@@ -32,37 +32,31 @@ type HMACAuthError struct {
 // Common HMAC auth errors
 var (
 	errMissingAuth = &HMACAuthError{
-		Type:   "urn:ietf:rfc:9457:hmac-auth:missing-header",
 		Title:  "Missing Authorization Header",
 		Status: http.StatusUnauthorized,
 		Detail: "Request is missing the Authorization header",
 	}
 	errInvalidFormat = &HMACAuthError{
-		Type:   "urn:ietf:rfc:9457:hmac-auth:invalid-format",
 		Title:  "Invalid Authorization Format",
 		Status: http.StatusUnauthorized,
 		Detail: "Authorization header does not match expected format",
 	}
 	errInvalidCredentials = &HMACAuthError{
-		Type:   "urn:ietf:rfc:9457:hmac-auth:invalid-credentials",
 		Title:  "Invalid Credentials",
 		Status: http.StatusUnauthorized,
 		Detail: "The access key ID was not found or signature is invalid",
 	}
 	errRequestExpired = &HMACAuthError{
-		Type:   "urn:ietf:rfc:9457:hmac-auth:request-expired",
 		Title:  "Request Expired",
 		Status: http.StatusUnauthorized,
 		Detail: "Request timestamp is outside the valid time window",
 	}
 	errSignatureMismatch = &HMACAuthError{
-		Type:   "urn:ietf:rfc:9457:hmac-auth:signature-mismatch",
 		Title:  "Signature Mismatch",
 		Status: http.StatusUnauthorized,
 		Detail: "The provided signature does not match the computed signature",
 	}
 	errMissingHeader = &HMACAuthError{
-		Type:   "urn:ietf:rfc:9457:hmac-auth:missing-required-header",
 		Title:  "Missing Required Header",
 		Status: http.StatusUnauthorized,
 		Detail: "Request is missing a required header for signature verification",
@@ -282,7 +276,6 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 						auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "body_too_large")
 					}
 					handleHMACError(w, r, &HMACAuthError{
-						Type:   "urn:ietf:rfc:9457:hmac-auth:payload-too-large",
 						Title:  "Request Body Too Large",
 						Status: http.StatusRequestEntityTooLarge,
 						Detail: "Request body exceeds maximum size for HMAC verification",
@@ -293,7 +286,6 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 
 			canonicalRequest := buildCanonicalRequest(r, parsed, requiredHeaders, optionalHeaders, bodyHash, c.TimestampHeader)
 
-			// Try each secret key - supports key rotation with multiple valid keys
 			authenticated := false
 			for _, secretKey := range secretKeys {
 				expectedSig := computeHMACSignature(secretKey, canonicalRequest, c.Algorithm)
@@ -311,12 +303,10 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Success - log audit event
 			if auditLogger != nil {
 				auditLogger(parsed.AccessKeyID, parsed.Timestamp, true, "")
 			}
 
-			// Add access key ID to context for handlers to use
 			ctx := context.WithValue(r.Context(), HMACAccessKeyIDContextKey, parsed.AccessKeyID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -524,7 +514,6 @@ func computeBodyHash(r *http.Request, algo config.HMACHashAlgorithm, maxBodySize
 			return "", err
 		}
 
-		// Check if body exceeded max size
 		if int64(len(body)) > maxBodySize {
 			return "", errors.New("request body too large")
 		}
@@ -653,17 +642,13 @@ func handleHMACError(w http.ResponseWriter, r *http.Request, hmacErr *HMACAuthEr
 
 // defaultHMACErrorHandler is the default error handler
 func defaultHMACErrorHandler(w http.ResponseWriter, r *http.Request) {
-	// Get error from context
 	hmacErr := GetHMACError(r)
 	if hmacErr == nil {
 		hmacErr = errInvalidCredentials
 	}
 
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(hmacErr.Status)
-
-	// Simple JSON error (RFC 9457 style)
-	response := fmt.Sprintf(`{"type":"%s","title":"%s","status":%d,"detail":"%s"}`,
-		hmacErr.Type, hmacErr.Title, hmacErr.Status, hmacErr.Detail)
-	_, _ = w.Write([]byte(response))
+	detail := problem.NewDetail(hmacErr.Status, hmacErr.Detail)
+	detail.Type = hmacErr.Type
+	detail.Title = hmacErr.Title
+	_ = detail.Render(w)
 }

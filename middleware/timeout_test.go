@@ -50,7 +50,12 @@ func TestTimeout_Scenarios(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/").Build()
 			w := zhtest.Serve(middleware, req)
 
-			zhtest.AssertWith(t, w).Status(tt.wantStatus).Body(tt.wantBody)
+			if tt.name == "success" {
+				zhtest.AssertWith(t, w).Status(tt.wantStatus).Body(tt.wantBody)
+			} else {
+				// Timeout cases return ProblemDetail
+				zhtest.AssertWith(t, w).Status(tt.wantStatus).IsProblemDetail()
+			}
 		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // CORS middleware handles Cross-Origin Resource Sharing
@@ -123,7 +124,9 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 				// Check if requested method is allowed
 				requestMethod := r.Header.Get("Access-Control-Request-Method")
 				if requestMethod != "" && !allowedMethodMap[strings.ToUpper(requestMethod)] {
-					w.WriteHeader(http.StatusMethodNotAllowed)
+					detail := problem.NewDetail(http.StatusMethodNotAllowed, "Method not allowed")
+					w.Header().Set("Allow", allowedMethodsHeader)
+					_ = detail.Render(w)
 					return
 				}
 
@@ -134,7 +137,8 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 					for _, header := range headers {
 						header = strings.ToLower(strings.TrimSpace(header))
 						if !allowedHeaderMap[header] {
-							w.WriteHeader(http.StatusForbidden)
+							detail := problem.NewDetail(http.StatusForbidden, "Request header not allowed")
+							_ = detail.Render(w)
 							return
 						}
 					}

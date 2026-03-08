@@ -38,7 +38,7 @@ func TestRateLimitStatusCodeAndMessageDefaults(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w := zhtest.Serve(handler, req)
 
-	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Body("Rate limit exceeded")
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).IsProblemDetail().ProblemDetailDetail("Rate limit exceeded")
 }
 
 func TestRateLimitMessageDefaults(t *testing.T) {
@@ -50,7 +50,7 @@ func TestRateLimitMessageDefaults(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w := zhtest.Serve(handler, req) // 2nd rate limited
 
-	zhtest.AssertWith(t, w).Body("Rate limit exceeded")
+	zhtest.AssertWith(t, w).IsProblemDetail().ProblemDetailDetail("Rate limit exceeded")
 }
 
 func TestRateLimitTokenBucket(t *testing.T) {
@@ -77,7 +77,7 @@ func TestRateLimitTokenBucket(t *testing.T) {
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := zhtest.Serve(handler, req)
 
-	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Body("Rate limit exceeded")
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).IsProblemDetail().ProblemDetailDetail("Rate limit exceeded")
 	if count != 2 {
 		t.Errorf("expected 2 successful requests, got %d", count)
 	}
@@ -266,7 +266,8 @@ func TestRateLimitCustomMessage(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
-		Body("Too many requests, please slow down").
+		IsProblemDetail().
+		ProblemDetailDetail("Too many requests, please slow down").
 		HeaderExists("Retry-After")
 }
 

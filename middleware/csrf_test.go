@@ -221,7 +221,8 @@ func TestCSRF_InvalidToken(t *testing.T) {
 
 	zhtest.AssertWith(t, rr).
 		Status(http.StatusForbidden).
-		BodyContains("CSRF token invalid or missing")
+		IsProblemDetail().
+		ProblemDetailTitle("Forbidden")
 }
 
 func TestCSRF_MissingToken(t *testing.T) {

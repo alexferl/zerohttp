@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // ContentCharset generates a middleware that validates request charset and returns
@@ -28,7 +29,11 @@ func ContentCharset(cfg ...config.ContentCharsetConfig) func(http.Handler) http.
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !contentEncoding(r.Header.Get("Content-Type"), normalizedCharsets...) {
-				w.WriteHeader(http.StatusUnsupportedMediaType)
+				detail := problem.NewDetail(http.StatusUnsupportedMediaType, "Unsupported charset")
+				if len(c.Charsets) > 0 {
+					w.Header().Set("Accept-Post", "application/json; charset="+c.Charsets[0])
+				}
+				_ = detail.Render(w)
 				return
 			}
 			next.ServeHTTP(w, r)
