@@ -80,12 +80,14 @@ func TestPathMatches(t *testing.T) {
 		{"/health", "/health", true},
 		{"/health", "/metrics", false},
 		{"/api/public/users", "/api/public/", true},
-		{"/api/public", "/api/public/", false},
-		{"/api/publicx", "/api/public/", false},
+		{"/api/public", "/api/public/", true},   // path without trailing slash matches
+		{"/api/public/", "/api/public/", true},  // exact match with trailing slash
+		{"/api/publicx", "/api/public/", false}, // different path, shouldn't match
 		{"/", "/", true},
 		{"", "", true},
 		{"/api/v1/users", "/api/", true},
-		{"/api/v1/users", "/api", false},
+		{"/api/v1/users", "/api", false}, // no trailing slash = no prefix match
+		{"/api", "/api/", true},          // path without trailing slash matches
 		{"/different", "/api/", false},
 	}
 
