@@ -1,4 +1,4 @@
-package zerohttp
+package problem
 
 import (
 	"encoding/json"
@@ -9,57 +9,57 @@ import (
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
-func TestNewProblemDetail(t *testing.T) {
-	problem := NewProblemDetail(http.StatusNotFound, "Not found")
+func TestNewDetail(t *testing.T) {
+	detail := NewDetail(http.StatusNotFound, "Not found")
 
-	if problem.Type != "" {
-		t.Errorf("expected empty Type, got %s", problem.Type)
+	if detail.Type != "" {
+		t.Errorf("expected empty Type, got %s", detail.Type)
 	}
 
-	if problem.Title != "Not Found" {
-		t.Errorf("expected title 'Not Found', got %s", problem.Title)
+	if detail.Title != "Not Found" {
+		t.Errorf("expected title 'Not Found', got %s", detail.Title)
 	}
 
-	if problem.Status != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", problem.Status)
+	if detail.Status != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", detail.Status)
 	}
 
-	if problem.Detail != "Not found" {
-		t.Errorf("expected detail 'Not found', got %s", problem.Detail)
+	if detail.Detail != "Not found" {
+		t.Errorf("expected detail 'Not found', got %s", detail.Detail)
 	}
 
-	if problem.Extensions == nil {
+	if detail.Extensions == nil {
 		t.Error("expected Extensions to be initialized")
 	}
 }
 
-func TestProblemDetail_Set(t *testing.T) {
-	problem := NewProblemDetail(400, "Bad request")
+func TestDetail_Set(t *testing.T) {
+	detail := NewDetail(400, "Bad request")
 
-	result := problem.Set("field", "email").Set("code", "INVALID")
+	result := detail.Set("field", "email").Set("code", "INVALID")
 
-	if result != problem {
-		t.Error("expected Set to return same problem for chaining")
+	if result != detail {
+		t.Error("expected Set to return same detail for chaining")
 	}
 
-	if len(problem.Extensions) != 2 {
-		t.Errorf("expected 2 extensions, got %d", len(problem.Extensions))
+	if len(detail.Extensions) != 2 {
+		t.Errorf("expected 2 extensions, got %d", len(detail.Extensions))
 	}
 
-	if problem.Extensions["field"] != "email" {
+	if detail.Extensions["field"] != "email" {
 		t.Error("expected field extension to be set")
 	}
 }
 
-func TestProblemDetail_MarshalJSON(t *testing.T) {
+func TestDetail_MarshalJSON(t *testing.T) {
 	tests := []struct {
 		name     string
-		problem  *ProblemDetail
+		detail   *Detail
 		expected map[string]any
 	}{
 		{
 			"all fields",
-			&ProblemDetail{
+			&Detail{
 				Type: "https://example.com/error", Title: "Error", Status: http.StatusBadRequest,
 				Detail: "Bad request", Instance: "/test",
 				Extensions: map[string]any{"code": "ERR001"},
@@ -71,12 +71,12 @@ func TestProblemDetail_MarshalJSON(t *testing.T) {
 		},
 		{
 			"required only",
-			&ProblemDetail{Title: "Error", Status: http.StatusInternalServerError},
+			&Detail{Title: "Error", Status: http.StatusInternalServerError},
 			map[string]any{"title": "Error", "status": float64(http.StatusInternalServerError)},
 		},
 		{
 			"with extensions",
-			&ProblemDetail{
+			&Detail{
 				Title: "Bad Request", Status: http.StatusBadRequest,
 				Extensions: map[string]any{"errors": []string{"field required"}},
 			},
@@ -89,7 +89,7 @@ func TestProblemDetail_MarshalJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := tt.problem.MarshalJSON()
+			data, err := tt.detail.MarshalJSON()
 			if err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}
@@ -110,44 +110,23 @@ func TestProblemDetail_MarshalJSON(t *testing.T) {
 	}
 }
 
-func TestRenderer_ProblemDetail(t *testing.T) {
-	problem := NewProblemDetail(http.StatusNotFound, "Not found")
-	problem.Instance = "/users/123"
-	problem.Set("timestamp", "2023-01-01T00:00:00Z")
-
-	w := httptest.NewRecorder()
-
-	if err := R.ProblemDetail(w, problem); err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	zhtest.AssertWith(t, w).
-		Status(http.StatusNotFound).
-		Header(HeaderContentType, MIMEApplicationProblem).
-		JSONPathEqual("title", "Not Found").
-		JSONPathEqual("status", float64(http.StatusNotFound)).
-		JSONPathEqual("detail", "Not found").
-		JSONPathEqual("instance", "/users/123").
-		JSONPathEqual("timestamp", "2023-01-01T00:00:00Z")
-}
-
-func TestNewValidationProblemDetail(t *testing.T) {
+func TestNewValidationDetail(t *testing.T) {
 	errs := []ValidationError{
 		{Detail: "required", Pointer: "#/name"},
 		{Detail: "invalid", Field: "email"},
 	}
 
-	problem := NewValidationProblemDetail("Validation failed", errs)
+	detail := NewValidationDetail("Validation failed", errs)
 
-	if problem.Status != http.StatusUnprocessableEntity {
-		t.Errorf("expected status 422, got %d", problem.Status)
+	if detail.Status != http.StatusUnprocessableEntity {
+		t.Errorf("expected status 422, got %d", detail.Status)
 	}
 
-	if problem.Title != "Unprocessable Entity" {
-		t.Errorf("expected title 'Unprocessable Entity', got %s", problem.Title)
+	if detail.Title != "Unprocessable Entity" {
+		t.Errorf("expected title 'Unprocessable Entity', got %s", detail.Title)
 	}
 
-	errorsExt, exists := problem.Extensions["errors"]
+	errorsExt, exists := detail.Extensions["errors"]
 	if !exists {
 		t.Fatal("expected errors extension to exist")
 	}
@@ -162,7 +141,7 @@ func TestNewValidationProblemDetail(t *testing.T) {
 	}
 }
 
-func TestNewValidationProblemDetail_Custom(t *testing.T) {
+func TestNewValidationDetail_Custom(t *testing.T) {
 	type CustomError struct {
 		Code string `json:"code"`
 		Msg  string `json:"msg"`
@@ -172,16 +151,16 @@ func TestNewValidationProblemDetail_Custom(t *testing.T) {
 		{Code: "ERR001", Msg: "Invalid input"},
 	}
 
-	problem := NewValidationProblemDetail("Custom validation", errs)
+	detail := NewValidationDetail("Custom validation", errs)
 
-	errorsExt := problem.Extensions["errors"].([]CustomError)
+	errorsExt := detail.Extensions["errors"].([]CustomError)
 	if len(errorsExt) != 1 || errorsExt[0].Code != "ERR001" {
 		t.Error("expected custom error to be preserved")
 	}
 }
 
-func TestProblemDetail_Set_ExtensionsInitialization(t *testing.T) {
-	p := &ProblemDetail{
+func TestDetail_Set_ExtensionsInitialization(t *testing.T) {
+	p := &Detail{
 		Title:  "Test Error",
 		Status: http.StatusBadRequest,
 	}
@@ -201,7 +180,7 @@ func TestProblemDetail_Set_ExtensionsInitialization(t *testing.T) {
 	}
 
 	if result != p {
-		t.Error("Expected Set to return same ProblemDetail instance for chaining")
+		t.Error("Expected Set to return same Detail instance for chaining")
 	}
 
 	p.Set("another", 123).Set("third", true)
@@ -215,21 +194,21 @@ func TestProblemDetail_Set_ExtensionsInitialization(t *testing.T) {
 	}
 }
 
-func TestProblemDetail_Render(t *testing.T) {
-	problem := NewProblemDetail(http.StatusNotFound, "Not found")
-	problem.Instance = "/users/123"
-	problem.Set("timestamp", "2023-01-01T00:00:00Z")
+func TestDetail_Render(t *testing.T) {
+	detail := NewDetail(http.StatusNotFound, "Not found")
+	detail.Instance = "/users/123"
+	detail.Set("timestamp", "2023-01-01T00:00:00Z")
 
 	w := httptest.NewRecorder()
 
-	err := problem.Render(w)
+	err := detail.Render(w)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusNotFound).
-		Header(HeaderContentType, MIMEApplicationProblem).
+		Header("Content-Type", "application/problem+json").
 		JSONPathEqual("title", "Not Found").
 		JSONPathEqual("status", float64(http.StatusNotFound)).
 		JSONPathEqual("detail", "Not found").
@@ -237,21 +216,21 @@ func TestProblemDetail_Render(t *testing.T) {
 		JSONPathEqual("timestamp", "2023-01-01T00:00:00Z")
 }
 
-func TestProblemDetail_Render_WithExtensions(t *testing.T) {
-	problem := NewProblemDetail(http.StatusUnprocessableEntity, "Validation failed")
-	problem.Set("errors", []string{"name is required", "email is invalid"})
-	problem.Set("code", "VALIDATION_ERROR")
+func TestDetail_Render_WithExtensions(t *testing.T) {
+	detail := NewDetail(http.StatusUnprocessableEntity, "Validation failed")
+	detail.Set("errors", []string{"name is required", "email is invalid"})
+	detail.Set("code", "VALIDATION_ERROR")
 
 	w := httptest.NewRecorder()
 
-	err := problem.Render(w)
+	err := detail.Render(w)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusUnprocessableEntity).
-		Header(HeaderContentType, MIMEApplicationProblem).
+		Header("Content-Type", "application/problem+json").
 		JSONPathEqual("code", "VALIDATION_ERROR")
 
 	var result map[string]any

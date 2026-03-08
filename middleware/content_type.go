@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // ContentType enforces a whitelist of request Content-Types otherwise responds
@@ -46,7 +47,11 @@ func ContentType(cfg ...config.ContentTypeConfig) func(http.Handler) http.Handle
 			contentType = strings.ToLower(strings.TrimSpace(contentType))
 
 			if _, ok := allowedContentTypes[contentType]; !ok {
-				w.WriteHeader(http.StatusUnsupportedMediaType)
+				detail := problem.NewDetail(http.StatusUnsupportedMediaType, "Unsupported content type")
+				if len(c.ContentTypes) > 0 {
+					w.Header().Set("Accept-Post", c.ContentTypes[0])
+				}
+				_ = detail.Render(w)
 				return
 			}
 

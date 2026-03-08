@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"crypto/subtle"
-	"fmt"
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // BasicAuth creates a basic authentication middleware with the provided configuration
@@ -59,6 +59,7 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 }
 
 func basicAuthFailed(w http.ResponseWriter, realm string) {
-	w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
-	w.WriteHeader(http.StatusUnauthorized)
+	w.Header().Add("WWW-Authenticate", `Basic realm="`+realm+`"`)
+	detail := problem.NewDetail(http.StatusUnauthorized, "Authentication required")
+	_ = detail.Render(w)
 }

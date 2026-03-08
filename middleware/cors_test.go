@@ -48,12 +48,14 @@ func TestCORSPreflightRequest(t *testing.T) {
 		name, origin, method, headers string
 		expectCode                    int
 		expectNext                    bool
+		checkProblemDetail            bool
+		checkAllowHeader              bool
 	}{
-		{"valid", "https://example.com", http.MethodPost, "Content-Type", http.StatusNoContent, false},
-		{"multiple headers", "https://example.com", http.MethodPut, "Content-Type, Authorization", http.StatusNoContent, false},
-		{"bad method", "https://example.com", http.MethodTrace, "", http.StatusMethodNotAllowed, false},
-		{"bad header", "https://example.com", http.MethodPost, "X-Custom-Header", http.StatusForbidden, false},
-		{"no origin", "", http.MethodPost, "Content-Type", http.StatusNoContent, false},
+		{"valid", "https://example.com", http.MethodPost, "Content-Type", http.StatusNoContent, false, false, false},
+		{"multiple headers", "https://example.com", http.MethodPut, "Content-Type, Authorization", http.StatusNoContent, false, false, false},
+		{"bad method", "https://example.com", http.MethodTrace, "", http.StatusMethodNotAllowed, false, true, true},
+		{"bad header", "https://example.com", http.MethodPost, "X-Custom-Header", http.StatusForbidden, false, true, false},
+		{"no origin", "", http.MethodPost, "Content-Type", http.StatusNoContent, false, false, false},
 	}
 	mw := CORS()
 	for _, tt := range tests {
@@ -78,6 +80,13 @@ func TestCORSPreflightRequest(t *testing.T) {
 				t.Errorf("expected called=%v, got %v", tt.expectNext, called)
 			}
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
+
+			if tt.checkProblemDetail {
+				zhtest.AssertWith(t, rr).IsProblemDetail()
+			}
+			if tt.checkAllowHeader {
+				zhtest.AssertWith(t, rr).HeaderExists("Allow")
+			}
 		})
 	}
 }

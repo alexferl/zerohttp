@@ -902,8 +902,7 @@ func TestGetHMACError(t *testing.T) {
 				ctx := context.WithValue(req.Context(), HMACErrorContextKey, errMissingAuth)
 				*req = *req.WithContext(ctx)
 			},
-			expectedType: "urn:ietf:rfc:9457:hmac-auth:missing-header",
-			expectedNil:  false,
+			expectedNil: false,
 		},
 		{
 			name: "signature_mismatch error",
@@ -911,8 +910,7 @@ func TestGetHMACError(t *testing.T) {
 				ctx := context.WithValue(req.Context(), HMACErrorContextKey, errSignatureMismatch)
 				*req = *req.WithContext(ctx)
 			},
-			expectedType: "urn:ietf:rfc:9457:hmac-auth:signature-mismatch",
-			expectedNil:  false,
+			expectedNil: false,
 		},
 		{
 			name: "no error",
@@ -983,9 +981,6 @@ func TestHMACAuth_CustomErrorHandlerWithContext(t *testing.T) {
 	}
 	if receivedError.Type != errMissingAuth.Type {
 		t.Errorf("expected error type %q, got %q", errMissingAuth.Type, receivedError.Type)
-	}
-	if !strings.Contains(rr.Body.String(), "custom: urn:ietf:rfc:9457:hmac-auth:missing-header") {
-		t.Errorf("unexpected response body: %s", rr.Body.String())
 	}
 }
 

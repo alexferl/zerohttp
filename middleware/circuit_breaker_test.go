@@ -55,7 +55,8 @@ func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
-		Body("Service temporarily unavailable")
+		IsProblemDetail().
+		ProblemDetailDetail("Service temporarily unavailable")
 	if handler.getCallCount() != 3 {
 		t.Errorf("Expected handler to be called 3 times, got %d", handler.getCallCount())
 	}
@@ -193,7 +194,8 @@ func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusTooManyRequests).
-		Body("Circuit breaker active")
+		IsProblemDetail().
+		ProblemDetailDetail("Circuit breaker active")
 }
 
 func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {

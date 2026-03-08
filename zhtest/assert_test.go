@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 func TestAssert_Status(t *testing.T) {
@@ -823,7 +823,7 @@ func TestJSONPathEqual_EdgeCases(t *testing.T) {
 	})
 }
 
-// Test Problem Detail failure paths
+// Test Problem ProblemDetail failure paths
 func TestProblemDetail_FailurePaths(t *testing.T) {
 	t.Run("IsProblemDetail failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -853,8 +853,8 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailStatus wrong status", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid")
-			if err := problem.Render(w); err != nil {
+			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
+			if err := detail.Render(w); err != nil {
 				t.Errorf("failed to render: %v", err)
 			}
 		})
@@ -882,8 +882,8 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailTitle wrong title", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid")
-			if err := problem.Render(w); err != nil {
+			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
+			if err := detail.Render(w); err != nil {
 				t.Errorf("failed to render: %v", err)
 			}
 		})
@@ -911,8 +911,8 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailDetail wrong detail", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Actual detail")
-			if err := problem.Render(w); err != nil {
+			detail := problem.NewDetail(http.StatusBadRequest, "Actual detail")
+			if err := detail.Render(w); err != nil {
 				t.Errorf("failed to render: %v", err)
 			}
 		})
@@ -940,9 +940,9 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailType wrong type", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid")
-			problem.Type = "https://api.example.com/actual"
-			if err := problem.Render(w); err != nil {
+			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
+			detail.Type = "https://api.example.com/actual"
+			if err := detail.Render(w); err != nil {
 				t.Errorf("failed to render: %v", err)
 			}
 		})
@@ -970,8 +970,8 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailExtension missing key", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid")
-			if err := problem.Render(w); err != nil {
+			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
+			if err := detail.Render(w); err != nil {
 				t.Errorf("failed to render: %v", err)
 			}
 		})
@@ -986,9 +986,9 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailExtension wrong value", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid")
-			problem.Set("key", "actual")
-			if err := problem.Render(w); err != nil {
+			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
+			detail.Set("key", "actual")
+			if err := detail.Render(w); err != nil {
 				t.Errorf("failed to render: %v", err)
 			}
 		})
@@ -1008,9 +1008,9 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 			t.Errorf("failed to write: %v", err)
 		}
 
-		var problem zerohttp.ProblemDetail
+		var detail problem.Detail
 
-		result := Assert(w).ProblemDetail(&problem)
+		result := Assert(w).ProblemDetail(detail)
 		if result == nil {
 			t.Error("expected chain to continue after failure")
 		}
@@ -1019,8 +1019,8 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 func TestAssert_IsProblemDetail(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid request")
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})
@@ -1035,8 +1035,8 @@ func TestAssert_IsProblemDetail(t *testing.T) {
 
 func TestAssert_ProblemDetailStatus(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid request")
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})
@@ -1051,8 +1051,8 @@ func TestAssert_ProblemDetailStatus(t *testing.T) {
 
 func TestAssert_ProblemDetailTitle(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid request")
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})
@@ -1067,8 +1067,8 @@ func TestAssert_ProblemDetailTitle(t *testing.T) {
 
 func TestAssert_ProblemDetailDetail(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid request")
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})
@@ -1083,9 +1083,9 @@ func TestAssert_ProblemDetailDetail(t *testing.T) {
 
 func TestAssert_ProblemDetailType(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid request")
-		problem.Type = "https://api.example.com/errors/invalid-request"
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
+		detail.Type = "https://api.example.com/errors/invalid-request"
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})
@@ -1100,9 +1100,9 @@ func TestAssert_ProblemDetailType(t *testing.T) {
 
 func TestAssert_ProblemDetailExtension(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusUnprocessableEntity, "Validation failed")
-		problem.Set("errors", []string{"field1 is required", "field2 is invalid"})
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusUnprocessableEntity, "Validation failed")
+		detail.Set("errors", []string{"field1 is required", "field2 is invalid"})
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})
@@ -1117,32 +1117,32 @@ func TestAssert_ProblemDetailExtension(t *testing.T) {
 
 func TestAssert_ProblemDetail(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid request")
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
-	var problem zerohttp.ProblemDetail
-	result := Assert(w).ProblemDetail(&problem)
+	var detail problem.Detail
+	result := Assert(w).ProblemDetail(&detail)
 	if result == nil {
 		t.Error("expected result to not be nil")
 	}
-	if problem.Status != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", problem.Status)
+	if detail.Status != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", detail.Status)
 	}
-	if problem.Detail != "Invalid request" {
-		t.Errorf("expected detail 'Invalid request', got %s", problem.Detail)
+	if detail.Detail != "Invalid request" {
+		t.Errorf("expected detail 'Invalid request', got %s", detail.Detail)
 	}
 }
 
 func TestAssert_ProblemDetailChaining(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		problem := zerohttp.NewProblemDetail(http.StatusBadRequest, "Invalid request")
-		problem.Type = "https://api.example.com/errors/invalid-request"
-		if err := problem.Render(w); err != nil {
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
+		detail.Type = "https://api.example.com/errors/invalid-request"
+		if err := detail.Render(w); err != nil {
 			t.Errorf("failed to render problem: %v", err)
 		}
 	})

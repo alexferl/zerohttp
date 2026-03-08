@@ -10,7 +10,6 @@ import (
 func SetHeader(cfg ...config.SetHeaderConfig) func(http.Handler) http.Handler {
 	c := config.DefaultSetHeaderConfig
 	if len(cfg) > 0 {
-		// Use the last config's headers (matching old functional options behavior)
 		c.Headers = cfg[len(cfg)-1].Headers
 	}
 

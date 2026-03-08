@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // ContentEncoding enforces a whitelist of request Content-Encoding
@@ -49,7 +50,11 @@ func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) htt
 					encoding = strings.TrimSpace(strings.ToLower(encoding))
 					if encoding != "" {
 						if _, ok := allowedEncodings[encoding]; !ok {
-							w.WriteHeader(http.StatusUnsupportedMediaType)
+							detail := problem.NewDetail(http.StatusUnsupportedMediaType, "Unsupported content encoding")
+							if len(c.Encodings) > 0 {
+								w.Header().Set("Accept-Encoding", strings.Join(c.Encodings, ", "))
+							}
+							_ = detail.Render(w)
 							return
 						}
 					}

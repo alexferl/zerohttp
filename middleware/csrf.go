@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // CSRFContextKey is the key type for CSRF token in context
@@ -27,7 +28,6 @@ const (
 func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 	c := config.DefaultCSRFConfig
 	if len(cfg) > 0 {
-		// Merge user config with defaults
 		if cfg[0].CookieName != "" {
 			c.CookieName = cfg[0].CookieName
 		}
@@ -265,7 +265,6 @@ func setCSRFCookie(w http.ResponseWriter, cfg config.CSRFConfig, token string) {
 
 // defaultCSRFErrorHandler is the default handler for CSRF validation failures
 func defaultCSRFErrorHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusForbidden)
-	_, _ = w.Write([]byte("CSRF token invalid or missing"))
+	detail := problem.NewDetail(http.StatusForbidden, "CSRF token is missing or invalid")
+	_ = detail.Render(w)
 }

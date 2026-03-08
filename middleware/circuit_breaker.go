@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // CircuitState represents the state of the circuit breaker
@@ -97,8 +98,8 @@ func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.
 			circ := cbm.getCircuit(key)
 
 			if circ.isOpen() {
-				w.WriteHeader(c.OpenStatusCode)
-				if _, err := w.Write([]byte(c.OpenMessage)); err != nil {
+				detail := problem.NewDetail(c.OpenStatusCode, c.OpenMessage)
+				if err := detail.Render(w); err != nil {
 					panic(fmt.Errorf("circuit breaker message write failed: %w", err))
 				}
 				return

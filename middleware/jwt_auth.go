@@ -34,7 +34,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 	"slices"
@@ -42,6 +41,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // JWTAuthContextKey is the context key type for JWT auth
@@ -72,25 +72,21 @@ func (e *JWTAuthError) Error() string {
 // Common JWT auth errors
 var (
 	errMissingToken = &JWTAuthError{
-		Type:   "urn:ietf:rfc:9457:jwt-auth:missing-token",
 		Title:  "Missing Authorization Token",
 		Status: http.StatusUnauthorized,
 		Detail: "Request is missing the Authorization header with Bearer token",
 	}
 	errInvalidToken = &JWTAuthError{
-		Type:   "urn:ietf:rfc:9457:jwt-auth:invalid-token",
 		Title:  "Invalid Token",
 		Status: http.StatusUnauthorized,
 		Detail: "The provided token is invalid or has expired",
 	}
 	errMissingRequiredClaim = &JWTAuthError{
-		Type:   "urn:ietf:rfc:9457:jwt-auth:missing-claim",
 		Title:  "Missing Required Claim",
 		Status: http.StatusForbidden,
 		Detail: "Token is missing a required claim",
 	}
 	errTokenGeneratorNotConfigured = &JWTAuthError{
-		Type:   "urn:ietf:rfc:9457:jwt-auth:generator-not-configured",
 		Title:  "Token Generator Not Configured",
 		Status: http.StatusInternalServerError,
 		Detail: "Token generation is not configured",
@@ -170,7 +166,6 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 			// Check if token is revoked
 			if c.TokenStore.IsRevoked(claims) {
 				handleJWTError(w, r, &JWTAuthError{
-					Type:   "urn:ietf:rfc:9457:jwt-auth:token-revoked",
 					Title:  "Token Revoked",
 					Status: http.StatusUnauthorized,
 					Detail: "token has been revoked",
@@ -181,7 +176,6 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 			// Prevent refresh tokens from being used as access tokens
 			if tokenType := getStringClaim(claims, config.JWTClaimType); tokenType == config.TokenTypeRefresh {
 				handleJWTError(w, r, &JWTAuthError{
-					Type:   "urn:ietf:rfc:9457:jwt-auth:invalid-token-type",
 					Title:  "Invalid Token Type",
 					Status: http.StatusUnauthorized,
 					Detail: "refresh token cannot be used for authentication",
@@ -433,9 +427,10 @@ func GenerateRefreshToken(r *http.Request, claims config.JWTClaims, cfg config.J
 
 // writeJWTError writes a JWTAuthError response
 func writeJWTError(w http.ResponseWriter, jwtErr *JWTAuthError) {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(jwtErr.Status)
-	_ = json.NewEncoder(w).Encode(jwtErr)
+	detail := problem.NewDetail(jwtErr.Status, jwtErr.Detail)
+	detail.Type = jwtErr.Type
+	detail.Title = jwtErr.Title
+	_ = detail.Render(w)
 }
 
 // tokenHandlerRequest parses and validates the refresh token from the request body.
@@ -457,7 +452,6 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJWTError(w, &JWTAuthError{
-			Type:   "urn:ietf:rfc:9457:jwt-auth:invalid-request",
 			Title:  "Invalid Request",
 			Status: http.StatusBadRequest,
 			Detail: "Request body must contain refresh_token",
@@ -467,7 +461,6 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 	if req.RefreshToken == "" {
 		writeJWTError(w, &JWTAuthError{
-			Type:   "urn:ietf:rfc:9457:jwt-auth:missing-refresh-token",
 			Title:  "Missing Refresh Token",
 			Status: http.StatusUnprocessableEntity,
 			Detail: "refresh_token is required",
@@ -483,7 +476,6 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 	if tokenType := getStringClaim(claims, config.JWTClaimType); tokenType != config.TokenTypeRefresh {
 		writeJWTError(w, &JWTAuthError{
-			Type:   "urn:ietf:rfc:9457:jwt-auth:invalid-token-type",
 			Title:  "Invalid Token Type",
 			Status: http.StatusUnprocessableEntity,
 			Detail: "Provided token is not a refresh token",
@@ -493,7 +485,6 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 	if cfg.TokenStore.IsRevoked(claims) {
 		writeJWTError(w, &JWTAuthError{
-			Type:   "urn:ietf:rfc:9457:jwt-auth:token-revoked",
 			Title:  "Token Revoked",
 			Status: http.StatusUnauthorized,
 			Detail: "token has been revoked",
@@ -503,7 +494,6 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 	if err := cfg.TokenStore.Revoke(claims); err != nil {
 		writeJWTError(w, &JWTAuthError{
-			Type:   "urn:ietf:rfc:9457:jwt-auth:revocation-failed",
 			Title:  "Token Revocation Failed",
 			Status: http.StatusInternalServerError,
 			Detail: err.Error(),
@@ -608,12 +598,10 @@ func defaultJWTErrorHandler(w http.ResponseWriter, r *http.Request) {
 		jwtErr = errInvalidToken
 	}
 
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(jwtErr.Status)
-
-	response := fmt.Sprintf(`{"type":"%s","title":"%s","status":%d,"detail":"%s"}`,
-		jwtErr.Type, jwtErr.Title, jwtErr.Status, jwtErr.Detail)
-	_, _ = w.Write([]byte(response))
+	detail := problem.NewDetail(jwtErr.Status, jwtErr.Detail)
+	detail.Type = jwtErr.Type
+	detail.Title = jwtErr.Title
+	_ = detail.Render(w)
 }
 
 // hasClaim checks if a claim exists in the claims

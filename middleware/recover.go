@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -94,19 +94,12 @@ func unwrapHandlerError(err error) error {
 // handleExpectedError handles validation and binding errors
 // by returning appropriate HTTP status codes without logging as ERROR.
 func handleExpectedError(w http.ResponseWriter, _ *http.Request, logger log.Logger, err error) {
-	w.Header().Set("Content-Type", "application/problem+json")
-
 	// Check for validation errors (422)
 	var verr ValidationErrorer
 	if errors.As(err, &verr) {
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		response := map[string]any{
-			"title":  "Unprocessable Entity",
-			"status": http.StatusUnprocessableEntity,
-			"detail": "Validation failed",
-			"errors": verr.ValidationErrors(),
-		}
-		_ = json.NewEncoder(w).Encode(response)
+		detail := problem.NewDetail(http.StatusUnprocessableEntity, "Validation failed")
+		detail.Set("errors", verr.ValidationErrors())
+		_ = detail.Render(w)
 		return
 	}
 
@@ -116,22 +109,13 @@ func handleExpectedError(w http.ResponseWriter, _ *http.Request, logger log.Logg
 		// Log the actual error for debugging, but return a sanitized message
 		logger.Debug("Binding error", log.P(err))
 
-		w.WriteHeader(http.StatusBadRequest)
-		response := map[string]any{
-			"title":  "Bad Request",
-			"status": http.StatusBadRequest,
-			"detail": "Invalid request body",
-		}
-		_ = json.NewEncoder(w).Encode(response)
+		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request body")
+		_ = detail.Render(w)
 		return
 	}
 
 	// Unknown error type - treat as 500
 	logger.Error("Unexpected handler error", log.P(err))
-	w.WriteHeader(http.StatusInternalServerError)
-	response := map[string]any{
-		"title":  "Internal Server Error",
-		"status": http.StatusInternalServerError,
-	}
-	_ = json.NewEncoder(w).Encode(response)
+	detail := problem.NewDetail(http.StatusInternalServerError, "Internal server error")
+	_ = detail.Render(w)
 }

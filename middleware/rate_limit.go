@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 )
 
 // Bucket represents a token bucket for rate limiting
@@ -162,11 +163,9 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 
 			if !allowed {
 				w.Header().Set("Retry-After", strconv.Itoa(int(time.Until(resetTime).Seconds())))
-				w.WriteHeader(c.StatusCode)
-				if c.Message != "" {
-					if _, err := fmt.Fprint(w, c.Message); err != nil {
-						panic(fmt.Errorf("rate limit message write failed: %w", err))
-					}
+				detail := problem.NewDetail(c.StatusCode, c.Message)
+				if err := detail.Render(w); err != nil {
+					panic(fmt.Errorf("rate limit message write failed: %w", err))
 				}
 				return
 			}
