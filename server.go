@@ -365,6 +365,28 @@ func New(cfg ...config.Config) *Server {
 		postShutdownHooks:  c.PostShutdownHooks,
 	}
 
+	var middlewares []func(http.Handler) http.Handler
+
+	// Add metrics middleware first so it will be innermost after reverse,
+	// running inside Recover and able to capture status codes written by other middleware
+	if c.Metrics.Enabled && registry != nil {
+		middlewares = append(middlewares, metrics.NewMiddleware(registry, c.Metrics))
+	}
+
+	if c.DisableDefaultMiddlewares {
+		middlewares = append(middlewares, c.DefaultMiddlewares...)
+	} else if c.DefaultMiddlewares == nil {
+		middlewares = append(middlewares, middleware.DefaultMiddlewares(c, s.logger)...)
+	} else {
+		defaults := middleware.DefaultMiddlewares(c, s.logger)
+		middlewares = append(middlewares, defaults...)
+		middlewares = append(middlewares, c.DefaultMiddlewares...)
+	}
+
+	if len(middlewares) > 0 {
+		s.Use(middlewares...)
+	}
+
 	if s.server != nil {
 		s.server.Handler = router
 	}
@@ -373,25 +395,14 @@ func New(cfg ...config.Config) *Server {
 		s.tlsServer.Handler = router
 	}
 
-	var middlewares []func(http.Handler) http.Handler
-
-	if c.DisableDefaultMiddlewares {
-		middlewares = c.DefaultMiddlewares
-	} else if c.DefaultMiddlewares == nil {
-		middlewares = middleware.DefaultMiddlewares(c, s.logger)
-	} else {
-		defaults := middleware.DefaultMiddlewares(c, s.logger)
-		middlewares = append(defaults, c.DefaultMiddlewares...)
-	}
-
-	if len(middlewares) > 0 {
-		s.Use(middlewares...)
-	}
-
-	// Add metrics middleware and endpoint if enabled
+	// Register metrics endpoint if enabled (middleware already added above)
 	if c.Metrics.Enabled && registry != nil {
-		s.Use(metrics.NewMiddleware(registry, c.Metrics))
 		s.GET(c.Metrics.Endpoint, metrics.Handler(registry))
+	}
+
+	// Finalize router to register catch-all handler with middleware
+	if r, ok := router.(interface{ finalize() }); ok {
+		r.finalize()
 	}
 
 	return s

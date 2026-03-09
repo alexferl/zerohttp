@@ -2,22 +2,22 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
-	"github.com/alexferl/zerohttp"
+	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
 func main() {
 	// Create server with metrics enabled (default)
-	app := zerohttp.New(config.Config{
-		Addr: ":8080",
+	app := zh.New(config.Config{
 		Metrics: config.MetricsConfig{
 			Enabled:      true,
 			Endpoint:     "/metrics",
-			ExcludePaths: []string{"/health"}, // Don't track health checks
+			ExcludePaths: []string{"/health", "/metrics"},
 			PathLabelFunc: func(p string) string {
 				// Normalize dynamic paths - replace IDs with placeholders
 				// e.g., /users/123 -> /users/{id}
@@ -27,36 +27,34 @@ func main() {
 	})
 
 	// Health check (excluded from metrics)
-	app.GET("/health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
+	app.GET("/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		return zh.Render.Text(w, http.StatusOK, "OK")
 	}))
 
 	// Simple endpoint
-	app.GET("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("Hello, World!"))
+	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		return zh.Render.Text(w, http.StatusOK, "Hello, World!")
 	}))
 
 	// Simulated slow endpoint
-	app.GET("/slow", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.GET("/slow", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		time.Sleep(100 * time.Millisecond)
-		_, _ = w.Write([]byte("Slow response"))
+		return zh.Render.Text(w, http.StatusOK, "Slow response")
 	}))
 
 	// Endpoint with custom metrics
-	app.GET("/api/users", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.GET("/api/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		// Record custom metric
 		if reg := metrics.GetRegistry(r.Context()); reg != nil {
 			counter := reg.Counter("user_api_requests_total", "endpoint")
 			counter.WithLabelValues("list_users").Inc()
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`["alice", "bob", "charlie"]`))
+		return zh.Render.JSON(w, http.StatusOK, []string{"alice", "bob", "charlie"})
 	}))
 
 	// Business metrics example - order processing
-	app.POST("/api/orders", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	app.POST("/api/orders", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		// Access the metrics registry
 		if reg := metrics.GetRegistry(r.Context()); reg != nil {
 			// Order value histogram
@@ -82,8 +80,12 @@ func main() {
 			fmt.Printf("Order processed: amount=%.2f region=%s\n", orderAmount, region)
 		}
 
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"status": "created"}`))
+		return zh.Render.JSON(w, http.StatusCreated, zh.M{"status": "created"})
+	}))
+
+	// Panic endpoint - demonstrates recovery middleware and panic metrics
+	app.GET("/panic", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		panic("intentional panic for demonstration")
 	}))
 
 	fmt.Println("Server starting on http://localhost:8080")
@@ -94,9 +96,8 @@ func main() {
 	fmt.Println("  curl http://localhost:8080/slow")
 	fmt.Println("  curl http://localhost:8080/api/users")
 	fmt.Println("  curl -X POST http://localhost:8080/api/orders -H 'X-Region: us-east'")
+	fmt.Println("  curl http://localhost:8080/panic")
 	fmt.Println("  curl http://localhost:8080/metrics")
 
-	if err := app.ListenAndServe(); err != nil {
-		fmt.Printf("Server error: %v\n", err)
-	}
+	log.Fatal(app.Start())
 }

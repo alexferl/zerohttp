@@ -90,7 +90,9 @@ func NewMiddleware(reg Registry, cfg config.MetricsConfig) func(http.Handler) ht
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Skip excluded paths
+			// Add registry to context so other middleware can access it
+			r = r.WithContext(WithRegistry(r.Context(), reg))
+
 			if _, excluded := mm.ExcludePaths[r.URL.Path]; excluded {
 				next.ServeHTTP(w, r)
 				return
@@ -99,7 +101,6 @@ func NewMiddleware(reg Registry, cfg config.MetricsConfig) func(http.Handler) ht
 			path := mm.PathLabelFunc(r.URL.Path)
 			method := r.Method
 
-			// Get custom labels if configured
 			var customLabelValues []string
 			if mm.CustomLabels != nil {
 				customLabels := mm.CustomLabels(r)
@@ -107,10 +108,8 @@ func NewMiddleware(reg Registry, cfg config.MetricsConfig) func(http.Handler) ht
 				customLabelValues = mm.getCustomLabelValues(customLabels)
 			}
 
-			// Build label sets (pre-allocated capacity to avoid reallocations)
 			labels := mm.buildLabels(method, path, customLabelValues)
 
-			// Track in-flight
 			mm.InFlight.WithLabelValues(labels.inFlight...).Inc()
 			defer mm.InFlight.WithLabelValues(labels.inFlight...).Dec()
 
@@ -121,27 +120,58 @@ func NewMiddleware(reg Registry, cfg config.MetricsConfig) func(http.Handler) ht
 			}
 
 			start := time.Now()
+
+			// Record metrics in defer to ensure they are captured even on panic.
+			// We catch the panic here to record the 500 status, then re-panic
+			// so the actual Recover middleware (which is outside us in the chain)
+			// can handle logging and response.
+			defer func() {
+				// Check if a panic occurred (inner middleware like Recover didn't catch it,
+				// or we're catching it before Recover does)
+				if rvr := recover(); rvr != nil {
+					// Panic occurred - set status to 500
+					wrapped.statusCode = http.StatusInternalServerError
+
+					duration := time.Since(start).Seconds()
+					labels.request[1] = "500"
+
+					// Record metrics for the panic request
+					mm.Requests.WithLabelValues(labels.request...).Inc()
+					mm.RequestDur.WithLabelValues(labels.request...).Observe(duration)
+
+					if r.ContentLength > 0 {
+						mm.RequestSize.WithLabelValues(labels.requestSz...).Observe(float64(r.ContentLength))
+					}
+					if wrapped.size > 0 {
+						mm.ResponseSize.WithLabelValues(labels.request...).Observe(float64(wrapped.size))
+					}
+
+					// Re-panic so Recover middleware can handle it properly
+					panic(rvr)
+				}
+
+				// No panic - record normal metrics
+				duration := time.Since(start).Seconds()
+
+				status := wrapped.statusCode
+				if status == 0 {
+					status = http.StatusOK
+				}
+
+				labels.request[1] = strconv.Itoa(status)
+
+				mm.Requests.WithLabelValues(labels.request...).Inc()
+				mm.RequestDur.WithLabelValues(labels.request...).Observe(duration)
+
+				if r.ContentLength > 0 {
+					mm.RequestSize.WithLabelValues(labels.requestSz...).Observe(float64(r.ContentLength))
+				}
+				if wrapped.size > 0 {
+					mm.ResponseSize.WithLabelValues(labels.request...).Observe(float64(wrapped.size))
+				}
+			}()
+
 			next.ServeHTTP(wrapped, r)
-			duration := time.Since(start).Seconds()
-
-			status := strconv.Itoa(wrapped.statusCode)
-			if wrapped.statusCode == 0 {
-				status = "200"
-			}
-
-			// Update status in request labels
-			labels.request[1] = status
-
-			// Record metrics
-			mm.Requests.WithLabelValues(labels.request...).Inc()
-			mm.RequestDur.WithLabelValues(labels.request...).Observe(duration)
-
-			if r.ContentLength > 0 {
-				mm.RequestSize.WithLabelValues(labels.requestSz...).Observe(float64(r.ContentLength))
-			}
-			if wrapped.size > 0 {
-				mm.ResponseSize.WithLabelValues(labels.request...).Observe(float64(wrapped.size))
-			}
 		})
 	}
 }

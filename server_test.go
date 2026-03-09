@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -2094,5 +2095,148 @@ func TestServerWithValidator(t *testing.T) {
 
 	if app.Validator() != mockVal {
 		t.Error("Validator should be set via config option")
+	}
+}
+
+// TestServer_MetricsRecordsErrors verifies that 404 and 405 responses are recorded in metrics
+func TestServer_MetricsRecordsErrors(t *testing.T) {
+	app := New()
+
+	// Register a simple GET endpoint
+	app.GET("/api/users", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		return R.JSON(w, http.StatusOK, M{"users": []string{"alice", "bob"}})
+	}))
+
+	// Create test server
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// Make requests that will result in different status codes
+	// 200 - existing route
+	resp, err := http.Get(server.URL + "/api/users")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	// 404 - non-existent route
+	resp, err = http.Get(server.URL + "/nonexistent")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", resp.StatusCode)
+	}
+
+	// 405 - method not allowed (POST to GET-only route)
+	resp, err = http.Post(server.URL+"/api/users", "application/json", nil)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", resp.StatusCode)
+	}
+
+	// Now check that all status codes are recorded in metrics
+	resp, err = http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to get metrics: %v", err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatalf("failed to read metrics body: %v", err)
+	}
+	metrics := string(body)
+
+	// Verify http_requests_total contains all expected status codes
+	if !strings.Contains(metrics, "http_requests_total") {
+		t.Error("metrics should contain http_requests_total")
+	}
+
+	// Check for 200 status in metrics
+	if !strings.Contains(metrics, `status="200"`) {
+		t.Error("metrics should contain status=200")
+	}
+
+	// Check for 404 status in metrics
+	if !strings.Contains(metrics, `status="404"`) {
+		t.Error("metrics should contain status=404")
+	}
+
+	// Check for 405 status in metrics
+	if !strings.Contains(metrics, `status="405"`) {
+		t.Error("metrics should contain status=405")
+	}
+
+	// Verify the path is recorded for the existing route
+	if !strings.Contains(metrics, `path="/api/users"`) {
+		t.Error("metrics should contain path=/api/users")
+	}
+
+	// Verify duration histogram is also present
+	if !strings.Contains(metrics, "http_request_duration_seconds") {
+		t.Error("metrics should contain http_request_duration_seconds")
+	}
+}
+
+// TestServer_MetricsRecordsPanic verifies that panic responses are recorded as 500 in metrics
+// and that the recover middleware records its panic counter
+func TestServer_MetricsRecordsPanic(t *testing.T) {
+	app := New()
+
+	// Register a panic endpoint
+	app.GET("/panic", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		panic("intentional panic for testing")
+	}))
+
+	// Create test server
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// Make request that will panic
+	resp, err := http.Get(server.URL + "/panic")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	// Should get 500 status from recover middleware
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
+	}
+
+	// Now check metrics
+	resp, err = http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to get metrics: %v", err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatalf("failed to read metrics body: %v", err)
+	}
+	metrics := string(body)
+
+	// Verify http_requests_total contains status 500
+	if !strings.Contains(metrics, `status="500"`) {
+		t.Error("metrics should contain status=500 for panic request")
+	}
+
+	// Verify recover_panics_total is recorded
+	if !strings.Contains(metrics, "recover_panics_total") {
+		t.Error("metrics should contain recover_panics_total from recover middleware")
+	}
+
+	// Verify the path is recorded
+	if !strings.Contains(metrics, `path="/panic"`) {
+		t.Error("metrics should contain path=/panic")
 	}
 }
