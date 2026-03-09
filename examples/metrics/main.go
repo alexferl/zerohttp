@@ -15,10 +15,13 @@ import (
 
 func main() {
 	// Create server with metrics enabled (default)
+	// By default, metrics are served on a separate localhost-bound port (localhost:9090)
+	// for security. This prevents exposing metrics to the public internet.
 	app := zh.New(config.Config{
 		Metrics: config.MetricsConfig{
 			Enabled:      true,
 			Endpoint:     "/metrics",
+			ServerAddr:   "localhost:9090", // Separate metrics server on localhost
 			ExcludePaths: []string{"/health", "/metrics"},
 			PathLabelFunc: func(p string) string {
 				// Normalize dynamic paths - replace IDs with placeholders
@@ -110,7 +113,7 @@ func main() {
 	})
 
 	fmt.Println("Server starting on http://localhost:8080")
-	fmt.Println("Metrics available at http://localhost:8080/metrics")
+	fmt.Println("Metrics available at http://localhost:9090/metrics (localhost only)")
 	fmt.Println("")
 	fmt.Println("Try these commands:")
 	fmt.Println("  curl http://localhost:8080/")
@@ -119,7 +122,7 @@ func main() {
 	fmt.Println("  curl -X POST http://localhost:8080/api/orders -H 'X-Region: us-east'")
 	fmt.Println("  curl http://localhost:8080/panic")
 	fmt.Println("  curl http://localhost:8080/flaky/data  (50% failure rate, circuit breaker)")
-	fmt.Println("  curl http://localhost:8080/metrics")
+	fmt.Println("  curl http://localhost:9090/metrics")
 
 	log.Fatal(app.Start())
 }

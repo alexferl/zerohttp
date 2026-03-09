@@ -1,0 +1,122 @@
+package config
+
+import (
+	"net/http"
+	"reflect"
+	"testing"
+)
+
+func TestDefaultMetricsConfig(t *testing.T) {
+	defaults := DefaultMetricsConfig
+
+	if defaults.Enabled != false {
+		t.Errorf("expected Enabled to be false, got %v", defaults.Enabled)
+	}
+
+	if defaults.Endpoint != "/metrics" {
+		t.Errorf("expected Endpoint to be /metrics, got %s", defaults.Endpoint)
+	}
+
+	if defaults.ServerAddr != "localhost:9090" {
+		t.Errorf("expected ServerAddr to be localhost:9090, got %s", defaults.ServerAddr)
+	}
+
+	expectedDurationBuckets := []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+	if !reflect.DeepEqual(defaults.DurationBuckets, expectedDurationBuckets) {
+		t.Errorf("expected DurationBuckets %v, got %v", expectedDurationBuckets, defaults.DurationBuckets)
+	}
+
+	expectedSizeBuckets := []float64{100, 1000, 10000, 100000, 1000000, 10000000}
+	if !reflect.DeepEqual(defaults.SizeBuckets, expectedSizeBuckets) {
+		t.Errorf("expected SizeBuckets %v, got %v", expectedSizeBuckets, defaults.SizeBuckets)
+	}
+
+	expectedExcludePaths := []string{"/metrics"}
+	if !reflect.DeepEqual(defaults.ExcludePaths, expectedExcludePaths) {
+		t.Errorf("expected ExcludePaths %v, got %v", expectedExcludePaths, defaults.ExcludePaths)
+	}
+
+	if defaults.PathLabelFunc == nil {
+		t.Error("expected PathLabelFunc to be set")
+	} else {
+		// Test that PathLabelFunc returns the path as-is
+		result := defaults.PathLabelFunc("/api/users/123")
+		if result != "/api/users/123" {
+			t.Errorf("expected PathLabelFunc to return path as-is, got %s", result)
+		}
+	}
+
+	if defaults.CustomLabels != nil {
+		t.Error("expected CustomLabels to be nil by default")
+	}
+}
+
+func TestMetricsConfig_CustomLabels(t *testing.T) {
+	customLabels := func(r *http.Request) map[string]string {
+		return map[string]string{
+			"region": "us-east-1",
+		}
+	}
+
+	cfg := MetricsConfig{
+		Enabled:         true,
+		Endpoint:        "/custom-metrics",
+		ServerAddr:      "localhost:9091",
+		DurationBuckets: []float64{0.1, 0.5, 1.0},
+		SizeBuckets:     []float64{1000, 10000},
+		ExcludePaths:    []string{"/health", "/readyz"},
+		PathLabelFunc:   func(p string) string { return "/normalized" },
+		CustomLabels:    customLabels,
+	}
+
+	if !cfg.Enabled {
+		t.Error("expected Enabled to be true")
+	}
+
+	if cfg.Endpoint != "/custom-metrics" {
+		t.Errorf("expected Endpoint to be /custom-metrics, got %s", cfg.Endpoint)
+	}
+
+	if cfg.ServerAddr != "localhost:9091" {
+		t.Errorf("expected ServerAddr to be localhost:9091, got %s", cfg.ServerAddr)
+	}
+
+	if len(cfg.DurationBuckets) != 3 {
+		t.Errorf("expected 3 DurationBuckets, got %d", len(cfg.DurationBuckets))
+	}
+
+	if len(cfg.SizeBuckets) != 2 {
+		t.Errorf("expected 2 SizeBuckets, got %d", len(cfg.SizeBuckets))
+	}
+
+	if !reflect.DeepEqual(cfg.ExcludePaths, []string{"/health", "/readyz"}) {
+		t.Errorf("expected ExcludePaths [health readyz], got %v", cfg.ExcludePaths)
+	}
+
+	result := cfg.PathLabelFunc("/api/users/123")
+	if result != "/normalized" {
+		t.Errorf("expected PathLabelFunc to return /normalized, got %s", result)
+	}
+
+	if cfg.CustomLabels == nil {
+		t.Error("expected CustomLabels to be set")
+	} else {
+		labels := cfg.CustomLabels(nil)
+		if labels["region"] != "us-east-1" {
+			t.Errorf("expected region label to be us-east-1, got %s", labels["region"])
+		}
+	}
+}
+
+func TestMetricsConfig_EmptyServerAddr(t *testing.T) {
+	// Empty ServerAddr means metrics are served on the main server
+	cfg := MetricsConfig{
+		Enabled:    true,
+		ServerAddr: "",
+		Endpoint:   "/metrics",
+	}
+
+	if cfg.ServerAddr != "" {
+		t.Errorf("expected ServerAddr to be empty, got %s", cfg.ServerAddr)
+	}
+}

@@ -9,6 +9,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Features](#features)
 - [Requirements](#requirements)
 - [Secure by Default](#secure-by-default)
+  - [Security Notice](#security-notice)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Response Rendering](#response-rendering)
@@ -77,6 +78,10 @@ zerohttp applies security best practices automatically with these default middle
 - **Request Logging**: Comprehensive request/response logging with security context
 
 These middlewares are enabled by default but can be customized or disabled as needed.
+
+### Security Notice
+
+We do our best to follow security best practices, but this hasn't been formally audited by security experts. Consider doing your own review if security is critical for your use case.
 
 ## Installation
 
