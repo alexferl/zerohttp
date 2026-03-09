@@ -6,6 +6,7 @@ zerohttp provides several pluggable features that extend core functionality thro
 
 - [Interface Overview](#interface-overview)
 - [Validator](#validator)
+- [Distributed Tracing](#distributed-tracing)
 - [Auto-TLS](#auto-tls)
 - [HTTP/3](#http3)
 - [Server-Sent Events (SSE)](#server-sent-events-sse)
@@ -21,6 +22,11 @@ zerohttp defines minimal interfaces for each pluggable feature:
 type Validator interface {
     Struct(dst any) error
     Register(name string, fn func(reflect.Value, string) error)
+}
+
+// Tracer - Distributed tracing interface
+type Tracer interface {
+    Start(ctx context.Context, name string, opts ...SpanOption) (context.Context, Span)
 }
 
 // AutocertManager - Automatic certificate management
@@ -58,6 +64,7 @@ All pluggable features are configured via the Config struct:
 ```go
 app := zh.New(config.Config{
     Validator:          myValidator,
+    Tracer:             myTracer,
     AutocertManager:    myCertManager,
     HTTP3Server:        myH3Server,
     SSEProvider:        mySSEProvider,
@@ -118,6 +125,80 @@ func main() {
 ```
 
 See [`examples/validation/goplayground.go`](../examples/validation/goplayground.go) for a complete example.
+
+## Distributed Tracing
+
+zerohttp provides a pluggable tracing interface for distributed tracing. No external dependencies are required - you can implement your own tracer or use OpenTelemetry.
+
+### Basic Usage (No External Dependencies)
+
+```go
+package main
+
+import (
+    zh "github.com/alexferl/zerohttp"
+    "github.com/alexferl/zerohttp/config"
+    "github.com/alexferl/zerohttp/middleware"
+    "github.com/alexferl/zerohttp/trace"
+)
+
+// SimpleTracer logs spans to stdout
+type SimpleTracer struct{}
+
+func (t *SimpleTracer) Start(ctx context.Context, name string, opts ...trace.SpanOption) (context.Context, trace.Span) {
+    span := &SimpleSpan{name: name}
+    return trace.ContextWithSpan(ctx, span), span
+}
+
+type SimpleSpan struct{ name string }
+func (s *SimpleSpan) End() {}
+func (s *SimpleSpan) SetStatus(code trace.Code, description string) {}
+func (s *SimpleSpan) SetAttributes(attrs ...trace.Attribute) {}
+func (s *SimpleSpan) RecordError(err error, opts ...trace.ErrorOption) {}
+
+func main() {
+    tracer := &SimpleTracer{}
+
+    app := zh.New(config.Config{
+        Tracer: tracer,
+    })
+
+    // Add tracing middleware
+    app.Use(middleware.Tracing(tracer))
+
+    // Access span in handlers
+    app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+        span := trace.SpanFromContext(r.Context())
+        span.SetAttributes(trace.String("user.id", "123"))
+        return zh.R.JSON(w, 200, zh.M{"message": "ok"})
+    }))
+
+    app.ListenAndServe()
+}
+```
+
+### With OpenTelemetry
+
+```go
+import (
+    "go.opentelemetry.io/otel"
+    "go.opentelemetry.io/otel/exporters/jaeger"
+    sdktrace "go.opentelemetry.io/otel/sdk/trace"
+)
+
+// Create tracer provider with Jaeger exporter
+exp, _ := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://localhost:14268/api/traces")))
+tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exp))
+otel.SetTracerProvider(tp)
+
+// Wrap OTel tracer to implement zerohttp's interface
+tracer := &OTelTracer{tracer: tp.Tracer("myapp")}
+
+app := zh.New(config.Config{Tracer: tracer})
+app.Use(middleware.Tracing(tracer))
+```
+
+See [`examples/tracing/`](../examples/tracing/) for complete working examples including custom and OpenTelemetry implementations.
 
 ## Auto-TLS
 

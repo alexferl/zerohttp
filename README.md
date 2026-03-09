@@ -25,6 +25,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
 - [Metrics](docs/METRICS.md)
+- [Distributed Tracing](docs/PLUGGABLE.md#distributed-tracing)
 - [Static File Serving](#static-file-serving)
   - [Static File Methods](#static-file-methods)
   - [Fallback Behavior](#fallback-behavior)
@@ -57,6 +58,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Pluggable Architecture**: Extensible interfaces for Auto-TLS, HTTP/3, WebSocket, WebTransport, SSE, and Validator - bring your own implementations
 - **Server-Sent Events**: Built-in SSE support with event replay and broadcast hub for real-time server-to-client streaming
 - **Request Tracing**: Built-in request ID generation and propagation
+- **Distributed Tracing**: Pluggable tracing interface for OpenTelemetry, Jaeger, or custom implementations
 - **Circuit Breaker**: Prevent cascading failures with configurable circuit breaker middleware
 - **Metrics**: Built-in Prometheus-compatible metrics with zero dependencies
 - **Structured Logging**: Integrated structured logging with customizable fields
@@ -448,6 +450,41 @@ app.Use(middleware.CircuitBreaker(config.CircuitBreakerConfig{
 ```
 
 The circuit breaker operates in three states: **Closed** (normal), **Open** (blocked), and **Half-Open** (testing recovery). It prevents cascading failures when downstream services are unavailable.
+
+## Distributed Tracing
+
+zerohttp includes a pluggable tracing interface for distributed tracing with zero dependencies:
+
+```go
+import (
+    "github.com/alexferl/zerohttp/middleware"
+    "github.com/alexferl/zerohttp/trace"
+)
+
+// Implement the Tracer interface (or use OpenTelemetry)
+type myTracer struct{}
+
+func (t *myTracer) Start(ctx context.Context, name string, opts ...trace.SpanOption) (context.Context, trace.Span) {
+    // Your tracing implementation
+    return ctx, span
+}
+
+app := zh.New(config.Config{
+    Tracer: myTracer,
+})
+
+// Add tracing middleware - creates spans for each request
+app.Use(middleware.Tracing(myTracer))
+
+// Access spans in handlers
+app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    span := trace.SpanFromContext(r.Context())
+    span.SetAttributes(trace.String("user.id", "123"))
+    return zh.R.JSON(w, 200, zh.M{"message": "ok"})
+}))
+```
+
+See [docs/PLUGGABLE.md](docs/PLUGGABLE.md#distributed-tracing) for complete examples including OpenTelemetry integration.
 
 ## Static File Serving
 

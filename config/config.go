@@ -129,6 +129,17 @@ type Config struct {
 	// The server will be started automatically when ListenAndServeTLS or Start is called.
 	// Default: nil
 	WebTransportServer WebTransportServer
+
+	// Tracer is an optional tracer for distributed tracing.
+	// Users can inject their own implementation (e.g., wrapping go.opentelemetry.io/otel).
+	// The tracer must implement the trace.Tracer interface.
+	// If nil, tracing is disabled.
+	// Default: nil
+	Tracer TracerField
+
+	// TracerConfig holds the configuration for the tracing middleware.
+	// Default: DefaultTracerConfig
+	TracerConfig TracerConfig
 }
 
 // DefaultConfig contains all default values used by Config.
