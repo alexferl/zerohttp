@@ -121,7 +121,7 @@ func main() {
 	fmt.Println("  curl http://localhost:8080/api/users")
 	fmt.Println("  curl -X POST http://localhost:8080/api/orders -H 'X-Region: us-east'")
 	fmt.Println("  curl http://localhost:8080/panic")
-	fmt.Println("  curl http://localhost:8080/flaky/data  (50% failure rate, circuit breaker)")
+	fmt.Println("  curl http://localhost:8080/flaky  (50% failure rate, circuit breaker)")
 	fmt.Println("  curl http://localhost:9090/metrics")
 
 	log.Fatal(app.Start())
