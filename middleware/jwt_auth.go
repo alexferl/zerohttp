@@ -92,6 +92,11 @@ var (
 		Status: http.StatusInternalServerError,
 		Detail: "Token generation is not configured",
 	}
+	errTokenStoreNotConfigured = &JWTAuthError{
+		Title:  "Token Store Not Configured",
+		Status: http.StatusUnauthorized,
+		Detail: "JWT authentication is not properly configured",
+	}
 )
 
 // JWTAuth creates JWT authentication middleware
@@ -149,8 +154,8 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 			}
 
 			if c.TokenStore == nil {
-				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
-				handleJWTError(w, r, errInvalidToken, errorHandler)
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("not_configured").Inc()
+				handleJWTError(w, r, errTokenStoreNotConfigured, errorHandler)
 				return
 			}
 
@@ -163,8 +168,8 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 
 			claims, err := c.TokenStore.Validate(tokenString)
 			if err != nil {
-				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
-				handleJWTError(w, r, errInvalidToken, errorHandler)
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("not_configured").Inc()
+				handleJWTError(w, r, errTokenStoreNotConfigured, errorHandler)
 				return
 			}
 
@@ -261,6 +266,12 @@ func GetJWTClaims(r *http.Request) JWTClaims {
 	return JWTClaims{}
 }
 
+// asMap normalizes claims to map[string]any for consistent access.
+// Handles both map[string]any and HS256Claims types.
+func (j JWTClaims) asMap() (map[string]any, bool) {
+	return normalizeClaims(j.claims)
+}
+
 // Subject returns the 'sub' claim.
 func (j JWTClaims) Subject() string {
 	return getStringClaim(j.claims, config.JWTClaimSubject)
@@ -274,35 +285,26 @@ func (j JWTClaims) Issuer() string {
 // Audience returns the 'aud' claim as a string slice.
 // Returns all audiences if 'aud' is an array, or a single-element slice if it's a string.
 func (j JWTClaims) Audience() []string {
-	if j.claims == nil {
+	m, ok := j.asMap()
+	if !ok {
 		return nil
 	}
 
-	extractAud := func(m map[string]any) []string {
-		if aud, ok := m[config.JWTClaimAudience]; ok {
-			switch v := aud.(type) {
-			case string:
-				return []string{v}
-			case []string:
-				return v
-			case []any:
-				audiences := make([]string, 0, len(v))
-				for _, a := range v {
-					if s, ok := a.(string); ok {
-						audiences = append(audiences, s)
-					}
+	if aud, ok := m[config.JWTClaimAudience]; ok {
+		switch v := aud.(type) {
+		case string:
+			return []string{v}
+		case []string:
+			return v
+		case []any:
+			audiences := make([]string, 0, len(v))
+			for _, a := range v {
+				if s, ok := a.(string); ok {
+					audiences = append(audiences, s)
 				}
-				return audiences
 			}
+			return audiences
 		}
-		return nil
-	}
-
-	switch c := j.claims.(type) {
-	case map[string]any:
-		return extractAud(c)
-	case HS256Claims:
-		return extractAud(c)
 	}
 	return nil
 }
@@ -319,62 +321,44 @@ func (j JWTClaims) JTI() string {
 
 // Expiration returns the 'exp' claim as time.Time.
 func (j JWTClaims) Expiration() time.Time {
-	if j.claims == nil {
+	m, ok := j.asMap()
+	if !ok {
 		return time.Time{}
 	}
 
-	extractExp := func(m map[string]any) time.Time {
-		if exp, ok := m[config.JWTClaimExpiration]; ok {
-			switch v := exp.(type) {
-			case float64:
-				return time.Unix(int64(v), 0)
-			case int64:
-				return time.Unix(v, 0)
-			}
+	if exp, ok := m[config.JWTClaimExpiration]; ok {
+		switch v := exp.(type) {
+		case float64:
+			return time.Unix(int64(v), 0)
+		case int64:
+			return time.Unix(v, 0)
 		}
-		return time.Time{}
-	}
-
-	switch c := j.claims.(type) {
-	case map[string]any:
-		return extractExp(c)
-	case HS256Claims:
-		return extractExp(c)
 	}
 	return time.Time{}
 }
 
 // Scopes returns the 'scope' claim as a string slice.
 func (j JWTClaims) Scopes() []string {
-	if j.claims == nil {
+	m, ok := j.asMap()
+	if !ok {
 		return nil
 	}
 
-	extractScopes := func(m map[string]any) []string {
-		if scope, ok := m[config.JWTClaimScope]; ok {
-			switch v := scope.(type) {
-			case string:
-				return strings.Fields(v)
-			case []string:
-				return v
-			case []any:
-				scopes := make([]string, 0, len(v))
-				for _, s := range v {
-					if str, ok := s.(string); ok {
-						scopes = append(scopes, str)
-					}
+	if scope, ok := m[config.JWTClaimScope]; ok {
+		switch v := scope.(type) {
+		case string:
+			return strings.Fields(v)
+		case []string:
+			return v
+		case []any:
+			scopes := make([]string, 0, len(v))
+			for _, s := range v {
+				if str, ok := s.(string); ok {
+					scopes = append(scopes, str)
 				}
-				return scopes
 			}
+			return scopes
 		}
-		return nil
-	}
-
-	switch c := j.claims.(type) {
-	case map[string]any:
-		return extractScopes(c)
-	case HS256Claims:
-		return extractScopes(c)
 	}
 	return nil
 }
@@ -450,7 +434,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 	}
 
 	if cfg.TokenStore == nil {
-		writeJWTError(w, errInvalidToken)
+		writeJWTError(w, errTokenStoreNotConfigured)
 		return nil, false
 	}
 
@@ -627,9 +611,26 @@ func hasClaim(claims config.JWTClaims, key string) bool {
 	}
 }
 
+// normalizeClaims converts claims to map[string]any for consistent access.
+// Handles map[string]any, HS256Claims, and other map types via reflection.
+func normalizeClaims(claims config.JWTClaims) (map[string]any, bool) {
+	if claims == nil {
+		return nil, false
+	}
+	switch c := claims.(type) {
+	case map[string]any:
+		return c, true
+	case HS256Claims:
+		return c, true
+	default:
+		// For other map types, use reflection
+		return nil, false
+	}
+}
+
 // getStringClaim extracts a string claim from claims
 func getStringClaim(claims config.JWTClaims, key string) string {
-	extractFromMap := func(m map[string]any) string {
+	if m, ok := normalizeClaims(claims); ok {
 		if v, ok := m[key]; ok {
 			switch s := v.(type) {
 			case string:
@@ -649,16 +650,9 @@ func getStringClaim(claims config.JWTClaims, key string) string {
 		return ""
 	}
 
-	switch c := claims.(type) {
-	case map[string]any:
-		return extractFromMap(c)
-	case HS256Claims:
-		return extractFromMap(c)
-	default:
-		// Handle other map types (e.g., jwt.MapClaims from golang-jwt)
-		if v := getMapClaim(claims, key); v != nil {
-			return extractStringValue(v)
-		}
+	// Handle other map types (e.g., jwt.MapClaims from golang-jwt) via reflection
+	if v := getMapClaim(claims, key); v != nil {
+		return extractStringValue(v)
 	}
 	return ""
 }

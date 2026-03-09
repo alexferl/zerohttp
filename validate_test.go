@@ -652,9 +652,9 @@ func TestBindError_Unwrap(t *testing.T) {
 		t.Error("expected IsBindingError(nil) to be false")
 	}
 	// Test errors.As works with wrapped error
-	var bindErr *bindError
+	var bindErr *BindError
 	if !errors.As(err, &bindErr) {
-		t.Error("expected error to be bindError")
+		t.Error("expected error to be BindError")
 	}
 	// Unwrap should return the inner error
 	if bindErr.Unwrap() == nil {

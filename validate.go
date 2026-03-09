@@ -17,6 +17,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	zerrors "github.com/alexferl/zerohttp/internal/errors"
 )
 
 // Validate is the default validator instance used by the package
@@ -158,7 +160,7 @@ func BindAndValidate(r *http.Request, dst any) error {
 
 	if bindErr != nil {
 		// Wrap as binding error (400)
-		return &bindError{err: bindErr}
+		return &zerrors.BindError{Err: bindErr}
 	}
 
 	// Validate
@@ -169,27 +171,17 @@ func BindAndValidate(r *http.Request, dst any) error {
 	return nil
 }
 
-// bindError wraps binding errors to distinguish them from validation errors.
-// The default error handler uses this to return 400 instead of 422.
-type bindError struct {
-	err error
-}
+// BindError is an alias for internal/errors.BindError
+type BindError = zerrors.BindError
 
-func (e *bindError) Error() string {
-	return fmt.Sprintf("bind error: %v", e.err)
-}
-
-func (e *bindError) Unwrap() error {
-	return e.err
+// IsBindError checks if an error is a binding error (should return 400).
+func IsBindError(err error) bool {
+	return zerrors.IsBindError(err)
 }
 
 // IsBindingError checks if an error is a binding error (should return 400).
 func IsBindingError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return len(errStr) >= 11 && errStr[:11] == "bind error:"
+	return IsBindError(err)
 }
 
 // IsValidationError checks if an error is a validation error (should return 422).

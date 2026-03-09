@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	zerrors "github.com/alexferl/zerohttp/internal/errors"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
@@ -340,8 +341,8 @@ func TestRecover_HandlerError_ValidationError(t *testing.T) {
 
 func TestRecover_HandlerError_BindingError(t *testing.T) {
 	logger := &mockLogger{}
-	// Binding errors have prefix "bind error: "
-	bindErr := errors.New("bind error: invalid JSON")
+	// Binding errors use the BindError type
+	bindErr := &zerrors.BindError{Err: errors.New("invalid JSON")}
 	handlerErr := fmt.Errorf("handler error: %w", bindErr)
 	handler := Recover(logger)(panicHandler(handlerErr))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
@@ -438,5 +439,63 @@ func TestRecover_Metrics(t *testing.T) {
 	}
 	if len(counter.Metrics) != 1 {
 		t.Errorf("expected 1 panic metric, got %d", len(counter.Metrics))
+	}
+}
+
+func TestRecover_CustomRequestIDHeader(t *testing.T) {
+	logger := &mockLogger{}
+	customHeader := "X-Custom-Request-ID"
+
+	cfg := config.RecoverConfig{
+		RequestIDHeader:  customHeader,
+		EnableStackTrace: false,
+	}
+
+	handler := Recover(logger, cfg)(panicHandler("test panic"))
+
+	// Test 1: Request with custom header should log that request ID
+	req1 := zhtest.NewRequest(http.MethodGet, "/").WithHeader(customHeader, "custom-req-456").Build()
+	w1 := zhtest.Serve(handler, req1)
+
+	if w1.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w1.Code)
+	}
+
+	foundCustomID := false
+	for _, fields := range logger.errorFields {
+		for _, field := range fields {
+			if field.Key == "request_id" && field.Value == "custom-req-456" {
+				foundCustomID = true
+				break
+			}
+		}
+	}
+	if !foundCustomID {
+		t.Error("expected custom request ID to be logged")
+	}
+
+	// Reset logger for next test
+	logger.errorFields = nil
+	logger.errorLogs = nil
+
+	// Test 2: Request with default X-Request-Id header should NOT use it
+	req2 := zhtest.NewRequest(http.MethodGet, "/").WithHeader("X-Request-Id", "should-be-ignored").Build()
+	w2 := zhtest.Serve(handler, req2)
+
+	if w2.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w2.Code)
+	}
+
+	foundDefaultID := false
+	for _, fields := range logger.errorFields {
+		for _, field := range fields {
+			if field.Key == "request_id" && field.Value == "should-be-ignored" {
+				foundDefaultID = true
+				break
+			}
+		}
+	}
+	if foundDefaultID {
+		t.Error("expected default X-Request-Id header to be ignored when custom header is configured")
 	}
 }

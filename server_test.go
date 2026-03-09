@@ -2677,3 +2677,83 @@ func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
 	defer cancel()
 	_ = srv.Shutdown(ctx)
 }
+
+func TestServer_RequestContextCancellation(t *testing.T) {
+	// This test verifies that when Shutdown is called, the base context
+	// is cancelled and requests can detect it via r.Context().Done()
+
+	ctxCancelled := make(chan bool, 1)
+	requestStarted := make(chan bool, 1)
+
+	server := New()
+
+	// Add a handler that waits for context cancellation
+	server.GET("/wait", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		close(requestStarted)
+
+		select {
+		case <-r.Context().Done():
+			ctxCancelled <- true
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return nil
+		case <-time.After(5 * time.Second):
+			ctxCancelled <- false
+			w.WriteHeader(http.StatusOK)
+			return nil
+		}
+	}))
+
+	// Start server
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	server.listener = listener
+	server.server.Addr = listener.Addr().String()
+
+	// Start server in goroutine using ListenAndServe (not Start)
+	go func() {
+		_ = server.ListenAndServe()
+	}()
+
+	// Wait for server to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Make a request in the background
+	go func() {
+		_, _ = http.Get("http://" + listener.Addr().String() + "/wait")
+	}()
+
+	// Wait for request to start
+	select {
+	case <-requestStarted:
+		// Good, request started
+	case <-time.After(2 * time.Second):
+		t.Fatal("request did not start in time")
+	}
+
+	// Small delay to ensure handler is waiting
+	time.Sleep(100 * time.Millisecond)
+
+	// Shutdown the server - this should cancel the base context
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = server.Shutdown(shutdownCtx)
+	if err != nil {
+		t.Errorf("shutdown error: %v", err)
+	}
+
+	// Wait to see if the handler detected context cancellation
+	select {
+	case wasCancelled := <-ctxCancelled:
+		if !wasCancelled {
+			t.Error("handler did not receive context cancellation signal")
+		}
+		// Success - context was cancelled
+	case <-time.After(2 * time.Second):
+		t.Error("timeout waiting for handler to detect cancellation")
+	}
+}

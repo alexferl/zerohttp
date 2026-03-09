@@ -9,17 +9,14 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zerrors "github.com/alexferl/zerohttp/internal/errors"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
-// ValidationErrorer is the interface for validation errors.
-// This is duplicated from the main package to avoid import cycle.
-type ValidationErrorer interface {
-	error
-	ValidationErrors() map[string][]string
-}
+// ValidationErrorer is an alias for internal/errors.ValidationErrorer.
+type ValidationErrorer = zerrors.ValidationErrorer
 
 // Recover is a middleware that recovers from panics, logs the panic (and a backtrace),
 // and returns HTTP 500 if possible. It prints a request ID if one is provided.
@@ -34,6 +31,9 @@ func Recover(logger log.Logger, cfg ...config.RecoverConfig) func(http.Handler) 
 	}
 	if c.StackSize <= 0 {
 		c.StackSize = config.DefaultRecoverConfig.StackSize
+	}
+	if c.RequestIDHeader == "" {
+		c.RequestIDHeader = config.DefaultRecoverConfig.RequestIDHeader
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -56,7 +56,7 @@ func Recover(logger log.Logger, cfg ...config.RecoverConfig) func(http.Handler) 
 					metrics.SafeRegistry(metrics.GetRegistry(r.Context())).Counter("recover_panics_total").Inc()
 
 					// Real panic - log as error with stack trace
-					reqID := r.Header.Get("X-Request-Id")
+					reqID := r.Header.Get(c.RequestIDHeader)
 					if reqID == "" {
 						reqID = fmt.Sprintf("recover-%d", time.Now().UnixNano())
 					}
@@ -107,8 +107,7 @@ func handleExpectedError(w http.ResponseWriter, _ *http.Request, logger log.Logg
 	}
 
 	// Check for binding errors (400)
-	// bindError prefix: "bind error: "
-	if strings.HasPrefix(err.Error(), "bind error: ") {
+	if zerrors.IsBindError(err) {
 		// Log the actual error for debugging, but return a sanitized message
 		logger.Debug("Binding error", log.P(err))
 

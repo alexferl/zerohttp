@@ -9,9 +9,13 @@ import (
 )
 
 func DefaultMiddlewares(cfg config.Config, logger log.Logger) []func(http.Handler) http.Handler {
+	// Sync RequestID header configuration with Recover config
+	recoverConfig := cfg.Recover
+	recoverConfig.RequestIDHeader = cfg.RequestID.Header
+
 	return []func(http.Handler) http.Handler{
 		RequestID(cfg.RequestID),
-		Recover(logger, cfg.Recover),
+		Recover(logger, recoverConfig),
 		RequestBodySize(cfg.RequestBodySize),
 		SecurityHeaders(cfg.SecurityHeaders),
 		RequestLogger(logger, cfg.RequestLogger),
