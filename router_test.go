@@ -30,6 +30,20 @@ func testHandler(message string) http.HandlerFunc {
 	}
 }
 
+// failWriteRecorder is a ResponseRecorder that fails on Write to simulate
+// JSON encoding failures
+type failWriteRecorder struct {
+	*httptest.ResponseRecorder
+	failWrite bool
+}
+
+func (f *failWriteRecorder) Write(p []byte) (int, error) {
+	if f.failWrite {
+		return 0, fmt.Errorf("simulated write failure")
+	}
+	return f.ResponseRecorder.Write(p)
+}
+
 func TestHandlerFunc(t *testing.T) {
 	t.Run("success case", func(t *testing.T) {
 		router := NewRouter()
@@ -461,23 +475,31 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			Body("Custom 405")
 	})
 
-	// Test fallback to plain text when headers are already written
-	t.Run("fallback when problem detail fails", func(t *testing.T) {
-		// This test verifies the panic fix - when ProblemDetail fails
-		// (e.g., headers already written), we should fallback to plain text
-		// rather than panicking
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Simulate a condition where headers might be partially written
-			// The fallback should work without panicking
-			w.WriteHeader(http.StatusNotFound)
-		})
+	// Test fallback path when ProblemDetail fails
+	t.Run("default not found handler fallback", func(t *testing.T) {
+		// Use a response writer that fails when writing the JSON body
+		w := &failWriteRecorder{ResponseRecorder: httptest.NewRecorder(), failWrite: true}
+		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
+		// Now call the handler - should trigger fallback path
+		defaultNotFoundHandler.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("expected status %d, got %d", http.StatusNotFound, w.Code)
+		// Content-Type should be text/plain (fallback)
+		contentType := w.Header().Get("Content-Type")
+		if contentType != "text/plain" {
+			t.Errorf("expected Content-Type %q, got %q", "text/plain", contentType)
+		}
+	})
+
+	t.Run("default method not allowed handler fallback", func(t *testing.T) {
+		w := &failWriteRecorder{ResponseRecorder: httptest.NewRecorder(), failWrite: true}
+		req := httptest.NewRequest(http.MethodPut, "/test", nil)
+
+		defaultMethodNotAllowedHandler.ServeHTTP(w, req)
+
+		contentType := w.Header().Get("Content-Type")
+		if contentType != "text/plain" {
+			t.Errorf("expected Content-Type %q, got %q", "text/plain", contentType)
 		}
 	})
 }

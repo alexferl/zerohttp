@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -907,4 +908,95 @@ func TestCSRF_GenerateTokenErrorHandling(t *testing.T) {
 	// where crypto/rand.Read fails (e.g., system out of entropy).
 	// When this happens, the middleware rejects the request rather than
 	// returning an empty token, implementing fail-closed security.
+}
+
+// TestCSRF_TokenGenerationFailsClosed verifies that when token generation fails,
+// the request is rejected and the token_generation_failed metric is incremented
+func TestCSRF_TokenGenerationFailsClosed(t *testing.T) {
+	reg := metrics.NewRegistry()
+
+	// Inject a failing token generator
+	failingGenerator := func(key []byte) (string, error) {
+		return "", fmt.Errorf("simulated token generation failure")
+	}
+
+	mw := CSRF(config.CSRFConfig{
+		HMACKey:        testHMACKey,
+		TokenGenerator: failingGenerator,
+	})
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called when token generation fails")
+	})))
+
+	// Test GET request (exempt method) with failing token generation
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when token generation fails, got %d", rr.Code)
+	}
+
+	// Verify the metric was incremented
+	families := reg.Gather()
+	var found bool
+	for _, f := range families {
+		if f.Name == "csrf_rejected_total" {
+			for _, m := range f.Metrics {
+				if reason, ok := m.Labels["reason"]; ok && reason == "token_generation_failed" {
+					found = true
+					break
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("expected csrf_rejected_total metric with reason=token_generation_failed")
+	}
+}
+
+// TestCSRF_DefaultTokenGenerator verifies that when TokenGenerator is not set (nil),
+// the default crypto-secure token generator is used
+func TestCSRF_DefaultTokenGenerator(t *testing.T) {
+	mw := CSRF(config.CSRFConfig{
+		HMACKey:        testHMACKey,
+		TokenGenerator: nil, // Explicitly nil to test default
+	})
+
+	// GET request should generate a token using the default generator
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	var tokenFromContext string
+	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenFromContext = GetCSRFToken(r)
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+
+	if tokenFromContext == "" {
+		t.Error("expected CSRF token to be generated and set in context")
+	}
+
+	// Verify the cookie was set
+	cookies := rr.Result().Cookies()
+	var found bool
+	for _, c := range cookies {
+		if c.Name == "csrf_token" && c.Value != "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected csrf_token cookie to be set")
+	}
 }

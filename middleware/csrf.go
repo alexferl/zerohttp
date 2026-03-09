@@ -64,6 +64,9 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 		if cfg[0].HMACKey != nil {
 			c.HMACKey = cfg[0].HMACKey
 		}
+		if cfg[0].TokenGenerator != nil {
+			c.TokenGenerator = cfg[0].TokenGenerator
+		}
 	}
 
 	// HMAC key is required - fail fast if not provided
@@ -72,6 +75,12 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 			"or load from environment variables. Using a random key would invalidate all tokens on server restart.")
 	}
 	hmacKey := c.HMACKey
+
+	// Use injected token generator or default
+	tokenGenerator := c.TokenGenerator
+	if tokenGenerator == nil {
+		tokenGenerator = generateToken
+	}
 
 	exemptMethodMap := make(map[string]bool)
 	for _, method := range c.ExemptMethods {
@@ -100,7 +109,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 				cookie, err := r.Cookie(c.CookieName)
 				var token string
 				if err != nil || cookie.Value == "" || !validateTokenFormat(cookie.Value) {
-					token, err = generateToken(hmacKey)
+					token, err = tokenGenerator(hmacKey)
 					if err != nil {
 						// Fail closed: reject request if we can't generate a token
 						reg.Counter("csrf_rejected_total", "reason").WithLabelValues("token_generation_failed").Inc()
@@ -139,7 +148,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			newToken, err := generateToken(hmacKey)
+			newToken, err := tokenGenerator(hmacKey)
 			if err != nil {
 				// Fail closed: reject request if we can't generate a token
 				reg.Counter("csrf_rejected_total", "reason").WithLabelValues("token_generation_failed").Inc()

@@ -51,6 +51,10 @@ type CSRFConfig struct {
 	// Use a 32-byte key from environment variables or secure storage.
 	// All servers in a cluster must use the same key.
 	HMACKey []byte
+
+	// TokenGenerator is an optional function for generating CSRF tokens.
+	// Defaults to crypto-secure random generation.
+	TokenGenerator func(key []byte) (string, error)
 }
 
 // Bool returns a pointer to a bool value
