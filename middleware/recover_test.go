@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -399,5 +401,42 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	// Should log as error with stack trace
 	if len(logger.errorLogs) != 1 {
 		t.Errorf("Expected 1 error log for panics, got %d", len(logger.errorLogs))
+	}
+}
+
+func TestRecover_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	logger := &mockLogger{}
+	mw := Recover(logger)
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	wrapped := metricsMw(mw(panicHandler("test panic")))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rr.Code)
+	}
+
+	// Check metrics
+	families := reg.Gather()
+	var counter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "recover_panics_total" {
+			counter = &f
+			break
+		}
+	}
+	if counter == nil {
+		t.Fatal("expected recover_panics_total metric")
+	}
+	if len(counter.Metrics) != 1 {
+		t.Errorf("expected 1 panic metric, got %d", len(counter.Metrics))
 	}
 }

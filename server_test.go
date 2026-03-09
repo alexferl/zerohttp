@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -2095,4 +2096,401 @@ func TestServerWithValidator(t *testing.T) {
 	if app.Validator() != mockVal {
 		t.Error("Validator should be set via config option")
 	}
+}
+
+// TestServer_MetricsRecordsErrors verifies that 404 and 405 responses are recorded in metrics
+func TestServer_MetricsRecordsErrors(t *testing.T) {
+	app := New()
+
+	// Register a simple GET endpoint
+	app.GET("/api/users", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		return R.JSON(w, http.StatusOK, M{"users": []string{"alice", "bob"}})
+	}))
+
+	// Create test server
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// Make requests that will result in different status codes
+	// 200 - existing route
+	resp, err := http.Get(server.URL + "/api/users")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	// 404 - non-existent route
+	resp, err = http.Get(server.URL + "/nonexistent")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", resp.StatusCode)
+	}
+
+	// 405 - method not allowed (POST to GET-only route)
+	resp, err = http.Post(server.URL+"/api/users", "application/json", nil)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", resp.StatusCode)
+	}
+
+	// Now check that all status codes are recorded in metrics
+	resp, err = http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to get metrics: %v", err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatalf("failed to read metrics body: %v", err)
+	}
+	metrics := string(body)
+
+	// Verify http_requests_total contains all expected status codes
+	if !strings.Contains(metrics, "http_requests_total") {
+		t.Error("metrics should contain http_requests_total")
+	}
+
+	// Check for 200 status in metrics
+	if !strings.Contains(metrics, `status="200"`) {
+		t.Error("metrics should contain status=200")
+	}
+
+	// Check for 404 status in metrics
+	if !strings.Contains(metrics, `status="404"`) {
+		t.Error("metrics should contain status=404")
+	}
+
+	// Check for 405 status in metrics
+	if !strings.Contains(metrics, `status="405"`) {
+		t.Error("metrics should contain status=405")
+	}
+
+	// Verify the path is recorded for the existing route
+	if !strings.Contains(metrics, `path="/api/users"`) {
+		t.Error("metrics should contain path=/api/users")
+	}
+
+	// Verify duration histogram is also present
+	if !strings.Contains(metrics, "http_request_duration_seconds") {
+		t.Error("metrics should contain http_request_duration_seconds")
+	}
+}
+
+// TestServer_MetricsRecordsPanic verifies that panic responses are recorded as 500 in metrics
+// and that the recover middleware records its panic counter
+func TestServer_MetricsRecordsPanic(t *testing.T) {
+	app := New()
+
+	// Register a panic endpoint
+	app.GET("/panic", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		panic("intentional panic for testing")
+	}))
+
+	// Create test server
+	server := httptest.NewServer(app)
+	defer server.Close()
+
+	// Make request that will panic
+	resp, err := http.Get(server.URL + "/panic")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	// Should get 500 status from recover middleware
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", resp.StatusCode)
+	}
+
+	// Now check metrics
+	resp, err = http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to get metrics: %v", err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatalf("failed to read metrics body: %v", err)
+	}
+	metrics := string(body)
+
+	// Verify http_requests_total contains status 500
+	if !strings.Contains(metrics, `status="500"`) {
+		t.Error("metrics should contain status=500 for panic request")
+	}
+
+	// Verify recover_panics_total is recorded
+	if !strings.Contains(metrics, "recover_panics_total") {
+		t.Error("metrics should contain recover_panics_total from recover middleware")
+	}
+
+	// Verify the path is recorded
+	if !strings.Contains(metrics, `path="/panic"`) {
+		t.Error("metrics should contain path=/panic")
+	}
+}
+
+func TestMergeRecoverConfig(t *testing.T) {
+	defaults := config.DefaultRecoverConfig
+
+	t.Run("empty user config keeps defaults", func(t *testing.T) {
+		result := mergeRecoverConfig(defaults, config.RecoverConfig{})
+		if result.StackSize != defaults.StackSize {
+			t.Errorf("expected StackSize %d, got %d", defaults.StackSize, result.StackSize)
+		}
+		if result.EnableStackTrace != defaults.EnableStackTrace {
+			t.Errorf("expected EnableStackTrace %v, got %v", defaults.EnableStackTrace, result.EnableStackTrace)
+		}
+	})
+
+	t.Run("user values override defaults", func(t *testing.T) {
+		user := config.RecoverConfig{
+			StackSize:        8192,
+			EnableStackTrace: true,
+		}
+		result := mergeRecoverConfig(defaults, user)
+		if result.StackSize != 8192 {
+			t.Errorf("expected StackSize 8192, got %d", result.StackSize)
+		}
+		if !result.EnableStackTrace {
+			t.Error("expected EnableStackTrace to be true")
+		}
+	})
+}
+
+func TestMergeRequestBodySizeConfig(t *testing.T) {
+	defaults := config.DefaultRequestBodySizeConfig
+
+	t.Run("empty user config keeps defaults", func(t *testing.T) {
+		result := mergeRequestBodySizeConfig(defaults, config.RequestBodySizeConfig{})
+		if result.MaxBytes != defaults.MaxBytes {
+			t.Errorf("expected MaxBytes %d, got %d", defaults.MaxBytes, result.MaxBytes)
+		}
+	})
+
+	t.Run("user values override defaults", func(t *testing.T) {
+		user := config.RequestBodySizeConfig{
+			MaxBytes:    10 * 1024 * 1024,
+			ExemptPaths: []string{"/upload", "/webhook"},
+		}
+		result := mergeRequestBodySizeConfig(defaults, user)
+		if result.MaxBytes != 10*1024*1024 {
+			t.Errorf("expected MaxBytes %d, got %d", 10*1024*1024, result.MaxBytes)
+		}
+		if len(result.ExemptPaths) != 2 || result.ExemptPaths[0] != "/upload" {
+			t.Errorf("expected ExemptPaths [/upload /webhook], got %v", result.ExemptPaths)
+		}
+	})
+
+	t.Run("empty exempt paths not applied", func(t *testing.T) {
+		user := config.RequestBodySizeConfig{
+			MaxBytes:    5 * 1024 * 1024,
+			ExemptPaths: []string{},
+		}
+		result := mergeRequestBodySizeConfig(defaults, user)
+		if result.MaxBytes != 5*1024*1024 {
+			t.Errorf("expected MaxBytes %d, got %d", 5*1024*1024, result.MaxBytes)
+		}
+		if len(result.ExemptPaths) != 0 {
+			t.Errorf("expected empty ExemptPaths, got %v", result.ExemptPaths)
+		}
+	})
+}
+
+func TestMergeRequestIDConfig(t *testing.T) {
+	defaults := config.DefaultRequestIDConfig
+
+	t.Run("empty user config keeps defaults", func(t *testing.T) {
+		result := mergeRequestIDConfig(defaults, config.RequestIDConfig{})
+		if result.Header != defaults.Header {
+			t.Errorf("expected Header %s, got %s", defaults.Header, result.Header)
+		}
+		if result.ContextKey != defaults.ContextKey {
+			t.Errorf("expected ContextKey %s, got %s", defaults.ContextKey, result.ContextKey)
+		}
+	})
+
+	t.Run("user values override defaults", func(t *testing.T) {
+		generator := func() string { return "custom-id" }
+		user := config.RequestIDConfig{
+			Header:     "X-Custom-ID",
+			ContextKey: "customKey",
+			Generator:  generator,
+		}
+		result := mergeRequestIDConfig(defaults, user)
+		if result.Header != "X-Custom-ID" {
+			t.Errorf("expected Header X-Custom-ID, got %s", result.Header)
+		}
+		if result.ContextKey != "customKey" {
+			t.Errorf("expected ContextKey customKey, got %s", result.ContextKey)
+		}
+		if result.Generator == nil {
+			t.Error("expected Generator to be set")
+		}
+	})
+}
+
+func TestMergeRequestLoggerConfig(t *testing.T) {
+	defaults := config.DefaultRequestLoggerConfig
+
+	t.Run("empty user config keeps defaults", func(t *testing.T) {
+		result := mergeRequestLoggerConfig(defaults, config.RequestLoggerConfig{})
+		if result.LogErrors != defaults.LogErrors {
+			t.Errorf("expected LogErrors %v, got %v", defaults.LogErrors, result.LogErrors)
+		}
+	})
+
+	t.Run("user values override defaults", func(t *testing.T) {
+		user := config.RequestLoggerConfig{
+			LogErrors:   true,
+			Fields:      []config.LogField{config.FieldMethod, config.FieldPath, config.FieldDurationHuman},
+			ExemptPaths: []string{"/health", "/metrics"},
+		}
+		result := mergeRequestLoggerConfig(defaults, user)
+		if !result.LogErrors {
+			t.Error("expected LogErrors to be true")
+		}
+		if len(result.Fields) != 3 {
+			t.Errorf("expected 3 Fields, got %d", len(result.Fields))
+		}
+		if len(result.ExemptPaths) != 2 {
+			t.Errorf("expected 2 ExemptPaths, got %d", len(result.ExemptPaths))
+		}
+	})
+}
+
+func TestMergeSecurityHeadersConfig(t *testing.T) {
+	defaults := config.DefaultSecurityHeadersConfig
+
+	t.Run("empty user config keeps defaults", func(t *testing.T) {
+		result := mergeSecurityHeadersConfig(defaults, config.SecurityHeadersConfig{})
+		if result.XFrameOptions != defaults.XFrameOptions {
+			t.Errorf("expected XFrameOptions %s, got %s", defaults.XFrameOptions, result.XFrameOptions)
+		}
+	})
+
+	t.Run("user values override defaults", func(t *testing.T) {
+		user := config.SecurityHeadersConfig{
+			XFrameOptions:         "DENY",
+			ContentSecurityPolicy: "default-src 'self'",
+			Server:                "CustomServer",
+			ExemptPaths:           []string{"/api/public"},
+		}
+		result := mergeSecurityHeadersConfig(defaults, user)
+		if result.XFrameOptions != "DENY" {
+			t.Errorf("expected XFrameOptions DENY, got %s", result.XFrameOptions)
+		}
+		if result.ContentSecurityPolicy != "default-src 'self'" {
+			t.Errorf("expected CSP 'default-src 'self'', got %s", result.ContentSecurityPolicy)
+		}
+		if result.Server != "CustomServer" {
+			t.Errorf("expected Server CustomServer, got %s", result.Server)
+		}
+		if len(result.ExemptPaths) != 1 || result.ExemptPaths[0] != "/api/public" {
+			t.Errorf("expected ExemptPaths [/api/public], got %v", result.ExemptPaths)
+		}
+	})
+
+	t.Run("partial user config merges with defaults", func(t *testing.T) {
+		user := config.SecurityHeadersConfig{
+			XFrameOptions: "SAMEORIGIN",
+		}
+		result := mergeSecurityHeadersConfig(defaults, user)
+		if result.XFrameOptions != "SAMEORIGIN" {
+			t.Errorf("expected XFrameOptions SAMEORIGIN, got %s", result.XFrameOptions)
+		}
+		// Other fields should keep defaults
+		if result.ContentSecurityPolicy != defaults.ContentSecurityPolicy {
+			t.Errorf("expected CSP to keep default, got %s", result.ContentSecurityPolicy)
+		}
+	})
+
+	t.Run("StrictTransportSecurity merge", func(t *testing.T) {
+		user := config.SecurityHeadersConfig{
+			StrictTransportSecurity: config.StrictTransportSecurity{
+				MaxAge:            31536000,
+				ExcludeSubdomains: true,
+			},
+		}
+		result := mergeSecurityHeadersConfig(defaults, user)
+		if result.StrictTransportSecurity.MaxAge != 31536000 {
+			t.Errorf("expected HSTS MaxAge 31536000, got %d", result.StrictTransportSecurity.MaxAge)
+		}
+		if !result.StrictTransportSecurity.ExcludeSubdomains {
+			t.Error("expected HSTS ExcludeSubdomains to be true")
+		}
+	})
+}
+
+func TestMergeMetricsConfig(t *testing.T) {
+	defaults := config.DefaultMetricsConfig
+
+	t.Run("empty user config applies zero values", func(t *testing.T) {
+		// Note: Enabled is always applied, so empty config will set Enabled to false
+		result := mergeMetricsConfig(defaults, config.MetricsConfig{})
+		if result.Enabled {
+			t.Error("expected Enabled to be false when user config is empty")
+		}
+		if result.Endpoint != defaults.Endpoint {
+			t.Errorf("expected Endpoint %s, got %s", defaults.Endpoint, result.Endpoint)
+		}
+	})
+
+	t.Run("user values override defaults", func(t *testing.T) {
+		customLabels := func(r *http.Request) map[string]string { return nil }
+		pathLabelFunc := func(p string) string { return p }
+		user := config.MetricsConfig{
+			Enabled:         false,
+			Endpoint:        "/custom-metrics",
+			DurationBuckets: []float64{0.01, 0.1, 1},
+			SizeBuckets:     []float64{100, 1000},
+			ExcludePaths:    []string{"/health", "/readyz"},
+			PathLabelFunc:   pathLabelFunc,
+			CustomLabels:    customLabels,
+		}
+		result := mergeMetricsConfig(defaults, user)
+		if result.Enabled {
+			t.Error("expected Enabled to be false")
+		}
+		if result.Endpoint != "/custom-metrics" {
+			t.Errorf("expected Endpoint /custom-metrics, got %s", result.Endpoint)
+		}
+		if len(result.DurationBuckets) != 3 {
+			t.Errorf("expected 3 DurationBuckets, got %d", len(result.DurationBuckets))
+		}
+		if len(result.SizeBuckets) != 2 {
+			t.Errorf("expected 2 SizeBuckets, got %d", len(result.SizeBuckets))
+		}
+		if len(result.ExcludePaths) != 2 {
+			t.Errorf("expected 2 ExcludePaths, got %d", len(result.ExcludePaths))
+		}
+		if result.PathLabelFunc == nil {
+			t.Error("expected PathLabelFunc to be set")
+		}
+		if result.CustomLabels == nil {
+			t.Error("expected CustomLabels to be set")
+		}
+	})
+
+	t.Run("Enabled field is always applied", func(t *testing.T) {
+		// Even with zero values, Enabled should be applied
+		user := config.MetricsConfig{
+			Enabled: false,
+		}
+		result := mergeMetricsConfig(defaults, user)
+		if result.Enabled {
+			t.Error("expected Enabled to be false when user sets it")
+		}
+	})
 }

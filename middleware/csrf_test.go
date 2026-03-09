@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -847,4 +848,40 @@ func TestCSRF_FormParseError(t *testing.T) {
 
 	// Should fail because form parsing fails
 	zhtest.AssertWith(t, rr2).Status(http.StatusForbidden)
+}
+
+func TestCSRF_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	mw := CSRF(config.CSRFConfig{HMACKey: testHMACKey})
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	// POST without token should be rejected
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", rr.Code)
+	}
+
+	// Check metrics
+	families := reg.Gather()
+	var counter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "csrf_rejected_total" {
+			counter = &f
+			break
+		}
+	}
+	if counter == nil {
+		t.Fatal("expected csrf_rejected_total metric")
+	}
 }

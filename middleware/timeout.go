@@ -10,6 +10,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // ErrTimeoutWrite is returned when the timeout middleware fails to write response data.
@@ -94,6 +95,8 @@ func Timeout(cfg ...config.TimeoutConfig) func(http.Handler) http.Handler {
 				defer tw.mu.Unlock()
 
 				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					metrics.SafeRegistry(metrics.GetRegistry(r.Context())).Counter("timeout_requests_total").Inc()
+
 					detail := problem.NewDetail(c.StatusCode, c.Message)
 					if err := detail.Render(w); err != nil {
 						panic(fmt.Errorf("timeout message write failed: %w", err))

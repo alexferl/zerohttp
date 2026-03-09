@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -278,4 +279,63 @@ func TestBasicAuthFailedFunction(t *testing.T) {
 	zhtest.AssertWith(t, w).
 		Status(http.StatusUnauthorized).
 		Header("WWW-Authenticate", `Basic realm="Test Realm"`)
+}
+
+func TestBasicAuth_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	mw := BasicAuth(config.BasicAuthConfig{
+		Credentials: map[string]string{"admin": "secret"},
+	})
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	// Test missing auth
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w1 := httptest.NewRecorder()
+	wrapped.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w1.Code)
+	}
+
+	// Test valid auth
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	auth := base64.StdEncoding.EncodeToString([]byte("admin:secret"))
+	req2.Header.Set("Authorization", "Basic "+auth)
+	w2 := httptest.NewRecorder()
+	wrapped.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w2.Code)
+	}
+
+	// Check metrics
+	families := reg.Gather()
+	var counter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "basic_auth_requests_total" {
+			counter = &f
+			break
+		}
+	}
+	if counter == nil {
+		t.Fatal("expected basic_auth_requests_total metric")
+	}
+
+	// Should have metrics for both valid and missing
+	results := make(map[string]int)
+	for _, m := range counter.Metrics {
+		results[m.Labels["result"]]++
+	}
+	if results["missing"] != 1 {
+		t.Errorf("expected 1 missing, got %d", results["missing"])
+	}
+	if results["valid"] != 1 {
+		t.Errorf("expected 1 valid, got %d", results["valid"])
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -199,5 +200,54 @@ func TestTimeout_NoRaceCondition(t *testing.T) {
 		if w.Code == http.StatusGatewayTimeout && body == "done" {
 			t.Fatal("race detected: timeout status but success body")
 		}
+	}
+}
+
+func TestTimeout_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(100 * time.Millisecond):
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	timeoutMw := Timeout(config.TimeoutConfig{Timeout: 50 * time.Millisecond})
+
+	// Chain: metrics -> timeout -> handler
+	wrapped := metricsMw(timeoutMw(handler))
+
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w := zhtest.Serve(wrapped, req)
+
+	// Should timeout
+	if w.Code != http.StatusGatewayTimeout {
+		t.Errorf("expected status %d, got %d", http.StatusGatewayTimeout, w.Code)
+	}
+
+	// Check that timeout metric was recorded
+	families := reg.Gather()
+
+	var timeoutCounter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "timeout_requests_total" {
+			timeoutCounter = &f
+			break
+		}
+	}
+
+	if timeoutCounter == nil {
+		t.Fatal("expected timeout_requests_total metric")
+	}
+
+	if len(timeoutCounter.Metrics) != 1 {
+		t.Errorf("expected 1 timeout metric, got %d", len(timeoutCounter.Metrics))
 	}
 }

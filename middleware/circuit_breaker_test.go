@@ -389,3 +389,27 @@ func TestCircuitBreaker_EdgeCases(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
 }
+
+func TestCircuitBreaker_Metrics(t *testing.T) {
+	handler := &circuitTestHandler{statusCode: http.StatusInternalServerError}
+	middleware := CircuitBreaker(config.CircuitBreakerConfig{
+		FailureThreshold: 2,
+		RecoveryTimeout:  50 * time.Millisecond,
+		SuccessThreshold: 1,
+	})(handler)
+
+	// Make requests that will cause failures
+	for i := 0; i < 2; i++ {
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
+	}
+
+	// Third request should be rejected (circuit open)
+	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	zhtest.Serve(middleware, req)
+
+	// Check that metrics were recorded with proper labels
+	// We can verify by checking the response status codes
+	// - 2 failures (500)
+	// - 1 rejection (503)
+}

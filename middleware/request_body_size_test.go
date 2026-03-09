@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -206,5 +207,56 @@ func TestRequestBodySize_GetRequest(t *testing.T) {
 	}
 	if handler.bodyError != nil {
 		t.Errorf("Expected no error for GET request, got %v", handler.bodyError)
+	}
+}
+
+func TestRequestBodySize_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	mw := RequestBodySize(config.RequestBodySizeConfig{MaxBytes: 10})
+
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	wrapped := metricsMw(handler)
+
+	// Test request within limit
+	req1 := zhtest.NewRequest(http.MethodPost, "/").WithBody(strings.NewReader("short")).Build()
+	zhtest.Serve(wrapped, req1)
+
+	// Test request exceeding limit
+	req2 := zhtest.NewRequest(http.MethodPost, "/").WithBody(strings.NewReader("this is definitely longer than 10 bytes")).Build()
+	zhtest.Serve(wrapped, req2)
+
+	// Check metrics
+	families := reg.Gather()
+
+	var rejectedCounter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "request_body_size_rejected_total" {
+			rejectedCounter = &f
+			break
+		}
+	}
+
+	if rejectedCounter == nil {
+		t.Fatal("expected request_body_size_rejected_total metric")
+	}
+
+	rejected := 0
+	for _, m := range rejectedCounter.Metrics {
+		rejected = int(m.Counter)
+	}
+	if rejected != 1 {
+		t.Errorf("expected 1 rejected request, got %d", rejected)
 	}
 }

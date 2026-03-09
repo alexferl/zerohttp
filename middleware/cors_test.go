@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -330,4 +331,99 @@ func TestCORSDisallowedOriginNoPassthrough(t *testing.T) {
 		t.Error("handler should not be called when origin disallowed and passthrough is false")
 	}
 	zhtest.AssertWith(t, rr).Status(http.StatusNoContent)
+}
+
+func TestCORS_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	mw := CORS(config.CORSConfig{
+		AllowedOrigins: []string{"https://allowed.com"},
+	})
+
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	wrapped := metricsMw(handler)
+
+	// Test preflight request
+	req1 := httptest.NewRequest(http.MethodOptions, "/test", nil)
+	req1.Header.Set("Origin", "https://allowed.com")
+	req1.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	rr1 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr1, req1)
+
+	if rr1.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", rr1.Code)
+	}
+
+	// Test allowed origin
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.Header.Set("Origin", "https://allowed.com")
+	rr2 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr2.Code)
+	}
+
+	// Test rejected origin
+	req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req3.Header.Set("Origin", "https://rejected.com")
+	rr3 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr3, req3)
+
+	if rr3.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr3.Code)
+	}
+
+	// Check metrics
+	families := reg.Gather()
+
+	var preflightCounter *metrics.MetricFamily
+	var originCounter *metrics.MetricFamily
+	for _, f := range families {
+		switch f.Name {
+		case "cors_preflight_requests_total":
+			preflightCounter = &f
+		case "cors_requests_total":
+			originCounter = &f
+		}
+	}
+
+	if preflightCounter == nil {
+		t.Fatal("expected cors_preflight_requests_total metric")
+	}
+	if originCounter == nil {
+		t.Fatal("expected cors_requests_total metric")
+	}
+
+	// Should have 1 preflight
+	preflightTotal := 0
+	for _, m := range preflightCounter.Metrics {
+		preflightTotal = int(m.Counter)
+	}
+	if preflightTotal != 1 {
+		t.Errorf("expected 1 preflight, got %d", preflightTotal)
+	}
+
+	// Should have 1 allowed and 1 rejected
+	allowed, rejected := 0, 0
+	for _, m := range originCounter.Metrics {
+		switch m.Labels["origin"] {
+		case "allowed":
+			allowed = int(m.Counter)
+		case "rejected":
+			rejected = int(m.Counter)
+		}
+	}
+	if allowed != 1 {
+		t.Errorf("expected 1 allowed, got %d", allowed)
+	}
+	if rejected != 1 {
+		t.Errorf("expected 1 rejected, got %d", rejected)
+	}
 }

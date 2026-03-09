@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -283,5 +285,54 @@ func TestRateLimitDefaultKeyExtractor(t *testing.T) {
 	key = config.DefaultKeyExtractor(req)
 	if key != "127.0.0.1:12345" {
 		t.Errorf("expected key '127.0.0.1:12345', got '%s'", key)
+	}
+}
+
+func TestRateLimit_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	mw := RateLimit(config.RateLimitConfig{
+		Rate:      1,
+		Window:    time.Second,
+		Algorithm: config.TokenBucket,
+	})
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	// First request allowed
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req1.RemoteAddr = "127.0.0.1:12345"
+	w1 := httptest.NewRecorder()
+	wrapped.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w1.Code)
+	}
+
+	// Second request rejected
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.RemoteAddr = "127.0.0.1:12345"
+	w2 := httptest.NewRecorder()
+	wrapped.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusTooManyRequests {
+		t.Errorf("expected 429, got %d", w2.Code)
+	}
+
+	// Check metrics
+	families := reg.Gather()
+	var counter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "ratelimit_allowed_total" || f.Name == "ratelimit_rejected_total" {
+			counter = &f
+			break
+		}
+	}
+	if counter == nil {
+		t.Fatal("expected ratelimit metrics")
 	}
 }

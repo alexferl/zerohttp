@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -854,7 +855,7 @@ func TestETag_NilSkipStatusCodes(t *testing.T) {
 	// Manually create middleware with nil maps
 	handler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ew := newETagResponseWriter(w, cfg, "", "", "", "")
+			ew := newETagResponseWriter(w, cfg, "", "", "", "", nil)
 			defer ew.release()
 			next.ServeHTTP(ew, r)
 			ew.finalize()
@@ -1041,7 +1042,7 @@ func TestETag_NilConfigMaps(t *testing.T) {
 
 	handler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ew := newETagResponseWriter(w, cfg, "", "", "", "")
+			ew := newETagResponseWriter(w, cfg, "", "", "", "", nil)
 			defer ew.release()
 			next.ServeHTTP(ew, r)
 			ew.finalize()
@@ -1154,7 +1155,7 @@ func TestETag_NilSkipContentTypes(t *testing.T) {
 
 	handler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ew := newETagResponseWriter(w, cfg, "", "", "", "")
+			ew := newETagResponseWriter(w, cfg, "", "", "", "", nil)
 			defer ew.release()
 			next.ServeHTTP(ew, r)
 			ew.finalize()
@@ -1195,5 +1196,92 @@ func TestETag_ChunkedTransferEncoding(t *testing.T) {
 	// Body should still be written
 	if rec.Body.String() != "chunked data" {
 		t.Errorf("expected body 'chunked data', got %s", rec.Body.String())
+	}
+}
+
+func TestETag_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	mw := ETag()
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello world"))
+	}))
+	wrapped := metricsMw(handler)
+
+	// First request - should generate ETag and count as miss
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rr1 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr1, req1)
+
+	if rr1.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr1.Code)
+	}
+
+	etag := rr1.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("expected ETag")
+	}
+
+	// Second request with matching ETag - should be a hit
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.Header.Set("If-None-Match", etag)
+	rr2 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusNotModified {
+		t.Errorf("expected 304, got %d", rr2.Code)
+	}
+
+	// Check metrics
+	families := reg.Gather()
+
+	var reqCounter *metrics.MetricFamily
+	var genCounter *metrics.MetricFamily
+	for _, f := range families {
+		switch f.Name {
+		case "etag_requests_total":
+			reqCounter = &f
+		case "etag_generated_total":
+			genCounter = &f
+		}
+	}
+
+	if reqCounter == nil {
+		t.Fatal("expected etag_requests_total metric")
+	}
+	if genCounter == nil {
+		t.Fatal("expected etag_generated_total metric")
+	}
+
+	// Should have 1 hit and 1 miss
+	hits, misses := 0, 0
+	for _, m := range reqCounter.Metrics {
+		switch m.Labels["result"] {
+		case "hit":
+			hits = int(m.Counter)
+		case "miss":
+			misses = int(m.Counter)
+		}
+	}
+	if hits != 1 {
+		t.Errorf("expected 1 hit, got %d", hits)
+	}
+	if misses != 1 {
+		t.Errorf("expected 1 miss, got %d", misses)
+	}
+
+	// Should have 2 generated ETags (one per request)
+	totalGen := 0
+	for _, m := range genCounter.Metrics {
+		totalGen = int(m.Counter)
+	}
+	if totalGen != 2 {
+		t.Errorf("expected 2 generated ETags, got %d", totalGen)
 	}
 }

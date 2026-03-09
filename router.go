@@ -11,6 +11,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
@@ -220,6 +221,10 @@ type defaultRouter struct {
 	// middleware settings and behavioral options. This configuration
 	// affects how routes and error responses are handled.
 	config config.Config
+
+	// finalizeOnce ensures the router is finalized exactly once, even with concurrent access.
+	// The finalize operation registers the catch-all handler for 404/405 responses.
+	finalizeOnce sync.Once
 }
 
 // NewRouter creates a new router instance with optional global middleware.
@@ -240,8 +245,6 @@ func NewRouter(mw ...func(http.Handler) http.Handler) Router {
 		logger:                  log.NewDefaultLogger(),
 		config:                  cfg,
 	}
-	// Register a catch-all handler to handle 404 and 405 responses
-	r.mux.HandleFunc("/", r.catchAllHandler())
 	return r
 }
 
@@ -461,7 +464,21 @@ func (r *defaultRouter) ServeMux() *http.ServeMux {
 // ServeHTTP implements the http.Handler interface, making the router compatible
 // with Go's standard HTTP server. This is the entry point for all HTTP requests.
 func (r *defaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// Auto-finalize on first use - safe for concurrent access
+	r.finalizeOnce.Do(func() {
+		r.mux.Handle("/", r.wrap(r.catchAllHandler(), nil))
+	})
 	r.mux.ServeHTTP(w, req)
+}
+
+// finalize registers the catch-all handler for 404/405 responses.
+// This must be called after all routes are registered and before serving requests.
+// The catch-all handler is wrapped with the current middleware chain.
+// Safe to call multiple times; only executes once.
+func (r *defaultRouter) finalize() {
+	r.finalizeOnce.Do(func() {
+		r.mux.Handle("/", r.wrap(r.catchAllHandler(), nil))
+	})
 }
 
 // Logger returns the logger instance used by the router for logging

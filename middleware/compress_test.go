@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -667,4 +668,56 @@ func decodeResponseBody(t *testing.T, resp *http.Response) string {
 	}
 
 	return string(respBody)
+}
+
+func TestCompress_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	mw := Compress(config.CompressConfig{
+		Types: []string{"text/plain"},
+	})
+
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte(strings.Repeat("test content ", 100)))
+	}))
+	wrapped := metricsMw(handler)
+
+	// Test gzip compression
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatal("expected gzip encoding")
+	}
+
+	// Check metrics
+	families := reg.Gather()
+	var reqCounter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "compress_requests_total" {
+			reqCounter = &f
+			break
+		}
+	}
+	if reqCounter == nil {
+		t.Fatal("expected compress_requests_total metric")
+	}
+
+	hasGzip := false
+	for _, m := range reqCounter.Metrics {
+		if m.Labels["encoding"] == "gzip" && m.Counter > 0 {
+			hasGzip = true
+			break
+		}
+	}
+	if !hasGzip {
+		t.Error("expected gzip encoding in metrics")
+	}
 }

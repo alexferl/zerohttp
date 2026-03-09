@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // Compressor represents a set of encoding configurations.
@@ -124,6 +125,8 @@ func (c *Compressor) Handler(next http.Handler) http.Handler {
 			return
 		}
 
+		reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 		encoder, encoding, cleanup := c.selectEncoder(r.Header, w)
 		cw := &compressResponseWriter{
 			ResponseWriter:   w,
@@ -140,6 +143,12 @@ func (c *Compressor) Handler(next http.Handler) http.Handler {
 		defer cleanup()
 		defer func() {
 			_ = cw.Close()
+			// Record metric for encoding used
+			enc := encoding
+			if enc == "" {
+				enc = "none"
+			}
+			reg.Counter("compress_requests_total", "encoding").WithLabelValues(enc).Inc()
 		}()
 
 		next.ServeHTTP(cw, r)
