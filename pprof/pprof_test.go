@@ -389,7 +389,7 @@ func TestIPAllowlistDisabled(t *testing.T) {
 	// Empty slice disables IP checking
 	app := zh.New()
 	cfg := DefaultConfig
-	cfg.Auth = &AuthConfig{} // disable auth for this test
+	cfg.Auth = &AuthConfig{}    // disable auth for this test
 	cfg.AllowedIPs = []string{} // empty = allow any IP
 	New(app, cfg)
 
