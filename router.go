@@ -61,7 +61,7 @@ func handleHandlerError(w http.ResponseWriter, err error) bool {
 	}
 
 	// Check for binding errors (400)
-	if strings.HasPrefix(err.Error(), "bind error: ") {
+	if IsBindError(err) {
 		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(http.StatusBadRequest)
 		response := map[string]any{
@@ -428,13 +428,12 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		}
 
 		if file, err := filesystem.Open(strings.TrimPrefix(cleanPath, "/")); err == nil {
-			defer func() {
-				if cErr := file.Close(); cErr != nil {
-					r.logger.Error("Failed to close file", log.F("error", cErr), log.F("path", cleanPath))
-				}
-			}()
+			stat, err := file.Stat()
+			if closeErr := file.Close(); closeErr != nil {
+				r.logger.Error("Failed to close file", log.F("error", closeErr), log.F("path", cleanPath))
+			}
 
-			if stat, err := file.Stat(); err == nil && !stat.IsDir() {
+			if err == nil && !stat.IsDir() {
 				http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
 				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
 				return

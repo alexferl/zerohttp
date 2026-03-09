@@ -27,6 +27,17 @@ type Server struct {
 	// route registration, middleware support, and request handling.
 	Router
 
+	// mu protects concurrent access to server fields during startup,
+	// shutdown, and configuration operations.
+	mu sync.RWMutex
+
+	// baseCtx is the root context for all requests.
+	// It is cancelled when Shutdown is called to signal request cancellation.
+	baseCtx context.Context
+
+	// cancelBaseCtx cancels the base context.
+	cancelBaseCtx context.CancelFunc
+
 	// server is the HTTP server instance for handling plain HTTP traffic.
 	// If nil, HTTP server will not be started.
 	server *http.Server
@@ -109,10 +120,6 @@ type Server struct {
 	// If nil, WebTransport support will not be enabled.
 	// The server will be started automatically when ListenAndServeTLS or Start is called.
 	webTransportServer config.WebTransportServer
-
-	// mu protects concurrent access to server fields during startup,
-	// shutdown, and configuration operations.
-	mu sync.RWMutex
 }
 
 // mergeRecoverConfig merges user config with defaults
@@ -357,6 +364,9 @@ func New(cfg ...config.Config) *Server {
 		registry = metrics.NewRegistry()
 	}
 
+	// Create base context for request cancellation during shutdown
+	baseCtx, cancelBaseCtx := context.WithCancel(context.Background())
+
 	s := &Server{
 		Router:             router,
 		server:             server,
@@ -377,6 +387,8 @@ func New(cfg ...config.Config) *Server {
 		preShutdownHooks:   c.PreShutdownHooks,
 		shutdownHooks:      c.ShutdownHooks,
 		postShutdownHooks:  c.PostShutdownHooks,
+		baseCtx:            baseCtx,
+		cancelBaseCtx:      cancelBaseCtx,
 	}
 
 	// Configure separate metrics server if ServerAddr is set
@@ -414,10 +426,16 @@ func New(cfg ...config.Config) *Server {
 
 	if s.server != nil {
 		s.server.Handler = router
+		s.server.BaseContext = func(net.Listener) context.Context {
+			return s.baseCtx
+		}
 	}
 
 	if s.tlsServer != nil {
 		s.tlsServer.Handler = router
+		s.tlsServer.BaseContext = func(net.Listener) context.Context {
+			return s.baseCtx
+		}
 	}
 
 	// Register metrics endpoint on main router only if no separate metrics server
@@ -1143,6 +1161,12 @@ func (s *Server) SetWebTransportServer(server config.WebTransportServer) {
 // Returns the first error encountered during shutdown, or nil if successful.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server...")
+
+	// Cancel the base context to signal all requests to close
+	// This happens before pre-shutdown hooks so requests can start terminating
+	if s.cancelBaseCtx != nil {
+		s.cancelBaseCtx()
+	}
 
 	// Execute pre-shutdown hooks sequentially
 	if err := s.runPreShutdownHooks(ctx); err != nil {

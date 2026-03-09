@@ -39,6 +39,8 @@ type Counter interface {
 }
 
 // Gauge can go up and down.
+// Note: Gauge values are stored with fixed-point precision (3 decimal places).
+// Values are rounded to the nearest 0.001. For example, 1.2345 becomes 1.235.
 type Gauge interface {
 	Inc()
 	Dec()
@@ -254,8 +256,10 @@ type gaugeVec struct {
 }
 
 // gauge is a single gauge instance.
+// Values are stored with fixed-point precision (3 decimal places) using int64.
+// The value is multiplied by 1000 for storage, allowing precision to 0.001.
 type gauge struct {
-	value int64 // stored as fixed-point for atomic operations
+	value int64 // stored as fixed-point (val * 1000) for atomic operations
 }
 
 func (g *gauge) Inc() {
