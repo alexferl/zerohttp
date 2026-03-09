@@ -3,6 +3,7 @@ package pprof
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	zh "github.com/alexferl/zerohttp"
@@ -44,9 +45,33 @@ func setupPProfWithAuth(t *testing.T, username, password string) (*zh.Server, *P
 }
 
 // makeRequest makes an HTTP request to the test server and returns the response.
+// Requests come from localhost (127.0.0.1) by default to pass IP allowlist checks.
 func makeRequest(t *testing.T, app *zh.Server, method, path string, username, password string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, nil)
+	// Set RemoteAddr to localhost to pass default IP allowlist
+	req.RemoteAddr = "127.0.0.1:1234"
+	if username != "" || password != "" {
+		req.SetBasicAuth(username, password)
+	}
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	return rec
+}
+
+// makeRequestFromIP makes an HTTP request from a specific IP address.
+// For IPv6 addresses, use the bracket notation like "[::1]".
+func makeRequestFromIP(t *testing.T, app *zh.Server, method, path, clientIP, username, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	// Format RemoteAddr properly for IPv4 and IPv6
+	if strings.Contains(clientIP, ":") {
+		// IPv6 - needs brackets
+		req.RemoteAddr = "[" + clientIP + "]:1234"
+	} else {
+		// IPv4
+		req.RemoteAddr = clientIP + ":1234"
+	}
 	if username != "" || password != "" {
 		req.SetBasicAuth(username, password)
 	}
@@ -91,6 +116,9 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if DefaultConfig.Auth != nil {
 		t.Error("expected Auth to be nil")
+	}
+	if len(DefaultConfig.AllowedIPs) != 2 {
+		t.Errorf("expected AllowedIPs to have 2 entries (localhost only), got %d", len(DefaultConfig.AllowedIPs))
 	}
 }
 
@@ -304,9 +332,123 @@ func TestDisabledAuth(t *testing.T) {
 		t.Error("expected Auth to be nil when disabled")
 	}
 
-	// Test without auth - should succeed
+	// Test without auth - should succeed (from localhost)
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/", "", "")
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d with auth disabled, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestIPAllowlistDefault(t *testing.T) {
+	// Default config should only allow localhost
+	app := zh.New()
+	cfg := DefaultConfig
+	cfg.Auth = &AuthConfig{} // disable auth for this test
+	New(app, cfg)
+
+	// Request from localhost should succeed
+	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "127.0.0.1", "", "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d from localhost, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Request from external IP should be forbidden
+	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.1.100", "", "")
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status %d from external IP, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestIPAllowlistCustom(t *testing.T) {
+	app := zh.New()
+	cfg := DefaultConfig
+	cfg.Auth = &AuthConfig{} // disable auth for this test
+	cfg.AllowedIPs = []string{"192.168.1.0/24", "10.0.0.100"}
+	New(app, cfg)
+
+	// Request from allowed CIDR should succeed
+	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.1.50", "", "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d from allowed CIDR, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Request from allowed single IP should succeed
+	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "10.0.0.100", "", "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d from allowed IP, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Request from disallowed IP should be forbidden
+	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.2.1", "", "")
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status %d from disallowed IP, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestIPAllowlistDisabled(t *testing.T) {
+	// Empty slice disables IP checking
+	app := zh.New()
+	cfg := DefaultConfig
+	cfg.Auth = &AuthConfig{} // disable auth for this test
+	cfg.AllowedIPs = []string{} // empty = allow any IP
+	New(app, cfg)
+
+	// Request from any IP should succeed
+	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "8.8.8.8", "", "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d when IP allowlist disabled, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestIPAllowlistWithAuth(t *testing.T) {
+	// Test that IP check happens before auth
+	app := zh.New()
+	cfg := DefaultConfig
+	cfg.Auth = &AuthConfig{Username: "admin", Password: "secret"}
+	cfg.AllowedIPs = []string{"127.0.0.1/32"}
+	New(app, cfg)
+
+	// Request from disallowed IP should get 403 before auth check
+	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.1.1", "admin", "secret")
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status %d from disallowed IP, got %d", http.StatusForbidden, rec.Code)
+	}
+
+	// Request from allowed IP with wrong auth should get 401
+	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "127.0.0.1", "wrong", "wrong")
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status %d with wrong auth, got %d", http.StatusUnauthorized, rec.Code)
+	}
+
+	// Request from allowed IP with correct auth should succeed
+	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "127.0.0.1", "admin", "secret")
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d with correct auth, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestIPAllowlistIPv6(t *testing.T) {
+	app := zh.New()
+	cfg := DefaultConfig
+	cfg.Auth = &AuthConfig{} // disable auth for this test
+	cfg.AllowedIPs = []string{"::1/128", "2001:db8::/32"}
+	New(app, cfg)
+
+	// Request from localhost IPv6 should succeed
+	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "::1", "", "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d from ::1, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Request from allowed IPv6 CIDR should succeed
+	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "2001:db8::1", "", "")
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d from allowed IPv6, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Request from disallowed IPv6 should be forbidden
+	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "2001:db9::1", "", "")
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status %d from disallowed IPv6, got %d", http.StatusForbidden, rec.Code)
 	}
 }

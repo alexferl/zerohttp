@@ -3,8 +3,10 @@ package pprof
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"net"
 	"net/http"
 	stdpprof "net/http/pprof"
+	"strings"
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/log"
@@ -69,6 +71,12 @@ type Config struct {
 	// Set to &AuthConfig{} with empty Username/Password to disable auth.
 	// Default: nil (auto-generates secure password)
 	Auth *AuthConfig
+
+	// AllowedIPs restricts access to specific IPs or CIDR ranges.
+	// Supports IPv4 and IPv6 addresses and CIDR notation (e.g., "10.0.0.0/8", "192.168.1.100").
+	// Default: []string{"127.0.0.1/8", "::1/128"} (localhost only)
+	// Set to empty slice to allow any IP (with auth still required).
+	AllowedIPs []string
 }
 
 // AuthConfig holds basic authentication configuration
@@ -96,16 +104,7 @@ var DefaultConfig = Config{
 	EnableBlock:        true,
 	EnableMutex:        true,
 	Auth:               nil,
-}
-
-// generateRandomPassword generates a secure random password
-func generateRandomPassword() string {
-	b := make([]byte, 24)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to a default if crypto/rand fails (extremely unlikely)
-		return "pprof-fallback-password-change-me"
-	}
-	return base64.URLEncoding.EncodeToString(b)
+	AllowedIPs:         []string{"127.0.0.1/8", "::1/128"}, // localhost only by default
 }
 
 // New creates and registers all pprof endpoints with the provided configuration.
@@ -146,23 +145,50 @@ func New(app *zh.Server, cfg Config) *PProf {
 		)
 	}
 
+	// Parse allowed IPs (nil means use default localhost-only)
+	allowedIPs := cfg.AllowedIPs
+	if allowedIPs == nil {
+		allowedIPs = []string{"127.0.0.1/8", "::1/128"}
+	}
+
+	var allowedNets []*net.IPNet
+	if len(allowedIPs) > 0 {
+		var err error
+		allowedNets, err = parseAllowedIPs(allowedIPs)
+		if err != nil {
+			logger.Error("failed to parse allowed IPs, falling back to localhost only",
+				log.F("error", err),
+			)
+			allowedNets, _ = parseAllowedIPs([]string{"127.0.0.1/8", "::1/128"})
+		}
+	}
+
 	pp := &PProf{
 		Config: cfg,
 		Auth:   auth,
 	}
 
+	// Build middleware chain: IP check -> Auth -> Handler
 	wrapFunc := func(fn http.HandlerFunc) zh.HandlerFunc {
+		handler := adaptHandlerFunc(fn)
 		if auth != nil {
-			return authHandlerFunc(auth, fn)
+			handler = authHandlerFunc(auth, fn)
 		}
-		return adaptHandlerFunc(fn)
+		if len(allowedNets) > 0 {
+			handler = ipCheckHandler(handler, allowedNets, logger, prefix)
+		}
+		return handler
 	}
 
 	wrapHandler := func(h http.Handler) zh.HandlerFunc {
+		handler := adaptHandler(h)
 		if auth != nil {
-			return authHandler(auth, h)
+			handler = authHandler(auth, h)
 		}
-		return adaptHandler(h)
+		if len(allowedNets) > 0 {
+			handler = ipCheckHandler(handler, allowedNets, logger, prefix)
+		}
+		return handler
 	}
 
 	if cfg.EnableIndex {
@@ -198,6 +224,16 @@ func New(app *zh.Server, cfg Config) *PProf {
 	}
 
 	return pp
+}
+
+// generateRandomPassword generates a secure random password
+func generateRandomPassword() string {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to a default if crypto/rand fails (extremely unlikely)
+		return "pprof-fallback-password-change-me"
+	}
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 // adaptHandler adapts a standard http.Handler to zerohttp's HandlerFunc
@@ -242,4 +278,101 @@ func authHandlerFunc(auth *AuthConfig, fn http.HandlerFunc) zh.HandlerFunc {
 		fn(w, r)
 		return nil
 	}
+}
+
+// ipCheckHandler wraps a handler with IP allowlist checking
+func ipCheckHandler(next zh.HandlerFunc, allowedNets []*net.IPNet, logger log.Logger, prefix string) zh.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		clientIP := extractClientIP(r, false)
+
+		if !isIPAllowed(clientIP, allowedNets) {
+			logger.Warn("pprof access denied: IP not in allowlist",
+				log.F("client_ip", clientIP),
+				log.F("endpoint", prefix),
+			)
+			w.WriteHeader(http.StatusForbidden)
+			return nil
+		}
+
+		return next(w, r)
+	}
+}
+
+// parseAllowedIPs parses a list of IP addresses or CIDR ranges.
+// Returns a slice of *net.IPNet for CIDR matching.
+func parseAllowedIPs(ips []string) ([]*net.IPNet, error) {
+	nets := make([]*net.IPNet, 0, len(ips))
+	for _, ipStr := range ips {
+		ipStr = strings.TrimSpace(ipStr)
+		if ipStr == "" {
+			continue
+		}
+
+		// Try parsing as CIDR first
+		_, ipNet, err := net.ParseCIDR(ipStr)
+		if err == nil {
+			nets = append(nets, ipNet)
+			continue
+		}
+
+		// Try parsing as single IP
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			return nil, err
+		}
+
+		// Convert single IP to /32 (IPv4) or /128 (IPv6)
+		var mask net.IPMask
+		if ip.To4() != nil {
+			mask = net.CIDRMask(32, 32)
+		} else {
+			mask = net.CIDRMask(128, 128)
+		}
+		nets = append(nets, &net.IPNet{IP: ip, Mask: mask})
+	}
+	return nets, nil
+}
+
+// isIPAllowed checks if the given IP is in the allowed list.
+func isIPAllowed(clientIP string, allowedNets []*net.IPNet) bool {
+	// Parse the client IP
+	ip := net.ParseIP(clientIP)
+	if ip == nil {
+		return false
+	}
+
+	// Check if IP matches any allowed network
+	for _, ipNet := range allowedNets {
+		if ipNet.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractClientIP extracts the client IP from the request.
+// It handles X-Forwarded-For and X-Real-IP headers when behind a proxy.
+func extractClientIP(r *http.Request, trustProxy bool) string {
+	if trustProxy {
+		// Check X-Forwarded-For header (may contain multiple IPs, use the first)
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			ips := strings.Split(xff, ",")
+			if len(ips) > 0 {
+				return strings.TrimSpace(ips[0])
+			}
+		}
+
+		// Check X-Real-IP header
+		if xri := r.Header.Get("X-Real-Ip"); xri != "" {
+			return xri
+		}
+	}
+
+	// Fall back to RemoteAddr
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// If SplitHostPort fails, RemoteAddr might not have a port
+		return r.RemoteAddr
+	}
+	return host
 }

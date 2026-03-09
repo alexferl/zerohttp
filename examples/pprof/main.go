@@ -42,6 +42,18 @@ func main() {
 	// cfg.EnableMutex = false
 	// pp := pprof.New(app, cfg)
 
+	// Example 5: Allow external access (custom IP allowlist)
+	// By default, pprof is only accessible from localhost (127.0.0.1, ::1)
+	// To allow access from specific IPs or CIDR ranges:
+	// cfg := pprof.DefaultConfig
+	// cfg.AllowedIPs = []string{"10.0.0.0/8", "192.168.1.100"}
+	// pp := pprof.New(app, cfg)
+
+	// Example 6: Allow any IP (disable IP restriction) - use with caution!
+	// cfg := pprof.DefaultConfig
+	// cfg.AllowedIPs = []string{} // empty slice = allow any IP
+	// pp := pprof.New(app, cfg)
+
 	log.Printf("pprof endpoints available at http://localhost:8080%s/", pp.Config.Prefix)
 	log.Fatal(app.Start())
 }
