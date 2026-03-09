@@ -19,10 +19,12 @@ import (
 	"github.com/alexferl/zerohttp/middleware"
 )
 
-// HandlerFunc is a handler function that returns an error
+// HandlerFunc is a handler function that returns an error.
+// Errors are handled directly without panic propagation.
 type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
 
-// ServeHTTP implements http.Handler interface
+// ServeHTTP implements http.Handler interface.
+// It handles all errors directly; no panic propagation is used.
 func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For HEAD requests, wrap the response writer to discard body writes.
 	// This prevents HTTP/2 "request body closed" errors when handlers
@@ -32,19 +34,14 @@ func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h(w, r); err != nil {
-		// Handle validation and binding errors directly
-		// This ensures consistent behavior regardless of Recover middleware
-		if handleHandlerError(w, err) {
-			return
-		}
-		// For other errors, panic to let Recover middleware handle it
-		panic(fmt.Errorf("handler error: %w", err))
+		// Handle all errors directly - no panic propagation
+		handleHandlerError(w, err)
 	}
 }
 
-// handleHandlerError handles validation and binding errors.
-// Returns true if the error was handled, false otherwise.
-func handleHandlerError(w http.ResponseWriter, err error) bool {
+// handleHandlerError handles all handler errors.
+// Returns appropriate HTTP responses for different error types.
+func handleHandlerError(w http.ResponseWriter, err error) {
 	// Check for validation errors (422)
 	var verr ValidationErrorer
 	if errors.As(err, &verr) {
@@ -57,7 +54,7 @@ func handleHandlerError(w http.ResponseWriter, err error) bool {
 			"errors": verr.ValidationErrors(),
 		}
 		_ = json.NewEncoder(w).Encode(response)
-		return true
+		return
 	}
 
 	// Check for binding errors (400)
@@ -70,10 +67,18 @@ func handleHandlerError(w http.ResponseWriter, err error) bool {
 			"detail": "Invalid request body",
 		}
 		_ = json.NewEncoder(w).Encode(response)
-		return true
+		return
 	}
 
-	return false
+	// For all other errors, return 500 Internal Server Error
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(http.StatusInternalServerError)
+	response := map[string]any{
+		"title":  "Internal Server Error",
+		"status": http.StatusInternalServerError,
+		"detail": "An unexpected error occurred",
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // headResponseWriter wraps a ResponseWriter and discards body writes for HEAD requests
