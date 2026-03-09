@@ -586,7 +586,10 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	problem := NewProblemDetail(http.StatusNotFound, "The requested resource was not found")
 	if err := R.ProblemDetail(w, problem); err != nil {
-		panic(fmt.Errorf("failed to write 404 problem detail: %w", err))
+		// Fallback to plain text if problem detail fails
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("404 Not Found\n"))
 	}
 })
 
@@ -596,7 +599,10 @@ var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseW
 var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	problem := NewProblemDetail(http.StatusMethodNotAllowed, "The HTTP method is not allowed")
 	if err := R.ProblemDetail(w, problem); err != nil {
-		panic(fmt.Errorf("failed to write 405 problem detail: %w", err))
+		// Fallback to plain text if problem detail fails
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = w.Write([]byte("405 Method Not Allowed\n"))
 	}
 })
 

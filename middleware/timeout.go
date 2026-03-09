@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 
@@ -87,9 +86,7 @@ func Timeout(cfg ...config.TimeoutConfig) func(http.Handler) http.Handler {
 					tw.code = http.StatusOK
 				}
 				w.WriteHeader(tw.code)
-				if _, err := w.Write(tw.wbuf.Bytes()); err != nil {
-					panic(fmt.Errorf("response write failed: %w", err))
-				}
+				_, _ = w.Write(tw.wbuf.Bytes()) // Best effort write
 			case <-ctx.Done():
 				tw.mu.Lock()
 				defer tw.mu.Unlock()
@@ -98,9 +95,7 @@ func Timeout(cfg ...config.TimeoutConfig) func(http.Handler) http.Handler {
 					metrics.SafeRegistry(metrics.GetRegistry(r.Context())).Counter("timeout_requests_total").Inc()
 
 					detail := problem.NewDetail(c.StatusCode, c.Message)
-					if err := detail.Render(w); err != nil {
-						panic(fmt.Errorf("timeout message write failed: %w", err))
-					}
+					_ = detail.Render(w) // Best effort - client may have disconnected
 					tw.err = ErrTimeoutWrite
 				}
 			}

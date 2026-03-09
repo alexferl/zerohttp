@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -99,7 +100,13 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 				cookie, err := r.Cookie(c.CookieName)
 				var token string
 				if err != nil || cookie.Value == "" || !validateTokenFormat(cookie.Value) {
-					token = generateToken(hmacKey)
+					token, err = generateToken(hmacKey)
+					if err != nil {
+						// Fail closed: reject request if we can't generate a token
+						reg.Counter("csrf_rejected_total", "reason").WithLabelValues("token_generation_failed").Inc()
+						errorHandler(w, r)
+						return
+					}
 					setCSRFCookie(w, c, token)
 				} else {
 					token = cookie.Value
@@ -132,7 +139,13 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			newToken := generateToken(hmacKey)
+			newToken, err := generateToken(hmacKey)
+			if err != nil {
+				// Fail closed: reject request if we can't generate a token
+				reg.Counter("csrf_rejected_total", "reason").WithLabelValues("token_generation_failed").Inc()
+				errorHandler(w, r)
+				return
+			}
 			setCSRFCookie(w, c, newToken)
 
 			ctx := r.Context()
@@ -154,10 +167,10 @@ func GetCSRFToken(r *http.Request) string {
 }
 
 // generateToken creates a new signed CSRF token
-func generateToken(key []byte) string {
+func generateToken(key []byte) (string, error) {
 	tokenBytes := make([]byte, defaultTokenLength)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		return ""
+		return "", fmt.Errorf("failed to generate CSRF token: %w", err)
 	}
 
 	mac := hmac.New(sha256.New, key)
@@ -165,7 +178,7 @@ func generateToken(key []byte) string {
 	signature := mac.Sum(nil)
 
 	combined := append(tokenBytes, signature...)
-	return base64.RawURLEncoding.EncodeToString(combined)
+	return base64.RawURLEncoding.EncodeToString(combined), nil
 }
 
 // validateTokenFormat checks if the token has a valid format (proper base64 and signature length)

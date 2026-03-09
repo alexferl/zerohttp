@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -105,9 +104,7 @@ func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.
 			if circ.isOpen() {
 				reg.Counter("circuit_breaker_requests_total", "key", "result").WithLabelValues(key, "rejected").Inc()
 				detail := problem.NewDetail(c.OpenStatusCode, c.OpenMessage)
-				if err := detail.Render(w); err != nil {
-					panic(fmt.Errorf("circuit breaker message write failed: %w", err))
-				}
+				_ = detail.Render(w) // Best effort - client may have disconnected
 				return
 			}
 

@@ -757,6 +757,39 @@ func TestETag_Flush(t *testing.T) {
 	}
 }
 
+// TestETag_FlushPreventsDoubleWrite verifies that calling Flush() during request
+// handling doesn't cause the response body to be written twice when finalize()
+// is called after next.ServeHTTP(). This was a bug where templ components
+// triggering Flush() would result in duplicate output.
+func TestETag_FlushPreventsDoubleWrite(t *testing.T) {
+	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello world"))
+		// Flush triggers finalize() when there's buffered data
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		// After handler returns, middleware calls finalize() again
+		// This should not write the body a second time
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	// If body is written twice, it would be "hello worldhello world"
+	expected := "hello world"
+	if body != expected {
+		t.Errorf("expected body %q, got %q (possible double-write)", expected, body)
+	}
+
+	// Also verify the ETag was generated correctly
+	etag := rec.Header().Get("ETag")
+	if etag == "" {
+		t.Error("expected ETag header to be set")
+	}
+}
+
 // Range parsing edge cases
 
 func TestETag_Range_InvalidFormat(t *testing.T) {

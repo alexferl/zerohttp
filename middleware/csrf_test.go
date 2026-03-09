@@ -35,6 +35,11 @@ func TestCSRF_MissingHMACKeyPanics(t *testing.T) {
 }
 
 func TestCSRF_ValidateTokenFormat(t *testing.T) {
+	validToken, err := generateToken(testHMACKey)
+	if err != nil {
+		t.Fatalf("Failed to generate test token: %v", err)
+	}
+
 	tests := []struct {
 		name     string
 		token    string
@@ -42,7 +47,7 @@ func TestCSRF_ValidateTokenFormat(t *testing.T) {
 	}{
 		{
 			name:     "valid token",
-			token:    generateToken(testHMACKey),
+			token:    validToken,
 			expected: true,
 		},
 		{

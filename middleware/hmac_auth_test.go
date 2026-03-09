@@ -15,7 +15,7 @@ import (
 )
 
 func TestHMACAuth_MissingAuthorization(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -40,7 +40,7 @@ func TestHMACAuth_MissingAuthorization(t *testing.T) {
 }
 
 func TestHMACAuth_InvalidFormat(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -66,7 +66,7 @@ func TestHMACAuth_InvalidFormat(t *testing.T) {
 }
 
 func TestHMACAuth_InvalidAlgorithm(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -82,7 +82,7 @@ func TestHMACAuth_InvalidAlgorithm(t *testing.T) {
 	}))
 
 	// Try with SHA512 when expecting SHA256
-	signer := NewHMACSignerWithAlgorithm("test-key", "test-secret", config.HMACSHA512)
+	signer := NewHMACSignerWithAlgorithm("test-key", "test-secret-key-that-is-64-bytes-long-for-the-sha512-algorithm-use!!", config.HMACSHA512)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -97,7 +97,7 @@ func TestHMACAuth_InvalidAlgorithm(t *testing.T) {
 }
 
 func TestHMACAuth_ValidRequest(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -113,7 +113,7 @@ func TestHMACAuth_ValidRequest(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestHMACAuth_ValidRequest(t *testing.T) {
 }
 
 func TestHMACAuth_WithBody(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -150,7 +150,7 @@ func TestHMACAuth_WithBody(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	body := bytes.NewReader([]byte(`{"test":"data"}`))
 	req := httptest.NewRequest("POST", "/api/test", body)
 	req.Header.Set("Content-Type", "application/json")
@@ -168,7 +168,7 @@ func TestHMACAuth_WithBody(t *testing.T) {
 }
 
 func TestHMACAuth_InvalidSignature(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -198,7 +198,7 @@ func TestHMACAuth_InvalidSignature(t *testing.T) {
 }
 
 func TestHMACAuth_UnknownAccessKey(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -212,7 +212,7 @@ func TestHMACAuth_UnknownAccessKey(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("unknown-key", "test-secret")
+	signer := NewHMACSigner("unknown-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -227,7 +227,7 @@ func TestHMACAuth_UnknownAccessKey(t *testing.T) {
 }
 
 func TestHMACAuth_ExpiredTimestamp(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -242,7 +242,7 @@ func TestHMACAuth_ExpiredTimestamp(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 
 	// Sign with old timestamp (10 minutes ago)
 	oldTime := time.Now().UTC().Add(-10 * time.Minute)
@@ -260,7 +260,7 @@ func TestHMACAuth_ExpiredTimestamp(t *testing.T) {
 }
 
 func TestHMACAuth_FutureTimestamp(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -276,7 +276,7 @@ func TestHMACAuth_FutureTimestamp(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 
 	// Sign with future timestamp (10 minutes from now)
 	futureTime := time.Now().UTC().Add(10 * time.Minute)
@@ -294,7 +294,7 @@ func TestHMACAuth_FutureTimestamp(t *testing.T) {
 }
 
 func TestHMACAuth_ExemptPath(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -324,7 +324,7 @@ func TestHMACAuth_ExemptPath(t *testing.T) {
 }
 
 func TestHMACAuth_SHA384(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-48-bytes-long-for-sha384-algorithm-use"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -341,7 +341,7 @@ func TestHMACAuth_SHA384(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSignerWithAlgorithm("test-key", "test-secret", config.HMACSHA384)
+	signer := NewHMACSignerWithAlgorithm("test-key", "test-secret-key-that-is-48-bytes-long-for-sha384-algorithm-use", config.HMACSHA384)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
 	if err != nil {
@@ -360,7 +360,7 @@ func TestHMACAuth_SHA384(t *testing.T) {
 }
 
 func TestHMACAuth_SHA512(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-64-bytes-long-for-the-sha512-algorithm-use!!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -377,7 +377,7 @@ func TestHMACAuth_SHA512(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSignerWithAlgorithm("test-key", "test-secret", config.HMACSHA512)
+	signer := NewHMACSignerWithAlgorithm("test-key", "test-secret-key-that-is-64-bytes-long-for-the-sha512-algorithm-use!!", config.HMACSHA512)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
 	if err != nil {
@@ -396,7 +396,7 @@ func TestHMACAuth_SHA512(t *testing.T) {
 }
 
 func TestHMACAuth_QueryParameters(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -416,7 +416,7 @@ func TestHMACAuth_QueryParameters(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test?foo=bar&baz=qux", nil)
 	err := signer.SignRequest(req)
 	if err != nil {
@@ -435,7 +435,7 @@ func TestHMACAuth_QueryParameters(t *testing.T) {
 }
 
 func TestHMACAuth_MissingRequiredHeader(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -450,7 +450,7 @@ func TestHMACAuth_MissingRequiredHeader(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -470,7 +470,7 @@ func TestHMACAuth_MissingRequiredHeader(t *testing.T) {
 }
 
 func TestHMACAuth_CustomErrorHandler(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	customCalled := false
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
@@ -506,7 +506,7 @@ func TestHMACAuth_CustomErrorHandler(t *testing.T) {
 }
 
 func TestHMACAuth_AllowUnsignedPayload(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -523,7 +523,7 @@ func TestHMACAuth_AllowUnsignedPayload(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	signer.SetAllowUnsignedPayload(true)
 	req := httptest.NewRequest("POST", "/api/test", strings.NewReader("body"))
 	if err := signer.SignRequest(req); err != nil {
@@ -660,7 +660,7 @@ func TestValidateTimestamp(t *testing.T) {
 }
 
 func TestComputeHMACSignature(t *testing.T) {
-	secret := "test-secret"
+	secret := "test-secret-key-that-is-32-bytes-long!"
 	canonicalRequest := "GET\n/api/test\n\nhost:example.com\nx-timestamp:2026-03-07T12:00:00Z\n\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 	// Test SHA256
@@ -768,7 +768,7 @@ func TestGetHMACAccessKeyID(t *testing.T) {
 }
 
 func TestHMACAuth_ContextPropagation(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -784,7 +784,7 @@ func TestHMACAuth_ContextPropagation(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -802,7 +802,7 @@ func TestHMACAuth_ContextPropagation(t *testing.T) {
 }
 
 func TestHMACAuth_AuditLogging(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	var auditEvents []struct {
 		accessKeyID string
 		success     bool
@@ -845,7 +845,7 @@ func TestHMACAuth_AuditLogging(t *testing.T) {
 	}
 
 	// Test 2: Successful auth
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req2 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer.SignRequest(req2); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -867,7 +867,7 @@ func TestHMACAuth_AuditLogging(t *testing.T) {
 	}
 
 	// Test 3: Invalid credentials
-	signer3 := NewHMACSigner("unknown-key", "test-secret")
+	signer3 := NewHMACSigner("unknown-key", "test-secret-key-that-is-32-bytes-long!")
 	req3 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer3.SignRequest(req3); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -946,7 +946,7 @@ func TestGetHMACError(t *testing.T) {
 }
 
 func TestHMACAuth_CustomErrorHandlerWithContext(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	var receivedError *HMACAuthError
 
 	mw := HMACAuth(config.HMACAuthConfig{
@@ -985,7 +985,7 @@ func TestHMACAuth_CustomErrorHandlerWithContext(t *testing.T) {
 }
 
 func TestHMACAuth_CustomErrorHandlerWithSignatureMismatch(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	var receivedError *HMACAuthError
 
 	mw := HMACAuth(config.HMACAuthConfig{
@@ -1138,7 +1138,7 @@ func TestHMACAuth_NoSecrets(t *testing.T) {
 
 func TestHMACAuth_ReplayAttack_Prevented(t *testing.T) {
 	// Test that replay attacks are prevented via timestamp validation
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1154,7 +1154,7 @@ func TestHMACAuth_ReplayAttack_Prevented(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 
 	// Test 1: Request with timestamp exactly at skew boundary (should fail)
 	t.Run("at_boundary", func(t *testing.T) {
@@ -1191,7 +1191,7 @@ func TestHMACAuth_ReplayAttack_Prevented(t *testing.T) {
 
 func TestHMACAuth_HeaderTampering_Detected(t *testing.T) {
 	// Test that tampering with signed headers invalidates the signature
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1206,7 +1206,7 @@ func TestHMACAuth_HeaderTampering_Detected(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	signer.SetHeadersToSign([]string{"host", "x-timestamp", "x-request-id"})
 
 	// Sign a request with specific headers
@@ -1229,7 +1229,7 @@ func TestHMACAuth_HeaderTampering_Detected(t *testing.T) {
 
 func TestHMACAuth_BodyTampering_Detected(t *testing.T) {
 	// Test that tampering with request body invalidates the signature
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1243,7 +1243,7 @@ func TestHMACAuth_BodyTampering_Detected(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 
 	// Sign a request with specific body
 	originalBody := []byte(`{"amount": 100, "to": "alice"}`)
@@ -1267,7 +1267,7 @@ func TestHMACAuth_BodyTampering_Detected(t *testing.T) {
 
 func TestHMACAuth_QueryParamTampering_Detected(t *testing.T) {
 	// Test that tampering with query parameters invalidates the signature
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1281,7 +1281,7 @@ func TestHMACAuth_QueryParamTampering_Detected(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 
 	// Sign a request with specific query params
 	req := httptest.NewRequest(http.MethodGet, "/api/data?user=alice&amount=100", nil)
@@ -1302,7 +1302,7 @@ func TestHMACAuth_QueryParamTampering_Detected(t *testing.T) {
 
 func TestHMACAuth_MiddlewareChaining(t *testing.T) {
 	// Test that HMAC auth works correctly when chained with other middleware
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 
 	// Simulate another middleware that runs before HMAC auth
 	addHeaderMiddleware := func(next http.Handler) http.Handler {
@@ -1329,7 +1329,7 @@ func TestHMACAuth_MiddlewareChaining(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -1394,7 +1394,7 @@ func TestParseAuthorizationHeader_InvalidCases(t *testing.T) {
 
 func TestComputeHMACSignature_DefaultAlgorithm(t *testing.T) {
 	// Test that unknown algorithm defaults to SHA256
-	secret := "test-secret"
+	secret := "test-secret-key-that-is-32-bytes-long!"
 	canonicalRequest := "GET\n/api/test\n\nhost:example.com\n\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 	// Use an invalid algorithm value
@@ -1436,7 +1436,7 @@ func TestValidateTimestamp_FutureWithinGrace(t *testing.T) {
 }
 
 func TestHMACAuth_InvalidBase64Signature(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1464,7 +1464,7 @@ func TestHMACAuth_InvalidBase64Signature(t *testing.T) {
 }
 
 func TestHMACAuth_MaxBodySize(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1484,7 +1484,7 @@ func TestHMACAuth_MaxBodySize(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/test", strings.NewReader(largeBody))
 	req.Header.Set("Content-Type", "application/json")
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	err := signer.SignRequest(req)
 	if err != nil {
 		t.Fatalf("Signer error: %v", err)
@@ -1506,7 +1506,7 @@ func TestHMACAuth_MaxBodySize(t *testing.T) {
 }
 
 func TestHMACAuth_MaxBodySize_AllowedWithUnsignedPayload(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1527,7 +1527,7 @@ func TestHMACAuth_MaxBodySize_AllowedWithUnsignedPayload(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/test", strings.NewReader(largeBody))
 	req.Header.Set("Content-Type", "application/json")
 
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	signer.SetAllowUnsignedPayload(true)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -1542,7 +1542,7 @@ func TestHMACAuth_MaxBodySize_AllowedWithUnsignedPayload(t *testing.T) {
 }
 
 func TestHMACAuth_PresignedURL(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1559,7 +1559,7 @@ func TestHMACAuth_PresignedURL(t *testing.T) {
 
 	// Create a pre-signed URL
 	req := httptest.NewRequest(http.MethodGet, "https://api.example.com/data", nil)
-	signer := NewHMACSigner("test-key", "test-secret")
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	presignedURL, err := signer.PresignURL(req, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to create presigned URL: %v", err)
@@ -1578,7 +1578,7 @@ func TestHMACAuth_PresignedURL(t *testing.T) {
 }
 
 func TestHMACAuth_PresignedURL_NotAllowed(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1605,7 +1605,7 @@ func TestHMACAuth_PresignedURL_NotAllowed(t *testing.T) {
 }
 
 func TestHMACAuth_PresignedURL_MissingParams(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1668,7 +1668,7 @@ func TestHMACAuth_PresignedURL_MissingParams(t *testing.T) {
 }
 
 func TestHMACAuth_PresignedURL_InvalidSignature(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -1695,7 +1695,7 @@ func TestHMACAuth_PresignedURL_InvalidSignature(t *testing.T) {
 }
 
 func TestValidatePresignedURLTimestamp_Expired(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret"}
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {

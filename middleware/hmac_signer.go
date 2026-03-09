@@ -5,6 +5,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"hash"
 	"io"
 	"net/http"
@@ -37,6 +38,16 @@ func NewHMACSigner(accessKeyID, secretKey string) *HMACSigner {
 
 // NewHMACSignerWithAlgorithm creates a signer with a specific algorithm
 func NewHMACSignerWithAlgorithm(accessKeyID, secretKey string, algorithm config.HMACHashAlgorithm) *HMACSigner {
+	minLength := 32 // Minimum for SHA256
+	switch algorithm {
+	case config.HMACSHA384:
+		minLength = 48
+	case config.HMACSHA512:
+		minLength = 64
+	}
+	if len(secretKey) < minLength {
+		panic(fmt.Sprintf("HMAC secret key must be at least %d bytes for %s, got %d bytes", minLength, algorithm, len(secretKey)))
+	}
 	return &HMACSigner{
 		accessKeyID: accessKeyID,
 		secretKey:   secretKey,
