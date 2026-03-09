@@ -168,30 +168,53 @@ func (nopHistogram) Observe(float64)                     {}
 func (nopHistogram) WithLabelValues(...string) Histogram { return nopHistogram{} }
 
 // NewRegistry creates a new metrics registry.
-func NewRegistry() Registry {
-	return &registry{
-		counters:   make(map[string]*counterVec),
-		gauges:     make(map[string]*gaugeVec),
-		histograms: make(map[string]*histogramVec),
-		collectors: make([]Collector, 0),
+// Default max cardinality is 1000 unique label combinations per metric.
+// Pass RegistryConfig{MaxCardinality: N} to customize.
+func NewRegistry(cfg ...RegistryConfig) Registry {
+	c := DefaultRegistryConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
+	return &registry{
+		counters:       make(map[string]*counterVec),
+		gauges:         make(map[string]*gaugeVec),
+		histograms:     make(map[string]*histogramVec),
+		collectors:     make([]Collector, 0),
+		maxCardinality: c.MaxCardinality,
+	}
+}
+
+// RegistryConfig holds optional configuration for the registry.
+type RegistryConfig struct {
+	// MaxCardinality limits the number of unique label combinations per metric.
+	// When exceeded, oldest entries are evicted (FIFO).
+	// Default: 1000. Set to 0 for unlimited (not recommended with user-controlled labels).
+	MaxCardinality int
+}
+
+// DefaultRegistryConfig is the default registry configuration.
+var DefaultRegistryConfig = RegistryConfig{
+	MaxCardinality: 1000,
 }
 
 // registry is the internal implementation of Registry.
 type registry struct {
-	mu         sync.RWMutex
-	counters   map[string]*counterVec
-	gauges     map[string]*gaugeVec
-	histograms map[string]*histogramVec
-	collectors []Collector
+	mu             sync.RWMutex
+	counters       map[string]*counterVec
+	gauges         map[string]*gaugeVec
+	histograms     map[string]*histogramVec
+	collectors     []Collector
+	maxCardinality int // 0 = unlimited, default 1000
 }
 
 // counterVec holds counters with different label values.
 type counterVec struct {
-	name   string
-	labels []string
-	mu     sync.RWMutex
-	values map[string]*counter
+	name           string
+	labels         []string
+	mu             sync.RWMutex
+	values         map[string]*counter
+	insertOrder    []string // tracks insertion order for LRU eviction
+	maxCardinality int      // 0 = unlimited
 }
 
 // counter is a single counter instance.
@@ -242,17 +265,28 @@ func (cv *counterVec) WithLabelValues(values ...string) Counter {
 		return c
 	}
 
+	// Check cardinality limit
+	if cv.maxCardinality > 0 && len(cv.values) >= cv.maxCardinality {
+		// Evict oldest entry (FIFO)
+		oldestKey := cv.insertOrder[0]
+		delete(cv.values, oldestKey)
+		cv.insertOrder = cv.insertOrder[1:]
+	}
+
 	c := &counter{}
 	cv.values[key] = c
+	cv.insertOrder = append(cv.insertOrder, key)
 	return c
 }
 
 // gaugeVec holds gauges with different label values.
 type gaugeVec struct {
-	name   string
-	labels []string
-	mu     sync.RWMutex
-	values map[string]*gauge
+	name           string
+	labels         []string
+	mu             sync.RWMutex
+	values         map[string]*gauge
+	insertOrder    []string // tracks insertion order for LRU eviction
+	maxCardinality int      // 0 = unlimited
 }
 
 // gauge is a single gauge instance.
@@ -327,18 +361,29 @@ func (gv *gaugeVec) WithLabelValues(values ...string) Gauge {
 		return g
 	}
 
+	// Check cardinality limit
+	if gv.maxCardinality > 0 && len(gv.values) >= gv.maxCardinality {
+		// Evict oldest entry (FIFO)
+		oldestKey := gv.insertOrder[0]
+		delete(gv.values, oldestKey)
+		gv.insertOrder = gv.insertOrder[1:]
+	}
+
 	g := &gauge{}
 	gv.values[key] = g
+	gv.insertOrder = append(gv.insertOrder, key)
 	return g
 }
 
 // histogramVec holds histograms with different label values.
 type histogramVec struct {
-	name    string
-	labels  []string
-	buckets []float64
-	mu      sync.RWMutex
-	values  map[string]*histogram
+	name           string
+	labels         []string
+	buckets        []float64
+	mu             sync.RWMutex
+	values         map[string]*histogram
+	insertOrder    []string // tracks insertion order for LRU eviction
+	maxCardinality int      // 0 = unlimited
 }
 
 // histogram is a single histogram instance.
@@ -388,11 +433,20 @@ func (hv *histogramVec) WithLabelValues(values ...string) Histogram {
 		return h
 	}
 
+	// Check cardinality limit
+	if hv.maxCardinality > 0 && len(hv.values) >= hv.maxCardinality {
+		// Evict oldest entry (FIFO)
+		oldestKey := hv.insertOrder[0]
+		delete(hv.values, oldestKey)
+		hv.insertOrder = hv.insertOrder[1:]
+	}
+
 	h := &histogram{
 		buckets: hv.buckets,
 		counts:  make([]uint64, len(hv.buckets)),
 	}
 	hv.values[key] = h
+	hv.insertOrder = append(hv.insertOrder, key)
 	return h
 }
 
@@ -405,9 +459,11 @@ func (r *registry) Counter(name string, labels ...string) Counter {
 	}
 
 	vec := &counterVec{
-		name:   name,
-		labels: labels,
-		values: make(map[string]*counter),
+		name:           name,
+		labels:         labels,
+		values:         make(map[string]*counter),
+		insertOrder:    make([]string, 0),
+		maxCardinality: r.maxCardinality,
 	}
 	r.counters[name] = vec
 	return vec
@@ -422,9 +478,11 @@ func (r *registry) Gauge(name string, labels ...string) Gauge {
 	}
 
 	vec := &gaugeVec{
-		name:   name,
-		labels: labels,
-		values: make(map[string]*gauge),
+		name:           name,
+		labels:         labels,
+		values:         make(map[string]*gauge),
+		insertOrder:    make([]string, 0),
+		maxCardinality: r.maxCardinality,
 	}
 	r.gauges[name] = vec
 	return vec
@@ -443,10 +501,12 @@ func (r *registry) Histogram(name string, buckets []float64, labels ...string) H
 	}
 
 	vec := &histogramVec{
-		name:    name,
-		labels:  labels,
-		buckets: buckets,
-		values:  make(map[string]*histogram),
+		name:           name,
+		labels:         labels,
+		buckets:        buckets,
+		values:         make(map[string]*histogram),
+		insertOrder:    make([]string, 0),
+		maxCardinality: r.maxCardinality,
 	}
 	r.histograms[name] = vec
 	return vec

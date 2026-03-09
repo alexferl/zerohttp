@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 )
@@ -553,5 +554,179 @@ func TestHistogramVec_Concurrent(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected to find concurrent_histogram metric family")
+	}
+}
+
+func TestCounter_CardinalityLimit(t *testing.T) {
+	reg := NewRegistry(RegistryConfig{MaxCardinality: 3}).(*registry)
+	c := reg.Counter("limited_counter", "label")
+
+	// Add 3 unique values (at limit)
+	c.WithLabelValues("a").Inc()
+	c.WithLabelValues("b").Inc()
+	c.WithLabelValues("c").Inc()
+
+	families := reg.Gather()
+	var initialCount int
+	for _, f := range families {
+		if f.Name == "limited_counter" {
+			initialCount = len(f.Metrics)
+		}
+	}
+	if initialCount != 3 {
+		t.Errorf("expected 3 metrics, got %d", initialCount)
+	}
+
+	// Add 4th value - should evict oldest ("a")
+	c.WithLabelValues("d").Inc()
+
+	families = reg.Gather()
+	var finalCount int
+	var hasA, hasD bool
+	for _, f := range families {
+		if f.Name == "limited_counter" {
+			finalCount = len(f.Metrics)
+			for _, m := range f.Metrics {
+				if m.Labels["label"] == "a" {
+					hasA = true
+				}
+				if m.Labels["label"] == "d" {
+					hasD = true
+				}
+			}
+		}
+	}
+	if finalCount != 3 {
+		t.Errorf("expected 3 metrics after eviction, got %d", finalCount)
+	}
+	if hasA {
+		t.Error("expected 'a' to be evicted (oldest)")
+	}
+	if !hasD {
+		t.Error("expected 'd' to exist")
+	}
+}
+
+func TestGauge_CardinalityLimit(t *testing.T) {
+	reg := NewRegistry(RegistryConfig{MaxCardinality: 2}).(*registry)
+	g := reg.Gauge("limited_gauge", "label")
+
+	// Add 2 unique values (at limit)
+	g.WithLabelValues("x").Set(1)
+	g.WithLabelValues("y").Set(2)
+
+	// Add 3rd value - should evict oldest ("x")
+	g.WithLabelValues("z").Set(3)
+
+	families := reg.Gather()
+	var hasX, hasZ bool
+	for _, f := range families {
+		if f.Name == "limited_gauge" {
+			for _, m := range f.Metrics {
+				if m.Labels["label"] == "x" {
+					hasX = true
+				}
+				if m.Labels["label"] == "z" {
+					hasZ = true
+				}
+			}
+		}
+	}
+	if hasX {
+		t.Error("expected 'x' to be evicted (oldest)")
+	}
+	if !hasZ {
+		t.Error("expected 'z' to exist")
+	}
+}
+
+func TestHistogram_CardinalityLimit(t *testing.T) {
+	reg := NewRegistry(RegistryConfig{MaxCardinality: 2}).(*registry)
+	h := reg.Histogram("limited_histogram", []float64{0.1, 0.5}, "method")
+
+	// Add 2 unique values (at limit)
+	h.WithLabelValues("GET").Observe(0.05)
+	h.WithLabelValues("POST").Observe(0.3)
+
+	// Add 3rd value - should evict oldest ("GET")
+	h.WithLabelValues("PUT").Observe(0.2)
+
+	families := reg.Gather()
+	var hasGet, hasPut bool
+	for _, f := range families {
+		if f.Name == "limited_histogram" {
+			for _, m := range f.Metrics {
+				if m.Labels["method"] == "GET" {
+					hasGet = true
+				}
+				if m.Labels["method"] == "PUT" {
+					hasPut = true
+				}
+			}
+		}
+	}
+	if hasGet {
+		t.Error("expected 'GET' to be evicted (oldest)")
+	}
+	if !hasPut {
+		t.Error("expected 'PUT' to exist")
+	}
+}
+
+func TestRegistry_DifferentMetricsDifferentLimits(t *testing.T) {
+	// Create two registries with different cardinality limits
+	reg1 := NewRegistry(RegistryConfig{MaxCardinality: 5}).(*registry)
+	reg2 := NewRegistry(RegistryConfig{MaxCardinality: 2}).(*registry)
+
+	c1 := reg1.Counter("test_counter", "label")
+	c2 := reg2.Counter("test_counter", "label")
+
+	c1.WithLabelValues("a").Inc()
+	c1.WithLabelValues("b").Inc()
+	c1.WithLabelValues("c").Inc()
+
+	c2.WithLabelValues("x").Inc()
+	c2.WithLabelValues("y").Inc()
+	c2.WithLabelValues("z").Inc()
+
+	// Both should respect their respective limits
+	families1 := reg1.Gather()
+	families2 := reg2.Gather()
+
+	for _, f := range families1 {
+		if f.Name == "test_counter" {
+			// reg1 has limit 5, should have 3 metrics
+			if len(f.Metrics) != 3 {
+				t.Errorf("expected 3 metrics for reg1 test_counter, got %d", len(f.Metrics))
+			}
+		}
+	}
+	for _, f := range families2 {
+		if f.Name == "test_counter" {
+			// reg2 has limit 2, should have 2 metrics (evicted oldest)
+			if len(f.Metrics) != 2 {
+				t.Errorf("expected 2 metrics for reg2 test_counter, got %d", len(f.Metrics))
+			}
+		}
+	}
+}
+
+func TestCounter_CardinalityUnlimited(t *testing.T) {
+	// maxCardinality = 0 means unlimited
+	reg := NewRegistry(RegistryConfig{MaxCardinality: 0}).(*registry)
+	c := reg.Counter("unlimited_counter", "label")
+
+	// Add many values
+	for i := 0; i < 100; i++ {
+		c.WithLabelValues(fmt.Sprintf("value%d", i)).Inc()
+	}
+
+	families := reg.Gather()
+	for _, f := range families {
+		if f.Name == "unlimited_counter" {
+			if len(f.Metrics) != 100 {
+				t.Errorf("expected 100 metrics with unlimited cardinality, got %d", len(f.Metrics))
+			}
+		}
 	}
 }
