@@ -60,6 +60,7 @@ type etagResponseWriter struct {
 	contentEncoding string
 	reg             metrics.Registry
 	etagGenerated   bool
+	finalized       bool
 }
 
 // newETagResponseWriter creates a new etagResponseWriter
@@ -274,7 +275,7 @@ func (ew *etagResponseWriter) shouldServeRange(etag string) bool {
 func (ew *etagResponseWriter) Flush() {
 	// If we have buffered data and haven't written to the response yet,
 	// we need to flush the ETag processing first
-	if ew.buf.Len() > 0 && !ew.skipETag {
+	if ew.buf.Len() > 0 && !ew.skipETag && !ew.finalized {
 		ew.finalize()
 	}
 
@@ -301,9 +302,10 @@ func (ew *etagResponseWriter) Push(target string, opts *http.PushOptions) error 
 
 // finalize processes the buffered response, generates ETag, and writes the response
 func (ew *etagResponseWriter) finalize() {
-	if ew.skipETag {
+	if ew.skipETag || ew.finalized {
 		return
 	}
+	ew.finalized = true
 
 	etag := ew.generateETag()
 

@@ -11,7 +11,7 @@ import (
 )
 
 func TestHS256Validator_Success(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	generator := HS256Generator(secret, opts)
@@ -45,7 +45,7 @@ func TestHS256Validator_Success(t *testing.T) {
 }
 
 func TestHS256Validator_InvalidSignature(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	wrongSecret := []byte("wrong-secret")
 	opts := HS256Options{}
 
@@ -75,7 +75,7 @@ func TestHS256Validator_InvalidSignature(t *testing.T) {
 }
 
 func TestHS256Validator_ExpiredToken(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	generator := HS256Generator(secret, opts)
@@ -102,7 +102,7 @@ func TestHS256Validator_ExpiredToken(t *testing.T) {
 }
 
 func TestHS256Validator_NotBefore(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	generator := HS256Generator(secret, opts)
@@ -130,7 +130,7 @@ func TestHS256Validator_NotBefore(t *testing.T) {
 }
 
 func TestHS256Validator_InvalidFormat(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	validator := HS256Validator(secret, opts)
@@ -151,7 +151,7 @@ func TestHS256Validator_InvalidFormat(t *testing.T) {
 }
 
 func TestHS256Validator_InvalidAlgorithm(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	validator := HS256Validator(secret, opts)
@@ -170,7 +170,7 @@ func TestHS256Validator_InvalidAlgorithm(t *testing.T) {
 }
 
 func TestHS256Validator_ValidateIssuer(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Issuer:         "my-app",
 		ValidateIssuer: true,
@@ -210,7 +210,7 @@ func TestHS256Validator_ValidateIssuer(t *testing.T) {
 }
 
 func TestHS256Validator_ValidateAudience(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Audience:         "my-api",
 		ValidateAudience: true,
@@ -250,7 +250,7 @@ func TestHS256Validator_ValidateAudience(t *testing.T) {
 }
 
 func TestHS256Generator_WithMapClaims(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Issuer: "test-issuer",
 	}
@@ -276,7 +276,7 @@ func TestHS256Generator_WithMapClaims(t *testing.T) {
 }
 
 func TestHS256Generator_UnsupportedClaimsType(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	generator := HS256Generator(secret, opts)
@@ -345,7 +345,7 @@ func TestSignHS256(t *testing.T) {
 // Tests for HS256TokenStore (TokenStore interface implementation)
 
 func TestNewHS256TokenStore(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Issuer:   "test-issuer",
 		Audience: "test-audience",
@@ -357,8 +357,24 @@ func TestNewHS256TokenStore(t *testing.T) {
 	}
 }
 
+func TestNewHS256TokenStore_ShortSecretPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("expected panic for short secret, but did not panic")
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "HS256 secret must be at least 32 bytes") {
+			t.Errorf("expected panic message about 32 bytes, got: %v", r)
+		}
+	}()
+
+	// This should panic - secret is only 13 bytes
+	_ = NewHS256TokenStore([]byte("short-secret"), HS256Options{})
+}
+
 func TestHS256TokenStore_Validate(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 	store := NewHS256TokenStore(secret, opts)
 
@@ -390,7 +406,7 @@ func TestHS256TokenStore_Validate(t *testing.T) {
 }
 
 func TestHS256TokenStore_Validate_InvalidToken(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 	store := NewHS256TokenStore(secret, opts)
 
@@ -401,7 +417,7 @@ func TestHS256TokenStore_Validate_InvalidToken(t *testing.T) {
 }
 
 func TestHS256TokenStore_Generate(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Issuer: "test-issuer",
 	}
@@ -425,7 +441,7 @@ func TestHS256TokenStore_Generate(t *testing.T) {
 }
 
 func TestHS256TokenStore_Generate_WithMapClaims(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 	store := NewHS256TokenStore(secret, opts)
 
@@ -448,7 +464,7 @@ func TestHS256TokenStore_Generate_WithMapClaims(t *testing.T) {
 }
 
 func TestHS256TokenStore_Generate_UnsupportedClaimsType(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 	store := NewHS256TokenStore(secret, opts)
 
@@ -460,7 +476,7 @@ func TestHS256TokenStore_Generate_UnsupportedClaimsType(t *testing.T) {
 }
 
 func TestHS256TokenStore_Revoke(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 	store := NewHS256TokenStore(secret, opts)
 
@@ -473,7 +489,7 @@ func TestHS256TokenStore_Revoke(t *testing.T) {
 }
 
 func TestHS256TokenStore_IsRevoked(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 	store := NewHS256TokenStore(secret, opts)
 
@@ -485,7 +501,7 @@ func TestHS256TokenStore_IsRevoked(t *testing.T) {
 }
 
 func TestHS256TokenStore_RoundTrip(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Issuer:   "test-issuer",
 		Audience: "test-audience",
@@ -533,7 +549,7 @@ func TestHS256TokenStore_RoundTrip(t *testing.T) {
 }
 
 func TestParseHS256Token_InvalidBase64(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	validator := HS256Validator(secret, opts)
@@ -546,7 +562,7 @@ func TestParseHS256Token_InvalidBase64(t *testing.T) {
 }
 
 func TestParseHS256Token_InvalidHeaderJSON(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	validator := HS256Validator(secret, opts)
@@ -562,7 +578,7 @@ func TestParseHS256Token_InvalidHeaderJSON(t *testing.T) {
 }
 
 func TestParseHS256Token_InvalidPayloadBase64(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	validator := HS256Validator(secret, opts)
@@ -578,7 +594,7 @@ func TestParseHS256Token_InvalidPayloadBase64(t *testing.T) {
 }
 
 func TestParseHS256Token_InvalidPayloadJSON(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	validator := HS256Validator(secret, opts)
@@ -595,7 +611,7 @@ func TestParseHS256Token_InvalidPayloadJSON(t *testing.T) {
 }
 
 func TestParseHS256Token_MissingAudience(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Audience:         "my-api",
 		ValidateAudience: true,
@@ -616,7 +632,7 @@ func TestParseHS256Token_MissingAudience(t *testing.T) {
 }
 
 func TestParseHS256Token_InvalidAudienceArray(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Audience:         "my-api",
 		ValidateAudience: true,
@@ -636,7 +652,7 @@ func TestParseHS256Token_InvalidAudienceArray(t *testing.T) {
 }
 
 func TestParseHS256Token_AudienceWrongFormat(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Audience:         "my-api",
 		ValidateAudience: true,
@@ -656,7 +672,7 @@ func TestParseHS256Token_AudienceWrongFormat(t *testing.T) {
 }
 
 func TestParseHS256Token_NoExpiration(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	generator := HS256Generator(secret, opts)
@@ -683,7 +699,7 @@ func TestParseHS256Token_NoExpiration(t *testing.T) {
 }
 
 func TestParseHS256Token_NoNotBefore(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}
 
 	generator := HS256Generator(secret, opts)
@@ -711,7 +727,7 @@ func TestParseHS256Token_NoNotBefore(t *testing.T) {
 }
 
 func TestGenerateHS256Token_NoIssuer(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Issuer: "", // No issuer set
 	}
@@ -741,7 +757,7 @@ func TestGenerateHS256Token_NoIssuer(t *testing.T) {
 }
 
 func TestGenerateHS256Token_NoAudience(t *testing.T) {
-	secret := []byte("my-secret-key")
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{
 		Audience: "", // No audience set
 	}

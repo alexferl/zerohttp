@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
@@ -170,9 +169,7 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 				reg.Counter("ratelimit_rejected_total", "key").WithLabelValues(key).Inc()
 				w.Header().Set("Retry-After", strconv.Itoa(int(time.Until(resetTime).Seconds())))
 				detail := problem.NewDetail(c.StatusCode, c.Message)
-				if err := detail.Render(w); err != nil {
-					panic(fmt.Errorf("rate limit message write failed: %w", err))
-				}
+				_ = detail.Render(w) // Best effort - client may have disconnected
 				return
 			}
 

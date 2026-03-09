@@ -33,6 +33,9 @@ type HS256TokenStore struct {
 //	    TokenStore: store,
 //	}
 func NewHS256TokenStore(secret []byte, opts HS256Options) *HS256TokenStore {
+	if len(secret) < 32 {
+		panic(fmt.Sprintf("HS256 secret must be at least 32 bytes, got %d bytes. Use a cryptographically secure random key.", len(secret)))
+	}
 	return &HS256TokenStore{
 		secret: secret,
 		opts:   opts,
