@@ -12,6 +12,13 @@ type MetricsConfig struct {
 	// Default: "/metrics"
 	Endpoint string
 
+	// ServerAddr is the address for a dedicated metrics server.
+	// Metrics are served on a separate port bound to localhost for security,
+	// preventing exposure of internal metrics to the public internet.
+	// Set to empty string to serve metrics on the main application server (not recommended).
+	// Default: "localhost:9090"
+	ServerAddr string
+
 	// DurationBuckets defines histogram buckets for request duration (seconds).
 	// Default: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 	DurationBuckets []float64
@@ -36,10 +43,11 @@ type MetricsConfig struct {
 
 // DefaultMetricsConfig contains default values for metrics configuration.
 var DefaultMetricsConfig = MetricsConfig{
-	Enabled:         true,
+	Enabled:         false,
 	Endpoint:        "/metrics",
+	ServerAddr:      "localhost:9090",
 	DurationBuckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	SizeBuckets:     []float64{100, 1000, 10000, 100000, 1000000, 10000000},
-	ExcludePaths:    []string{"/health", "/metrics"},
+	ExcludePaths:    []string{"/metrics"},
 	PathLabelFunc:   func(p string) string { return p },
 }

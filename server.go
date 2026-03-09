@@ -73,6 +73,17 @@ type Server struct {
 	// If nil, metrics collection is disabled.
 	metricsRegistry metrics.Registry
 
+	// metricsServer is a dedicated HTTP server for serving metrics.
+	// When Metrics.ServerAddr is set, metrics are served on this separate server
+	// bound to the specified address (typically localhost for security).
+	metricsServer *http.Server
+
+	// metricsListener is the network listener for the metrics server.
+	metricsListener net.Listener
+
+	// metricsServerAddr is the configured address for the metrics server.
+	metricsServerAddr string
+
 	// autocertManager handles automatic certificate provisioning and renewal
 	// using Let's Encrypt ACME protocol. If set, enables automatic TLS.
 	// Users must provide their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager).
@@ -199,6 +210,8 @@ func mergeMetricsConfig(defaultCfg, userCfg config.MetricsConfig) config.Metrics
 	if userCfg.Endpoint != "" {
 		defaultCfg.Endpoint = userCfg.Endpoint
 	}
+	// ServerAddr can be explicitly set to empty string to disable separate metrics server
+	defaultCfg.ServerAddr = userCfg.ServerAddr
 	if len(userCfg.DurationBuckets) > 0 {
 		defaultCfg.DurationBuckets = userCfg.DurationBuckets
 	}
@@ -358,11 +371,23 @@ func New(cfg ...config.Config) *Server {
 		webSocketUpgrader:  c.WebSocketUpgrader,
 		sseProvider:        c.SSEProvider,
 		metricsRegistry:    registry,
+		metricsServerAddr:  c.Metrics.ServerAddr,
 		validator:          c.Validator,
 		logger:             logger,
 		preShutdownHooks:   c.PreShutdownHooks,
 		shutdownHooks:      c.ShutdownHooks,
 		postShutdownHooks:  c.PostShutdownHooks,
+	}
+
+	// Configure separate metrics server if ServerAddr is set
+	if c.Metrics.Enabled && registry != nil && c.Metrics.ServerAddr != "" {
+		s.metricsServer = &http.Server{
+			Addr:         c.Metrics.ServerAddr,
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  60 * time.Second,
+			Handler:      metrics.Handler(registry),
+		}
 	}
 
 	var middlewares []func(http.Handler) http.Handler
@@ -395,8 +420,9 @@ func New(cfg ...config.Config) *Server {
 		s.tlsServer.Handler = router
 	}
 
-	// Register metrics endpoint if enabled (middleware already added above)
-	if c.Metrics.Enabled && registry != nil {
+	// Register metrics endpoint on main router only if no separate metrics server
+	if c.Metrics.Enabled && registry != nil && c.Metrics.ServerAddr == "" {
+		s.logger.Warn("Metrics endpoint registered on main server (set Metrics.ServerAddr to isolate)", log.F("endpoint", c.Metrics.Endpoint))
 		s.GET(c.Metrics.Endpoint, metrics.Handler(registry))
 	}
 
@@ -538,9 +564,19 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 // Returns the first error encountered by any server during startup or operation.
 func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 4)
 
 	handler := s.Router
+
+	// Start metrics server if configured
+	if s.metricsServer != nil {
+		go func() {
+			s.logger.Info("Starting metrics server...", log.F("addr", fmtHTTPAddr(s.metricsServer.Addr)))
+			if err := s.startMetricsServer(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("metrics server error: %w", err)
+			}
+		}()
+	}
 
 	// Start HTTP server
 	if s.server != nil {
@@ -1180,6 +1216,21 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}()
 	}
 
+	// Shutdown metrics server
+	if s.metricsServer != nil && s.metricsListener != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.logger.Info("Shutting down metrics server")
+			if err := s.metricsServer.Shutdown(ctx); err != nil {
+				s.logger.Error("Error shutting down metrics server", log.F("error", err))
+				errCh <- err
+			} else {
+				s.logger.Info("Metrics server shutdown complete")
+			}
+		}()
+	}
+
 	wg.Wait()
 	close(errCh)
 
@@ -1243,6 +1294,14 @@ func (s *Server) Close() error {
 		s.logger.Debug("Closing WebTransport server")
 		if err := s.webTransportServer.Close(); err != nil {
 			s.logger.Error("Error closing WebTransport server", log.F("error", err))
+			lastErr = err
+		}
+	}
+
+	if s.metricsListener != nil {
+		s.logger.Debug("Closing metrics listener")
+		if err := s.metricsListener.Close(); err != nil {
+			s.logger.Error("Error closing metrics listener", log.F("error", err))
 			lastErr = err
 		}
 	}
@@ -1365,6 +1424,47 @@ func (s *Server) runPostShutdownHooks(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// startMetricsServer starts the dedicated metrics server.
+// It creates a listener if one doesn't exist and serves metrics.
+func (s *Server) startMetricsServer() error {
+	s.mu.Lock()
+
+	var err error
+	if s.metricsListener == nil {
+		s.logger.Debug("Creating metrics listener", log.F("addr", s.metricsServer.Addr))
+		s.metricsListener, err = net.Listen("tcp", s.metricsServer.Addr)
+		if err != nil {
+			s.mu.Unlock()
+			return err
+		}
+	}
+
+	s.mu.Unlock()
+
+	return s.metricsServer.Serve(s.metricsListener)
+}
+
+// MetricsAddr returns the network address that the metrics server is listening on.
+// If a listener is configured, it returns the listener's actual address.
+// If no listener is configured but a metrics server is configured, it returns the server's configured address.
+// If no metrics server is configured, it returns an empty string.
+//
+// This method is thread-safe and can be called concurrently.
+func (s *Server) MetricsAddr() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.metricsListener != nil {
+		return s.metricsListener.Addr().String()
+	}
+
+	if s.metricsServer != nil {
+		return s.metricsServer.Addr
+	}
+
+	return ""
 }
 
 func fmtHTTPAddr(addr string) string {

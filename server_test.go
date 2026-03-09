@@ -2100,7 +2100,11 @@ func TestServerWithValidator(t *testing.T) {
 
 // TestServer_MetricsRecordsErrors verifies that 404 and 405 responses are recorded in metrics
 func TestServer_MetricsRecordsErrors(t *testing.T) {
-	app := New()
+	app := New(config.Config{
+		Metrics: config.MetricsConfig{
+			Enabled: true,
+		},
+	})
 
 	// Register a simple GET endpoint
 	app.GET("/api/users", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
@@ -2189,7 +2193,11 @@ func TestServer_MetricsRecordsErrors(t *testing.T) {
 // TestServer_MetricsRecordsPanic verifies that panic responses are recorded as 500 in metrics
 // and that the recover middleware records its panic counter
 func TestServer_MetricsRecordsPanic(t *testing.T) {
-	app := New()
+	app := New(config.Config{
+		Metrics: config.MetricsConfig{
+			Enabled: true,
+		},
+	})
 
 	// Register a panic endpoint
 	app.GET("/panic", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
@@ -2493,4 +2501,179 @@ func TestMergeMetricsConfig(t *testing.T) {
 			t.Error("expected Enabled to be false when user sets it")
 		}
 	})
+
+	t.Run("ServerAddr is applied", func(t *testing.T) {
+		user := config.MetricsConfig{
+			Enabled:    true,
+			ServerAddr: "localhost:9091",
+		}
+		result := mergeMetricsConfig(defaults, user)
+		if result.ServerAddr != "localhost:9091" {
+			t.Errorf("expected ServerAddr localhost:9091, got %s", result.ServerAddr)
+		}
+	})
+}
+
+// TestServer_MetricsDedicatedServer verifies that a dedicated metrics server starts
+// on the configured address when ServerAddr is set.
+func TestServer_MetricsDedicatedServer(t *testing.T) {
+	// Get available ports for both servers
+	mainListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to create main listener: %v", err)
+	}
+	mainAddr := mainListener.Addr().String()
+	if err := mainListener.Close(); err != nil {
+		t.Fatalf("failed to close main listener: %v", err)
+	}
+
+	metricsListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to create metrics listener: %v", err)
+	}
+	metricsAddr := metricsListener.Addr().String()
+	if err := metricsListener.Close(); err != nil {
+		t.Fatalf("failed to close metrics listener: %v", err)
+	}
+
+	srv := New(config.Config{
+		Addr: mainAddr,
+		Metrics: config.MetricsConfig{
+			Enabled:    true,
+			ServerAddr: metricsAddr,
+			Endpoint:   "/metrics",
+		},
+	})
+
+	// Add a test route
+	srv.GET("/test", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("OK"))
+		return nil
+	}))
+
+	// Start server in background
+	go func() {
+		if err := srv.Start(); err != nil {
+			t.Errorf("server start error: %v", err)
+		}
+	}()
+
+	// Wait for server to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Make a request to the main server
+	resp, err := http.Get("http://" + mainAddr + "/test")
+	if err != nil {
+		t.Fatalf("failed to request main server: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	// Request metrics from dedicated server
+	resp, err = http.Get("http://" + metricsAddr + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to request metrics server: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	metrics := string(body)
+
+	if !strings.Contains(metrics, "http_requests_total") {
+		t.Error("metrics should contain http_requests_total")
+	}
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Errorf("shutdown error: %v", err)
+	}
+}
+
+// TestServer_MetricsAddr_NoServer verifies MetricsAddr returns empty string when no metrics server is configured.
+func TestServer_MetricsAddr_NoServer(t *testing.T) {
+	srv := New(config.Config{
+		Metrics: config.MetricsConfig{
+			Enabled: false,
+		},
+	})
+
+	addr := srv.MetricsAddr()
+	if addr != "" {
+		t.Errorf("expected empty address, got %s", addr)
+	}
+}
+
+// TestServer_MetricsDedicatedServerNotExposedOnMainServer verifies that when using
+// a dedicated metrics server, the /metrics endpoint is NOT available on the main server.
+func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
+	// Get available ports for both servers
+	mainListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to create main listener: %v", err)
+	}
+	mainAddr := mainListener.Addr().String()
+	if err := mainListener.Close(); err != nil {
+		t.Fatalf("failed to close main listener: %v", err)
+	}
+
+	metricsListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to create metrics listener: %v", err)
+	}
+	metricsAddr := metricsListener.Addr().String()
+	if err := metricsListener.Close(); err != nil {
+		t.Fatalf("failed to close metrics listener: %v", err)
+	}
+
+	srv := New(config.Config{
+		Addr: mainAddr,
+		Metrics: config.MetricsConfig{
+			Enabled:    true,
+			ServerAddr: metricsAddr,
+			Endpoint:   "/metrics",
+		},
+	})
+
+	// Start server in background
+	go func() {
+		if err := srv.Start(); err != nil {
+			t.Errorf("server start error: %v", err)
+		}
+	}()
+
+	// Wait for server to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Try to access metrics on main server - should 404
+	resp, err := http.Get("http://" + mainAddr + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to request main server: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != 404 {
+		t.Errorf("expected status 404 on main server, got %d", resp.StatusCode)
+	}
+
+	// But should work on metrics server
+	resp2, err := http.Get("http://" + metricsAddr + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to request metrics server: %v", err)
+	}
+	_ = resp2.Body.Close()
+
+	if resp2.StatusCode != 200 {
+		t.Errorf("expected status 200 on metrics server, got %d", resp2.StatusCode)
+	}
+
+	// Shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(ctx)
 }
