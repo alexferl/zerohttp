@@ -7,6 +7,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // CORS middleware handles Cross-Origin Resource Sharing
@@ -60,6 +61,8 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
@@ -111,8 +114,12 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 
 			// Handle preflight requests
 			if r.Method == http.MethodOptions {
+				// Record preflight request metric
+				reg.Counter("cors_preflight_requests_total").Inc()
+
 				if allowedOrigin == "" {
 					// Origin not allowed, don't set preflight headers
+					reg.Counter("cors_requests_total", "origin").WithLabelValues("rejected").Inc()
 					if c.OptionsPassthrough {
 						next.ServeHTTP(w, r)
 						return
@@ -158,7 +165,15 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			// For actual requests, just continue
+			// For actual requests, record origin result
+			if origin != "" {
+				result := "allowed"
+				if allowedOrigin == "" {
+					result = "rejected"
+				}
+				reg.Counter("cors_requests_total", "origin").WithLabelValues(result).Inc()
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}

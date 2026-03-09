@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/metrics"
+	"github.com/alexferl/zerohttp/middleware"
 )
 
 func main() {
@@ -88,6 +90,25 @@ func main() {
 		panic("intentional panic for demonstration")
 	}))
 
+	// Circuit breaker example - demonstrates circuit breaker metrics collection
+	// Records: circuit_breaker_state, circuit_breaker_requests_total, circuit_breaker_failures_total, circuit_breaker_trips_total
+	app.Group(func(flaky zh.Router) {
+		flaky.Use(middleware.CircuitBreaker(config.CircuitBreakerConfig{
+			FailureThreshold: 3,
+			RecoveryTimeout:  5 * time.Second,
+			SuccessThreshold: 2,
+			OpenStatusCode:   http.StatusServiceUnavailable,
+			OpenMessage:      "Service temporarily unavailable (circuit open)",
+		}))
+		flaky.GET("/flaky", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+			// Simulate flaky service - 50% failure rate
+			if rand.Float32() < 0.5 {
+				return zh.Render.JSON(w, http.StatusInternalServerError, zh.M{"error": "service error"})
+			}
+			return zh.Render.JSON(w, http.StatusOK, zh.M{"data": "success", "timestamp": time.Now().Unix()})
+		}))
+	})
+
 	fmt.Println("Server starting on http://localhost:8080")
 	fmt.Println("Metrics available at http://localhost:8080/metrics")
 	fmt.Println("")
@@ -97,6 +118,7 @@ func main() {
 	fmt.Println("  curl http://localhost:8080/api/users")
 	fmt.Println("  curl -X POST http://localhost:8080/api/orders -H 'X-Region: us-east'")
 	fmt.Println("  curl http://localhost:8080/panic")
+	fmt.Println("  curl http://localhost:8080/flaky/data  (50% failure rate, circuit breaker)")
 	fmt.Println("  curl http://localhost:8080/metrics")
 
 	log.Fatal(app.Start())

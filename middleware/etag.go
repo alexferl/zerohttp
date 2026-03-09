@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 var (
@@ -57,10 +58,12 @@ type etagResponseWriter struct {
 	ifRange         string
 	rangeHeader     string
 	contentEncoding string
+	reg             metrics.Registry
+	etagGenerated   bool
 }
 
 // newETagResponseWriter creates a new etagResponseWriter
-func newETagResponseWriter(w http.ResponseWriter, cfg config.ETagConfig, ifNoneMatch, ifMatch, ifRange, rangeHeader string) *etagResponseWriter {
+func newETagResponseWriter(w http.ResponseWriter, cfg config.ETagConfig, ifNoneMatch, ifMatch, ifRange, rangeHeader string, reg metrics.Registry) *etagResponseWriter {
 	return &etagResponseWriter{
 		ResponseWriter: w,
 		config:         cfg,
@@ -70,6 +73,7 @@ func newETagResponseWriter(w http.ResponseWriter, cfg config.ETagConfig, ifNoneM
 		ifMatch:        ifMatch,
 		ifRange:        ifRange,
 		rangeHeader:    rangeHeader,
+		reg:            reg,
 	}
 }
 
@@ -304,15 +308,19 @@ func (ew *etagResponseWriter) finalize() {
 	etag := ew.generateETag()
 
 	if etag != "" {
+		ew.etagGenerated = true
+
 		if ew.ifMatch != "" && ew.shouldReturn412(etag) {
 			ew.ResponseWriter.Header().Set("ETag", etag)
 			ew.ResponseWriter.WriteHeader(http.StatusPreconditionFailed)
+			ew.recordMetrics(http.StatusPreconditionFailed)
 			return
 		}
 
 		if ew.shouldReturn304(etag) {
 			ew.ResponseWriter.Header().Set("ETag", etag)
 			ew.ResponseWriter.WriteHeader(http.StatusNotModified)
+			ew.recordMetrics(http.StatusNotModified)
 			return
 		}
 
@@ -326,6 +334,7 @@ func (ew *etagResponseWriter) finalize() {
 			// The range request is valid, but we need to serve partial content
 			// Since we're buffering the full response, we can serve ranges
 			ew.serveRange()
+			ew.recordMetrics(http.StatusPartialContent)
 			return
 		}
 	}
@@ -334,6 +343,26 @@ func (ew *etagResponseWriter) finalize() {
 	if ew.buf.Len() > 0 {
 		_, _ = ew.ResponseWriter.Write(ew.buf.Bytes())
 	}
+	ew.recordMetrics(ew.status)
+}
+
+// recordMetrics records ETag metrics
+func (ew *etagResponseWriter) recordMetrics(status int) {
+	if ew.reg == nil {
+		return
+	}
+
+	// Record ETag generated
+	if ew.etagGenerated {
+		ew.reg.Counter("etag_generated_total").Inc()
+	}
+
+	// Record hit/miss based on status
+	result := "miss"
+	if status == http.StatusNotModified {
+		result = "hit"
+	}
+	ew.reg.Counter("etag_requests_total", "result").WithLabelValues(result).Inc()
 }
 
 // serveRange serves a partial content response based on the Range header
@@ -412,6 +441,8 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+
 			for _, exemptPath := range c.ExemptPaths {
 				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
@@ -435,7 +466,7 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 				// For PUT/PATCH/DELETE, check If-Match but don't generate/cache ETags
 				if ifMatch != "" {
 					// Pass through with a wrapper that checks If-Match
-					ew := newETagResponseWriter(w, c, "", ifMatch, "", "")
+					ew := newETagResponseWriter(w, c, "", ifMatch, "", "", reg)
 					defer ew.release()
 					next.ServeHTTP(ew, r)
 					ew.finalize()
@@ -445,7 +476,7 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			ew := newETagResponseWriter(w, c, ifNoneMatch, ifMatch, ifRange, rangeHeader)
+			ew := newETagResponseWriter(w, c, ifNoneMatch, ifMatch, ifRange, rangeHeader, reg)
 			defer ew.release()
 
 			next.ServeHTTP(ew, r)

@@ -112,6 +112,34 @@ The following metrics are automatically collected:
 | `http_response_size_bytes`      | Histogram | Response body size distribution | method, status, path |
 | `http_requests_in_flight`       | Gauge     | Currently processing requests   | method, path         |
 
+### Middleware Metrics
+
+Several built-in middlewares also record their own metrics:
+
+| Middleware      | Metric                             | Type      | Description                        | Labels         |
+|-----------------|------------------------------------|-----------|------------------------------------|----------------|
+| BasicAuth       | `basic_auth_requests_total`        | Counter   | Authentication attempts            | result         |
+| CircuitBreaker  | `circuit_breaker_state`            | Gauge     | Current circuit state              | key            |
+|                 | `circuit_breaker_requests_total`   | Counter   | Requests through circuit breaker   | key, result    |
+|                 | `circuit_breaker_failures_total`   | Counter   | Circuit breaker failures           | key            |
+|                 | `circuit_breaker_trips_total`      | Counter   | Circuit breaker trips              | key            |
+| Compress        | `compress_requests_total`          | Counter   | Compression requests by encoding   | encoding       |
+| CORS            | `cors_preflight_requests_total`    | Counter   | Preflight requests handled         | -              |
+|                 | `cors_requests_total`              | Counter   | CORS requests by result            | origin         |
+| CSRF            | `csrf_rejected_total`              | Counter   | CSRF rejections                    | reason         |
+| ETag            | `etag_requests_total`              | Counter   | ETag cache hits/misses             | result         |
+|                 | `etag_generated_total`             | Counter   | Total ETags generated              | -              |
+| JWTAuth         | `jwt_auth_requests_total`          | Counter   | JWT authentication attempts        | result         |
+| HMACAuth        | `hmac_auth_requests_total`         | Counter   | HMAC authentication attempts       | result         |
+| RateLimit       | `ratelimit_allowed_total`          | Counter   | Allowed requests                   | key            |
+|                 | `ratelimit_rejected_total`         | Counter   | Rejected requests                  | key            |
+|                 | `ratelimit_remaining`              | Gauge     | Remaining requests in window       | key            |
+| Recover         | `recover_panics_total`             | Counter   | Recovered panics                   | -              |
+| RequestBodySize | `request_body_size_rejected_total` | Counter   | Requests rejected (too large)      | -              |
+| ReverseProxy    | `proxy_requests_total`             | Counter   | Proxy requests                     | target, status |
+|                 | `proxy_request_duration_seconds`   | Histogram | Proxy latency                      | target         |
+| Timeout         | `timeout_requests_total`           | Counter   | Timed out requests                 | -              |
+
 ### Example Output
 
 ```

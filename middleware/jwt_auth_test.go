@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // slicesEqual compares two string slices for equality
@@ -1936,5 +1937,71 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+}
+
+func TestJWTAuth_Metrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	store := &mockTokenStore{
+		validateFunc: func(token string) (config.JWTClaims, error) {
+			if token == "valid-token" {
+				return map[string]any{"sub": "user123"}, nil
+			}
+			return nil, errors.New("invalid token")
+		},
+	}
+	mw := JWTAuth(config.JWTAuthConfig{
+		TokenStore: store,
+	})
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	// Request without token
+	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr1 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr1, req1)
+	if rr1.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", rr1.Code)
+	}
+
+	// Request with valid token
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2.Header.Set("Authorization", "Bearer valid-token")
+	rr2 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr2.Code)
+	}
+
+	// Check metrics
+	families := reg.Gather()
+	var counter *metrics.MetricFamily
+	for _, f := range families {
+		if f.Name == "jwt_auth_requests_total" {
+			counter = &f
+			break
+		}
+	}
+	if counter == nil {
+		t.Fatal("expected jwt_auth_requests_total metric")
+	}
+
+	// Should have metrics for both valid and invalid
+	results := make(map[string]int)
+	for _, m := range counter.Metrics {
+		results[m.Labels["result"]]++
+	}
+	if results["missing"] != 1 {
+		t.Errorf("expected 1 missing, got %d", results["missing"])
+	}
+	if results["valid"] != 1 {
+		t.Errorf("expected 1 valid, got %d", results["valid"])
 	}
 }
