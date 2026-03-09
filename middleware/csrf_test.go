@@ -961,6 +961,67 @@ func TestCSRF_TokenGenerationFailsClosed(t *testing.T) {
 	}
 }
 
+// TestCSRF_TokenGenerationFailsClosed_POST verifies that when token generation fails
+// after successful token validation (POST request), the request is rejected
+func TestCSRF_TokenGenerationFailsClosed_POST(t *testing.T) {
+	reg := metrics.NewRegistry()
+
+	// First, generate a valid token
+	validToken, err := generateToken(testHMACKey)
+	if err != nil {
+		t.Fatalf("failed to generate valid token: %v", err)
+	}
+
+	// Inject a failing token generator
+	failCount := 0
+	failingGenerator := func(key []byte) (string, error) {
+		failCount++
+		return "", fmt.Errorf("simulated token generation failure")
+	}
+
+	mw := CSRF(config.CSRFConfig{
+		HMACKey:        testHMACKey,
+		TokenGenerator: failingGenerator,
+	})
+
+	// Wrap with metrics middleware to provide registry in context
+	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       true,
+		PathLabelFunc: func(p string) string { return p },
+	})
+	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called when token generation fails")
+	})))
+
+	// Test POST request with valid token but failing token generation for new token
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set("X-CSRF-Token", validToken)
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: validToken})
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when token generation fails on POST, got %d", rr.Code)
+	}
+
+	// Verify the metric was incremented
+	families := reg.Gather()
+	var found bool
+	for _, f := range families {
+		if f.Name == "csrf_rejected_total" {
+			for _, m := range f.Metrics {
+				if reason, ok := m.Labels["reason"]; ok && reason == "token_generation_failed" {
+					found = true
+					break
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("expected csrf_rejected_total metric with reason=token_generation_failed")
+	}
+}
+
 // TestCSRF_DefaultTokenGenerator verifies that when TokenGenerator is not set (nil),
 // the default crypto-secure token generator is used
 func TestCSRF_DefaultTokenGenerator(t *testing.T) {
