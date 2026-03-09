@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 	"time"
 
@@ -661,6 +662,204 @@ func TestSSEHub(t *testing.T) {
 		}
 		if hub.TopicCount("topic2") != 0 {
 			t.Error("expected stream to be removed from topic2")
+		}
+	})
+
+	t.Run("auto-unregisters failed connections on broadcast", func(t *testing.T) {
+		hub := NewSSEHub()
+
+		// Create a working stream
+		w1 := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+		stream1, _ := NewSSE(w1, r)
+		hub.Register(stream1)
+
+		// Create a stream with an error writer that will fail on send
+		header := make(http.Header)
+		ew := &errorWriter{header: header}
+		fw := &flusherWriter{ResponseWriter: ew, header: header}
+		badStream := &SSE{
+			w:       fw,
+			flusher: fw,
+			ctx:     r.Context(),
+			closed:  make(chan struct{}),
+			done:    make(chan struct{}),
+		}
+		hub.Register(badStream)
+
+		if hub.ConnectionCount() != 2 {
+			t.Errorf("expected 2 connections, got %d", hub.ConnectionCount())
+		}
+
+		// Broadcast should auto-unregister the failed connection
+		hub.Broadcast(SSEEvent{Data: []byte("test")})
+
+		if hub.ConnectionCount() != 1 {
+			t.Errorf("expected 1 connection after broadcast, got %d", hub.ConnectionCount())
+		}
+	})
+
+	t.Run("auto-unregisters failed connections on broadcast to topic", func(t *testing.T) {
+		hub := NewSSEHub()
+
+		// Create a working stream
+		w1 := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+		stream1, _ := NewSSE(w1, r)
+		hub.Subscribe(stream1, "test-topic")
+
+		// Create a stream with an error writer
+		header := make(http.Header)
+		ew := &errorWriter{header: header}
+		fw := &flusherWriter{ResponseWriter: ew, header: header}
+		badStream := &SSE{
+			w:       fw,
+			flusher: fw,
+			ctx:     r.Context(),
+			closed:  make(chan struct{}),
+			done:    make(chan struct{}),
+		}
+		hub.Subscribe(badStream, "test-topic")
+
+		if hub.TopicCount("test-topic") != 2 {
+			t.Errorf("expected 2 subscribers, got %d", hub.TopicCount("test-topic"))
+		}
+
+		// Broadcast should auto-unregister the failed connection
+		hub.BroadcastTo("test-topic", SSEEvent{Data: []byte("test")})
+
+		if hub.TopicCount("test-topic") != 1 {
+			t.Errorf("expected 1 subscriber after broadcast, got %d", hub.TopicCount("test-topic"))
+		}
+	})
+}
+
+// Goroutine cleanup tests
+
+func TestSSE_GoroutineCleanup(t *testing.T) {
+	t.Run("monitor goroutine exits on close", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		stream, err := NewSSE(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		// Close the stream
+		err = stream.Close()
+		if err != nil {
+			t.Fatalf("expected no error on close, got %v", err)
+		}
+
+		// Wait for monitor goroutine to exit
+		done := make(chan struct{})
+		go func() {
+			stream.WaitDone()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Goroutine exited successfully
+		case <-time.After(time.Second):
+			t.Error("monitor goroutine did not exit within timeout")
+		}
+	})
+
+	t.Run("monitor goroutine exits on context cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
+
+		stream, err := NewSSE(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		// Cancel the context
+		cancel()
+
+		// Wait for monitor goroutine to exit
+		done := make(chan struct{})
+		go func() {
+			stream.WaitDone()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Goroutine exited successfully
+		case <-time.After(time.Second):
+			t.Error("monitor goroutine did not exit within timeout")
+		}
+	})
+
+	t.Run("no goroutine leak on multiple create/close cycles", func(t *testing.T) {
+		// Get initial goroutine count
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+		initial := runtime.NumGoroutine()
+
+		// Create and close many SSE connections
+		for i := 0; i < 50; i++ {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+			stream, err := NewSSE(w, r)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			// Send an event
+			_ = stream.Send(SSEEvent{Data: []byte("test")})
+
+			// Close and wait for cleanup
+			_ = stream.Close()
+			stream.WaitDone()
+		}
+
+		// Give goroutines time to exit
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+
+		final := runtime.NumGoroutine()
+
+		if final != initial {
+			t.Errorf("goroutine leak detected: started with %d, ended with %d", initial, final)
+		}
+	})
+
+	t.Run("no goroutine leak on context cancellation", func(t *testing.T) {
+		// Get initial goroutine count
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+		initial := runtime.NumGoroutine()
+
+		// Create and cancel many contexts
+		for i := 0; i < 50; i++ {
+			ctx, cancel := context.WithCancel(context.Background())
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
+
+			stream, err := NewSSE(w, r)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			// Cancel context and wait for cleanup
+			cancel()
+			stream.WaitDone()
+		}
+
+		// Give goroutines time to exit
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+
+		final := runtime.NumGoroutine()
+
+		if final != initial {
+			t.Errorf("goroutine leak detected on cancellation: started with %d, ended with %d", initial, final)
 		}
 	})
 }

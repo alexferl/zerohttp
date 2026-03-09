@@ -30,6 +30,7 @@ type SSE struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	closed  chan struct{}
+	done    chan struct{} // Closed when monitor goroutine exits
 	mu      sync.Mutex
 	retry   time.Duration
 }
@@ -61,10 +62,12 @@ func NewSSE(w http.ResponseWriter, r *http.Request) (*SSE, error) {
 		ctx:     ctx,
 		cancel:  cancel,
 		closed:  make(chan struct{}),
+		done:    make(chan struct{}),
 	}
 
 	// Monitor context cancellation
 	go func() {
+		defer close(stream.done) // Signal goroutine exit
 		select {
 		case <-ctx.Done():
 			_ = stream.Close()
@@ -176,9 +179,17 @@ func (s *SSE) Close() error {
 		return nil
 	default:
 		close(s.closed)
-		s.cancel()
+		if s.cancel != nil {
+			s.cancel()
+		}
 		return nil
 	}
+}
+
+// WaitDone blocks until the monitor goroutine exits.
+// This is primarily used for testing to verify goroutine cleanup.
+func (s *SSE) WaitDone() {
+	<-s.done
 }
 
 // SetRetry sets the default reconnection time for this connection.
@@ -503,24 +514,53 @@ func (h *SSEHub) Unsubscribe(s *SSE, topic string) {
 }
 
 // Broadcast sends an event to all registered connections.
+// Connections that fail to receive the event are automatically unregistered.
 func (h *SSEHub) Broadcast(event SSEEvent) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-
+	connections := make([]*SSE, 0, len(h.connections))
 	for conn := range h.connections {
-		_ = conn.Send(event)
+		connections = append(connections, conn)
+	}
+	h.mu.RUnlock()
+
+	var failed []*SSE
+	for _, conn := range connections {
+		if err := conn.Send(event); err != nil {
+			failed = append(failed, conn)
+		}
+	}
+
+	// Unregister failed connections
+	for _, conn := range failed {
+		h.Unregister(conn)
+		_ = conn.Close()
 	}
 }
 
 // BroadcastTo sends an event to all connections subscribed to a topic.
+// Connections that fail to receive the event are automatically unregistered.
 func (h *SSEHub) BroadcastTo(topic string, event SSEEvent) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-
+	var connections []*SSE
 	if subs, ok := h.topics[topic]; ok {
+		connections = make([]*SSE, 0, len(subs))
 		for conn := range subs {
-			_ = conn.Send(event)
+			connections = append(connections, conn)
 		}
+	}
+	h.mu.RUnlock()
+
+	var failed []*SSE
+	for _, conn := range connections {
+		if err := conn.Send(event); err != nil {
+			failed = append(failed, conn)
+		}
+	}
+
+	// Unregister failed connections
+	for _, conn := range failed {
+		h.Unregister(conn)
+		_ = conn.Close()
 	}
 }
 
