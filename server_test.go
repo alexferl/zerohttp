@@ -2708,7 +2708,7 @@ func TestServer_RequestContextCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	server.listener = listener
 	server.server.Addr = listener.Addr().String()
