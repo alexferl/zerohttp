@@ -357,6 +357,22 @@ func TestNewHS256TokenStore(t *testing.T) {
 	}
 }
 
+func TestNewHS256TokenStore_ShortSecretPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("expected panic for short secret, but did not panic")
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "HS256 secret must be at least 32 bytes") {
+			t.Errorf("expected panic message about 32 bytes, got: %v", r)
+		}
+	}()
+
+	// This should panic - secret is only 13 bytes
+	_ = NewHS256TokenStore([]byte("short-secret"), HS256Options{})
+}
+
 func TestHS256TokenStore_Validate(t *testing.T) {
 	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
 	opts := HS256Options{}

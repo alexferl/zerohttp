@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,6 +42,36 @@ func TestNewHMACSignerWithAlgorithm(t *testing.T) {
 			if signer.Algorithm() != tt.algorithm {
 				t.Errorf("expected algorithm %s, got %s", tt.algorithm, signer.Algorithm())
 			}
+		})
+	}
+}
+
+func TestNewHMACSignerWithAlgorithm_ShortSecretPanics(t *testing.T) {
+	tests := []struct {
+		name         string
+		algorithm    config.HMACHashAlgorithm
+		secret       string
+		expectedSize int
+	}{
+		{"SHA256 too short", config.HMACSHA256, "short-secret", 32},
+		{"SHA384 too short", config.HMACSHA384, "test-secret-key-that-is-32-bytes-long!", 48},
+		{"SHA512 too short", config.HMACSHA512, "test-secret-key-that-is-48-bytes-long-for-sha384-algo!", 64},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Error("expected panic for short secret, but did not panic")
+				}
+				msg, ok := r.(string)
+				if !ok || !strings.Contains(msg, fmt.Sprintf("at least %d bytes", tt.expectedSize)) {
+					t.Errorf("expected panic message about %d bytes, got: %v", tt.expectedSize, r)
+				}
+			}()
+
+			_ = NewHMACSignerWithAlgorithm("test-key", tt.secret, tt.algorithm)
 		})
 	}
 }

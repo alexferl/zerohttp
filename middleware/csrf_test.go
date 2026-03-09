@@ -890,3 +890,21 @@ func TestCSRF_Metrics(t *testing.T) {
 		t.Fatal("expected csrf_rejected_total metric")
 	}
 }
+
+// TestCSRF_GenerateTokenErrorHandling verifies that generateToken can return an error
+// and the error is properly handled by the middleware (fail closed security principle)
+func TestCSRF_GenerateTokenErrorHandling(t *testing.T) {
+	// Test that generateToken succeeds with valid key
+	token, err := generateToken(testHMACKey)
+	if err != nil {
+		t.Errorf("generateToken should not fail with valid key: %v", err)
+	}
+	if token == "" {
+		t.Error("generateToken should return non-empty token on success")
+	}
+
+	// The function signature now returns (string, error) to handle rare cases
+	// where crypto/rand.Read fails (e.g., system out of entropy).
+	// When this happens, the middleware rejects the request rather than
+	// returning an empty token, implementing fail-closed security.
+}

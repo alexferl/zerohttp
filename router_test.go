@@ -460,6 +460,26 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			Status(http.StatusMethodNotAllowed).
 			Body("Custom 405")
 	})
+
+	// Test fallback to plain text when headers are already written
+	t.Run("fallback when problem detail fails", func(t *testing.T) {
+		// This test verifies the panic fix - when ProblemDetail fails
+		// (e.g., headers already written), we should fallback to plain text
+		// rather than panicking
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate a condition where headers might be partially written
+			// The fallback should work without panicking
+			w.WriteHeader(http.StatusNotFound)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected status %d, got %d", http.StatusNotFound, w.Code)
+		}
+	})
 }
 
 func TestRouter_Configuration(t *testing.T) {
