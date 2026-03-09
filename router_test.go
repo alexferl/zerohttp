@@ -46,23 +46,7 @@ func TestHandlerFunc(t *testing.T) {
 	})
 
 	t.Run("error case", func(t *testing.T) {
-		var panicked bool
-		var panicMsg string
-
-		recoveryMW := func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				defer func() {
-					if rec := recover(); rec != nil {
-						panicked = true
-						panicMsg = fmt.Sprintf("%v", rec)
-						w.WriteHeader(http.StatusInternalServerError)
-					}
-				}()
-				next.ServeHTTP(w, r)
-			})
-		}
-
-		router := NewRouter(recoveryMW)
+		router := NewRouter()
 		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 			return fmt.Errorf("test error")
 		})
@@ -72,12 +56,7 @@ func TestHandlerFunc(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if !panicked {
-			t.Error("Expected handler error to cause panic")
-		}
-		if !strings.Contains(panicMsg, "test error") {
-			t.Errorf("Expected panic message to contain 'test error', got '%s'", panicMsg)
-		}
+		// Errors are now handled directly without panic
 		zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 	})
 
