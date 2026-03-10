@@ -1,6 +1,10 @@
 package config
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/alexferl/zerohttp/log"
+)
 
 // CSRFConfig holds configuration for CSRF protection
 type CSRFConfig struct {
@@ -55,6 +59,11 @@ type CSRFConfig struct {
 	// TokenGenerator is an optional function for generating CSRF tokens.
 	// Defaults to crypto-secure random generation.
 	TokenGenerator func(key []byte) (string, error)
+
+	// Logger is used to log errors during CSRF token generation.
+	// If nil, the global logger will be used.
+	// Default: nil
+	Logger log.Logger
 }
 
 // DefaultCSRFConfig contains the default values for CSRF configuration
