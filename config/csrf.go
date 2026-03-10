@@ -57,11 +57,6 @@ type CSRFConfig struct {
 	TokenGenerator func(key []byte) (string, error)
 }
 
-// Bool returns a pointer to a bool value
-func Bool(b bool) *bool {
-	return &b
-}
-
 // DefaultCSRFConfig contains the default values for CSRF configuration
 var DefaultCSRFConfig = CSRFConfig{
 	CookieName:     "csrf_token",
