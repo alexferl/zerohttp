@@ -1033,8 +1033,9 @@ func TestHMACAuth_CustomErrorHandlerWithSignatureMismatch(t *testing.T) {
 
 func TestHMACAuth_KeyRotation(t *testing.T) {
 	// Simulate key rotation scenario with old and new secrets
-	oldSecret := "old-secret-key-for-test"
-	newSecret := "new-secret-key-for-test"
+	// Secrets must be at least 32 bytes for security
+	oldSecret := "old-secret-key-for-test-32bytes!"
+	newSecret := "new-secret-key-for-test-32bytes!"
 
 	// Credential store returns both secrets during rotation
 	mw := HMACAuth(config.HMACAuthConfig{
@@ -1114,7 +1115,7 @@ func TestHMACAuth_NoSecrets(t *testing.T) {
 	// Test that empty secrets slice returns invalid credentials
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
-			return nil // No secrets for any key
+			return nil // no secrets for any key
 		},
 	})
 
@@ -1122,7 +1123,7 @@ func TestHMACAuth_NoSecrets(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	signer := NewHMACSigner("any-key", "any-secret")
+	signer := NewHMACSigner("any-key", "this-secret-is-32-bytes-long!!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -1133,6 +1134,138 @@ func TestHMACAuth_NoSecrets(t *testing.T) {
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for unknown access key, got %d", rr.Code)
+	}
+}
+
+func TestHMACAuth_ShortSecretRejected(t *testing.T) {
+	// Test that secrets shorter than minimum length are rejected
+	// This is a security measure to prevent brute-force attacks
+	creds := map[string]string{"test-key": "short-secret"} // Only 12 bytes
+	mw := HMACAuth(config.HMACAuthConfig{
+		CredentialStore: func(id string) []string {
+			if secret, ok := creds[id]; ok {
+				return []string{secret}
+			}
+			return nil
+		},
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Sign with short secret - should be rejected by middleware
+	signer := NewHMACSigner("test-key", "short-secret")
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	if err := signer.SignRequest(req); err != nil {
+		t.Fatalf("failed to sign request: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for short secret, got %d", rr.Code)
+	}
+}
+
+func TestHMACAuth_ShortSecretRejected_AllAlgorithms(t *testing.T) {
+	// Test minimum secret length enforcement for all HMAC algorithms
+	// The middleware filters out secrets that don't meet the minimum length
+	tests := []struct {
+		name         string
+		algorithm    config.HMACHashAlgorithm
+		storeSecrets []string // secrets returned by credential store
+		validSecret  string   // secret used to sign (must meet min length)
+		shouldPass   bool
+	}{
+		{
+			name:         "SHA256 with only short secrets in store",
+			algorithm:    config.HMACSHA256,
+			storeSecrets: []string{"short-secret-12", "another-short-15"},
+			validSecret:  "this-is-exactly-32-bytes-!!!!!!!",
+			shouldPass:   false,
+		},
+		{
+			name:         "SHA256 with valid secret in store",
+			algorithm:    config.HMACSHA256,
+			storeSecrets: []string{"this-is-exactly-32-bytes-!!!!!!!"},
+			validSecret:  "this-is-exactly-32-bytes-!!!!!!!",
+			shouldPass:   true,
+		},
+		{
+			name:         "SHA384 with only short secrets in store",
+			algorithm:    config.HMACSHA384,
+			storeSecrets: []string{"short-secret-12", "this-secret-is-exactly-31-bytes"},
+			validSecret:  "this-is-exactly-48-bytes-for-sha384-tests!!!!!!!",
+			shouldPass:   false,
+		},
+		{
+			name:         "SHA384 with valid secret in store",
+			algorithm:    config.HMACSHA384,
+			storeSecrets: []string{"this-is-exactly-48-bytes-for-sha384-tests!!!!!!!"},
+			validSecret:  "this-is-exactly-48-bytes-for-sha384-tests!!!!!!!",
+			shouldPass:   true,
+		},
+		{
+			name:         "SHA512 with only short secrets in store",
+			algorithm:    config.HMACSHA512,
+			storeSecrets: []string{"short-secret-12", "this-secret-is-exactly-47-bytes-long-enough!!"},
+			validSecret:  "this-is-exactly-64-bytes-for-sha512-tests-in-middleware-!!!!!!!!",
+			shouldPass:   false,
+		},
+		{
+			name:         "SHA512 with valid secret in store",
+			algorithm:    config.HMACSHA512,
+			storeSecrets: []string{"this-is-exactly-64-bytes-for-sha512-tests-in-middleware-!!!!!!!!"},
+			validSecret:  "this-is-exactly-64-bytes-for-sha512-tests-in-middleware-!!!!!!!!",
+			shouldPass:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mw := HMACAuth(config.HMACAuthConfig{
+				Algorithm: tt.algorithm,
+				CredentialStore: func(id string) []string {
+					if id == "test-key" {
+						return tt.storeSecrets
+					}
+					return nil
+				},
+			})
+
+			handlerCalled := false
+			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlerCalled = true
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			signer := NewHMACSignerWithAlgorithm("test-key", tt.validSecret, tt.algorithm)
+			req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+			if err := signer.SignRequest(req); err != nil {
+				t.Fatalf("failed to sign request: %v", err)
+			}
+
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			if tt.shouldPass {
+				if rr.Code != http.StatusOK {
+					t.Errorf("expected 200 for valid secret length, got %d", rr.Code)
+				}
+				if !handlerCalled {
+					t.Error("handler was not called for valid secret")
+				}
+			} else {
+				if rr.Code != http.StatusUnauthorized {
+					t.Errorf("expected 401 for short secret, got %d", rr.Code)
+				}
+				if handlerCalled {
+					t.Error("handler was called for invalid secret")
+				}
+			}
+		})
 	}
 }
 
