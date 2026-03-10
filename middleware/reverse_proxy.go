@@ -323,6 +323,10 @@ func (rp *reverseProxy) checkHealth(ctx context.Context) {
 		go func(be *backend) {
 			defer wg.Done()
 			healthy := rp.checkBackendHealth(ctx, be)
+			// Don't update health status if context was cancelled (e.g., during shutdown)
+			if ctx.Err() != nil {
+				return
+			}
 			if healthy {
 				be.healthy.Store(1)
 			} else {
