@@ -24,6 +24,8 @@ const (
 	csrfTokenContextKey CSRFContextKey = "csrf_token"
 	// defaultTokenLength is the length of the random token in bytes
 	defaultTokenLength = 32
+	// defaultMaxMultipartMemory is the maximum memory allocated for parsing multipart forms (32 MB)
+	defaultMaxMultipartMemory = 32 << 20 // 32 MB
 )
 
 // CSRF returns middleware that provides CSRF protection using the double-submit cookie pattern
@@ -248,7 +250,7 @@ func extractToken(r *http.Request, source, name string) string {
 	case "form":
 		contentType := r.Header.Get("Content-Type")
 		if strings.HasPrefix(contentType, "multipart/form-data") {
-			if err := r.ParseMultipartForm(32 << 20); err != nil {
+			if err := r.ParseMultipartForm(defaultMaxMultipartMemory); err != nil {
 				return ""
 			}
 			if r.MultipartForm != nil {
