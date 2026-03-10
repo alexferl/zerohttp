@@ -192,6 +192,18 @@ func (s *SSE) WaitDone() {
 	<-s.done
 }
 
+// isOpen returns true if the connection is still open (not closed).
+func (s *SSE) isOpen() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	select {
+	case <-s.closed:
+		return false
+	default:
+		return true
+	}
+}
+
 // SetRetry sets the default reconnection time for this connection.
 func (s *SSE) SetRetry(d time.Duration) error {
 	s.mu.Lock()
@@ -525,7 +537,12 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 
 	var failed []*SSE
 	for _, conn := range connections {
-		if err := conn.Send(event); err != nil {
+		// Check if connection is still registered and not closed before sending
+		if h.isConnectionActive(conn) {
+			if err := conn.Send(event); err != nil {
+				failed = append(failed, conn)
+			}
+		} else {
 			failed = append(failed, conn)
 		}
 	}
@@ -535,6 +552,11 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 		h.Unregister(conn)
 		_ = conn.Close()
 	}
+}
+
+// isConnectionActive checks if a connection is still open (not closed).
+func (h *SSEHub) isConnectionActive(conn *SSE) bool {
+	return conn.isOpen()
 }
 
 // BroadcastTo sends an event to all connections subscribed to a topic.
@@ -552,7 +574,12 @@ func (h *SSEHub) BroadcastTo(topic string, event SSEEvent) {
 
 	var failed []*SSE
 	for _, conn := range connections {
-		if err := conn.Send(event); err != nil {
+		// Check if connection is still registered and not closed before sending
+		if h.isConnectionActive(conn) {
+			if err := conn.Send(event); err != nil {
+				failed = append(failed, conn)
+			}
+		} else {
 			failed = append(failed, conn)
 		}
 	}

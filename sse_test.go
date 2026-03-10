@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -860,6 +861,177 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 
 		if final != initial {
 			t.Errorf("goroutine leak detected on cancellation: started with %d, ended with %d", initial, final)
+		}
+	})
+}
+
+// Test for race condition in Broadcast where connections are closed during broadcast
+func TestSSEHub_BroadcastRaceCondition(t *testing.T) {
+	t.Run("broadcast with concurrent close", func(t *testing.T) {
+		hub := NewSSEHub()
+
+		// Create multiple connections
+		var streams []*SSE
+		for i := 0; i < 10; i++ {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+			stream, err := NewSSE(w, r)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			streams = append(streams, stream)
+			hub.Register(stream)
+		}
+
+		if hub.ConnectionCount() != 10 {
+			t.Errorf("expected 10 connections, got %d", hub.ConnectionCount())
+		}
+
+		// Run multiple iterations to increase chance of race detection
+		for iter := 0; iter < 100; iter++ {
+			var wg sync.WaitGroup
+			wg.Add(2)
+
+			// Broadcast from one goroutine
+			go func() {
+				defer wg.Done()
+				hub.Broadcast(SSEEvent{Data: []byte("test")})
+			}()
+
+			// Close connections from another goroutine
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 10; i++ {
+					if i%2 == 0 {
+						_ = streams[i].Close()
+					}
+				}
+			}()
+
+			wg.Wait()
+		}
+
+		// Clean up remaining connections
+		for _, stream := range streams {
+			_ = stream.Close()
+		}
+	})
+
+	t.Run("broadcastTo with concurrent close", func(t *testing.T) {
+		hub := NewSSEHub()
+
+		// Create multiple connections subscribed to a topic
+		var streams []*SSE
+		for i := 0; i < 10; i++ {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+			stream, err := NewSSE(w, r)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			streams = append(streams, stream)
+			hub.Subscribe(stream, "test-topic")
+		}
+
+		if hub.TopicCount("test-topic") != 10 {
+			t.Errorf("expected 10 subscribers, got %d", hub.TopicCount("test-topic"))
+		}
+
+		// Run multiple iterations to increase chance of race detection
+		for iter := 0; iter < 100; iter++ {
+			var wg sync.WaitGroup
+			wg.Add(2)
+
+			// BroadcastTo from one goroutine
+			go func() {
+				defer wg.Done()
+				hub.BroadcastTo("test-topic", SSEEvent{Data: []byte("test")})
+			}()
+
+			// Close connections from another goroutine
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 10; i++ {
+					if i%2 == 0 {
+						_ = streams[i].Close()
+					}
+				}
+			}()
+
+			wg.Wait()
+		}
+
+		// Clean up remaining connections
+		for _, stream := range streams {
+			_ = stream.Close()
+		}
+	})
+
+	// Stress test with many concurrent operations
+	t.Run("concurrent broadcast stress test", func(t *testing.T) {
+		hub := NewSSEHub()
+		var streams []*SSE
+
+		// Create many connections
+		for i := 0; i < 50; i++ {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+			stream, err := NewSSE(w, r)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			streams = append(streams, stream)
+			hub.Register(stream)
+		}
+
+		var wg sync.WaitGroup
+		numWorkers := 10
+		iterations := 100
+
+		// Multiple broadcasters
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					hub.Broadcast(SSEEvent{Data: []byte("test"), ID: fmt.Sprintf("worker-%d-iter-%d", id, j)})
+				}
+			}(i)
+		}
+
+		// Multiple closers
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					idx := (id*iterations + j) % len(streams)
+					_ = streams[idx].Close()
+					// Re-register sometimes to keep the pool active
+					if j%3 == 0 {
+						hub.Register(streams[idx])
+					}
+				}
+			}(i)
+		}
+
+		// Multiple registrars
+		for i := 0; i < numWorkers/2; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					idx := (id*iterations + j) % len(streams)
+					hub.Register(streams[idx])
+				}
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Clean up
+		for _, stream := range streams {
+			_ = stream.Close()
 		}
 	})
 }
