@@ -243,7 +243,7 @@ func (cw *compressResponseWriter) isCompressible() bool {
 
 func (cw *compressResponseWriter) WriteHeader(code int) {
 	if cw.wroteHeader {
-		cw.ResponseWriter.WriteHeader(code)
+		// Ignore subsequent WriteHeader calls, matching standard library behavior
 		return
 	}
 	cw.wroteHeader = true

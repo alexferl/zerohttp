@@ -721,3 +721,29 @@ func TestCompress_Metrics(t *testing.T) {
 		t.Error("expected gzip encoding in metrics")
 	}
 }
+
+func TestCompress_WriteHeader_MultipleCalls(t *testing.T) {
+	mw := Compress(config.CompressConfig{
+		Types: []string{"text/html"},
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		// Subsequent WriteHeader calls should be ignored (standard library behavior)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("test content"))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	// The status code should be 200 (first WriteHeader), not 404 or 500
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d (subsequent WriteHeader calls should be ignored)", rr.Code)
+	}
+}
