@@ -29,10 +29,10 @@ type ParamExtractor interface {
 	ParamOrDefault(r *http.Request, name, defaultVal string) string
 }
 
-// defaultParamsExtractor implements the ParamExtractor interface
 // Ensure defaultParamsExtractor implements ParamExtractor
 var _ ParamExtractor = (*defaultParamsExtractor)(nil)
 
+// defaultParamsExtractor implements the ParamExtractor interface
 type defaultParamsExtractor struct{}
 
 // Param gets a path parameter by name as a string.

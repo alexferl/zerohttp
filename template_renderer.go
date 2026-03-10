@@ -11,10 +11,10 @@ type TemplateRenderer interface {
 	Render(w http.ResponseWriter, code int, name string, data any) error
 }
 
-// TemplateManager implements TemplateRenderer using html/template
 // Ensure TemplateManager implements TemplateRenderer
 var _ TemplateRenderer = (*TemplateManager)(nil)
 
+// TemplateManager implements TemplateRenderer using html/template
 type TemplateManager struct {
 	templates *template.Template
 }

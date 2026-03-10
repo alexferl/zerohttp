@@ -209,10 +209,10 @@ var DefaultRegistryConfig = RegistryConfig{
 	MaxCardinality: 1000,
 }
 
-// registry is the internal implementation of Registry.
 // Ensure registry implements Registry
 var _ Registry = (*registry)(nil)
 
+// registry is the internal implementation of Registry.
 type registry struct {
 	mu             sync.RWMutex
 	counters       map[string]*counterVec

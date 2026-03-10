@@ -58,10 +58,10 @@ type Renderer interface {
 	ProblemDetail(w http.ResponseWriter, problem *ProblemDetail) error
 }
 
-// defaultRenderer implements the Renderer interface with standard HTTP response handling
 // Ensure defaultRenderer implements Renderer
 var _ Renderer = (*defaultRenderer)(nil)
 
+// defaultRenderer implements the Renderer interface with standard HTTP response handling
 type defaultRenderer struct{}
 
 // JSON writes a JSON response with the given status code and data

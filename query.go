@@ -19,10 +19,10 @@ type QueryExtractor interface {
 	QueryParamOrDefault(r *http.Request, name, defaultVal string) string
 }
 
-// defaultQueryExtractor implements the QueryExtractor interface
 // Ensure defaultQueryExtractor implements QueryExtractor
 var _ QueryExtractor = (*defaultQueryExtractor)(nil)
 
+// defaultQueryExtractor implements the QueryExtractor interface
 type defaultQueryExtractor struct{}
 
 // QueryParam gets a query parameter by name as a string.

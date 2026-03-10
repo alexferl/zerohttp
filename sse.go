@@ -356,11 +356,11 @@ type SSEReplayer interface {
 	Replay(afterID string, send func(SSEEvent) error) (int, error)
 }
 
-// InMemoryReplayer stores events in memory with a circular buffer.
-// Events can be limited by max count and/or TTL.
 // Ensure InMemoryReplayer implements SSEReplayer
 var _ SSEReplayer = (*InMemoryReplayer)(nil)
 
+// InMemoryReplayer stores events in memory with a circular buffer.
+// Events can be limited by max count and/or TTL.
 type InMemoryReplayer struct {
 	events    []storedEvent
 	maxEvents int
