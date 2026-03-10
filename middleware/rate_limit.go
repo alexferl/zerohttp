@@ -3,7 +3,6 @@ package middleware
 import (
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
@@ -11,23 +10,7 @@ import (
 	"github.com/alexferl/zerohttp/metrics"
 )
 
-// Bucket represents a token bucket for rate limiting
-type Bucket struct {
-	tokens     float64
-	capacity   float64
-	rate       float64
-	lastRefill time.Time
-	mutex      sync.Mutex
-}
-
-// WindowCounter represents a counter for window-based rate limiting
-type WindowCounter struct {
-	count       int
-	windowStart time.Time
-	mutex       sync.Mutex
-}
-
-// RateLimit creates a rate limiting middleware
+// RateLimit creates a rate limiting middleware.
 func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRateLimitConfig
 	if len(cfg) > 0 {
@@ -53,10 +36,17 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 		c.Message = config.DefaultRateLimitConfig.Message
 	}
 
-	buckets := make(map[string]*Bucket)
-	counters := make(map[string]*WindowCounter)
-	slidingWindows := make(map[string][]time.Time)
-	mu := sync.RWMutex{}
+	// Use provided store or create default in-memory store
+	var store RateLimitStore
+	if c.Store != nil {
+		store = c.Store
+	} else {
+		maxKeys := c.MaxKeys
+		if maxKeys == 0 {
+			maxKeys = 10000
+		}
+		store = NewInMemoryStore(c.Algorithm, c.Window, c.Rate, maxKeys)
+	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,90 +61,7 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 
 			key := c.KeyExtractor(r)
 			now := time.Now()
-			allowed := false
-			remaining := 0
-			resetTime := now.Add(c.Window)
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			switch c.Algorithm {
-			case config.TokenBucket:
-				bucket, exists := buckets[key]
-				if !exists {
-					bucket = &Bucket{
-						tokens:     float64(c.Rate),
-						capacity:   float64(c.Rate),
-						rate:       float64(c.Rate) / c.Window.Seconds(),
-						lastRefill: now,
-					}
-					buckets[key] = bucket
-				}
-
-				bucket.mutex.Lock()
-				// Refill tokens based on elapsed time
-				elapsed := now.Sub(bucket.lastRefill).Seconds()
-				bucket.tokens = min(bucket.capacity, bucket.tokens+elapsed*bucket.rate)
-				bucket.lastRefill = now
-
-				if bucket.tokens >= 1.0 {
-					bucket.tokens--
-					allowed = true
-					remaining = int(bucket.tokens)
-				} else {
-					remaining = 0
-				}
-				bucket.mutex.Unlock()
-
-			case config.FixedWindow:
-				counter, exists := counters[key]
-				if !exists || now.Sub(counter.windowStart) >= c.Window {
-					counter = &WindowCounter{
-						count:       0,
-						windowStart: now,
-					}
-					counters[key] = counter
-				}
-
-				counter.mutex.Lock()
-				if counter.count < c.Rate {
-					counter.count++
-					allowed = true
-					remaining = c.Rate - counter.count
-				} else {
-					remaining = 0
-				}
-				resetTime = counter.windowStart.Add(c.Window)
-				counter.mutex.Unlock()
-
-			case config.SlidingWindow:
-				window, exists := slidingWindows[key]
-				if !exists {
-					window = []time.Time{}
-				}
-
-				// Remove expired entries
-				cutoff := now.Add(-c.Window)
-				newWindow := window[:0]
-				for _, t := range window {
-					if t.After(cutoff) {
-						newWindow = append(newWindow, t)
-					}
-				}
-
-				if len(newWindow) < c.Rate {
-					newWindow = append(newWindow, now)
-					allowed = true
-					remaining = c.Rate - len(newWindow)
-				} else {
-					remaining = 0
-				}
-
-				slidingWindows[key] = newWindow
-				if len(newWindow) > 0 {
-					resetTime = newWindow[0].Add(c.Window)
-				}
-			}
+			allowed, remaining, resetTime := store.CheckAndRecord(r.Context(), key, now)
 
 			if c.IncludeHeaders {
 				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(c.Rate))
@@ -169,12 +76,11 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 				reg.Counter("ratelimit_rejected_total", "key").WithLabelValues(key).Inc()
 				w.Header().Set("Retry-After", strconv.Itoa(int(time.Until(resetTime).Seconds())))
 				detail := problem.NewDetail(c.StatusCode, c.Message)
-				_ = detail.Render(w) // Best effort - client may have disconnected
+				_ = detail.Render(w)
 				return
 			}
 
 			reg.Counter("ratelimit_allowed_total", "key").WithLabelValues(key).Inc()
-
 			next.ServeHTTP(w, r)
 		})
 	}

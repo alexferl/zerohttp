@@ -42,11 +42,11 @@ func TestDefaultKeyExtractorFunction(t *testing.T) {
 		xForwardedFor string
 		expectedKey   string
 	}{
-		{"no forwarded header", "192.168.1.1:8080", "", "192.168.1.1:8080"},
+		{"no forwarded header", "192.168.1.1:8080", "", "192.168.1.1"},
 		{"with forwarded header", "192.168.1.1:8080", "203.0.113.1", "203.0.113.1"},
-		{"empty forwarded header", "192.168.1.1:8080", "", "192.168.1.1:8080"},
-		{"forwarded with multiple IPs", "192.168.1.1:8080", "203.0.113.1, 198.51.100.1", "203.0.113.1, 198.51.100.1"},
-		{"IPv6 address", "[::1]:8080", "", "[::1]:8080"},
+		{"empty forwarded header", "192.168.1.1:8080", "", "192.168.1.1"},
+		{"forwarded with multiple IPs", "192.168.1.1:8080", "203.0.113.1, 198.51.100.1", "203.0.113.1"},
+		{"IPv6 address", "[::1]:8080", "", "::1"},
 		{"IPv6 with forwarded", "[::1]:8080", "2001:db8::1", "2001:db8::1"},
 	}
 
