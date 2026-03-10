@@ -209,8 +209,8 @@ func (cbm *circuitBreakerMiddleware) GetState(key string) CircuitState {
 
 // Reset manually resets a circuit breaker (for admin operations)
 func (cbm *circuitBreakerMiddleware) Reset(key string) {
-	cbm.mu.RLock()
-	defer cbm.mu.RUnlock()
+	cbm.mu.Lock()
+	defer cbm.mu.Unlock()
 
 	if c, exists := cbm.circuits[key]; exists {
 		c.mu.Lock()
