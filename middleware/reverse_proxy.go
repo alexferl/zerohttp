@@ -18,10 +18,11 @@ import (
 
 // reverseProxy manages the proxy state including load balancing
 type reverseProxy struct {
-	cfg       config.ReverseProxyConfig
-	backends  []*backend
-	current   uint64 // for round-robin
-	transport http.RoundTripper
+	cfg        config.ReverseProxyConfig
+	backends   []*backend
+	current    uint64 // for round-robin
+	transport  http.RoundTripper
+	cancelFunc context.CancelFunc // For stopping health checks on shutdown
 }
 
 // proxyResponseRecorder wraps http.ResponseWriter to capture status code
@@ -72,7 +73,9 @@ func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler
 	}
 
 	if cfg.HealthCheckInterval > 0 {
-		go rp.healthCheckLoop()
+		ctx, cancel := context.WithCancel(context.Background())
+		rp.cancelFunc = cancel
+		go rp.healthCheckLoop(ctx)
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -290,23 +293,28 @@ func (rp *reverseProxy) applyModifications(r *http.Request) {
 }
 
 // healthCheckLoop periodically checks backend health
-func (rp *reverseProxy) healthCheckLoop() {
+func (rp *reverseProxy) healthCheckLoop(ctx context.Context) {
 	ticker := time.NewTicker(rp.cfg.HealthCheckInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		rp.checkHealth()
+	for {
+		select {
+		case <-ticker.C:
+			rp.checkHealth(ctx)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
 // checkHealth performs health checks on all backends
-func (rp *reverseProxy) checkHealth() {
+func (rp *reverseProxy) checkHealth(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, b := range rp.backends {
 		wg.Add(1)
 		go func(be *backend) {
 			defer wg.Done()
-			healthy := rp.checkBackendHealth(be)
+			healthy := rp.checkBackendHealth(ctx, be)
 			if healthy {
 				atomic.StoreInt32(&be.healthy, 1)
 			} else {
@@ -318,17 +326,17 @@ func (rp *reverseProxy) checkHealth() {
 }
 
 // checkBackendHealth checks a single backend
-func (rp *reverseProxy) checkBackendHealth(b *backend) bool {
+func (rp *reverseProxy) checkBackendHealth(ctx context.Context, b *backend) bool {
 	client := &http.Client{
 		Timeout:   rp.cfg.HealthCheckTimeout,
 		Transport: rp.transport,
 	}
 
 	healthURL := b.targetURL.Scheme + "://" + b.targetURL.Host + rp.cfg.HealthCheckPath
-	ctx, cancel := context.WithTimeout(context.Background(), rp.cfg.HealthCheckTimeout)
+	reqCtx, cancel := context.WithTimeout(ctx, rp.cfg.HealthCheckTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, healthURL, nil)
 	if err != nil {
 		return false
 	}

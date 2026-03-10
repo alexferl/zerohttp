@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -645,6 +646,55 @@ func TestReverseProxy_QueryParams(t *testing.T) {
 	mw(nil).ServeHTTP(rec, req)
 
 	zhtest.AssertWith(t, rec).Status(http.StatusOK).Body("foo=bar&baz=qux")
+}
+
+func TestReverseProxy_HealthCheckContextCancellation(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	// Create a context that we can cancel
+	_, cancel := context.WithCancel(context.Background())
+
+	// Create reverse proxy with health checks
+	mw := ReverseProxy(config.ReverseProxyConfig{
+		Targets: []config.Backend{
+			{Target: upstream.URL, Healthy: true},
+		},
+		HealthCheckInterval: 50 * time.Millisecond,
+		HealthCheckPath:     "/health",
+		HealthCheckTimeout:  100 * time.Millisecond,
+	})
+
+	handler := mw(nil)
+
+	// Make a request to ensure handler is working
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	// Wait for a health check cycle
+	time.Sleep(75 * time.Millisecond)
+
+	// Cancel the context - this should stop health checks
+	cancel()
+
+	// Wait a bit and verify no panic occurs
+	time.Sleep(100 * time.Millisecond)
+
+	// Handler should still work after context cancellation
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected status 200 after context cancel, got %d", rec2.Code)
+	}
 }
 
 func BenchmarkReverseProxy(b *testing.B) {
