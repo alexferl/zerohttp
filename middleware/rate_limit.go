@@ -53,7 +53,7 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
 			for _, exemptPath := range c.ExemptPaths {
-				if r.URL.Path == exemptPath {
+				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return
 				}
