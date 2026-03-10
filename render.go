@@ -59,6 +59,9 @@ type Renderer interface {
 }
 
 // defaultRenderer implements the Renderer interface with standard HTTP response handling
+// Ensure defaultRenderer implements Renderer
+var _ Renderer = (*defaultRenderer)(nil)
+
 type defaultRenderer struct{}
 
 // JSON writes a JSON response with the given status code and data

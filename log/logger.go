@@ -50,6 +50,9 @@ func P(value any) Field {
 }
 
 // DefaultLogger is a simple implementation using Go's standard log package
+// Ensure DefaultLogger implements Logger
+var _ Logger = (*DefaultLogger)(nil)
+
 type DefaultLogger struct {
 	logger *log.Logger
 	fields []Field

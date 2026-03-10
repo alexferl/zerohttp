@@ -44,6 +44,9 @@ type Validator interface {
 }
 
 // defaultValidator implements the Validator interface
+// Ensure defaultValidator implements Validator
+var _ Validator = (*defaultValidator)(nil)
+
 type defaultValidator struct {
 	mu         sync.RWMutex
 	validators map[string]ValidationFunc

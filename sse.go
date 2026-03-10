@@ -358,6 +358,9 @@ type SSEReplayer interface {
 
 // InMemoryReplayer stores events in memory with a circular buffer.
 // Events can be limited by max count and/or TTL.
+// Ensure InMemoryReplayer implements SSEReplayer
+var _ SSEReplayer = (*InMemoryReplayer)(nil)
+
 type InMemoryReplayer struct {
 	events    []storedEvent
 	maxEvents int

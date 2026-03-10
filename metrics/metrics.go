@@ -134,6 +134,9 @@ func SafeRegistry(reg Registry) Registry {
 	return reg
 }
 
+// Ensure nopRegistry implements Registry
+var _ Registry = (*nopRegistry)(nil)
+
 // nopRegistry is a no-op registry that does nothing.
 type nopRegistry struct{}
 
@@ -144,12 +147,18 @@ func (nopRegistry) RegisterCollector(Collector)                      {}
 func (nopRegistry) UnregisterCollector(Collector)                    {}
 func (nopRegistry) Gather() []MetricFamily                           { return nil }
 
+// Ensure nopCounter implements Counter
+var _ Counter = (*nopCounter)(nil)
+
 // nopCounter is a no-op counter.
 type nopCounter struct{}
 
 func (nopCounter) Inc()                              {}
 func (nopCounter) Add(float64)                       {}
 func (nopCounter) WithLabelValues(...string) Counter { return nopCounter{} }
+
+// Ensure nopGauge implements Gauge
+var _ Gauge = (*nopGauge)(nil)
 
 // nopGauge is a no-op gauge.
 type nopGauge struct{}
@@ -160,6 +169,9 @@ func (nopGauge) Set(float64)                     {}
 func (nopGauge) Add(float64)                     {}
 func (nopGauge) Sub(float64)                     {}
 func (nopGauge) WithLabelValues(...string) Gauge { return nopGauge{} }
+
+// Ensure nopHistogram implements Histogram
+var _ Histogram = (*nopHistogram)(nil)
 
 // nopHistogram is a no-op histogram.
 type nopHistogram struct{}
@@ -198,6 +210,9 @@ var DefaultRegistryConfig = RegistryConfig{
 }
 
 // registry is the internal implementation of Registry.
+// Ensure registry implements Registry
+var _ Registry = (*registry)(nil)
+
 type registry struct {
 	mu             sync.RWMutex
 	counters       map[string]*counterVec
@@ -206,6 +221,9 @@ type registry struct {
 	collectors     []Collector
 	maxCardinality int // 0 = unlimited, default 1000
 }
+
+// Ensure counterVec implements Counter
+var _ Counter = (*counterVec)(nil)
 
 // counterVec holds counters with different label values.
 type counterVec struct {
@@ -216,6 +234,9 @@ type counterVec struct {
 	insertOrder    []string // tracks insertion order for LRU eviction
 	maxCardinality int      // 0 = unlimited
 }
+
+// Ensure counter implements Counter
+var _ Counter = (*counter)(nil)
 
 // counter is a single counter instance.
 type counter struct {
@@ -279,6 +300,9 @@ func (cv *counterVec) WithLabelValues(values ...string) Counter {
 	return c
 }
 
+// Ensure gaugeVec implements Gauge
+var _ Gauge = (*gaugeVec)(nil)
+
 // gaugeVec holds gauges with different label values.
 type gaugeVec struct {
 	name           string
@@ -288,6 +312,9 @@ type gaugeVec struct {
 	insertOrder    []string // tracks insertion order for LRU eviction
 	maxCardinality int      // 0 = unlimited
 }
+
+// Ensure gauge implements Gauge
+var _ Gauge = (*gauge)(nil)
 
 // gauge is a single gauge instance.
 // Values are stored with fixed-point precision (3 decimal places) using int64.
@@ -375,6 +402,9 @@ func (gv *gaugeVec) WithLabelValues(values ...string) Gauge {
 	return g
 }
 
+// Ensure histogramVec implements Histogram
+var _ Histogram = (*histogramVec)(nil)
+
 // histogramVec holds histograms with different label values.
 type histogramVec struct {
 	name           string
@@ -385,6 +415,9 @@ type histogramVec struct {
 	insertOrder    []string // tracks insertion order for LRU eviction
 	maxCardinality int      // 0 = unlimited
 }
+
+// Ensure histogram implements Histogram
+var _ Histogram = (*histogram)(nil)
 
 // histogram is a single histogram instance.
 type histogram struct {

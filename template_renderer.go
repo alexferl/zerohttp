@@ -12,6 +12,9 @@ type TemplateRenderer interface {
 }
 
 // TemplateManager implements TemplateRenderer using html/template
+// Ensure TemplateManager implements TemplateRenderer
+var _ TemplateRenderer = (*TemplateManager)(nil)
+
 type TemplateManager struct {
 	templates *template.Template
 }

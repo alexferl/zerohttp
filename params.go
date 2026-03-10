@@ -30,6 +30,9 @@ type ParamExtractor interface {
 }
 
 // defaultParamsExtractor implements the ParamExtractor interface
+// Ensure defaultParamsExtractor implements ParamExtractor
+var _ ParamExtractor = (*defaultParamsExtractor)(nil)
+
 type defaultParamsExtractor struct{}
 
 // Param gets a path parameter by name as a string.

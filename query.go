@@ -20,6 +20,9 @@ type QueryExtractor interface {
 }
 
 // defaultQueryExtractor implements the QueryExtractor interface
+// Ensure defaultQueryExtractor implements QueryExtractor
+var _ QueryExtractor = (*defaultQueryExtractor)(nil)
+
 type defaultQueryExtractor struct{}
 
 // QueryParam gets a query parameter by name as a string.
