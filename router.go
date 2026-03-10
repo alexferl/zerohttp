@@ -443,11 +443,13 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		}
 
 		if file, err := filesystem.Open(strings.TrimPrefix(cleanPath, "/")); err == nil {
-			stat, err := file.Stat()
-			if closeErr := file.Close(); closeErr != nil {
-				r.logger.Error("Failed to close file", log.F("error", closeErr), log.F("path", cleanPath))
-			}
+			defer func() {
+				if closeErr := file.Close(); closeErr != nil {
+					r.logger.Error("Failed to close file", log.F("error", closeErr), log.F("path", cleanPath))
+				}
+			}()
 
+			stat, err := file.Stat()
 			if err == nil && !stat.IsDir() {
 				http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
 				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
