@@ -168,8 +168,8 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 
 			claims, err := c.TokenStore.Validate(tokenString)
 			if err != nil {
-				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("not_configured").Inc()
-				handleJWTError(w, r, errTokenStoreNotConfigured, errorHandler)
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
+				handleJWTError(w, r, errInvalidToken, errorHandler)
 				return
 			}
 
