@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +20,7 @@ func TestReverseProxy_SingleTarget(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 	})
 
@@ -43,7 +42,7 @@ func TestReverseProxy_StripPrefix(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:      upstream.URL,
 		StripPrefix: "/api",
 	})
@@ -62,7 +61,7 @@ func TestReverseProxy_StripPrefixRoot(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:      upstream.URL,
 		StripPrefix: "/api",
 	})
@@ -81,7 +80,7 @@ func TestReverseProxy_AddPrefix(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:    upstream.URL,
 		AddPrefix: "/v2",
 	})
@@ -100,7 +99,7 @@ func TestReverseProxy_StripAndAddPrefix(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:      upstream.URL,
 		StripPrefix: "/api",
 		AddPrefix:   "/v2",
@@ -120,7 +119,7 @@ func TestReverseProxy_Rewrite(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 		Rewrites: []config.RewriteRule{
 			{Pattern: "/old/*", Replacement: "/new/path"},
@@ -141,7 +140,7 @@ func TestReverseProxy_SetHeaders(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 		SetHeaders: map[string]string{
 			"X-Custom": "custom-value",
@@ -166,7 +165,7 @@ func TestReverseProxy_RemoveHeaders(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:        upstream.URL,
 		RemoveHeaders: []string{"X-Remove"},
 	})
@@ -189,7 +188,7 @@ func TestReverseProxy_ForwardHeaders(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:         upstream.URL,
 		ForwardHeaders: true,
 	})
@@ -216,7 +215,7 @@ func TestReverseProxy_ExemptPaths(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:      upstream.URL,
 		ExemptPaths: []string{"/health", "/metrics"},
 	})
@@ -253,7 +252,7 @@ func TestReverseProxy_ModifyRequest(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 		ModifyRequest: func(r *http.Request) {
 			r.Header.Set("X-Modified", "modified-value")
@@ -276,7 +275,7 @@ func TestReverseProxy_ModifyResponse(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 		ModifyResponse: func(r *http.Response) error {
 			r.Header.Set("X-Modified", "modified")
@@ -293,7 +292,7 @@ func TestReverseProxy_ModifyResponse(t *testing.T) {
 }
 
 func TestReverseProxy_ErrorHandler(t *testing.T) {
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: "http://localhost:1",
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -310,7 +309,7 @@ func TestReverseProxy_ErrorHandler(t *testing.T) {
 }
 
 func TestReverseProxy_FallbackHandler(t *testing.T) {
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Targets: []config.Backend{
 			{Target: "http://localhost:1", Healthy: false},
 		},
@@ -340,7 +339,7 @@ func TestReverseProxy_LoadBalancer_RoundRobin(t *testing.T) {
 	}))
 	defer upstream2.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Targets: []config.Backend{
 			{Target: upstream1.URL, Healthy: true},
 			{Target: upstream2.URL, Healthy: true},
@@ -382,7 +381,7 @@ func TestReverseProxy_LoadBalancer_Random(t *testing.T) {
 	}))
 	defer upstream2.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Targets: []config.Backend{
 			{Target: upstream1.URL, Healthy: true},
 			{Target: upstream2.URL, Healthy: true},
@@ -413,7 +412,7 @@ func TestReverseProxy_LoadBalancer_LeastConnections(t *testing.T) {
 	}))
 	defer upstream2.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Targets: []config.Backend{
 			{Target: upstream1.URL, Healthy: true},
 			{Target: upstream2.URL, Healthy: true},
@@ -468,7 +467,7 @@ func TestReverseProxy_HealthCheck(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Targets: []config.Backend{
 			{Target: upstream.URL, Healthy: true},
 		},
@@ -506,7 +505,7 @@ func TestReverseProxy_FlushInterval(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:        upstream.URL,
 		FlushInterval: 100 * time.Millisecond,
 	})
@@ -530,7 +529,7 @@ func TestReverseProxy_CustomTransport(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target:    upstream.URL,
 		Transport: customTransport,
 	})
@@ -556,7 +555,7 @@ func TestReverseProxy_WithNextHandler(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 	})
 
@@ -578,7 +577,7 @@ func TestReverseProxy_WithNextHandler(t *testing.T) {
 }
 
 func TestReverseProxy_NoHealthyBackends(t *testing.T) {
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Targets: []config.Backend{
 			{Target: "http://localhost:1", Healthy: false},
 		},
@@ -601,7 +600,7 @@ func TestReverseProxy_ResponseHeaders(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 	})
 
@@ -619,7 +618,7 @@ func TestReverseProxy_PostBody(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 	})
 
@@ -637,7 +636,7 @@ func TestReverseProxy_QueryParams(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 	})
 
@@ -648,17 +647,14 @@ func TestReverseProxy_QueryParams(t *testing.T) {
 	zhtest.AssertWith(t, rec).Status(http.StatusOK).Body("foo=bar&baz=qux")
 }
 
-func TestReverseProxy_HealthCheckContextCancellation(t *testing.T) {
+func TestReverseProxy_HealthCheckCleanup(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer upstream.Close()
 
-	// Create a context that we can cancel
-	_, cancel := context.WithCancel(context.Background())
-
 	// Create reverse proxy with health checks
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, cleanup := ReverseProxy(config.ReverseProxyConfig{
 		Targets: []config.Backend{
 			{Target: upstream.URL, Healthy: true},
 		},
@@ -681,19 +677,19 @@ func TestReverseProxy_HealthCheckContextCancellation(t *testing.T) {
 	// Wait for a health check cycle
 	time.Sleep(75 * time.Millisecond)
 
-	// Cancel the context - this should stop health checks
-	cancel()
+	// Call cleanup - this should stop health checks
+	cleanup()
 
 	// Wait a bit and verify no panic occurs
 	time.Sleep(100 * time.Millisecond)
 
-	// Handler should still work after context cancellation
+	// Handler should still work after cleanup
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
 	if rec2.Code != http.StatusOK {
-		t.Fatalf("expected status 200 after context cancel, got %d", rec2.Code)
+		t.Fatalf("expected status 200 after cleanup, got %d", rec2.Code)
 	}
 }
 
@@ -703,7 +699,7 @@ func BenchmarkReverseProxy(b *testing.B) {
 	}))
 	defer upstream.Close()
 
-	mw := ReverseProxy(config.ReverseProxyConfig{
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
 		Target: upstream.URL,
 	})
 

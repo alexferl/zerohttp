@@ -45,8 +45,10 @@ type backend struct {
 	proxy       *httputil.ReverseProxy
 }
 
-// ReverseProxy creates a reverse proxy middleware from the given configuration
-func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler {
+// ReverseProxy creates a reverse proxy middleware from the given configuration.
+// It returns the middleware handler and a cleanup function to stop health checks.
+// The cleanup function should be called on server shutdown to prevent goroutine leaks.
+func ReverseProxy(cfg config.ReverseProxyConfig) (func(http.Handler) http.Handler, func()) {
 	rp := &reverseProxy{
 		cfg:       cfg,
 		transport: cfg.Transport,
@@ -76,6 +78,12 @@ func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler
 		ctx, cancel := context.WithCancel(context.Background())
 		rp.cancelFunc = cancel
 		go rp.healthCheckLoop(ctx)
+	}
+
+	cleanup := func() {
+		if rp.cancelFunc != nil {
+			rp.cancelFunc()
+		}
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -113,7 +121,7 @@ func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler
 			reg.Counter("proxy_requests_total", "target", "status").WithLabelValues(b.Target, strconv.Itoa(rec.statusCode)).Inc()
 			reg.Histogram("proxy_request_duration_seconds", []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}, "target").WithLabelValues(b.Target).Observe(duration)
 		})
-	}
+	}, cleanup
 }
 
 // initBackend initializes a single backend
