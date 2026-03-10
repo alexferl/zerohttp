@@ -213,9 +213,28 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			for _, header := range requiredHeaders {
-				if header == "host" {
-					if r.Host == "" {
+			// For presigned URLs, skip required header checks since the timestamp
+			// comes from the URL credential, not headers. The signature validation
+			// will still ensure the URL hasn't been tampered with.
+			if !parsed.IsPresigned {
+				for _, header := range requiredHeaders {
+					if header == "host" {
+						if r.Host == "" {
+							if auditLogger != nil {
+								auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "missing_header")
+							}
+							reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
+							handleHMACError(w, r, &HMACAuthError{
+								Type:   errMissingHeader.Type,
+								Title:  errMissingHeader.Title,
+								Status: errMissingHeader.Status,
+								Detail: "Missing required header: host",
+							}, errorHandler)
+							return
+						}
+						continue
+					}
+					if r.Header.Get(header) == "" {
 						if auditLogger != nil {
 							auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "missing_header")
 						}
@@ -224,24 +243,10 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 							Type:   errMissingHeader.Type,
 							Title:  errMissingHeader.Title,
 							Status: errMissingHeader.Status,
-							Detail: "Missing required header: host",
+							Detail: "Missing required header: " + header,
 						}, errorHandler)
 						return
 					}
-					continue
-				}
-				if r.Header.Get(header) == "" {
-					if auditLogger != nil {
-						auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "missing_header")
-					}
-					reg.Counter("hmac_auth_requests_total", "result").WithLabelValues("invalid").Inc()
-					handleHMACError(w, r, &HMACAuthError{
-						Type:   errMissingHeader.Type,
-						Title:  errMissingHeader.Title,
-						Status: errMissingHeader.Status,
-						Detail: "Missing required header: " + header,
-					}, errorHandler)
-					return
 				}
 			}
 
@@ -452,10 +457,6 @@ func parsePresignedURLParams(r *http.Request) (*parsedAuth, error) {
 		return nil, errors.New("invalid signature encoding")
 	}
 
-	// For presigned URLs, set the X-Timestamp header from the credential timestamp
-	// so that required header checks pass
-	r.Header.Set("X-Timestamp", ts.Format(time.RFC3339))
-
 	return &parsedAuth{
 		Algorithm:   algo,
 		AccessKeyID: accessKeyID,
@@ -582,7 +583,7 @@ func buildCanonicalRequest(
 	b.WriteString(buildCanonicalQueryString(query))
 	b.WriteByte('\n')
 
-	signedHeaders := buildSignedHeaders(r, parsed.Headers, timestampHeader)
+	signedHeaders := buildSignedHeaders(r, parsed.Headers, timestampHeader, parsed.Timestamp)
 	b.WriteString(signedHeaders)
 	b.WriteString("\n\n") // Two newlines: end headers section + blank line
 
@@ -616,7 +617,8 @@ func buildCanonicalQueryString(values url.Values) string {
 }
 
 // buildSignedHeaders creates the canonical headers string
-func buildSignedHeaders(r *http.Request, headers []string, timestampHeader string) string {
+// For presigned URLs, the timestamp from parsedAuth is used instead of the request header
+func buildSignedHeaders(r *http.Request, headers []string, timestampHeader string, presignedTimestamp time.Time) string {
 	var parts []string
 
 	for _, h := range headers {
@@ -625,8 +627,12 @@ func buildSignedHeaders(r *http.Request, headers []string, timestampHeader strin
 
 		if h == "host" {
 			value = r.Host
-		} else {
+		} else if presignedTimestamp.IsZero() || h != strings.ToLower(timestampHeader) {
+			// Normal case: get header from request
 			value = r.Header.Get(h)
+		} else {
+			// Presigned URL case: use the timestamp from the credential
+			value = presignedTimestamp.Format(time.RFC3339)
 		}
 
 		value = strings.TrimSpace(value)
