@@ -283,8 +283,8 @@ func TestRateLimitDefaultKeyExtractor(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	key = config.DefaultKeyExtractor(req)
-	if key != "127.0.0.1:12345" {
-		t.Errorf("expected key '127.0.0.1:12345', got '%s'", key)
+	if key != "127.0.0.1" {
+		t.Errorf("expected key '127.0.0.1', got '%s'", key)
 	}
 }
 

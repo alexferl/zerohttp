@@ -1,9 +1,17 @@
 package config
 
 import (
+	"context"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 )
+
+// RateLimitStore defines the interface for rate limit storage backends.
+type RateLimitStore interface {
+	CheckAndRecord(ctx context.Context, key string, now time.Time) (bool, int, time.Time)
+}
 
 // RateLimitAlgorithm defines the rate limiting algorithm
 type RateLimitAlgorithm string
@@ -38,15 +46,35 @@ type RateLimitConfig struct {
 	IncludeHeaders bool
 	// ExemptPaths contains paths to skip rate limiting
 	ExemptPaths []string
+	// Store is the storage backend for rate limiting.
+	// If nil, a secure in-memory store is used.
+	Store RateLimitStore
+	// MaxKeys limits the number of unique keys stored in the default
+	// in-memory store. Defaults to 10000. Set to 0 for unlimited (not recommended).
+	MaxKeys int
 }
 
-// DefaultKeyExtractor extracts IP address as the rate limit key
+// DefaultKeyExtractor extracts IP address as the rate limit key.
+// It strips the port from RemoteAddr so all connections from the same IP
+// share the same rate limit. For X-Forwarded-For, it uses the first IP.
 func DefaultKeyExtractor(r *http.Request) string {
-	// Use X-Forwarded-For if available, otherwise RemoteAddr
+	var ip string
+
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
+		// X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
+		// Use the first one (client IP)
+		ip, _, _ = strings.Cut(xff, ",")
+		ip = strings.TrimSpace(ip)
+	} else {
+		ip = r.RemoteAddr
 	}
-	return r.RemoteAddr
+
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		return host
+	}
+
+	// If SplitHostPort fails (no port), return as-is
+	return ip
 }
 
 // DefaultRateLimitConfig contains the default values for rate limit configuration.
