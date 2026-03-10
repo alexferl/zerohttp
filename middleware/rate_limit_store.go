@@ -85,7 +85,6 @@ func (s *InMemoryStore) CheckAndRecord(ctx context.Context, key string, now time
 
 func (s *InMemoryStore) checkTokenBucket(key string, now time.Time) (bool, int, time.Time) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	entry, exists := s.buckets[key]
 	if !exists || now.Sub(entry.lastAccess) > s.window {
@@ -108,6 +107,10 @@ func (s *InMemoryStore) checkTokenBucket(key string, now time.Time) (bool, int, 
 		entry.lastAccess = now
 	}
 
+	// Release store lock before acquiring entry lock to maintain consistent
+	// lock ordering and prevent potential deadlocks
+	s.mu.Unlock()
+
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
@@ -127,7 +130,6 @@ func (s *InMemoryStore) checkTokenBucket(key string, now time.Time) (bool, int, 
 
 func (s *InMemoryStore) checkFixedWindow(key string, now time.Time) (bool, int, time.Time) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	entry, exists := s.counters[key]
 	if !exists || now.Sub(entry.windowStart) >= s.window {
@@ -144,10 +146,16 @@ func (s *InMemoryStore) checkFixedWindow(key string, now time.Time) (bool, int, 
 			lastAccess:  now,
 		}
 		s.counters[key] = entry
+		s.mu.Unlock()
 		return true, s.rate - 1, now.Add(s.window)
 	}
 
 	entry.lastAccess = now
+
+	// Release store lock before acquiring entry lock to maintain consistent
+	// lock ordering and prevent potential deadlocks
+	s.mu.Unlock()
+
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
@@ -161,7 +169,6 @@ func (s *InMemoryStore) checkFixedWindow(key string, now time.Time) (bool, int, 
 
 func (s *InMemoryStore) checkSlidingWindow(key string, now time.Time) (bool, int, time.Time) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	entry, exists := s.windows[key]
 	if !exists || now.Sub(entry.lastAccess) > s.window {
@@ -177,11 +184,17 @@ func (s *InMemoryStore) checkSlidingWindow(key string, now time.Time) (bool, int
 			lastAccess: now,
 		}
 		s.windows[key] = entry
+		s.mu.Unlock()
 		return true, s.rate - 1, now.Add(s.window)
 	}
 
-	entry.mutex.Lock()
 	entry.lastAccess = now
+
+	// Release store lock before acquiring entry lock to maintain consistent
+	// lock ordering and prevent potential deadlocks
+	s.mu.Unlock()
+
+	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
 	// Remove expired timestamps
