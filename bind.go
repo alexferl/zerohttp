@@ -81,6 +81,8 @@ func (fh *FileHeader) Open() (multipart.File, error) {
 
 // ReadAll reads the entire file content into a byte slice.
 // This is a convenience method that opens, reads, and closes the file.
+// Uses the Size field to limit reading; returns an error if actual file size
+// exceeds the declared Size to prevent OOM attacks.
 // Note: This loads the entire file into memory; use Open() for large files.
 func (fh *FileHeader) ReadAll() (data []byte, err error) {
 	file, err := fh.Open()
@@ -92,6 +94,9 @@ func (fh *FileHeader) ReadAll() (data []byte, err error) {
 			err = cerr
 		}
 	}()
+	if fh.Size > 0 {
+		return io.ReadAll(io.LimitReader(file, fh.Size))
+	}
 	return io.ReadAll(file)
 }
 
