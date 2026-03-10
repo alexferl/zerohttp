@@ -114,7 +114,7 @@ func (r *defaultRenderer) Stream(w http.ResponseWriter, statusCode int, contentT
 // File sends the contents of a file as the response.
 // It automatically sets the Content-Type header based on the file extension
 // and handles file opening/closing. Also sets ETag and Content-Length headers.
-func (r *defaultRenderer) File(w http.ResponseWriter, req *http.Request, filename string) error {
+func (r *defaultRenderer) File(w http.ResponseWriter, req *http.Request, filename string) (err error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return err
@@ -158,7 +158,7 @@ func (r *defaultRenderer) File(w http.ResponseWriter, req *http.Request, filenam
 	w.Header().Set(HeaderContentLength, strconv.FormatInt(fileInfo.Size(), 10))
 
 	http.ServeContent(w, req, filepath.Base(filename), fileInfo.ModTime(), file)
-	return err
+	return
 }
 
 // NoContent writes a 204 No Content response with no body

@@ -27,6 +27,9 @@ func (rw *ResponseWriter) WriteHeader(code int) {
 	}
 	rw.statusCode = code
 	rw.headerWritten = true
+	// WriteHeader does not return an error per http.ResponseWriter interface.
+	// Once headers are written, the connection is committed and errors cannot
+	// be handled meaningfully at this layer.
 	rw.ResponseWriter.WriteHeader(code)
 }
 
