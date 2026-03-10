@@ -20,7 +20,7 @@ import (
 type reverseProxy struct {
 	cfg        config.ReverseProxyConfig
 	backends   []*backend
-	current    uint64 // for round-robin
+	current    atomic.Uint64 // for round-robin
 	transport  http.RoundTripper
 	cancelFunc context.CancelFunc // For stopping health checks on shutdown
 }
@@ -40,8 +40,8 @@ func (rec *proxyResponseRecorder) WriteHeader(code int) {
 type backend struct {
 	config.Backend
 	targetURL   *url.URL
-	activeConns int64
-	healthy     int32 // atomic access
+	activeConns atomic.Int64
+	healthy     atomic.Int32
 	proxy       *httputil.ReverseProxy
 }
 
@@ -100,8 +100,8 @@ func ReverseProxy(cfg config.ReverseProxyConfig) func(http.Handler) http.Handler
 			}
 
 			if cfg.LoadBalancer == config.LeastConnections {
-				atomic.AddInt64(&b.activeConns, 1)
-				defer atomic.AddInt64(&b.activeConns, -1)
+				b.activeConns.Add(1)
+				defer b.activeConns.Add(-1)
 			}
 
 			rec := &proxyResponseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
@@ -160,7 +160,7 @@ func (rp *reverseProxy) initBackend(target string, weight int, healthy bool) {
 		proxy:     proxy,
 	}
 	if healthy {
-		atomic.StoreInt32(&b.healthy, 1)
+		b.healthy.Store(1)
 	}
 	rp.backends = append(rp.backends, b)
 }
@@ -185,7 +185,7 @@ func (rp *reverseProxy) roundRobin() *backend {
 	if len(healthy) == 0 {
 		return nil
 	}
-	next := atomic.AddUint64(&rp.current, 1) - 1
+	next := rp.current.Add(1) - 1
 	return healthy[int(next)%len(healthy)]
 }
 
@@ -209,7 +209,7 @@ func (rp *reverseProxy) leastConnections() *backend {
 	var selected *backend
 	var minConns int64 = -1
 	for _, b := range healthy {
-		conns := atomic.LoadInt64(&b.activeConns)
+		conns := b.activeConns.Load()
 		if minConns == -1 || conns < minConns {
 			selected = b
 			minConns = conns
@@ -222,7 +222,7 @@ func (rp *reverseProxy) leastConnections() *backend {
 func (rp *reverseProxy) healthyBackends() []*backend {
 	var healthy []*backend
 	for _, b := range rp.backends {
-		if atomic.LoadInt32(&b.healthy) == 1 {
+		if b.healthy.Load() == 1 {
 			healthy = append(healthy, b)
 		}
 	}
@@ -316,9 +316,9 @@ func (rp *reverseProxy) checkHealth(ctx context.Context) {
 			defer wg.Done()
 			healthy := rp.checkBackendHealth(ctx, be)
 			if healthy {
-				atomic.StoreInt32(&be.healthy, 1)
+				be.healthy.Store(1)
 			} else {
-				atomic.StoreInt32(&be.healthy, 0)
+				be.healthy.Store(0)
 			}
 		}(b)
 	}
