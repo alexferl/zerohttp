@@ -197,14 +197,16 @@ func (c *circuit) recordResult(r *http.Request, statusCode int, reg metrics.Regi
 // GetState returns the current state of a circuit (for monitoring)
 func (cbm *circuitBreakerMiddleware) GetState(key string) CircuitState {
 	cbm.mu.RLock()
-	defer cbm.mu.RUnlock()
+	c, exists := cbm.circuits[key]
+	cbm.mu.RUnlock()
 
-	if c, exists := cbm.circuits[key]; exists {
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		return c.state
+	if !exists {
+		return StateClosed
 	}
-	return StateClosed
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.state
 }
 
 // Reset manually resets a circuit breaker (for admin operations)
