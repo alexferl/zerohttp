@@ -43,6 +43,9 @@ type Validator interface {
 	Register(name string, fn ValidationFunc)
 }
 
+// Ensure defaultValidator implements Validator
+var _ Validator = (*defaultValidator)(nil)
+
 // defaultValidator implements the Validator interface
 type defaultValidator struct {
 	mu         sync.RWMutex

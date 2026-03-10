@@ -29,6 +29,9 @@ type ParamExtractor interface {
 	ParamOrDefault(r *http.Request, name, defaultVal string) string
 }
 
+// Ensure defaultParamsExtractor implements ParamExtractor
+var _ ParamExtractor = (*defaultParamsExtractor)(nil)
+
 // defaultParamsExtractor implements the ParamExtractor interface
 type defaultParamsExtractor struct{}
 

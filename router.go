@@ -92,6 +92,9 @@ type headResponseWriter struct {
 	http.ResponseWriter
 }
 
+// Ensure headResponseWriter implements http.ResponseWriter
+var _ http.ResponseWriter = (*headResponseWriter)(nil)
+
 func (h *headResponseWriter) Write(p []byte) (int, error) {
 	// Discard body writes for HEAD requests
 	return len(p), nil
@@ -203,6 +206,9 @@ type Router interface {
 	// and 404/405 error responses.
 	SetConfig(config config.Config)
 }
+
+// Ensure defaultRouter implements Router
+var _ Router = (*defaultRouter)(nil)
 
 // defaultRouter is the concrete implementation of the Router interface.
 // It wraps Go's standard http.ServeMux and adds method-specific routing,

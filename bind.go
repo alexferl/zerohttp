@@ -45,6 +45,9 @@ type Binder interface {
 	Query(r *http.Request, dst any) error
 }
 
+// Ensure defaultBinder implements Binder
+var _ Binder = (*defaultBinder)(nil)
+
 // defaultBinder implements the Binder interface with standard decoding
 type defaultBinder struct{}
 

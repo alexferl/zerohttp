@@ -49,6 +49,9 @@ func P(value any) Field {
 	return Field{Key: "panic", Value: value}
 }
 
+// Ensure DefaultLogger implements Logger
+var _ Logger = (*DefaultLogger)(nil)
+
 // DefaultLogger is a simple implementation using Go's standard log package
 type DefaultLogger struct {
 	logger *log.Logger

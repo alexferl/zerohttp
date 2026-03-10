@@ -58,6 +58,9 @@ type Renderer interface {
 	ProblemDetail(w http.ResponseWriter, problem *ProblemDetail) error
 }
 
+// Ensure defaultRenderer implements Renderer
+var _ Renderer = (*defaultRenderer)(nil)
+
 // defaultRenderer implements the Renderer interface with standard HTTP response handling
 type defaultRenderer struct{}
 
