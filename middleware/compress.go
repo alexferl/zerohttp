@@ -186,7 +186,11 @@ func (c *Compressor) selectEncoder(h http.Header, w io.Writer) (io.Writer, strin
 				return encoder, name, cleanup
 			}
 			if fn, ok := c.encoders[name]; ok {
-				return fn(w, c.level), name, func() {}
+				encoder := fn(w, c.level)
+				if encoder == nil {
+					continue // Skip if encoder failed to create (invalid level)
+				}
+				return encoder, name, func() {}
 			}
 		}
 	}
