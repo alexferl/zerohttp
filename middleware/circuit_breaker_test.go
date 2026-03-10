@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -412,4 +413,44 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 	// We can verify by checking the response status codes
 	// - 2 failures (500)
 	// - 1 rejection (503)
+}
+
+func TestCircuitBreaker_ConcurrentReset(t *testing.T) {
+	cbm := &circuitBreakerMiddleware{
+		circuits: make(map[string]*circuit),
+		config:   config.DefaultCircuitBreakerConfig,
+	}
+
+	// Create some circuits in open state
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("test-%d", i)
+		c := cbm.getCircuit(key)
+		c.mu.Lock()
+		c.state = StateOpen
+		c.failureCount = 100
+		c.mu.Unlock()
+	}
+
+	// Concurrently reset circuits and create new ones
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			key := fmt.Sprintf("test-%d", id%10)
+			cbm.Reset(key)
+			// Also create new circuits while resetting
+			_ = cbm.getCircuit(fmt.Sprintf("dynamic-%d", id))
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify all original circuits are reset
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("test-%d", i)
+		c := cbm.getCircuit(key)
+		if c.getState() != StateClosed {
+			t.Errorf("expected circuit %s to be closed, got %v", key, c.getState())
+		}
+	}
 }
