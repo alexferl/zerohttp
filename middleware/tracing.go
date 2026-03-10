@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/trace"
 )
 
@@ -42,15 +43,16 @@ func Tracing(tracer trace.Tracer, cfg ...config.TracerConfig) func(http.Handler)
 				span.SetAttributes(trace.Int64("http.request_content_length", r.ContentLength))
 			}
 
+			rw := rwutil.NewResponseWriter(w)
 			wrapped := &tracingResponseWriter{
-				ResponseWriter: w,
+				ResponseWriter: rw,
 				span:           span,
 			}
 
 			next.ServeHTTP(wrapped, r.WithContext(ctx))
 
-			if wrapped.statusCode >= 500 {
-				span.SetStatus(trace.CodeError, http.StatusText(wrapped.statusCode))
+			if wrapped.StatusCode() >= 500 {
+				span.SetStatus(trace.CodeError, http.StatusText(wrapped.StatusCode()))
 			} else {
 				span.SetStatus(trace.CodeOk, "")
 			}
@@ -59,27 +61,13 @@ func Tracing(tracer trace.Tracer, cfg ...config.TracerConfig) func(http.Handler)
 }
 
 type tracingResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-	span       trace.Span
-	written    bool
+	*rwutil.ResponseWriter
+	span trace.Span
 }
 
 func (w *tracingResponseWriter) WriteHeader(code int) {
-	if w.written {
-		return
-	}
-	w.written = true
-	w.statusCode = code
-	w.span.SetAttributes(trace.Int("http.status_code", code))
 	w.ResponseWriter.WriteHeader(code)
-}
-
-func (w *tracingResponseWriter) Write(data []byte) (int, error) {
-	if !w.written {
-		w.WriteHeader(http.StatusOK)
-	}
-	return w.ResponseWriter.Write(data)
+	w.span.SetAttributes(trace.Int("http.status_code", code))
 }
 
 func scheme(r *http.Request) string {

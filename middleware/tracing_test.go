@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/trace"
 )
 
@@ -266,16 +267,17 @@ func TestTracingResponseWriter(t *testing.T) {
 	_, span := mock.Start(ctx, "test")
 
 	rr := httptest.NewRecorder()
+	rw := rwutil.NewResponseWriter(rr)
 	trw := &tracingResponseWriter{
-		ResponseWriter: rr,
+		ResponseWriter: rw,
 		span:           span,
 	}
 
 	// Write should trigger WriteHeader
 	_, _ = trw.Write([]byte("hello"))
 
-	if trw.statusCode != 200 {
-		t.Errorf("statusCode = %d, want 200", trw.statusCode)
+	if trw.StatusCode() != 200 {
+		t.Errorf("statusCode = %d, want 200", trw.StatusCode())
 	}
 
 	if rr.Code != 200 {
@@ -284,7 +286,7 @@ func TestTracingResponseWriter(t *testing.T) {
 
 	// Multiple WriteHeader calls should be safe
 	trw.WriteHeader(500)
-	if trw.statusCode != 200 {
+	if trw.StatusCode() != 200 {
 		t.Error("WriteHeader should not change status after already written")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -34,17 +35,13 @@ func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(ht
 
 			start := time.Now()
 
-			wrapped := &responseWriter{
-				ResponseWriter: w,
-				statusCode:     http.StatusOK,
-				headerWritten:  false,
-			}
+			wrapped := rwutil.NewResponseWriter(w)
 
 			next.ServeHTTP(wrapped, r)
 
 			duration := time.Since(start)
 
-			LogRequest(logger, c, r, wrapped.statusCode, duration)
+			LogRequest(logger, c, r, wrapped.StatusCode(), duration)
 		})
 	}
 }
@@ -114,27 +111,4 @@ func LogRequest(logger log.Logger, cfg config.RequestLoggerConfig, r *http.Reque
 	} else {
 		logger.Info(msg, logFields...)
 	}
-}
-
-// responseWriter wraps http.ResponseWriter to capture status code.
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode    int
-	headerWritten bool
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	if rw.headerWritten {
-		return // Prevent multiple WriteHeader calls
-	}
-	rw.statusCode = code
-	rw.headerWritten = true
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *responseWriter) Write(data []byte) (int, error) {
-	if !rw.headerWritten {
-		rw.WriteHeader(http.StatusOK)
-	}
-	return rw.ResponseWriter.Write(data)
 }
