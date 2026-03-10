@@ -53,7 +53,9 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 			"detail": "Validation failed",
 			"errors": verr.ValidationErrors(),
 		}
-		_ = json.NewEncoder(w).Encode(response)
+		if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
+			log.GetGlobalLogger().Error("Failed to encode validation error response", log.E(encErr))
+		}
 		return
 	}
 
@@ -66,7 +68,9 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 			"status": http.StatusBadRequest,
 			"detail": "Invalid request body",
 		}
-		_ = json.NewEncoder(w).Encode(response)
+		if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
+			log.GetGlobalLogger().Error("Failed to encode binding error response", log.E(encErr))
+		}
 		return
 	}
 
@@ -78,7 +82,9 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 		"status": http.StatusInternalServerError,
 		"detail": "An unexpected error occurred",
 	}
-	_ = json.NewEncoder(w).Encode(response)
+	if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
+		log.GetGlobalLogger().Error("Failed to encode internal server error response", log.E(encErr))
+	}
 }
 
 // headResponseWriter wraps a ResponseWriter and discards body writes for HEAD requests
@@ -240,6 +246,10 @@ type defaultRouter struct {
 //	router := NewRouter(loggingMiddleware, authMiddleware)
 func NewRouter(mw ...func(http.Handler) http.Handler) Router {
 	cfg := config.DefaultConfig
+	logger := log.NewDefaultLogger()
+
+	// Initialize the package-level logger for error handling
+	log.SetGlobalLogger(logger)
 
 	r := &defaultRouter{
 		mux:                     &http.ServeMux{},
@@ -247,7 +257,7 @@ func NewRouter(mw ...func(http.Handler) http.Handler) Router {
 		notFoundHandler:         defaultNotFoundHandler,
 		methodNotAllowedHandler: defaultMethodNotAllowedHandler,
 		registeredRoutes:        make(map[string]map[string]bool),
-		logger:                  log.NewDefaultLogger(),
+		logger:                  logger,
 		config:                  cfg,
 	}
 	return r
@@ -496,6 +506,8 @@ func (r *defaultRouter) Logger() log.Logger {
 // and ensures consistent logging across the application.
 func (r *defaultRouter) SetLogger(logger log.Logger) {
 	r.logger = logger
+	// Also update the global logger for error handling
+	log.SetGlobalLogger(logger)
 }
 
 // Config returns the current configuration used by the router.
