@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -321,33 +320,5 @@ func TestDefaultRequestLoggerConfig(t *testing.T) {
 	}
 	if len(cfg.ExemptPaths) != 0 {
 		t.Errorf("Expected default exempt paths to be empty, got %d", len(cfg.ExemptPaths))
-	}
-}
-
-func TestResponseWriter_MultipleWriteHeader(t *testing.T) {
-	w := httptest.NewRecorder()
-	rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK, headerWritten: false}
-	rw.WriteHeader(http.StatusNotFound)
-	if rw.statusCode != http.StatusNotFound {
-		t.Errorf("Expected status code 404, got %d", rw.statusCode)
-	}
-	rw.WriteHeader(http.StatusInternalServerError)
-	if rw.statusCode != http.StatusNotFound {
-		t.Errorf("Expected status code to remain 404, got %d", rw.statusCode)
-	}
-}
-
-func TestResponseWriter_WriteWithoutHeader(t *testing.T) {
-	w := httptest.NewRecorder()
-	rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK, headerWritten: false}
-	_, err := rw.Write([]byte("test"))
-	if err != nil {
-		t.Fatalf("failed to write response: %v", err)
-	}
-	if rw.statusCode != http.StatusOK {
-		t.Errorf("Expected status code 200, got %d", rw.statusCode)
-	}
-	if !rw.headerWritten {
-		t.Error("Expected headerWritten to be true after Write")
 	}
 }

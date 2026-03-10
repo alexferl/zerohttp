@@ -7,6 +7,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
@@ -34,28 +35,6 @@ type circuitBreakerMiddleware struct {
 	circuits map[string]*circuit
 	config   config.CircuitBreakerConfig
 	mu       sync.RWMutex
-}
-
-// responseWriter wraps http.ResponseWriter to capture status code
-type circuitResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-	written    bool
-}
-
-func (w *circuitResponseWriter) WriteHeader(code int) {
-	if !w.written {
-		w.statusCode = code
-		w.written = true
-		w.ResponseWriter.WriteHeader(code)
-	}
-}
-
-func (w *circuitResponseWriter) Write(data []byte) (int, error) {
-	if !w.written {
-		w.WriteHeader(http.StatusOK)
-	}
-	return w.ResponseWriter.Write(data)
 }
 
 // CircuitBreaker creates a circuit breaker middleware
@@ -108,14 +87,11 @@ func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.
 				return
 			}
 
-			wrapped := &circuitResponseWriter{
-				ResponseWriter: w,
-				statusCode:     http.StatusOK,
-			}
+			wrapped := rwutil.NewResponseWriter(w)
 
 			next.ServeHTTP(wrapped, r)
 
-			circ.recordResult(r, wrapped.statusCode, reg, key)
+			circ.recordResult(r, wrapped.StatusCode(), reg, key)
 		})
 	}
 }
