@@ -129,6 +129,7 @@ func (b *defaultBinder) Query(r *http.Request, dst any) error {
 
 // bindValues binds url.Values to a struct using the specified tag name.
 // The tagName parameter specifies which struct tag to use (e.g., "form", "query").
+// Uses the type registry to cache reflection information for improved performance.
 func bindValues(values url.Values, dst any, tagName string, allowFiles bool) error {
 	v := reflect.ValueOf(dst)
 	if v.Kind() != reflect.Ptr || v.IsNil() {
@@ -142,131 +143,35 @@ func bindValues(values url.Values, dst any, tagName string, allowFiles bool) err
 
 	t := v.Type()
 
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldType := t.Field(i)
+	// Get cached type information from the registry
+	info, err := globalTypeRegistry.getTypeInfo(t)
+	if err != nil {
+		return err
+	}
 
-		// Handle embedded structs - inline their fields
-		if fieldType.Anonymous && field.Kind() == reflect.Struct {
-			if err := bindEmbeddedStruct(values, field, tagName, allowFiles); err != nil {
-				return err
-			}
-			continue
-		}
+	// Get pre-computed bindable fields for this tag
+	bindableFields := info.getBindableFields(tagName, allowFiles)
 
-		// Skip unexported fields (for non-embedded fields)
-		if !field.CanSet() {
-			continue
-		}
-
-		// Get the tag value
-		tag := fieldType.Tag.Get(tagName)
-		if tag == "-" {
-			continue
-		}
-
-		// Use field name as default
-		if tag == "" {
-			tag = camelToSnake(fieldType.Name)
-		}
-
-		// Check for file uploads first (only in multipart mode)
-		if allowFiles {
-			handled, err := bindFileField(field)
-			if err != nil {
-				return err
-			}
-			if handled {
-				continue
-			}
+	// Bind each field using the pre-computed path
+	for _, bf := range bindableFields {
+		// Get the field value using the cached path
+		field := v.FieldByIndex(bf.path.toSlice())
+		if !field.IsValid() {
+			continue // Skip invalid fields (shouldn't happen with correct paths)
 		}
 
 		// Get value(s) from url.Values
-		fieldValues, exists := values[tag]
+		fieldValues, exists := values[bf.tag]
 		if !exists || len(fieldValues) == 0 {
 			continue
 		}
 
 		if err := setFieldValue(field, fieldValues); err != nil {
-			return fmt.Errorf("field %s: %w", fieldType.Name, err)
+			return fmt.Errorf("field %s: %w", bf.name, err)
 		}
 	}
 
 	return nil
-}
-
-// bindEmbeddedStruct binds values to an embedded struct's fields directly.
-// This avoids the reflection issues with getting an interface from embedded struct fields.
-func bindEmbeddedStruct(values url.Values, structField reflect.Value, tagName string, allowFiles bool) error {
-	structType := structField.Type()
-
-	for j := 0; j < structField.NumField(); j++ {
-		field := structField.Field(j)
-		fieldType := structType.Field(j)
-
-		// Skip unexported fields
-		if !field.CanSet() {
-			continue
-		}
-
-		// Handle nested embedded structs recursively
-		if fieldType.Anonymous && field.Kind() == reflect.Struct {
-			if err := bindEmbeddedStruct(values, field, tagName, allowFiles); err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Get the tag value
-		tag := fieldType.Tag.Get(tagName)
-		if tag == "-" {
-			continue
-		}
-		if tag == "" {
-			tag = camelToSnake(fieldType.Name)
-		}
-
-		// Check for file uploads first (only in multipart mode)
-		if allowFiles {
-			handled, err := bindFileField(field)
-			if err != nil {
-				return err
-			}
-			if handled {
-				continue
-			}
-		}
-
-		// Get value(s) from url.Values
-		fieldValues, exists := values[tag]
-		if !exists || len(fieldValues) == 0 {
-			continue
-		}
-
-		if err := setFieldValue(field, fieldValues); err != nil {
-			return fmt.Errorf("field %s: %w", fieldType.Name, err)
-		}
-	}
-
-	return nil
-}
-
-// bindFileField attempts to bind a file upload to a field.
-// Returns true if the field was handled as a file field.
-func bindFileField(field reflect.Value) (bool, error) {
-	// Check if it's a FileHeader field
-	switch field.Type() {
-	case reflect.TypeOf(&FileHeader{}):
-		// Single file - will be set later when processing multipart form
-		return true, nil
-	case reflect.TypeOf([]*FileHeader{}):
-		// Multiple files - will be set later
-		return true, nil
-	case reflect.TypeOf(FileHeader{}):
-		// Non-pointer FileHeader - not supported for binding
-		return false, fmt.Errorf("FileHeader field must be a pointer (*FileHeader)")
-	}
-	return false, nil
 }
 
 // setFieldValue sets a field's value from form string values.
@@ -371,56 +276,33 @@ func BindMultipartFormFiles(r *http.Request, dst any) error {
 	return bindFilesToStruct(v, r.MultipartForm.File)
 }
 
-// bindFilesToStruct recursively binds multipart files to struct fields.
+// bindFilesToStruct binds multipart files to struct fields using cached type information.
 func bindFilesToStruct(v reflect.Value, files map[string][]*multipart.FileHeader) error {
 	t := v.Type()
 
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldType := t.Field(i)
+	// Get cached type information from the registry
+	info, err := globalTypeRegistry.getTypeInfo(t)
+	if err != nil {
+		return err
+	}
 
-		if !field.CanSet() {
-			continue
-		}
-
-		// Handle embedded structs
-		if fieldType.Anonymous && field.Kind() == reflect.Struct {
-			if err := bindFilesToStruct(field, files); err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Get form tag
-		tag := fieldType.Tag.Get("form")
-		if tag == "-" || tag == "" {
-			tag = camelToSnake(fieldType.Name)
-		}
-
-		// Check for files with this field name
-		fileHeaders, exists := files[tag]
+	// Use pre-computed file bindable fields
+	for _, fbf := range info.fileBindableFields {
+		// Check for files with this field tag
+		fileHeaders, exists := files[fbf.tag]
 		if !exists {
 			continue
 		}
 
-		// Bind based on field type
-		switch field.Type() {
-		case reflect.TypeOf(&FileHeader{}):
-			if len(fileHeaders) > 0 {
-				fh := fileHeaders[0]
-				file, err := fh.Open()
-				if err != nil {
-					return fmt.Errorf("open file %s: %w", fh.Filename, err)
-				}
-				field.Set(reflect.ValueOf(&FileHeader{
-					Filename: fh.Filename,
-					Size:     fh.Size,
-					Header:   fh.Header,
-					file:     file,
-				}))
-			}
+		// Get the field using the cached path
+		field := v.FieldByIndex(fbf.path.toSlice())
+		if !field.IsValid() {
+			continue
+		}
 
-		case reflect.TypeOf([]*FileHeader{}):
+		// Bind based on field type (single file or slice)
+		if fbf.isSlice {
+			// Slice of files
 			fileList := make([]*FileHeader, len(fileHeaders))
 			for j, fh := range fileHeaders {
 				file, err := fh.Open()
@@ -435,6 +317,21 @@ func bindFilesToStruct(v reflect.Value, files map[string][]*multipart.FileHeader
 				}
 			}
 			field.Set(reflect.ValueOf(fileList))
+		} else {
+			// Single file
+			if len(fileHeaders) > 0 {
+				fh := fileHeaders[0]
+				file, err := fh.Open()
+				if err != nil {
+					return fmt.Errorf("open file %s: %w", fh.Filename, err)
+				}
+				field.Set(reflect.ValueOf(&FileHeader{
+					Filename: fh.Filename,
+					Size:     fh.Size,
+					Header:   fh.Header,
+					file:     file,
+				}))
+			}
 		}
 	}
 
