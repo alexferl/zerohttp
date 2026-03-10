@@ -266,7 +266,22 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 			}
 
 			secretKeys := c.CredentialStore(parsed.AccessKeyID)
-			if len(secretKeys) == 0 {
+			// Filter secrets by minimum length based on algorithm
+			// Short secrets can be brute-forced
+			minLength := 32 // HMAC-SHA256 requires 32 bytes
+			switch c.Algorithm {
+			case config.HMACSHA384:
+				minLength = 48
+			case config.HMACSHA512:
+				minLength = 64
+			}
+			var validSecretKeys []string
+			for _, secret := range secretKeys {
+				if len(secret) >= minLength {
+					validSecretKeys = append(validSecretKeys, secret)
+				}
+			}
+			if len(validSecretKeys) == 0 {
 				if auditLogger != nil {
 					auditLogger(parsed.AccessKeyID, parsed.Timestamp, false, "invalid_credentials")
 				}
@@ -274,6 +289,7 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 				handleHMACError(w, r, errInvalidCredentials, errorHandler)
 				return
 			}
+			secretKeys = validSecretKeys
 
 			var bodyHash string
 			if c.AllowUnsignedPayload {

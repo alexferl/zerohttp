@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewHMACSigner(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 
 	if signer.AccessKeyID() != "test-key" {
 		t.Errorf("expected access key ID 'test-key', got %s", signer.AccessKeyID())
@@ -116,7 +116,7 @@ func TestHMACSigner_Algorithm(t *testing.T) {
 }
 
 func TestHMACSigner_SignRequest(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
@@ -143,7 +143,7 @@ func TestHMACSigner_SignRequest(t *testing.T) {
 }
 
 func TestHMACSigner_SignRequestWithTime(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 
 	fixedTime := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
 
@@ -161,7 +161,7 @@ func TestHMACSigner_SignRequestWithTime(t *testing.T) {
 }
 
 func TestHMACSigner_SignRequestWithBody(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 
 	body := `{"test":"data"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/test", strings.NewReader(body))
@@ -184,7 +184,7 @@ func TestHMACSigner_SignRequestWithBody(t *testing.T) {
 }
 
 func TestHMACSigner_SetAllowUnsignedPayload(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 	signer.SetAllowUnsignedPayload(true)
 
 	body := `{"test":"data"}`
@@ -258,7 +258,7 @@ func TestHMACSigner_SetHeadersToSign(t *testing.T) {
 }
 
 func TestHMACSigner_CustomHeadersRoundTrip(t *testing.T) {
-	creds := map[string]string{"test-key": "test-secret-that-is-32-bytes!"}
+	creds := map[string]string{"test-key": "test-secret-that-is-32-bytes-long!!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
 			if secret, ok := creds[id]; ok {
@@ -276,7 +276,7 @@ func TestHMACSigner_CustomHeadersRoundTrip(t *testing.T) {
 	}))
 
 	// Create signer with custom headers
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 	signer.SetHeadersToSign([]string{"host", "x-timestamp", "x-request-id"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
@@ -297,7 +297,7 @@ func TestHMACSigner_CustomHeadersRoundTrip(t *testing.T) {
 }
 
 func TestHMACSigner_GenerateSignature(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 
 	timestamp := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
@@ -317,7 +317,7 @@ func TestHMACSigner_GenerateSignature(t *testing.T) {
 }
 
 func TestHMACSigner_PresignURL(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 	req := httptest.NewRequest(http.MethodGet, "https://api.example.com/data?foo=bar", nil)
 
 	presignedURL, err := signer.PresignURL(req, 5*time.Minute)
@@ -345,7 +345,7 @@ func TestHMACSigner_PresignURL(t *testing.T) {
 }
 
 func TestHMACSigner_PresignURLWithTime(t *testing.T) {
-	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes!")
+	signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 	req := httptest.NewRequest(http.MethodGet, "https://api.example.com/data", nil)
 
 	expiresAt := time.Date(2026, 3, 7, 13, 0, 0, 0, time.UTC)
