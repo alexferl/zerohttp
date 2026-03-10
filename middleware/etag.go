@@ -61,6 +61,7 @@ type etagResponseWriter struct {
 	reg             metrics.Registry
 	etagGenerated   bool
 	finalized       bool
+	mu              sync.Mutex // protects buffer and state fields
 }
 
 // newETagResponseWriter creates a new etagResponseWriter
@@ -93,8 +94,9 @@ func (ew *etagResponseWriter) release() {
 	}
 }
 
-// WriteHeader captures the status code and checks if ETag generation should be skipped
-func (ew *etagResponseWriter) WriteHeader(status int) {
+// writeHeaderLocked captures the status code and checks if ETag generation should be skipped.
+// Caller must hold ew.mu.
+func (ew *etagResponseWriter) writeHeaderLocked(status int) {
 	if ew.hasWritten {
 		return
 	}
@@ -136,12 +138,16 @@ func (ew *etagResponseWriter) WriteHeader(status int) {
 	}
 }
 
-// Write captures the response body for ETag generation
-func (ew *etagResponseWriter) Write(p []byte) (int, error) {
-	if !ew.hasWritten {
-		ew.WriteHeader(http.StatusOK)
-	}
+// WriteHeader captures the status code and checks if ETag generation should be skipped
+func (ew *etagResponseWriter) WriteHeader(status int) {
+	ew.mu.Lock()
+	defer ew.mu.Unlock()
+	ew.writeHeaderLocked(status)
+}
 
+// writeLocked captures the response body for ETag generation.
+// Caller must hold ew.mu.
+func (ew *etagResponseWriter) writeLocked(p []byte) (int, error) {
 	n := len(p)
 	ew.written += n
 
@@ -161,6 +167,19 @@ func (ew *etagResponseWriter) Write(p []byte) (int, error) {
 	}
 
 	return ew.buf.Write(p)
+}
+
+// Write captures the response body for ETag generation
+func (ew *etagResponseWriter) Write(p []byte) (int, error) {
+	ew.mu.Lock()
+
+	if !ew.hasWritten {
+		ew.writeHeaderLocked(http.StatusOK)
+	}
+
+	n, err := ew.writeLocked(p)
+	ew.mu.Unlock()
+	return n, err
 }
 
 // generateETag generates the ETag from the buffered content
@@ -273,11 +292,13 @@ func (ew *etagResponseWriter) shouldServeRange(etag string) bool {
 
 // Flush implements http.Flusher
 func (ew *etagResponseWriter) Flush() {
+	ew.mu.Lock()
 	// If we have buffered data and haven't written to the response yet,
 	// we need to flush the ETag processing first
 	if ew.buf.Len() > 0 && !ew.skipETag && !ew.finalized {
-		ew.finalize()
+		ew.finalizeLocked()
 	}
+	ew.mu.Unlock()
 
 	if f, ok := ew.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
@@ -300,8 +321,9 @@ func (ew *etagResponseWriter) Push(target string, opts *http.PushOptions) error 
 	return errors.New("middleware: http.Pusher is unavailable on the writer")
 }
 
-// finalize processes the buffered response, generates ETag, and writes the response
-func (ew *etagResponseWriter) finalize() {
+// finalizeLocked processes the buffered response, generates ETag, and writes the response.
+// Caller must hold ew.mu.
+func (ew *etagResponseWriter) finalizeLocked() {
 	if ew.skipETag || ew.finalized {
 		return
 	}
@@ -346,6 +368,13 @@ func (ew *etagResponseWriter) finalize() {
 		_, _ = ew.ResponseWriter.Write(ew.buf.Bytes())
 	}
 	ew.recordMetrics(ew.status)
+}
+
+// finalize processes the buffered response, generates ETag, and writes the response
+func (ew *etagResponseWriter) finalize() {
+	ew.mu.Lock()
+	defer ew.mu.Unlock()
+	ew.finalizeLocked()
 }
 
 // recordMetrics records ETag metrics

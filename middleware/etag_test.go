@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1317,4 +1318,36 @@ func TestETag_Metrics(t *testing.T) {
 	if totalGen != 2 {
 		t.Errorf("expected 2 generated ETags, got %d", totalGen)
 	}
+}
+
+// TestETag_ConcurrentWriteAndFlush tests that concurrent Write operations
+// don't cause a data race on the buffer field
+func TestETag_ConcurrentWriteAndFlush(t *testing.T) {
+	mw := ETag()
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var wg sync.WaitGroup
+
+		// Simulate concurrent writes
+		for range 10 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, _ = w.Write([]byte("data"))
+				// Note: Flush is not safe for concurrent use in httptest.ResponseRecorder
+				// so we only test concurrent writes here which is the actual issue
+			}()
+		}
+
+		wg.Wait()
+
+		// Single flush after all writes complete
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
 }
