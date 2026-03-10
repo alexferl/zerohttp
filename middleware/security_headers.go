@@ -41,7 +41,7 @@ func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) htt
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, exemptPath := range c.ExemptPaths {
-				if r.URL.Path == exemptPath {
+				if pathMatches(r.URL.Path, exemptPath) {
 					next.ServeHTTP(w, r)
 					return
 				}

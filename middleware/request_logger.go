@@ -41,16 +41,19 @@ func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(ht
 
 			duration := time.Since(start)
 
-			LogRequest(logger, c, r, wrapped.StatusCode(), duration)
+			LogRequest(logger, c, fieldMap, r, wrapped.StatusCode(), duration)
 		})
 	}
 }
 
 // LogRequest logs an HTTP request with consistent formatting.
-func LogRequest(logger log.Logger, cfg config.RequestLoggerConfig, r *http.Request, statusCode int, duration time.Duration) {
-	fieldMap := make(map[config.LogField]bool)
-	for _, field := range cfg.Fields {
-		fieldMap[field] = true
+// If fieldMap is nil, it will be computed from cfg.Fields.
+func LogRequest(logger log.Logger, cfg config.RequestLoggerConfig, fieldMap map[config.LogField]bool, r *http.Request, statusCode int, duration time.Duration) {
+	if fieldMap == nil {
+		fieldMap = make(map[config.LogField]bool)
+		for _, field := range cfg.Fields {
+			fieldMap[field] = true
+		}
 	}
 
 	var logFields []log.Field

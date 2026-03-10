@@ -443,7 +443,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		for _, prefix := range apiPrefixes {
 			if strings.HasPrefix(cleanPath, prefix) {
 				r.notFoundHandler.ServeHTTP(w, req)
-				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusNotFound, time.Since(start))
+				middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start))
 				return
 			}
 		}
@@ -458,7 +458,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			stat, err := file.Stat()
 			if err == nil && !stat.IsDir() {
 				http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
-				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
+				middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusOK, time.Since(start))
 				return
 			}
 		}
@@ -467,11 +467,11 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			// Fallback to index.html for client-side routing
 			req.URL.Path = "/"
 			http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
-			middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusOK, time.Since(start))
+			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusOK, time.Since(start))
 		} else {
 			// Use custom 404 handler for missing files
 			r.notFoundHandler.ServeHTTP(w, req)
-			middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusNotFound, time.Since(start))
+			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start))
 		}
 	})
 }
@@ -591,13 +591,13 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			if !methods[req.Method] {
 				w.Header().Set(HeaderAllow, allowedMethods(methods))
 				r.methodNotAllowedHandler.ServeHTTP(w, req)
-				middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusMethodNotAllowed, time.Since(start))
+				middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusMethodNotAllowed, time.Since(start))
 				return
 			}
 		}
 
 		r.notFoundHandler.ServeHTTP(w, req)
-		middleware.LogRequest(r.logger, r.config.RequestLogger, req, http.StatusNotFound, time.Since(start))
+		middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start))
 	}
 }
 
