@@ -454,3 +454,39 @@ func TestCircuitBreaker_ConcurrentReset(t *testing.T) {
 		}
 	}
 }
+
+func TestCircuitBreaker_GetState(t *testing.T) {
+	cbm := &circuitBreakerMiddleware{
+		circuits: make(map[string]*circuit),
+		config: config.CircuitBreakerConfig{
+			FailureThreshold: 3,
+			RecoveryTimeout:  100 * time.Millisecond,
+		},
+	}
+
+	// Test initial state (circuit doesn't exist yet)
+	if state := cbm.GetState("/test"); state != StateClosed {
+		t.Errorf("expected StateClosed for non-existent circuit, got %v", state)
+	}
+
+	// Create and open a circuit
+	c := cbm.getCircuit("/test")
+	c.mu.Lock()
+	c.state = StateOpen
+	c.failureCount = 100
+	c.mu.Unlock()
+
+	// Circuit should be open now
+	if state := cbm.GetState("/test"); state != StateOpen {
+		t.Errorf("expected StateOpen, got %v", state)
+	}
+
+	// Reset circuit to closed
+	c.mu.Lock()
+	c.state = StateClosed
+	c.mu.Unlock()
+
+	if state := cbm.GetState("/test"); state != StateClosed {
+		t.Errorf("expected StateClosed after reset, got %v", state)
+	}
+}
