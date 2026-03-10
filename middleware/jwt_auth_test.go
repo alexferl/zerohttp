@@ -105,8 +105,10 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	reg := metrics.NewRegistry()
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
+	req = req.WithContext(metrics.WithRegistry(req.Context(), reg))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -118,6 +120,22 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+
+	// Verify the metric was incremented with "invalid" label
+	found := false
+	for _, family := range reg.Gather() {
+		if family.Name == "jwt_auth_requests_total" {
+			for _, m := range family.Metrics {
+				if m.Labels["result"] == "invalid" && m.Counter == 1 {
+					found = true
+					break
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("expected jwt_auth_requests_total metric with result='invalid' to be 1")
 	}
 }
 
