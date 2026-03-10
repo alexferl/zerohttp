@@ -1867,3 +1867,56 @@ func TestHMACAuth_NilCredentialStore(t *testing.T) {
 		CredentialStore: nil,
 	})
 }
+
+// TestHMACAuth_PresignedURL_NoHeaderModification verifies that the middleware
+// does not modify the request headers when processing presigned URLs
+func TestHMACAuth_PresignedURL_NoHeaderModification(t *testing.T) {
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
+	mw := HMACAuth(config.HMACAuthConfig{
+		CredentialStore: func(id string) []string {
+			if secret, ok := creds[id]; ok {
+				return []string{secret}
+			}
+			return nil
+		},
+		AllowPresignedURLs: true,
+	})
+
+	var capturedRequest *http.Request
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedRequest = r
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Create a pre-signed URL
+	req := httptest.NewRequest(http.MethodGet, "https://api.example.com/data", nil)
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
+	presignedURL, err := signer.PresignURL(req, 5*time.Minute)
+	if err != nil {
+		t.Fatalf("failed to create presigned URL: %v", err)
+	}
+
+	// Parse the presigned URL and make a request
+	parsedURL, _ := url.Parse(presignedURL)
+	req2 := httptest.NewRequest(http.MethodGet, parsedURL.String(), nil)
+
+	// Capture the original headers before the request is processed
+	originalTimestampHeader := req2.Header.Get("X-Timestamp")
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req2)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 for valid presigned URL, got %d", rr.Code)
+	}
+
+	// Verify that the X-Timestamp header was NOT modified by the middleware
+	if capturedRequest == nil {
+		t.Fatal("capturedRequest is nil")
+	}
+	finalTimestampHeader := capturedRequest.Header.Get("X-Timestamp")
+	if finalTimestampHeader != originalTimestampHeader {
+		t.Errorf("X-Timestamp header was modified by middleware: original=%q, final=%q",
+			originalTimestampHeader, finalTimestampHeader)
+	}
+}
