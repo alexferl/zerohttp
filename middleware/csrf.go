@@ -13,6 +13,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
@@ -84,6 +85,12 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 		tokenGenerator = generateToken
 	}
 
+	// Use injected logger or global
+	logger := c.Logger
+	if logger == nil {
+		logger = log.GetGlobalLogger()
+	}
+
 	exemptMethodMap := make(map[string]bool)
 	for _, method := range c.ExemptMethods {
 		exemptMethodMap[strings.ToUpper(method)] = true
@@ -114,6 +121,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 					token, err = tokenGenerator(hmacKey)
 					if err != nil {
 						// Fail closed: reject request if we can't generate a token
+						logger.Error("CSRF token generation failed", log.E(err))
 						reg.Counter("csrf_rejected_total", "reason").WithLabelValues("token_generation_failed").Inc()
 						errorHandler(w, r)
 						return
@@ -153,6 +161,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 			newToken, err := tokenGenerator(hmacKey)
 			if err != nil {
 				// Fail closed: reject request if we can't generate a token
+				logger.Error("CSRF token generation failed", log.E(err))
 				reg.Counter("csrf_rejected_total", "reason").WithLabelValues("token_generation_failed").Inc()
 				errorHandler(w, r)
 				return
