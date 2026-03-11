@@ -2,6 +2,10 @@ package config
 
 import "net/http"
 
+// OriginValidator is a function that validates if an origin is allowed.
+// Returns true if the origin is allowed, false otherwise.
+type OriginValidator func(origin string) bool
+
 // CORSConfig allows customization of CORS behavior
 type CORSConfig struct {
 	// AllowedOrigins is a list of allowed origins. Use ["*"] to allow all origins
@@ -20,6 +24,9 @@ type CORSConfig struct {
 	OptionsPassthrough bool
 	// ExemptPaths contains paths that skip CORS processing
 	ExemptPaths []string
+	// AllowOriginFunc is a custom function to validate origins dynamically.
+	// If set, this takes precedence over AllowedOrigins matching.
+	AllowOriginFunc OriginValidator
 }
 
 // DefaultCORSConfig contains the default values for CORS configuration.
