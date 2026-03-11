@@ -49,6 +49,21 @@ func mergeRequestLoggerConfig(defaultCfg, userCfg config.RequestLoggerConfig) co
 	if len(userCfg.ExemptPaths) > 0 {
 		defaultCfg.ExemptPaths = userCfg.ExemptPaths
 	}
+	if userCfg.LogRequestBody {
+		defaultCfg.LogRequestBody = userCfg.LogRequestBody
+	}
+	if userCfg.LogResponseBody {
+		defaultCfg.LogResponseBody = userCfg.LogResponseBody
+	}
+	if userCfg.MaxBodySize != 0 {
+		defaultCfg.MaxBodySize = userCfg.MaxBodySize
+	}
+	if userCfg.SensitiveFields != nil {
+		defaultCfg.SensitiveFields = userCfg.SensitiveFields
+	}
+	if len(userCfg.AllowedPaths) > 0 {
+		defaultCfg.AllowedPaths = userCfg.AllowedPaths
+	}
 	return defaultCfg
 }
 

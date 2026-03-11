@@ -186,9 +186,13 @@ func TestMergeRequestLoggerConfig(t *testing.T) {
 
 	t.Run("user values override defaults", func(t *testing.T) {
 		user := config.RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      []config.LogField{config.FieldMethod, config.FieldPath, config.FieldDurationHuman},
-			ExemptPaths: []string{"/health", "/metrics"},
+			LogErrors:       true,
+			Fields:          []config.LogField{config.FieldMethod, config.FieldPath, config.FieldDurationHuman},
+			ExemptPaths:     []string{"/health", "/metrics"},
+			LogRequestBody:  true,
+			LogResponseBody: true,
+			MaxBodySize:     2048,
+			SensitiveFields: []string{"password", "token", "api_key"},
 		}
 		result := mergeRequestLoggerConfig(defaults, user)
 		if !result.LogErrors {
@@ -199,6 +203,36 @@ func TestMergeRequestLoggerConfig(t *testing.T) {
 		}
 		if len(result.ExemptPaths) != 2 {
 			t.Errorf("expected 2 ExemptPaths, got %d", len(result.ExemptPaths))
+		}
+		if !result.LogRequestBody {
+			t.Error("expected LogRequestBody to be true")
+		}
+		if !result.LogResponseBody {
+			t.Error("expected LogResponseBody to be true")
+		}
+		if result.MaxBodySize != 2048 {
+			t.Errorf("expected MaxBodySize 2048, got %d", result.MaxBodySize)
+		}
+		if len(result.SensitiveFields) != 3 {
+			t.Errorf("expected 3 SensitiveFields, got %d", len(result.SensitiveFields))
+		}
+	})
+
+	t.Run("allowed paths restricts body logging", func(t *testing.T) {
+		user := config.RequestLoggerConfig{
+			LogRequestBody:  true,
+			LogResponseBody: true,
+			AllowedPaths:    []string{"/api/debug", "/api/test/"},
+		}
+		result := mergeRequestLoggerConfig(defaults, user)
+		if !result.LogRequestBody {
+			t.Error("expected LogRequestBody to be true")
+		}
+		if !result.LogResponseBody {
+			t.Error("expected LogResponseBody to be true")
+		}
+		if len(result.AllowedPaths) != 2 {
+			t.Errorf("expected 2 AllowedPaths, got %d", len(result.AllowedPaths))
 		}
 	})
 }

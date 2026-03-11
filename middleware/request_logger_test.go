@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -321,4 +322,563 @@ func TestDefaultRequestLoggerConfig(t *testing.T) {
 	if len(cfg.ExemptPaths) != 0 {
 		t.Errorf("Expected default exempt paths to be empty, got %d", len(cfg.ExemptPaths))
 	}
+	if cfg.MaxBodySize != 1024 {
+		t.Errorf("Expected default MaxBodySize to be 1024, got %d", cfg.MaxBodySize)
+	}
+	if len(cfg.SensitiveFields) == 0 {
+		t.Error("Expected default SensitiveFields to be populated")
+	}
+}
+
+func TestRequestLogger_RequestBodyLogging(t *testing.T) {
+	t.Run("enabled", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:         []config.LogField{config.FieldMethod, config.FieldRequestBody},
+			LogRequestBody: true,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/test").
+			WithBytes([]byte(`{"name":"test","value":123}`)).
+			WithHeader("Content-Type", "application/json").
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
+			t.Error("Expected request_body field to be present")
+		} else if body, ok := value.(string); !ok || body != `{"name":"test","value":123}` {
+			t.Errorf("Expected request_body to be '{\"name\":\"test\",\"value\":123}', got %v", value)
+		}
+	})
+
+	t.Run("disabled by default", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger)(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/test").
+			WithBytes([]byte(`{"name":"test"}`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			t.Error("Expected request_body field not to be present when disabled")
+		}
+	})
+
+	t.Run("body available to handler", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+
+		// Handler that reads the body
+		bodyReadingHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write([]byte("read: " + string(body)))
+		})
+
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:         []config.LogField{config.FieldMethod, config.FieldRequestBody},
+			LogRequestBody: true,
+		})(bodyReadingHandler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/test").
+			WithBytes([]byte(`{"data":"value"}`)).
+			Build()
+		recorder := zhtest.Serve(middleware, req)
+
+		// Verify handler could read the body
+		if !strings.Contains(recorder.Body.String(), `{"data":"value"}`) {
+			t.Errorf("Expected handler to read body, got %s", recorder.Body.String())
+		}
+	})
+}
+
+func TestRequestLogger_ResponseBodyLogging(t *testing.T) {
+	t.Run("enabled", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"status":"ok","id":123}`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldMethod, config.FieldResponseBody},
+			LogResponseBody: true,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); !found {
+			t.Error("Expected response_body field to be present")
+		} else if body, ok := value.(string); !ok {
+			t.Errorf("Expected response_body to be string, got %T", value)
+		} else {
+			// Check for expected content without relying on key order
+			if !strings.Contains(body, `"status":"ok"`) || !strings.Contains(body, `"id":123`) {
+				t.Errorf("Expected response_body to contain '{\"status\":\"ok\",\"id\":123}', got %v", body)
+			}
+		}
+	})
+
+	t.Run("disabled by default", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
+		middleware := RequestLogger(logger)(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		if _, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
+			t.Error("Expected response_body field not to be present when disabled")
+		}
+	})
+
+	t.Run("response still returned", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`response data`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldStatus},
+			LogResponseBody: true,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		recorder := zhtest.Serve(middleware, req)
+
+		if recorder.Body.String() != "response data" {
+			t.Errorf("Expected response body to be 'response data', got %s", recorder.Body.String())
+		}
+	})
+}
+
+func TestRequestLogger_MaxBodySize(t *testing.T) {
+	t.Run("request body truncated", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:         []config.LogField{config.FieldRequestBody},
+			LogRequestBody: true,
+			MaxBodySize:    10,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/test").
+			WithBytes([]byte(`this is a long request body`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			// 10 chars + "..." = 13
+			if len(value.(string)) != 13 {
+				t.Errorf("Expected request_body to be truncated to 10 chars + ..., got %d", len(value.(string)))
+			}
+			if !strings.HasSuffix(value.(string), "...") {
+				t.Errorf("Expected request_body to end with ..., got %s", value.(string))
+			}
+		}
+	})
+
+	t.Run("response body truncated", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`this is a long response body`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldResponseBody},
+			LogResponseBody: true,
+			MaxBodySize:     10,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
+			// 10 chars + "..." = 13
+			if len(value.(string)) != 13 {
+				t.Errorf("Expected response_body to be truncated to 10 chars + ..., got %d", len(value.(string)))
+			}
+			if !strings.HasSuffix(value.(string), "...") {
+				t.Errorf("Expected response_body to end with ..., got %s", value.(string))
+			}
+		}
+	})
+
+	t.Run("unlimited body size", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`short`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldResponseBody},
+			LogResponseBody: true,
+			MaxBodySize:     -1, // Unlimited
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
+			if value != "short" {
+				t.Errorf("Expected response_body to be 'short', got %v", value)
+			}
+		}
+	})
+}
+
+func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
+	t.Run("masks password field", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:         []config.LogField{config.FieldRequestBody},
+			LogRequestBody: true,
+			MaxBodySize:    1024,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/login").
+			WithBytes([]byte(`{"username":"admin","password":"secret123"}`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			body := value.(string)
+			if strings.Contains(body, "secret123") {
+				t.Errorf("Expected password to be masked, got %s", body)
+			}
+			if !strings.Contains(body, "[REDACTED]") {
+				t.Errorf("Expected [REDACTED] in body, got %s", body)
+			}
+		}
+	})
+
+	t.Run("masks token field", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"access_token":"abc123","refresh_token":"xyz789"}`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldResponseBody},
+			LogResponseBody: true,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/token").Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
+			body := value.(string)
+			if strings.Contains(body, "abc123") || strings.Contains(body, "xyz789") {
+				t.Errorf("Expected tokens to be masked, got %s", body)
+			}
+			count := strings.Count(body, "[REDACTED]")
+			if count != 2 {
+				t.Errorf("Expected 2 [REDACTED] values, got %d in %s", count, body)
+			}
+		}
+	})
+
+	t.Run("custom sensitive fields", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldRequestBody},
+			LogRequestBody:  true,
+			SensitiveFields: []string{"ssn", "credit_card"},
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/payment").
+			WithBytes([]byte(`{"name":"John","ssn":"123-45-6789","credit_card":"4111-1111-1111-1111"}`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			body := value.(string)
+			if strings.Contains(body, "123-45-6789") || strings.Contains(body, "4111-1111-1111-1111") {
+				t.Errorf("Expected sensitive fields to be masked, got %s", body)
+			}
+			// "name" should not be masked
+			if !strings.Contains(body, "John") {
+				t.Errorf("Expected name to not be masked, got %s", body)
+			}
+		}
+	})
+
+	t.Run("nested object masking", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:         []config.LogField{config.FieldRequestBody},
+			LogRequestBody: true,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/api").
+			WithBytes([]byte(`{"user":{"password":"nested_secret","name":"John"},"data":"value"}`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			body := value.(string)
+			if strings.Contains(body, "nested_secret") {
+				t.Errorf("Expected nested password to be masked, got %s", body)
+			}
+			// "name" inside user should not be masked
+			if !strings.Contains(body, "John") {
+				t.Errorf("Expected name to not be masked, got %s", body)
+			}
+		}
+	})
+
+	t.Run("array of objects masking", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:         []config.LogField{config.FieldRequestBody},
+			LogRequestBody: true,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/api").
+			WithBytes([]byte(`[{"id":1,"password":"pass1"},{"id":2,"password":"pass2"}]`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			body := value.(string)
+			if strings.Contains(body, "pass1") || strings.Contains(body, "pass2") {
+				t.Errorf("Expected passwords in array to be masked, got %s", body)
+			}
+			// Check ids are preserved
+			if !strings.Contains(body, `"id":1`) || !strings.Contains(body, `"id":2`) {
+				t.Errorf("Expected ids to not be masked, got %s", body)
+			}
+		}
+	})
+
+	t.Run("non-json body passthrough", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:         []config.LogField{config.FieldRequestBody},
+			LogRequestBody: true,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/api").
+			WithBytes([]byte(`plain text body`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			if value != "plain text body" {
+				t.Errorf("Expected plain text body, got %v", value)
+			}
+		}
+	})
+
+	t.Run("empty sensitive fields list", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldRequestBody},
+			LogRequestBody:  true,
+			SensitiveFields: []string{}, // Empty but not nil
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/api").
+			WithBytes([]byte(`{"password":"secret"}`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
+			body := value.(string)
+			// With empty sensitive fields list, password should NOT be masked
+			if !strings.Contains(body, "secret") {
+				t.Errorf("Expected password not to be masked with empty list, got %s", body)
+			}
+		}
+	})
+}
+
+func TestRequestLogger_BothBodies(t *testing.T) {
+	logger := &requestLoggerMockLogger{}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_, _ = w.Write([]byte(`{"echo":` + string(body) + `}`))
+	})
+	middleware := RequestLogger(logger, config.RequestLoggerConfig{
+		Fields:          []config.LogField{config.FieldRequestBody, config.FieldResponseBody},
+		LogRequestBody:  true,
+		LogResponseBody: true,
+	})(handler)
+
+	req := zhtest.NewRequest(http.MethodPost, "/echo").
+		WithBytes([]byte(`{"msg":"hello"}`)).
+		Build()
+	recorder := zhtest.Serve(middleware, req)
+
+	// Verify handler works
+	if !strings.Contains(recorder.Body.String(), `"msg":"hello"`) {
+		t.Errorf("Expected handler to work, got %s", recorder.Body.String())
+	}
+
+	// Verify both bodies logged
+	if len(logger.infoLogs) != 1 {
+		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+	}
+
+	if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
+		t.Error("Expected request_body field to be present")
+	}
+	if _, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); !found {
+		t.Error("Expected response_body field to be present")
+	}
+}
+
+type panicLogger struct{}
+
+func (p *panicLogger) Debug(msg string, fields ...log.Field) {}
+func (p *panicLogger) Info(msg string, fields ...log.Field)  {}
+func (p *panicLogger) Warn(msg string, fields ...log.Field)  {}
+func (p *panicLogger) Error(msg string, fields ...log.Field) {}
+func (p *panicLogger) Panic(msg string, fields ...log.Field) {
+	panic(msg)
+}
+func (p *panicLogger) Fatal(msg string, fields ...log.Field)      {}
+func (p *panicLogger) WithFields(fields ...log.Field) log.Logger  { return p }
+func (p *panicLogger) WithContext(ctx context.Context) log.Logger { return p }
+
+func TestRequestLogger_ExemptPathsAndAllowedPathsPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic when both ExemptPaths and AllowedPaths are set")
+		} else if !strings.Contains(r.(string), "cannot set both ExemptPaths and AllowedPaths") {
+			t.Errorf("Expected panic message about ExemptPaths and AllowedPaths, got: %v", r)
+		}
+	}()
+
+	logger := &panicLogger{}
+	_ = RequestLogger(logger, config.RequestLoggerConfig{
+		ExemptPaths:  []string{"/health"},
+		AllowedPaths: []string{"/api/debug"},
+	})
+}
+
+func TestRequestLogger_AllowedPaths(t *testing.T) {
+	t.Run("body logging only for allowed paths", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
+			LogRequestBody:  true,
+			LogResponseBody: true,
+			AllowedPaths:    []string{"/api/debug"},
+		})(handler)
+
+		// Request to allowed path - bodies should be logged
+		req1 := zhtest.NewRequest(http.MethodPost, "/api/debug").
+			WithBytes([]byte(`{"test":"data"}`)).
+			Build()
+		zhtest.Serve(middleware, req1)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
+			t.Error("Expected request_body to be present for allowed path")
+		}
+		if _, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); !found {
+			t.Error("Expected response_body to be present for allowed path")
+		}
+
+		// Request to non-allowed path - bodies should NOT be logged
+		logger2 := &requestLoggerMockLogger{}
+		middleware2 := RequestLogger(logger2, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
+			LogRequestBody:  true,
+			LogResponseBody: true,
+			AllowedPaths:    []string{"/api/debug"},
+		})(handler)
+
+		req2 := zhtest.NewRequest(http.MethodPost, "/api/other").
+			WithBytes([]byte(`{"test":"data"}`)).
+			Build()
+		zhtest.Serve(middleware2, req2)
+
+		if len(logger2.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger2.infoLogs))
+		}
+		if _, found := findFieldValue(logger2.infoLogs[0].fields, "request_body"); found {
+			t.Error("Expected request_body to NOT be present for non-allowed path")
+		}
+		if _, found := findFieldValue(logger2.infoLogs[0].fields, "response_body"); found {
+			t.Error("Expected response_body to NOT be present for non-allowed path")
+		}
+	})
+
+	t.Run("prefix matching for allowed paths", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
+			LogRequestBody:  true,
+			LogResponseBody: true,
+			AllowedPaths:    []string{"/api/debug/"},
+		})(handler)
+
+		// Request to path under allowed prefix
+		req := zhtest.NewRequest(http.MethodPost, "/api/debug/test").
+			WithBytes([]byte(`{"test":"data"}`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
+			t.Error("Expected request_body to be present for path under allowed prefix")
+		}
+	})
+
+	t.Run("empty allowed paths allows all", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
+			LogRequestBody:  true,
+			LogResponseBody: true,
+			AllowedPaths:    []string{}, // Empty - should allow all
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodPost, "/api/anything").
+			WithBytes([]byte(`{"test":"data"}`)).
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
+			t.Error("Expected request_body to be present when AllowedPaths is empty")
+		}
+	})
 }
