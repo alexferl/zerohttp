@@ -22,13 +22,13 @@ const (
 
 // circuit represents a single circuit breaker instance
 type circuit struct {
-	state              CircuitState
-	failureCount       int
-	successCount       int
-	halfOpenInFlight   int // Number of requests currently in flight in half-open state
-	lastFailureTime    time.Time
-	mu                 sync.RWMutex
-	config             config.CircuitBreakerConfig
+	state            CircuitState
+	failureCount     int
+	successCount     int
+	halfOpenInFlight int // Number of requests currently in flight in half-open state
+	lastFailureTime  time.Time
+	mu               sync.RWMutex
+	config           config.CircuitBreakerConfig
 }
 
 // circuitBreakerMiddleware manages multiple circuit breakers
