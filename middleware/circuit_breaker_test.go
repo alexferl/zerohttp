@@ -490,3 +490,90 @@ func TestCircuitBreaker_GetState(t *testing.T) {
 		t.Errorf("expected StateClosed after reset, got %v", state)
 	}
 }
+
+func TestCircuitBreaker_HalfOpenRequestLimit(t *testing.T) {
+	// Test that MaxHalfOpenRequests limits concurrent requests in half-open state
+	cbm := &circuitBreakerMiddleware{
+		circuits: make(map[string]*circuit),
+		config: config.CircuitBreakerConfig{
+			FailureThreshold:    1,
+			RecoveryTimeout:     30 * time.Second,
+			SuccessThreshold:    10, // High threshold
+			MaxHalfOpenRequests: 2,
+		},
+	}
+
+	c := cbm.getCircuit("/test")
+
+	// Manually set to half-open state
+	c.mu.Lock()
+	c.state = StateHalfOpen
+	c.halfOpenInFlight = 0
+	c.mu.Unlock()
+
+	// First request should be allowed
+	if c.isOpen() {
+		t.Error("first request should be allowed in half-open state")
+	}
+
+	// Second request should be allowed
+	if c.isOpen() {
+		t.Error("second request should be allowed in half-open state")
+	}
+
+	// Third request should be blocked (MaxHalfOpenRequests=2)
+	if !c.isOpen() {
+		t.Error("third request should be blocked when MaxHalfOpenRequests=2")
+	}
+
+	// Simulate one request completing
+	c.mu.Lock()
+	c.halfOpenInFlight--
+	c.mu.Unlock()
+
+	// Now another request should be allowed
+	if c.isOpen() {
+		t.Error("request should be allowed after one in-flight completes")
+	}
+}
+
+func TestCircuitBreaker_HalfOpenRequestLimit_Default(t *testing.T) {
+	// Test that default MaxHalfOpenRequests is 1
+	cbm := &circuitBreakerMiddleware{
+		circuits: make(map[string]*circuit),
+		config: config.CircuitBreakerConfig{
+			FailureThreshold:    1,
+			RecoveryTimeout:     30 * time.Second,
+			SuccessThreshold:    10,
+			MaxHalfOpenRequests: 1, // Default is 1
+		},
+	}
+
+	c := cbm.getCircuit("/test")
+
+	// Manually set to half-open state
+	c.mu.Lock()
+	c.state = StateHalfOpen
+	c.halfOpenInFlight = 0
+	c.mu.Unlock()
+
+	// First request should be allowed
+	if c.isOpen() {
+		t.Error("first request should be allowed in half-open state with default limit")
+	}
+
+	// Second request should be blocked (default MaxHalfOpenRequests=1)
+	if !c.isOpen() {
+		t.Error("second request should be blocked when MaxHalfOpenRequests=1")
+	}
+
+	// Simulate request completing
+	c.mu.Lock()
+	c.halfOpenInFlight--
+	c.mu.Unlock()
+
+	// Now another request should be allowed
+	if c.isOpen() {
+		t.Error("request should be allowed after in-flight completes")
+	}
+}
