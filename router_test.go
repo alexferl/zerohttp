@@ -1117,3 +1117,33 @@ func TestShouldLogRequest(t *testing.T) {
 		}
 	})
 }
+
+func TestJSONNotFoundHandler(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/not-found", nil)
+
+	jsonNotFoundHandler(w, req)
+
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotFound).
+		Header(HeaderContentType, MIMEApplicationProblem).
+		BodyContains(`"title":"Not Found"`).
+		BodyContains(`"status":404`)
+}
+
+func TestJSONMethodNotAllowedHandler(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+
+	// The Allow header should be set by the caller
+	w.Header().Set(HeaderAllow, "GET, HEAD")
+
+	jsonMethodNotAllowedHandler(w, req)
+
+	zhtest.AssertWith(t, w).
+		Status(http.StatusMethodNotAllowed).
+		Header(HeaderContentType, MIMEApplicationProblem).
+		Header(HeaderAllow, "GET, HEAD").
+		BodyContains(`"title":"Method Not Allowed"`).
+		BodyContains(`"status":405`)
+}
