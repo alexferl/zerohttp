@@ -427,3 +427,104 @@ func TestCORS_Metrics(t *testing.T) {
 		t.Errorf("expected 1 rejected, got %d", rejected)
 	}
 }
+
+func TestCORSAllowOriginFunc(t *testing.T) {
+	tests := []struct {
+		name          string
+		origin        string
+		validator     config.OriginValidator
+		expectAllowed bool
+		expectVary    bool
+	}{
+		{
+			name:   "allowed by function",
+			origin: "https://app.example.com",
+			validator: func(origin string) bool {
+				return strings.HasSuffix(origin, ".example.com")
+			},
+			expectAllowed: true,
+			expectVary:    true,
+		},
+		{
+			name:   "rejected by function",
+			origin: "https://evil.com",
+			validator: func(origin string) bool {
+				return strings.HasSuffix(origin, ".example.com")
+			},
+			expectAllowed: false,
+			expectVary:    true,
+		},
+		{
+			name:   "function takes precedence over allowed origins",
+			origin: "https://other.com",
+			validator: func(origin string) bool {
+				return origin == "https://other.com"
+			},
+			expectAllowed: true,
+			expectVary:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mw := CORS(config.CORSConfig{
+				AllowedOrigins:  []string{"https://example.com"}, // Should be ignored when AllowOriginFunc is set
+				AllowOriginFunc: tt.validator,
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set("Origin", tt.origin)
+			rr := httptest.NewRecorder()
+
+			mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rr, req)
+
+			varyHeader := rr.Header().Get("Vary")
+			if tt.expectVary && varyHeader != "Origin" {
+				t.Errorf("expected Vary: Origin, got %s", varyHeader)
+			}
+			if !tt.expectVary && varyHeader == "Origin" {
+				t.Errorf("unexpected Vary: Origin header")
+			}
+
+			allowOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+			if tt.expectAllowed && allowOrigin == "" {
+				t.Errorf("expected Access-Control-Allow-Origin header, got none")
+			}
+			if !tt.expectAllowed && allowOrigin != "" {
+				t.Errorf("expected no Access-Control-Allow-Origin header, got %s", allowOrigin)
+			}
+		})
+	}
+}
+
+func TestCORSCustomOriginFuncWithCredentials(t *testing.T) {
+	mw := CORS(config.CORSConfig{
+		AllowCredentials: true,
+		AllowOriginFunc: func(origin string) bool {
+			return strings.HasPrefix(origin, "https://")
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	rr := httptest.NewRecorder()
+
+	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	// When credentials are allowed and using custom validator, should echo origin
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+		t.Errorf("expected origin echo with credentials, got %s", got)
+	}
+
+	if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Errorf("expected credentials header, got %s", got)
+	}
+
+	if got := rr.Header().Get("Vary"); got != "Origin" {
+		t.Errorf("expected Vary: Origin, got %s", got)
+	}
+}

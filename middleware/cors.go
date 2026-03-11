@@ -88,15 +88,26 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 
 			// Determine if origin is allowed
 			var allowedOrigin string
-			if allowAllOrigins {
-				if c.AllowCredentials {
-					// When credentials are allowed, can't use "*"
-					allowedOrigin = origin
-				} else {
-					allowedOrigin = "*"
-				}
+			originAllowed := false
+
+			if c.AllowOriginFunc != nil {
+				// Use custom origin validator
+				originAllowed = c.AllowOriginFunc(origin)
+				// Set Vary header when using dynamic origin validation
+				w.Header().Set("Vary", "Origin")
+			} else if allowAllOrigins {
+				originAllowed = true
 			} else if allowedOriginMap[strings.ToLower(origin)] {
-				allowedOrigin = origin
+				originAllowed = true
+			}
+
+			if originAllowed {
+				if allowAllOrigins && !c.AllowCredentials {
+					// When credentials are allowed, can't use "*"
+					allowedOrigin = "*"
+				} else {
+					allowedOrigin = origin
+				}
 			}
 
 			// Set CORS headers if origin is allowed
