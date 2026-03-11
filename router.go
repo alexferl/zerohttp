@@ -330,8 +330,8 @@ func (r *defaultRouter) OPTIONS(path string, h http.Handler, mw ...func(http.Han
 
 // PATCH registers a handler for HTTP PATCH requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) PATCH(path string, fn http.Handler, mw ...func(http.Handler) http.Handler) {
-	r.handle(http.MethodPatch, path, fn, mw)
+func (r *defaultRouter) PATCH(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+	r.handle(http.MethodPatch, path, h, mw)
 }
 
 // POST registers a handler for HTTP POST requests to the specified path.
