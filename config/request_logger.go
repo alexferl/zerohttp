@@ -24,7 +24,7 @@ const (
 // RequestLoggerConfig allows customization of request logging.
 type RequestLoggerConfig struct {
 	// Enabled determines if request logging is enabled at all.
-	// When false, no request logging occurs (fastest option).
+	// When false, no request logging occurs.
 	// Use a pointer to distinguish between "not set" and "explicitly set to false".
 	// Default: true
 	Enabled *bool

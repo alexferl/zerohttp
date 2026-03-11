@@ -86,10 +86,10 @@ type Config struct {
 	RequestLogger RequestLoggerConfig
 
 	// ErrorResponseType controls the format of 404/405 error responses.
-	// "json" returns RFC 9457 Problem Detail responses (application/problem+json).
-	// "plain" returns simple text/plain responses (faster, lower overhead).
-	// Default: "json"
-	ErrorResponseType string
+	// ErrorResponseJSON returns RFC 9457 Problem Detail responses (application/problem+json).
+	// ErrorResponsePlain returns simple text/plain responses.
+	// Default: ErrorResponsePlain
+	ErrorResponseType ErrorResponseType
 
 	// SecurityHeaders holds the configuration for the security headers middleware.
 	SecurityHeaders SecurityHeadersConfig
@@ -148,10 +148,12 @@ type Config struct {
 	TracerConfig TracerConfig
 }
 
-// ErrorResponse type constants.
+// ErrorResponseType defines the format of error responses.
+type ErrorResponseType string
+
 const (
-	ErrorResponseJSON  = "json"
-	ErrorResponsePlain = "plain"
+	ErrorResponseJSON  ErrorResponseType = "json"
+	ErrorResponsePlain ErrorResponseType = "plain"
 )
 
 // DefaultConfig contains all default values used by Config.
