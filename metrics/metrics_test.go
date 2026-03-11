@@ -425,34 +425,6 @@ func TestUnregisterCollector_NotFound(t *testing.T) {
 	reg.UnregisterCollector(collector)
 }
 
-func BenchmarkCounterInc(b *testing.B) {
-	reg := NewRegistry()
-	counter := reg.Counter("bench_counter", "label")
-	c := counter.WithLabelValues("value")
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			c.Inc()
-		}
-	})
-}
-
-func BenchmarkHistogramObserve(b *testing.B) {
-	reg := NewRegistry()
-	hist := reg.Histogram("bench_histogram", nil, "label")
-	h := hist.WithLabelValues("value")
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			h.Observe(float64(i%100) / 100.0)
-			i++
-		}
-	})
-}
-
 func TestCounterVec_Concurrent(t *testing.T) {
 	reg := NewRegistry()
 	c := reg.Counter("concurrent_counter", "label")

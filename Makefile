@@ -1,4 +1,4 @@
-.PHONY: dev audit cover cover-html fmt lint pre-commit test tidy update-deps
+.PHONY: dev audit cover cover-html fmt lint pre-commit test bench tidy update-deps
 
 .DEFAULT: help
 help:
@@ -17,7 +17,9 @@ help:
 	@echo "make pre-commit"
 	@echo "	run pre-commit hooks"
 	@echo "make test"
-	@echo "	execute all tests"
+	@echo "	run all tests"
+	@echo "make bench"
+	@echo "	run all benchmarks"
 	@echo "make tidy"
 	@echo "	clean and tidy dependencies"
 	@echo "make update-deps"
@@ -58,6 +60,9 @@ pre-commit: check-pre-commit
 
 test:
 	$(GOTESTSUM) $(TESTFLAGS)
+
+bench:
+	go test -bench=. -benchmem -run=^$$ ./...
 
 tidy:
 	go mod tidy -v

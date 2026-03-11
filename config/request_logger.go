@@ -23,6 +23,11 @@ const (
 
 // RequestLoggerConfig allows customization of request logging.
 type RequestLoggerConfig struct {
+	// Enabled determines if request logging is enabled at all.
+	// When false, no request logging occurs (fastest option).
+	// Use a pointer to distinguish between "not set" and "explicitly set to false".
+	// Default: true
+	Enabled *bool
 	// LogErrors determines if errors should be logged (defaults to true).
 	LogErrors bool
 	// Fields to include in logs (defaults to all fields).
@@ -80,6 +85,7 @@ var DefaultSensitiveFields = []string{
 
 // DefaultRequestLoggerConfig contains the default values for request logging configuration.
 var DefaultRequestLoggerConfig = RequestLoggerConfig{
+	Enabled:   Bool(true),
 	LogErrors: true,
 	Fields: []LogField{
 		FieldMethod,

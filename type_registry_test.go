@@ -685,29 +685,3 @@ func TestMixedEmbeddedAndRegular(t *testing.T) {
 		t.Errorf("expected both 'a' and 'b', got %v", tags)
 	}
 }
-
-func BenchmarkTagLookup(b *testing.B) {
-	type TestStruct struct {
-		Field1  string `form:"field1"`
-		Field2  string `form:"field2"`
-		Field3  string `form:"field3"`
-		Field4  string `form:"field4"`
-		Field5  string `form:"field5"`
-		Field6  string `form:"field6"`
-		Field7  string `form:"field7"`
-		Field8  string `form:"field8"`
-		Field9  string `form:"field9"`
-		Field10 string `form:"field10"`
-	}
-
-	typ := reflect.TypeOf(TestStruct{})
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		info, err := globalTypeRegistry.getTypeInfo(typ)
-		if err != nil {
-			b.Fatalf("failed to get type info: %v", err)
-		}
-		_ = info.getBindableFields("form", false)
-	}
-}

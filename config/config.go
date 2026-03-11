@@ -85,6 +85,12 @@ type Config struct {
 	// RequestLogger holds the configuration for the HTTP request logging middleware.
 	RequestLogger RequestLoggerConfig
 
+	// ErrorResponseType controls the format of 404/405 error responses.
+	// "json" returns RFC 9457 Problem Detail responses (application/problem+json).
+	// "plain" returns simple text/plain responses (faster, lower overhead).
+	// Default: "json"
+	ErrorResponseType string
+
 	// SecurityHeaders holds the configuration for the security headers middleware.
 	SecurityHeaders SecurityHeadersConfig
 
@@ -142,6 +148,12 @@ type Config struct {
 	TracerConfig TracerConfig
 }
 
+// ErrorResponse type constants.
+const (
+	ErrorResponseJSON  = "json"
+	ErrorResponsePlain = "plain"
+)
+
 // DefaultConfig contains all default values used by Config.
 // Update this file if you want to change system-wide defaults.
 var DefaultConfig = Config{
@@ -155,6 +167,7 @@ var DefaultConfig = Config{
 	RequestLogger:             DefaultRequestLoggerConfig,
 	SecurityHeaders:           DefaultSecurityHeadersConfig,
 	Metrics:                   DefaultMetricsConfig,
+	ErrorResponseType:         ErrorResponsePlain,
 	Logger:                    nil, // means use DefaultLogger
 	Server:                    nil,
 	TLSServer:                 nil,

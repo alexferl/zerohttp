@@ -492,7 +492,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(HeaderContentType, MIMEApplicationProblem)
+			Header(HeaderContentType, MIMETextPlainCharset)
 
 		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
@@ -556,10 +556,10 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		// Now call the handler - should trigger fallback path
 		defaultNotFoundHandler.ServeHTTP(w, req)
 
-		// Content-Type should be text/plain (fallback)
+		// Content-Type should be text/plain; charset=utf-8
 		contentType := w.Header().Get("Content-Type")
-		if contentType != "text/plain" {
-			t.Errorf("expected Content-Type %q, got %q", "text/plain", contentType)
+		if contentType != MIMETextPlainCharset {
+			t.Errorf("expected Content-Type %q, got %q", MIMETextPlainCharset, contentType)
 		}
 	})
 
@@ -570,8 +570,8 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		defaultMethodNotAllowedHandler.ServeHTTP(w, req)
 
 		contentType := w.Header().Get("Content-Type")
-		if contentType != "text/plain" {
-			t.Errorf("expected Content-Type %q, got %q", "text/plain", contentType)
+		if contentType != MIMETextPlainCharset {
+			t.Errorf("expected Content-Type %q, got %q", MIMETextPlainCharset, contentType)
 		}
 	})
 }
@@ -690,7 +690,7 @@ func TestUtilityFunctions(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(HeaderContentType, MIMEApplicationProblem)
+			Header(HeaderContentType, MIMETextPlainCharset)
 	})
 
 	t.Run("defaultMethodNotAllowedHandler", func(t *testing.T) {
@@ -700,17 +700,17 @@ func TestUtilityFunctions(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusMethodNotAllowed).
-			Header(HeaderContentType, MIMEApplicationProblem)
+			Header(HeaderContentType, MIMETextPlainCharset)
 	})
 
-	t.Run("defaultNotFoundHandler", func(t *testing.T) {
+	t.Run("defaultNotFoundHandler body", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 		defaultNotFoundHandler.ServeHTTP(w, req)
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(HeaderContentType, MIMEApplicationProblem)
+			Body("Requested resource was not found\n")
 	})
 
 	t.Run("allowedMethods", func(t *testing.T) {
@@ -1045,6 +1045,75 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 
 		if !upgradeCalled {
 			t.Error("CONNECT handler was not called for WebTransport upgrade")
+		}
+	})
+}
+
+func TestShouldLogRequest(t *testing.T) {
+	t.Run("returns true when Enabled is nil (default)", func(t *testing.T) {
+		r := NewRouter().(*defaultRouter)
+		r.SetConfig(config.Config{
+			RequestLogger: config.RequestLoggerConfig{
+				Enabled: nil, // use default
+			},
+		})
+
+		if !r.shouldLogRequest() {
+			t.Error("expected shouldLogRequest to be true when Enabled is nil")
+		}
+	})
+
+	t.Run("returns true when Enabled is explicitly true", func(t *testing.T) {
+		r := NewRouter().(*defaultRouter)
+		r.SetConfig(config.Config{
+			RequestLogger: config.RequestLoggerConfig{
+				Enabled: config.Bool(true),
+			},
+		})
+
+		if !r.shouldLogRequest() {
+			t.Error("expected shouldLogRequest to be true when Enabled is true")
+		}
+	})
+
+	t.Run("returns false when Enabled is explicitly false", func(t *testing.T) {
+		r := NewRouter().(*defaultRouter)
+		r.SetConfig(config.Config{
+			RequestLogger: config.RequestLoggerConfig{
+				Enabled: config.Bool(false),
+			},
+		})
+
+		if r.shouldLogRequest() {
+			t.Error("expected shouldLogRequest to be false when Enabled is false")
+		}
+	})
+
+	t.Run("returns false when DisableDefaultMiddlewares is true", func(t *testing.T) {
+		r := NewRouter().(*defaultRouter)
+		r.SetConfig(config.Config{
+			DisableDefaultMiddlewares: true,
+			RequestLogger: config.RequestLoggerConfig{
+				Enabled: config.Bool(true), // even if Enabled is true
+			},
+		})
+
+		if r.shouldLogRequest() {
+			t.Error("expected shouldLogRequest to be false when DisableDefaultMiddlewares is true")
+		}
+	})
+
+	t.Run("returns true when DisableDefaultMiddlewares is false and Enabled is nil", func(t *testing.T) {
+		r := NewRouter().(*defaultRouter)
+		r.SetConfig(config.Config{
+			DisableDefaultMiddlewares: false,
+			RequestLogger: config.RequestLoggerConfig{
+				Enabled: nil,
+			},
+		})
+
+		if !r.shouldLogRequest() {
+			t.Error("expected shouldLogRequest to be true when DisableDefaultMiddlewares is false and Enabled is nil")
 		}
 	})
 }

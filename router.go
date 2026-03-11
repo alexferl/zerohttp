@@ -19,6 +19,30 @@ import (
 	"github.com/alexferl/zerohttp/middleware"
 )
 
+var (
+	// preEncodedNotFoundJSON is the pre-encoded 404 Not Found JSON response
+	preEncodedNotFoundJSON []byte
+	// preEncodedMethodNotAllowedJSON is the pre-encoded 405 Method Not Allowed JSON response
+	preEncodedMethodNotAllowedJSON []byte
+)
+
+func init() {
+	// Pre-encode JSON responses at init time to avoid repeated encoding overhead
+	notFoundProblem := &ProblemDetail{
+		Title:  "Not Found",
+		Status: http.StatusNotFound,
+		Detail: "Requested resource was not found",
+	}
+	preEncodedNotFoundJSON, _ = json.Marshal(notFoundProblem)
+
+	methodNotAllowedProblem := &ProblemDetail{
+		Title:  "Method Not Allowed",
+		Status: http.StatusMethodNotAllowed,
+		Detail: "HTTP method is not allowed",
+	}
+	preEncodedMethodNotAllowedJSON, _ = json.Marshal(methodNotAllowedProblem)
+}
+
 // HandlerFunc is a handler function that returns an error.
 // Errors are handled directly without panic propagation.
 type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
@@ -45,7 +69,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	// Check for validation errors (422)
 	var verr ValidationErrorer
 	if errors.As(err, &verr) {
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(HeaderContentType, MIMEApplicationProblem)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		response := map[string]any{
 			"title":  "Unprocessable Entity",
@@ -61,7 +85,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 
 	// Check for binding errors (400)
 	if IsBindError(err) {
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(HeaderContentType, MIMEApplicationProblem)
 		w.WriteHeader(http.StatusBadRequest)
 		response := map[string]any{
 			"title":  "Bad Request",
@@ -75,7 +99,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	}
 
 	// For all other errors, return 500 Internal Server Error
-	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
 	w.WriteHeader(http.StatusInternalServerError)
 	response := map[string]any{
 		"title":  "Internal Server Error",
@@ -573,58 +597,96 @@ func (r *defaultRouter) handle(method, path string, fn http.Handler, mw []func(h
 	}
 }
 
+// shouldLogRequest returns true if request logging should be enabled.
+// It checks both the RequestLogger.Enabled setting and DisableDefaultMiddlewares.
+func (r *defaultRouter) shouldLogRequest() bool {
+	if r.config.DisableDefaultMiddlewares {
+		return false
+	}
+	return r.config.RequestLogger.Enabled == nil || *r.config.RequestLogger.Enabled
+}
+
 // catchAllHandler returns a handler that processes unmatched requests.
 // It determines whether to return a 404 Not Found or 405 Method Not Allowed response
 // based on whether any methods are registered for the requested path.
 func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
+	useJSON := r.config.ErrorResponseType == config.ErrorResponseJSON
+	shouldLog := r.shouldLogRequest()
+
 	return func(w http.ResponseWriter, req *http.Request) {
-		start := time.Now()
+		var start time.Time
 
-		requestID := req.Header.Get(r.config.RequestID.Header)
-		if requestID == "" {
-			requestID = r.config.RequestID.Generator()
+		if shouldLog {
+			start = time.Now()
+
+			// Lazy request ID generation - only when logging
+			requestID := req.Header.Get(r.config.RequestID.Header)
+			if requestID == "" {
+				requestID = r.config.RequestID.Generator()
+			}
+			w.Header().Set(r.config.RequestID.Header, requestID)
 		}
-
-		w.Header().Set(r.config.RequestID.Header, requestID)
 
 		if methods, exists := r.registeredRoutes[req.URL.Path]; exists {
 			if !methods[req.Method] {
 				w.Header().Set(HeaderAllow, allowedMethods(methods))
-				r.methodNotAllowedHandler.ServeHTTP(w, req)
-				middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusMethodNotAllowed, time.Since(start), "", "")
+
+				if useJSON {
+					jsonMethodNotAllowedHandler(w, req)
+				} else {
+					r.methodNotAllowedHandler.ServeHTTP(w, req)
+				}
+
+				if shouldLog {
+					middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusMethodNotAllowed, time.Since(start), "", "")
+				}
 				return
 			}
 		}
 
-		r.notFoundHandler.ServeHTTP(w, req)
-		middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
+		if useJSON {
+			jsonNotFoundHandler(w, req)
+		} else {
+			r.notFoundHandler.ServeHTTP(w, req)
+		}
+
+		if shouldLog {
+			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
+		}
 	}
 }
 
 // defaultNotFoundHandler is the default handler for 404 Not Found responses.
-// It returns a problem detail response indicating that the requested resource was not found.
+// It returns a pre-encoded plain text response for optimal performance.
 var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	problem := NewProblemDetail(http.StatusNotFound, "The requested resource was not found")
-	if err := R.ProblemDetail(w, problem); err != nil {
-		// Fallback to plain text if problem detail fails
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("404 Not Found\n"))
-	}
+	w.Header().Set(HeaderContentType, MIMETextPlainCharset)
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write([]byte("Requested resource was not found\n"))
 })
 
 // defaultMethodNotAllowedHandler is the default handler for 405 Method Not Allowed responses.
-// It returns a problem detail response indicating that the HTTP method is not allowed.
+// It returns a pre-encoded plain text response for optimal performance.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
 var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	problem := NewProblemDetail(http.StatusMethodNotAllowed, "The HTTP method is not allowed")
-	if err := R.ProblemDetail(w, problem); err != nil {
-		// Fallback to plain text if problem detail fails
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_, _ = w.Write([]byte("405 Method Not Allowed\n"))
-	}
+	w.Header().Set(HeaderContentType, MIMETextPlainCharset)
+	w.WriteHeader(http.StatusMethodNotAllowed)
+	_, _ = w.Write([]byte("HTTP method is not allowed\n"))
 })
+
+// jsonNotFoundHandler returns a JSON problem detail 404 response.
+func jsonNotFoundHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write(preEncodedNotFoundJSON)
+}
+
+// jsonMethodNotAllowedHandler returns a JSON problem detail 405 response.
+// The "Allow" header should be set by the caller to indicate which methods are allowed.
+func jsonMethodNotAllowedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+	w.WriteHeader(http.StatusMethodNotAllowed)
+	_, _ = w.Write(preEncodedMethodNotAllowedJSON)
+}
 
 // allowedMethods converts a map of HTTP methods to a comma-separated string
 // suitable for the "Allow" header in 405 Method Not Allowed responses.

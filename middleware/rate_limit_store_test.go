@@ -361,16 +361,3 @@ func TestInMemoryStore_MaxKeysEviction_SlidingWindow(t *testing.T) {
 		t.Error("key 'b' should have been evicted and treated as new")
 	}
 }
-
-// BenchmarkInMemoryStore_CheckAndRecord benchmarks the store
-func BenchmarkInMemoryStore_CheckAndRecord(b *testing.B) {
-	store := NewInMemoryStore(config.TokenBucket, time.Minute, 1000, 10000)
-	ctx := context.Background()
-	now := time.Now()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		key := string(rune('a' + (i % 26)))
-		store.CheckAndRecord(ctx, key, now)
-	}
-}
