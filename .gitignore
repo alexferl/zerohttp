@@ -38,3 +38,6 @@ uploads
 
 # coverage
 coverage.html
+
+# profiling
+*.prof

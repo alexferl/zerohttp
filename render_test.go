@@ -337,3 +337,54 @@ func TestRenderer_Redirect_WithQuery(t *testing.T) {
 
 	zhtest.AssertWith(t, w).Header(HeaderLocation, redirectURL)
 }
+
+func TestRenderer_ProblemDetail(t *testing.T) {
+	t.Run("basic problem detail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		problem := NewProblemDetail(http.StatusNotFound, "Resource not found")
+		problem.Instance = "/test/resource"
+
+		if err := R.ProblemDetail(w, problem); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Header(HeaderContentType, MIMEApplicationProblem).
+			IsProblemDetail().
+			ProblemDetailTitle("Not Found").
+			ProblemDetailDetail("Resource not found")
+	})
+
+	t.Run("different status codes", func(t *testing.T) {
+		tests := []struct {
+			name   string
+			status int
+			title  string
+		}{
+			{"bad request", http.StatusBadRequest, "Bad Request"},
+			{"unauthorized", http.StatusUnauthorized, "Unauthorized"},
+			{"forbidden", http.StatusForbidden, "Forbidden"},
+			{"internal error", http.StatusInternalServerError, "Internal Server Error"},
+			{"service unavailable", http.StatusServiceUnavailable, "Service Unavailable"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				w := httptest.NewRecorder()
+
+				problem := NewProblemDetail(tt.status, "test detail")
+
+				if err := R.ProblemDetail(w, problem); err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+
+				zhtest.AssertWith(t, w).
+					Status(tt.status).
+					IsProblemDetail().
+					ProblemDetailTitle(tt.title)
+			})
+		}
+	})
+}

@@ -235,6 +235,45 @@ func TestMergeRequestLoggerConfig(t *testing.T) {
 			t.Errorf("expected 2 AllowedPaths, got %d", len(result.AllowedPaths))
 		}
 	})
+
+	t.Run("Enabled nil uses default (true)", func(t *testing.T) {
+		user := config.RequestLoggerConfig{
+			LogErrors: true,
+		}
+		result := mergeRequestLoggerConfig(defaults, user)
+		if result.Enabled == nil {
+			t.Error("expected Enabled to be set to default, got nil")
+		}
+		if !*result.Enabled {
+			t.Error("expected Enabled to be true when not set (nil)")
+		}
+	})
+
+	t.Run("Enabled explicitly set to false", func(t *testing.T) {
+		user := config.RequestLoggerConfig{
+			Enabled: config.Bool(false),
+		}
+		result := mergeRequestLoggerConfig(defaults, user)
+		if result.Enabled == nil {
+			t.Error("expected Enabled to be set, got nil")
+		}
+		if *result.Enabled {
+			t.Error("expected Enabled to be false when explicitly set")
+		}
+	})
+
+	t.Run("Enabled explicitly set to true", func(t *testing.T) {
+		user := config.RequestLoggerConfig{
+			Enabled: config.Bool(true),
+		}
+		result := mergeRequestLoggerConfig(defaults, user)
+		if result.Enabled == nil {
+			t.Error("expected Enabled to be set, got nil")
+		}
+		if !*result.Enabled {
+			t.Error("expected Enabled to be true when explicitly set")
+		}
+	})
 }
 
 func TestMergeSecurityHeadersConfig(t *testing.T) {

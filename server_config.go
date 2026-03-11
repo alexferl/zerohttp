@@ -40,6 +40,9 @@ func mergeRequestIDConfig(defaultCfg, userCfg config.RequestIDConfig) config.Req
 
 // mergeRequestLoggerConfig merges user config with defaults
 func mergeRequestLoggerConfig(defaultCfg, userCfg config.RequestLoggerConfig) config.RequestLoggerConfig {
+	if userCfg.Enabled != nil {
+		defaultCfg.Enabled = userCfg.Enabled
+	}
 	if userCfg.LogErrors {
 		defaultCfg.LogErrors = userCfg.LogErrors
 	}

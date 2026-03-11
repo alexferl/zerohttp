@@ -564,33 +564,6 @@ func TestMiddleware_MultipleMethods(t *testing.T) {
 	}
 }
 
-func BenchmarkMiddleware(b *testing.B) {
-	reg := NewRegistry()
-	cfg := config.MetricsConfig{
-		Enabled:         true,
-		DurationBuckets: []float64{0.001, 0.01, 0.1},
-		SizeBuckets:     []float64{100, 1000},
-		PathLabelFunc:   func(p string) string { return p },
-	}
-
-	middleware := NewMiddleware(reg, cfg)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	wrapped := middleware(handler)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		rec := httptest.NewRecorder()
-		wrapped.ServeHTTP(rec, req)
-	}
-}
-
 func TestMiddleware_Router404And405(t *testing.T) {
 	// Create a real zerohttp router to test 404/405 handling
 	reg := NewRegistry()
@@ -674,39 +647,6 @@ func TestMiddleware_Router404And405(t *testing.T) {
 	}
 	if statuses["405"] != 1 {
 		t.Errorf("expected 1 request with status 405, got %d", statuses["405"])
-	}
-}
-
-func BenchmarkMiddleware_CustomLabels(b *testing.B) {
-	reg := NewRegistry()
-	cfg := config.MetricsConfig{
-		Enabled:         true,
-		DurationBuckets: []float64{0.001, 0.01, 0.1},
-		SizeBuckets:     []float64{100, 1000},
-		PathLabelFunc:   func(p string) string { return p },
-		CustomLabels: func(r *http.Request) map[string]string {
-			return map[string]string{
-				"tenant": "tenant-123",
-				"region": "us-east",
-			}
-		},
-	}
-
-	middleware := NewMiddleware(reg, cfg)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	wrapped := middleware(handler)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		rec := httptest.NewRecorder()
-		wrapped.ServeHTTP(rec, req)
 	}
 }
 
