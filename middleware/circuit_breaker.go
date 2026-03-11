@@ -22,12 +22,13 @@ const (
 
 // circuit represents a single circuit breaker instance
 type circuit struct {
-	state           CircuitState
-	failureCount    int
-	successCount    int
-	lastFailureTime time.Time
-	mu              sync.RWMutex
-	config          config.CircuitBreakerConfig
+	state              CircuitState
+	failureCount       int
+	successCount       int
+	halfOpenInFlight   int // Number of requests currently in flight in half-open state
+	lastFailureTime    time.Time
+	mu                 sync.RWMutex
+	config             config.CircuitBreakerConfig
 }
 
 // circuitBreakerMiddleware manages multiple circuit breakers
@@ -64,6 +65,9 @@ func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.
 	}
 	if c.OpenMessage == "" {
 		c.OpenMessage = config.DefaultCircuitBreakerConfig.OpenMessage
+	}
+	if c.MaxHalfOpenRequests <= 0 {
+		c.MaxHalfOpenRequests = config.DefaultCircuitBreakerConfig.MaxHalfOpenRequests
 	}
 
 	cbm := &circuitBreakerMiddleware{
@@ -126,7 +130,9 @@ func (c *circuit) getState() CircuitState {
 	return c.state
 }
 
-// isOpen checks if the circuit is open or should transition to half-open
+// isOpen checks if the circuit is open or should transition to half-open.
+// Returns true if the request should be blocked.
+// For half-open state, it checks if max concurrent requests limit is reached.
 func (c *circuit) isOpen() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -139,10 +145,16 @@ func (c *circuit) isOpen() bool {
 		if time.Since(c.lastFailureTime) >= c.config.RecoveryTimeout {
 			c.state = StateHalfOpen
 			c.successCount = 0
+			c.halfOpenInFlight = 0
 			return false
 		}
 		return true
 	case StateHalfOpen:
+		// Check if we've reached the max concurrent requests limit
+		if c.halfOpenInFlight >= c.config.MaxHalfOpenRequests {
+			return true // Treat as open (reject request)
+		}
+		c.halfOpenInFlight++
 		return false
 	}
 
@@ -175,10 +187,15 @@ func (c *circuit) recordResult(r *http.Request, statusCode int, reg metrics.Regi
 		// In open state, requests are blocked
 
 	case StateHalfOpen:
+		// Decrement in-flight counter when request completes
+		c.halfOpenInFlight--
+
 		if isFailure {
 			c.state = StateOpen
 			c.lastFailureTime = time.Now()
 			c.failureCount++
+			c.successCount = 0
+			c.halfOpenInFlight = 0
 			reg.Counter("circuit_breaker_failures_total", "key").WithLabelValues(key).Inc()
 			reg.Counter("circuit_breaker_trips_total", "key").WithLabelValues(key).Inc()
 			reg.Counter("circuit_breaker_requests_total", "key", "result").WithLabelValues(key, "rejected").Inc()
@@ -188,6 +205,7 @@ func (c *circuit) recordResult(r *http.Request, statusCode int, reg metrics.Regi
 				c.state = StateClosed
 				c.failureCount = 0
 				c.successCount = 0
+				c.halfOpenInFlight = 0
 			}
 			reg.Counter("circuit_breaker_requests_total", "key", "result").WithLabelValues(key, "allowed").Inc()
 		}
@@ -220,5 +238,6 @@ func (cbm *circuitBreakerMiddleware) Reset(key string) {
 		c.state = StateClosed
 		c.failureCount = 0
 		c.successCount = 0
+		c.halfOpenInFlight = 0
 	}
 }
