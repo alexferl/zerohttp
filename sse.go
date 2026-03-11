@@ -35,9 +35,9 @@ type SSE struct {
 	retry   time.Duration
 }
 
-// NewSSE creates a new SSE connection using stdlib.
-// This sets the appropriate headers and prepares the connection for streaming.
-func NewSSE(w http.ResponseWriter, r *http.Request) (*SSE, error) {
+// setupSSEResponse sets up the SSE headers and returns the flusher.
+// This is a helper shared between NewSSE and NewSSEWriter.
+func setupSSEResponse(w http.ResponseWriter) (http.Flusher, error) {
 	if w.Header().Get("Content-Type") != "" {
 		return nil, fmt.Errorf("sse: response headers already sent")
 	}
@@ -53,6 +53,17 @@ func NewSSE(w http.ResponseWriter, r *http.Request) (*SSE, error) {
 
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+
+	return flusher, nil
+}
+
+// NewSSE creates a new SSE connection using stdlib.
+// This sets the appropriate headers and prepares the connection for streaming.
+func NewSSE(w http.ResponseWriter, r *http.Request) (*SSE, error) {
+	flusher, err := setupSSEResponse(w)
+	if err != nil {
+		return nil, err
+	}
 
 	ctx, cancel := context.WithCancel(r.Context())
 
@@ -236,20 +247,10 @@ type SSEWriter struct {
 // NewSSEWriter creates a new SSEWriter from an http.ResponseWriter.
 // This sets SSE headers and prepares the connection.
 func NewSSEWriter(w http.ResponseWriter, r *http.Request) (*SSEWriter, error) {
-	if w.Header().Get("Content-Type") != "" {
-		return nil, fmt.Errorf("sse: response headers already sent")
+	flusher, err := setupSSEResponse(w)
+	if err != nil {
+		return nil, err
 	}
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		return nil, fmt.Errorf("sse: streaming not supported")
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.WriteHeader(http.StatusOK)
-	flusher.Flush()
 
 	return &SSEWriter{
 		w:       w,
