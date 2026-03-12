@@ -635,6 +635,16 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 		}
 
 		if methods, exists := r.registeredRoutes[req.URL.Path]; exists {
+			// Auto-generate OPTIONS response
+			if req.Method == http.MethodOptions {
+				w.Header().Set(HeaderAllow, allowedMethods(methods))
+				w.WriteHeader(http.StatusNoContent)
+				if shouldLog {
+					middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNoContent, time.Since(start), "", "")
+				}
+				return
+			}
+
 			if !methods[req.Method] {
 				w.Header().Set(HeaderAllow, allowedMethods(methods))
 
@@ -697,10 +707,20 @@ func jsonMethodNotAllowedHandler(w http.ResponseWriter, r *http.Request) {
 
 // allowedMethods converts a map of HTTP methods to a comma-separated string
 // suitable for the "Allow" header in 405 Method Not Allowed responses.
+// Implicit HEAD is included if GET is present. OPTIONS is always included.
 func allowedMethods(methods map[string]bool) string {
-	var result []string
+	result := make([]string, 0, len(methods)+2)
 	for method := range methods {
 		result = append(result, method)
 	}
+	// Implicit HEAD when GET is registered
+	if methods[http.MethodGet] && !methods[http.MethodHead] {
+		result = append(result, http.MethodHead)
+	}
+	// OPTIONS is always implicitly allowed
+	if !methods[http.MethodOptions] {
+		result = append(result, http.MethodOptions)
+	}
+	slices.Sort(result)
 	return strings.Join(result, ", ")
 }
