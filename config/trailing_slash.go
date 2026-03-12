@@ -18,8 +18,10 @@ const (
 type TrailingSlashConfig struct {
 	// Action to take when trailing slash doesn't match preference (defaults to redirect)
 	Action TrailingSlashAction
+
 	// PreferTrailingSlash determines if URLs should have trailing slashes (defaults to false)
 	PreferTrailingSlash bool
+
 	// RedirectCode for redirects (defaults to 301 Moved Permanently)
 	RedirectCode int
 }

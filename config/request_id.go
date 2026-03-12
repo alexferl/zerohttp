@@ -12,9 +12,11 @@ type RequestIDContextKey string
 type RequestIDConfig struct {
 	// Header is the header name for the request ID (defaults to "X-Request-Id").
 	Header string
+
 	// Generator is a custom function to generate request IDs.
 	// The default generator uses crypto/rand (CSPRNG) for 128 bits of entropy.
 	Generator func() string
+
 	// ContextKey is the key to store the request ID in context (defaults to "request_id").
 	ContextKey RequestIDContextKey
 }

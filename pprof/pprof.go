@@ -16,6 +16,7 @@ import (
 type PProf struct {
 	// Config is the configuration used
 	Config Config
+
 	// Auth contains the actual authentication config used (auto-generated or provided)
 	Auth *AuthConfig
 }
@@ -84,6 +85,7 @@ type AuthConfig struct {
 	// Username for basic auth
 	// Default: "pprof"
 	Username string
+
 	// Password for basic auth
 	// Default: auto-generated secure random password
 	Password string

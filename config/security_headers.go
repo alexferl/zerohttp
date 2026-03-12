@@ -32,8 +32,10 @@ type StrictTransportSecurity struct {
 	// MaxAge sets the time, in seconds, that the browser should remember that a site is only to be accessed using HTTPS.
 	// A value of 0 disables HSTS.
 	MaxAge int
+
 	// ExcludeSubdomains specifies whether the HSTS policy applies to all subdomains.
 	ExcludeSubdomains bool
+
 	// PreloadEnabled adds the preload directive to the header.
 	PreloadEnabled bool
 }
@@ -49,26 +51,37 @@ var DefaultStrictTransportSecurity = StrictTransportSecurity{
 type SecurityHeadersConfig struct {
 	// ContentSecurityPolicy sets the `Content-Security-Policy` header
 	ContentSecurityPolicy string
+
 	// ContentSecurityPolicyReportOnly sets the policy in report-only mode
 	ContentSecurityPolicyReportOnly bool
+
 	// CrossOriginEmbedderPolicy sets the `Cross-Origin-Embedder-Policy` header
 	CrossOriginEmbedderPolicy string
+
 	// CrossOriginOpenerPolicy sets the `Cross-Origin-Opener-Policy` header
 	CrossOriginOpenerPolicy string
+
 	// CrossOriginResourcePolicy sets the `Cross-Origin-Resource-Policy` header
 	CrossOriginResourcePolicy string
+
 	// PermissionsPolicy sets the `Permissions-Policy` header
 	PermissionsPolicy string
+
 	// ReferrerPolicy sets the `Referrer-Policy` header
 	ReferrerPolicy string
+
 	// Server sets the `Server` header (empty string to hide server info)
 	Server string
+
 	// StrictTransportSecurity configures HSTS header
 	StrictTransportSecurity StrictTransportSecurity
+
 	// XContentTypeOptions sets the `X-Content-Type-Options` header
 	XContentTypeOptions string
+
 	// XFrameOptions sets the `X-Frame-Options` header
 	XFrameOptions string
+
 	// ExemptPaths contains paths to skip security headers
 	ExemptPaths []string
 }

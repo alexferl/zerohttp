@@ -7,8 +7,6 @@ import (
 	"github.com/alexferl/zerohttp/config"
 )
 
-// Re-export WebSocket types from config package for convenience.
-
 // MessageType represents the type of WebSocket message.
 type MessageType = config.MessageType
 

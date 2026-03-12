@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -384,13 +385,13 @@ func TestHS256TokenStore_Validate(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
 	// Validate the token
-	validatedClaims, err := store.Validate(token)
+	validatedClaims, err := store.Validate(context.Background(), token)
 	if err != nil {
 		t.Fatalf("failed to validate token: %v", err)
 	}
@@ -410,7 +411,7 @@ func TestHS256TokenStore_Validate_InvalidToken(t *testing.T) {
 	opts := HS256Options{}
 	store := NewHS256TokenStore(secret, opts)
 
-	_, err := store.Validate("invalid.token.here")
+	_, err := store.Validate(context.Background(), "invalid.token.here")
 	if err == nil {
 		t.Error("expected error for invalid token")
 	}
@@ -428,7 +429,7 @@ func TestHS256TokenStore_Generate(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -451,7 +452,7 @@ func TestHS256TokenStore_Generate_WithMapClaims(t *testing.T) {
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
 
-	token, err := store.Generate(claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -469,7 +470,7 @@ func TestHS256TokenStore_Generate_UnsupportedClaimsType(t *testing.T) {
 	store := NewHS256TokenStore(secret, opts)
 
 	// Use unsupported claims type
-	_, err := store.Generate("not a map", config.AccessToken)
+	_, err := store.Generate(context.Background(), "not a map", config.AccessToken)
 	if err == nil {
 		t.Error("expected error for unsupported claims type")
 	}
@@ -482,7 +483,7 @@ func TestHS256TokenStore_Revoke(t *testing.T) {
 
 	// Revoke is a no-op for HS256TokenStore
 	claims := HS256Claims{"sub": "user123"}
-	err := store.Revoke(claims)
+	err := store.Revoke(context.Background(), claims)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -495,7 +496,8 @@ func TestHS256TokenStore_IsRevoked(t *testing.T) {
 
 	// IsRevoked always returns false for HS256TokenStore
 	claims := HS256Claims{"sub": "user123", "jti": "token-id"}
-	if store.IsRevoked(claims) {
+	revoked, _ := store.IsRevoked(context.Background(), claims)
+	if revoked {
 		t.Error("expected IsRevoked to return false")
 	}
 }
@@ -515,13 +517,13 @@ func TestHS256TokenStore_RoundTrip(t *testing.T) {
 		"exp":   float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
 	// Validate token
-	validatedClaims, err := store.Validate(token)
+	validatedClaims, err := store.Validate(context.Background(), token)
 	if err != nil {
 		t.Fatalf("failed to validate token: %v", err)
 	}
@@ -739,13 +741,13 @@ func TestGenerateHS256Token_NoIssuer(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
 	// Validate and check issuer wasn't added
-	validatedClaims, err := store.Validate(token)
+	validatedClaims, err := store.Validate(context.Background(), token)
 	if err != nil {
 		t.Fatalf("failed to validate token: %v", err)
 	}
@@ -769,13 +771,13 @@ func TestGenerateHS256Token_NoAudience(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
 	// Validate and check audience wasn't added
-	validatedClaims, err := store.Validate(token)
+	validatedClaims, err := store.Validate(context.Background(), token)
 	if err != nil {
 		t.Fatalf("failed to validate token: %v", err)
 	}

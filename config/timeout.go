@@ -9,10 +9,13 @@ import (
 type TimeoutConfig struct {
 	// Timeout duration for the request (defaults to 30 seconds)
 	Timeout time.Duration
+
 	// StatusCode to return on timeout (defaults to 504 Gateway Timeout)
 	StatusCode int
+
 	// Message to write on timeout (optional)
 	Message string
+
 	// ExemptPaths contains paths that skip timeout enforcement
 	ExemptPaths []string
 }

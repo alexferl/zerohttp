@@ -29,40 +29,40 @@ func slicesEqual(a, b []string) bool {
 
 // mockTokenStore is a test implementation of config.TokenStore
 type mockTokenStore struct {
-	validateFunc func(token string) (config.JWTClaims, error)
-	generateFunc func(claims config.JWTClaims, tokenType config.TokenType) (string, error)
-	revokeFunc   func(claims config.JWTClaims) error
+	validateFunc func(ctx context.Context, token string) (config.JWTClaims, error)
+	generateFunc func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error)
+	revokeFunc   func(ctx context.Context, claims config.JWTClaims) error
 	isRevoked    bool
 }
 
-func (m *mockTokenStore) Validate(token string) (config.JWTClaims, error) {
+func (m *mockTokenStore) Validate(ctx context.Context, token string) (config.JWTClaims, error) {
 	if m.validateFunc != nil {
-		return m.validateFunc(token)
+		return m.validateFunc(ctx, token)
 	}
 	return nil, errors.New("validator not configured")
 }
 
-func (m *mockTokenStore) Generate(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+func (m *mockTokenStore) Generate(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 	if m.generateFunc != nil {
-		return m.generateFunc(claims, tokenType)
+		return m.generateFunc(ctx, claims, tokenType)
 	}
 	return "", errors.New("generator not configured")
 }
 
-func (m *mockTokenStore) Revoke(claims config.JWTClaims) error {
+func (m *mockTokenStore) Revoke(ctx context.Context, claims config.JWTClaims) error {
 	if m.revokeFunc != nil {
-		return m.revokeFunc(claims)
+		return m.revokeFunc(ctx, claims)
 	}
 	return nil
 }
 
-func (m *mockTokenStore) IsRevoked(claims config.JWTClaims) bool {
-	return m.isRevoked
+func (m *mockTokenStore) IsRevoked(ctx context.Context, claims config.JWTClaims) (bool, error) {
+	return m.isRevoked, nil
 }
 
 func TestJWTAuth_MissingToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{"sub": "user123"}, nil
 		},
 	}
@@ -92,7 +92,7 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 
 func TestJWTAuth_InvalidToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return nil, errors.New("invalid token")
 		},
 	}
@@ -146,7 +146,7 @@ func TestJWTAuth_Success(t *testing.T) {
 	}
 
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return expectedClaims, nil
 		},
 	}
@@ -245,7 +245,7 @@ func TestJWTAuth_ExemptMethod(t *testing.T) {
 
 func TestJWTAuth_RequiredClaims(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub": "user123",
 			}, nil
@@ -307,7 +307,7 @@ func TestJWTAuth_OnSuccess(t *testing.T) {
 	var receivedClaims config.JWTClaims
 
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{"sub": "user123"}, nil
 		},
 	}
@@ -677,7 +677,7 @@ func TestGenerateRefreshToken_NoStore(t *testing.T) {
 
 func TestGenerateAccessToken_Success(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "generated-access-token", nil
 		},
 	}
@@ -699,7 +699,7 @@ func TestGenerateAccessToken_Success(t *testing.T) {
 
 func TestGenerateRefreshToken_Success(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "generated-refresh-token", nil
 		},
 	}
@@ -721,7 +721,7 @@ func TestGenerateRefreshToken_Success(t *testing.T) {
 
 func TestGenerateAccessToken_StoreError(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "", errors.New("token generation failed")
 		},
 	}
@@ -743,7 +743,7 @@ func TestGenerateAccessToken_StoreError(t *testing.T) {
 
 func TestGenerateRefreshToken_StoreError(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "", errors.New("token generation failed")
 		},
 	}
@@ -765,7 +765,7 @@ func TestGenerateRefreshToken_StoreError(t *testing.T) {
 
 func TestRefreshTokenHandler(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			if token == "valid-refresh-token" {
 				return map[string]any{
 					"sub":  "user123",
@@ -774,7 +774,7 @@ func TestRefreshTokenHandler(t *testing.T) {
 			}
 			return nil, errors.New("invalid token")
 		},
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			if tokenType == config.AccessToken {
 				return "new-access-token", nil
 			}
@@ -833,10 +833,10 @@ func TestRefreshTokenHandler_InvalidMethod(t *testing.T) {
 
 func TestRefreshTokenHandler_MissingToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return nil, errors.New("invalid token")
 		},
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "token", nil
 		},
 	}
@@ -859,10 +859,10 @@ func TestRefreshTokenHandler_MissingToken(t *testing.T) {
 
 func TestRefreshTokenHandler_InvalidToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return nil, errors.New("invalid token")
 		},
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "token", nil
 		},
 	}
@@ -887,13 +887,13 @@ func TestRefreshTokenHandler_InvalidToken(t *testing.T) {
 
 func TestRefreshTokenHandler_NotRefreshToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": "access",
 			}, nil
 		},
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "token", nil
 		},
 	}
@@ -918,14 +918,14 @@ func TestRefreshTokenHandler_NotRefreshToken(t *testing.T) {
 
 func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": config.TokenTypeRefresh,
 				"jti":  "token-id-123",
 			}, nil
 		},
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "token", nil
 		},
 		isRevoked: true,
@@ -956,14 +956,14 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 
 func TestRefreshTokenHandler_TokenAllowed(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": config.TokenTypeRefresh,
 				"jti":  "valid-token-id",
 			}, nil
 		},
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			if tokenType == config.AccessToken {
 				return "new-access-token", nil
 			}
@@ -994,14 +994,14 @@ func TestRefreshTokenHandler_TokenAllowed(t *testing.T) {
 func TestLogoutTokenHandler(t *testing.T) {
 	revokeCalled := false
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": config.TokenTypeRefresh,
 				"jti":  "token-id-123",
 			}, nil
 		},
-		revokeFunc: func(claims config.JWTClaims) error {
+		revokeFunc: func(ctx context.Context, claims config.JWTClaims) error {
 			revokeCalled = true
 			return nil
 		},
@@ -1070,7 +1070,7 @@ func TestLogoutTokenHandler_NoTokenStore(t *testing.T) {
 
 func TestLogoutTokenHandler_MissingToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return nil, errors.New("invalid token")
 		},
 	}
@@ -1094,7 +1094,7 @@ func TestLogoutTokenHandler_MissingToken(t *testing.T) {
 
 func TestLogoutTokenHandler_InvalidToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return nil, errors.New("invalid token")
 		},
 	}
@@ -1119,7 +1119,7 @@ func TestLogoutTokenHandler_InvalidToken(t *testing.T) {
 
 func TestLogoutTokenHandler_NotRefreshToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": "access",
@@ -1147,14 +1147,14 @@ func TestLogoutTokenHandler_NotRefreshToken(t *testing.T) {
 
 func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": config.TokenTypeRefresh,
 				"jti":  "token-id-123",
 			}, nil
 		},
-		revokeFunc: func(claims config.JWTClaims) error {
+		revokeFunc: func(ctx context.Context, claims config.JWTClaims) error {
 			return errors.New("database error")
 		},
 	}
@@ -1814,7 +1814,7 @@ func TestAddTypeToClaims_NonMap(t *testing.T) {
 
 func TestGenerateAccessToken_DefaultTTL(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			return "token", nil
 		},
 	}
@@ -1824,7 +1824,8 @@ func TestGenerateAccessToken_DefaultTTL(t *testing.T) {
 	}
 	claims := map[string]any{"sub": "user123"}
 
-	token, err := GenerateAccessToken(nil, claims, cfg)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	token, err := GenerateAccessToken(req, claims, cfg)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1835,13 +1836,13 @@ func TestGenerateAccessToken_DefaultTTL(t *testing.T) {
 
 func TestRefreshTokenHandler_StoreError(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": config.TokenTypeRefresh,
 			}, nil
 		},
-		generateFunc: func(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 			if tokenType == config.AccessToken {
 				return "", errors.New("generate failed")
 			}
@@ -1867,7 +1868,7 @@ func TestRefreshTokenHandler_StoreError(t *testing.T) {
 
 func TestLogoutTokenHandler_AlreadyRevoked(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": config.TokenTypeRefresh,
@@ -1894,7 +1895,7 @@ func TestLogoutTokenHandler_AlreadyRevoked(t *testing.T) {
 
 func TestJWTAuth_RevokedToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{"sub": "user123"}, nil
 		},
 		isRevoked: true,
@@ -1926,7 +1927,7 @@ func TestJWTAuth_RevokedToken(t *testing.T) {
 
 func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{
 				"sub":  "user123",
 				"type": config.TokenTypeRefresh,
@@ -1961,7 +1962,7 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 func TestJWTAuth_Metrics(t *testing.T) {
 	reg := metrics.NewRegistry()
 	store := &mockTokenStore{
-		validateFunc: func(token string) (config.JWTClaims, error) {
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			if token == "valid-token" {
 				return map[string]any{"sub": "user123"}, nil
 			}

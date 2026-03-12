@@ -11,19 +11,25 @@ import (
 type Logger interface {
 	// Debug logs a debug message
 	Debug(msg string, fields ...Field)
+
 	// Info logs an info message
 	Info(msg string, fields ...Field)
+
 	// Warn logs a warning message
 	Warn(msg string, fields ...Field)
+
 	// Error logs an error message
 	Error(msg string, fields ...Field)
+
 	// Panic logs a panic message and panics
 	Panic(msg string, fields ...Field)
+
 	// Fatal logs a fatal message and exits
 	Fatal(msg string, fields ...Field)
 
 	// WithFields returns a logger with additional fields
 	WithFields(fields ...Field) Logger
+
 	// WithContext returns a logger with context
 	WithContext(ctx context.Context) Logger
 }

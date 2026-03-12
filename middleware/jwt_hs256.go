@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -43,29 +44,29 @@ func NewHS256TokenStore(secret []byte, opts HS256Options) *HS256TokenStore {
 }
 
 // Validate parses and validates an HS256 JWT token.
-func (s *HS256TokenStore) Validate(token string) (config.JWTClaims, error) {
+func (s *HS256TokenStore) Validate(_ context.Context, token string) (config.JWTClaims, error) {
 	return parseHS256Token(token, s.secret, s.opts)
 }
 
 // Generate creates a new HS256 JWT token for the given claims.
-func (s *HS256TokenStore) Generate(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+func (s *HS256TokenStore) Generate(_ context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
 	return generateHS256Token(claims, s.secret, s.opts)
 }
 
 // Revoke is a no-op for HS256TokenStore. In-memory revocation is not supported.
 // Use a database-backed TokenStore implementation for revocation support.
-func (s *HS256TokenStore) Revoke(claims config.JWTClaims) error {
+func (s *HS256TokenStore) Revoke(_ context.Context, claims config.JWTClaims) error {
 	// No-op: HS256TokenStore doesn't support revocation
 	// Users should implement their own TokenStore with Redis/DB for revocation
 	return nil
 }
 
-// IsRevoked always returns false for HS256TokenStore.
+// IsRevoked always returns (false, nil) for HS256TokenStore.
 // Use a database-backed TokenStore implementation for revocation support.
-func (s *HS256TokenStore) IsRevoked(claims config.JWTClaims) bool {
+func (s *HS256TokenStore) IsRevoked(_ context.Context, claims config.JWTClaims) (bool, error) {
 	// Always returns false: HS256TokenStore doesn't support revocation
 	// Users should implement their own TokenStore with Redis/DB for revocation
-	return false
+	return false, nil
 }
 
 // HS256Options configures the built-in HS256 JWT implementation.
