@@ -62,8 +62,8 @@ func BenchmarkReverseProxy_LoadBalancers(b *testing.B) {
 			}
 
 			mw, cleanup := ReverseProxy(config.ReverseProxyConfig{
-				Targets:       targets,
-				LoadBalancer:  tc.algo,
+				Targets:      targets,
+				LoadBalancer: tc.algo,
 			})
 			defer cleanup()
 
@@ -183,7 +183,7 @@ func BenchmarkReverseProxy_AddPrefix(b *testing.B) {
 
 	b.Run("WithPrefix", func(b *testing.B) {
 		mw, cleanup := ReverseProxy(config.ReverseProxyConfig{
-			Target:   upstream.URL,
+			Target:    upstream.URL,
 			AddPrefix: "/v1",
 		})
 		defer cleanup()
@@ -402,9 +402,9 @@ func BenchmarkReverseProxy_UnhealthyBackends(b *testing.B) {
 	}
 
 	scenarios := []struct {
-		name            string
-		healthyCount    int
-		unhealthyCount  int
+		name           string
+		healthyCount   int
+		unhealthyCount int
 	}{
 		{"AllHealthy", 5, 0},
 		{"OneUnhealthy", 4, 1},
