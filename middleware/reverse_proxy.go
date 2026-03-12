@@ -146,6 +146,7 @@ func (rp *reverseProxy) initBackend(target string, weight int, healthy bool) {
 	}
 
 	// Clear Director before setting Rewrite (only one can be set)
+	//lint:ignore SA1019 Setting Director to nil is required before using Rewrite - this is intentional
 	proxy.Director = nil
 	proxy.Rewrite = func(r *httputil.ProxyRequest) {
 		r.SetURL(targetURL)

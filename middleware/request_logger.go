@@ -214,26 +214,21 @@ func captureRequestBody(r *http.Request, maxSize int) string {
 		return ""
 	}
 
-	// Read the body
-	var body []byte
-	var err error
-
-	if maxSize > 0 {
-		// Limit reading to maxSize + 1 to detect truncation
-		body, err = io.ReadAll(io.LimitReader(r.Body, int64(maxSize)+1))
-	} else {
-		body, err = io.ReadAll(r.Body)
+	// maxSize <= 0 means body logging is disabled
+	if maxSize <= 0 {
+		return ""
 	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, int64(maxSize)+1))
+
+	// Always restore the body, even on error, so downstream handlers are unaffected
+	r.Body = io.NopCloser(bytes.NewReader(body))
 
 	if err != nil {
 		return ""
 	}
 
-	// Restore the body so the next handler can read it
-	r.Body = io.NopCloser(bytes.NewBuffer(body))
-
-	// Truncate if exceeds max size
-	if maxSize > 0 && len(body) > maxSize {
+	if len(body) > maxSize {
 		return string(body[:maxSize]) + "..."
 	}
 	return string(body)
