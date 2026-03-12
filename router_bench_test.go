@@ -491,3 +491,200 @@ func BenchmarkRouter_AllHTTPMethods(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkRouter_WildcardPatterns measures routing performance with wildcard
+// path patterns (Go 1.22+ "..." syntax).
+func BenchmarkRouter_WildcardPatterns(b *testing.B) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	b.Run("Baseline_ServeMux", func(b *testing.B) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /files/{path...}", handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/files/docs/readme.txt", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("Zerohttp_Router", func(b *testing.B) {
+		router := NewRouter()
+		router.GET("/files/{path...}", handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/files/docs/readme.txt", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("ShallowWildcard_1Segment", func(b *testing.B) {
+		router := NewRouter()
+		router.GET("/api/{path...}", handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("DeepWildcard_5Segments", func(b *testing.B) {
+		router := NewRouter()
+		router.GET("/files/{path...}", handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/files/a/b/c/d/e.txt", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("DeepWildcard_10Segments", func(b *testing.B) {
+		router := NewRouter()
+		router.GET("/files/{path...}", handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/files/a/b/c/d/e/f/g/h/i/j.txt", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+}
+
+// BenchmarkRouter_NestedRouteGroups measures the overhead of deeply nested
+// route groups (5+ levels).
+func BenchmarkRouter_NestedRouteGroups(b *testing.B) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := func(_ string) func(http.Handler) http.Handler {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r)
+			})
+		}
+	}
+
+	b.Run("NoGroups", func(b *testing.B) {
+		router := NewRouter()
+		router.GET("/api/v1/users", handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("OneGroup", func(b *testing.B) {
+		router := NewRouter()
+		router.Group(func(api Router) {
+			api.GET("/api/v1/users", handler)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("ThreeGroups", func(b *testing.B) {
+		router := NewRouter()
+		router.Group(func(api Router) {
+			api.Group(func(v1 Router) {
+				v1.Group(func(users Router) {
+					users.GET("/api/v1/users", handler)
+				})
+			})
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("FiveGroups", func(b *testing.B) {
+		router := NewRouter()
+		router.Group(func(a Router) {
+			a.Group(func(b Router) {
+				b.Group(func(c Router) {
+					c.Group(func(d Router) {
+						d.Group(func(e Router) {
+							e.GET("/api/v1/users", handler)
+						})
+					})
+				})
+			})
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+
+	b.Run("FiveGroups_WithMiddleware", func(b *testing.B) {
+		router := NewRouter()
+		router.Group(func(a Router) {
+			a.Use(middleware("level1"))
+			a.Group(func(b Router) {
+				b.Use(middleware("level2"))
+				b.Group(func(c Router) {
+					c.Use(middleware("level3"))
+					c.Group(func(d Router) {
+						d.Use(middleware("level4"))
+						d.Group(func(e Router) {
+							e.Use(middleware("level5"))
+							e.GET("/api/v1/users", handler)
+						})
+					})
+				})
+			})
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+	})
+}
