@@ -47,7 +47,7 @@ func NewCacheMemoryStore(maxEntries int) *CacheMemoryStore {
 // Returns the record, true if found and not expired, and nil error.
 // Returns false and nil error if not found or expired.
 // The context is accepted for interface compatibility but not used by the in-memory store.
-func (c *CacheMemoryStore) Get(ctx context.Context, key string) (CacheRecord, bool, error) {
+func (c *CacheMemoryStore) Get(_ context.Context, key string) (CacheRecord, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -69,7 +69,7 @@ func (c *CacheMemoryStore) Get(ctx context.Context, key string) (CacheRecord, bo
 // Set stores a record in the cache with the given TTL.
 // Returns nil error on success.
 // The context is accepted for interface compatibility but not used by the in-memory store.
-func (c *CacheMemoryStore) Set(ctx context.Context, key string, record CacheRecord, ttl time.Duration) error {
+func (c *CacheMemoryStore) Set(_ context.Context, key string, record CacheRecord, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
