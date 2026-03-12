@@ -55,14 +55,6 @@ func TestGenerateRequestID(t *testing.T) {
 		}
 	})
 
-	t.Run("fallback format", func(t *testing.T) {
-		timestampPattern := regexp.MustCompile(`^request-\d+$`)
-		fallbackID := "request-1640995200000000000"
-		if !timestampPattern.MatchString(fallbackID) {
-			t.Errorf("fallback ID format should match 'request-', example: %s", fallbackID)
-		}
-	})
-
 	t.Run("performance", func(t *testing.T) {
 		start := time.Now()
 		iterations := 1000
