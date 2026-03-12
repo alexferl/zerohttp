@@ -49,8 +49,7 @@ type Validator interface {
 // Ensure defaultValidator implements Validator
 var _ Validator = (*defaultValidator)(nil)
 
-// defaultValidator implements the Validator interface using copy-on-write
-// with atomic.Value for lock-free reads during validation
+// defaultValidator implements the Validator interface
 type defaultValidator struct {
 	validators atomic.Value // stores map[string]ValidationFunc
 }
@@ -493,7 +492,7 @@ func parseTag(tag string) []validationRule {
 	return rules
 }
 
-// Register adds a custom validation function using copy-on-write.
+// Register adds a custom validation function.
 func (v *defaultValidator) Register(name string, fn ValidationFunc) {
 	old := v.validators.Load().(map[string]ValidationFunc)
 	newMap := make(map[string]ValidationFunc, len(old)+1)
