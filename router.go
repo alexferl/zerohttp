@@ -451,7 +451,6 @@ func (r *defaultRouter) StaticDir(dir string, fallback bool, apiPrefix ...string
 	r.mux.Handle("GET /{path...}", r.wrap(handler, nil))
 }
 
-// createStaticHandler creates an HTTP handler for static routing with API prefix exclusions.
 func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, apiPrefixes []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
@@ -461,7 +460,17 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		}
 		w.Header().Set(r.config.RequestID.Header, requestID)
 
-		cleanPath := path.Clean(req.URL.Path)
+		// Security: reject any request whose raw path contains ".." before
+		// it can be resolved away by cleaning. fs.FS also enforces this at
+		// Open time via fs.ValidPath, but blocking early allows accurate logging.
+		if strings.Contains(req.URL.Path, "..") {
+			r.logger.Warn("Path traversal attempt blocked", log.F("path", req.URL.Path))
+			r.notFoundHandler.ServeHTTP(w, req)
+			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
+			return
+		}
+
+		cleanPath := path.Clean(req.URL.Path) // ✅ path.Clean, not filepath.Clean
 
 		// Skip API routes - return 404
 		for _, prefix := range apiPrefixes {
@@ -488,12 +497,10 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		}
 
 		if fallback {
-			// Fallback to index.html for client-side routing
 			req.URL.Path = "/"
 			http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
 			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusOK, time.Since(start), "", "")
 		} else {
-			// Use custom 404 handler for missing files
 			r.notFoundHandler.ServeHTTP(w, req)
 			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
 		}
