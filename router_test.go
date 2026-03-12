@@ -934,6 +934,19 @@ func TestRouter_Static(t *testing.T) {
 
 		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 	})
+
+	t.Run("Static - path traversal blocked", func(t *testing.T) {
+		router := NewRouter()
+		router.Static(testStaticFS, "testdata/static", false)
+
+		// URL-encoded traversal - should be blocked (decoded to .. before check)
+		req := httptest.NewRequest(http.MethodGet, "/..%2f..%2f..%2fetc/passwd", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Should return 404, not serve any file
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
+	})
 }
 
 func TestRouter_ServeMux(t *testing.T) {
