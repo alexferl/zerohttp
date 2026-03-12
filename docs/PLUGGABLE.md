@@ -6,6 +6,7 @@ zerohttp provides several pluggable features that extend core functionality thro
 
 - [Interface Overview](#interface-overview)
 - [Validator](#validator)
+- [Compression (Middleware)](#compression-middleware)
 - [Distributed Tracing](#distributed-tracing)
 - [Auto-TLS](#auto-tls)
 - [HTTP/3](#http3)
@@ -125,6 +126,59 @@ func main() {
 ```
 
 See [`examples/validation/goplayground.go`](../examples/validation/goplayground.go) for a complete example.
+
+## Compression (Middleware)
+
+The compression middleware supports custom compression algorithms (Brotli, zstd, etc.) via the `CompressionProvider` interface. Unlike other pluggable features, this is configured per-middleware, not at the server level:
+
+```go
+app.Use(middleware.Compress(config.CompressConfig{
+    Provider: MyCompressionProvider{},
+}))
+
+```go
+import (
+    "io"
+    zh "github.com/alexferl/zerohttp"
+    "github.com/alexferl/zerohttp/config"
+    "github.com/alexferl/zerohttp/middleware"
+)
+
+// BrotliEncoder implements config.CompressionEncoder
+type BrotliEncoder struct{}
+
+func (e BrotliEncoder) Encode(w io.Writer, level int) io.Writer {
+    return brotli.NewWriterLevel(w, level)
+}
+
+func (e BrotliEncoder) Encoding() string {
+    return "br"
+}
+
+// BrotliProvider implements config.CompressionProvider
+type BrotliProvider struct{}
+
+func (p BrotliProvider) GetEncoder(encoding string) config.CompressionEncoder {
+    if encoding == "br" {
+        return BrotliEncoder{}
+    }
+    return nil
+}
+
+func main() {
+    app := zh.New()
+
+    app.Use(middleware.Compress(config.CompressConfig{
+        Level:      6,
+        Algorithms: []config.CompressionAlgorithm{"br", config.Gzip},
+        Provider:   BrotliProvider{},
+    }))
+
+    app.ListenAndServe()
+}
+```
+
+See [`examples/compress/`](../examples/compress/) for complete examples with Brotli and zstd.
 
 ## Distributed Tracing
 

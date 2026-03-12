@@ -747,3 +747,217 @@ func TestCompress_WriteHeader_MultipleCalls(t *testing.T) {
 		t.Errorf("expected status 200, got %d (subsequent WriteHeader calls should be ignored)", rr.Code)
 	}
 }
+
+// TestCompressionProvider tests the pluggable CompressionProvider interface
+func TestCompressionProvider(t *testing.T) {
+	t.Run("custom encoder is registered and used", func(t *testing.T) {
+		nopEncoder := &testEncoder{encoding: "nop"}
+		provider := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"nop": nopEncoder,
+		}}
+
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{"nop", config.Gzip},
+			Provider:   provider,
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Accept-Encoding", "nop")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		zhtest.AssertWith(t, rr).Header("Content-Encoding", "nop")
+		if !nopEncoder.used {
+			t.Error("expected custom encoder to be used")
+		}
+	})
+
+	t.Run("provider returns nil for unsupported encoding", func(t *testing.T) {
+		provider := &testProvider{encoders: map[string]config.CompressionEncoder{}}
+
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{config.Gzip},
+			Provider:   provider,
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		// Request gzip which is built-in, not from provider
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
+	})
+
+	t.Run("custom encoder with level parameter", func(t *testing.T) {
+		levelEncoder := &testEncoderWithLevel{encoding: "testlevel"}
+		provider := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"testlevel": levelEncoder,
+		}}
+
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{"testlevel"},
+			Level:      9,
+			Provider:   provider,
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Accept-Encoding", "testlevel")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if levelEncoder.receivedLevel != 9 {
+			t.Errorf("expected level 9, got %d", levelEncoder.receivedLevel)
+		}
+	})
+
+	t.Run("multiple custom encoders from provider", func(t *testing.T) {
+		encoder1 := &testEncoder{encoding: "custom1"}
+		encoder2 := &testEncoder{encoding: "custom2"}
+		provider := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"custom1": encoder1,
+			"custom2": encoder2,
+		}}
+
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{"custom1", "custom2"},
+			Provider:   provider,
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		// Test first custom encoder
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req1.Header.Set("Accept-Encoding", "custom1")
+		rr1 := httptest.NewRecorder()
+		handler.ServeHTTP(rr1, req1)
+		zhtest.AssertWith(t, rr1).Header("Content-Encoding", "custom1")
+
+		// Test second custom encoder
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req2.Header.Set("Accept-Encoding", "custom2")
+		rr2 := httptest.NewRecorder()
+		handler.ServeHTTP(rr2, req2)
+		zhtest.AssertWith(t, rr2).Header("Content-Encoding", "custom2")
+	})
+
+	t.Run("custom encoder alongside built-in", func(t *testing.T) {
+		customEncoder := &testEncoder{encoding: "custom"}
+		provider := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"custom": customEncoder,
+		}}
+
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{config.Gzip, "custom"},
+			Provider:   provider,
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		// Test built-in gzip still works
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req1.Header.Set("Accept-Encoding", "gzip")
+		rr1 := httptest.NewRecorder()
+		handler.ServeHTTP(rr1, req1)
+		zhtest.AssertWith(t, rr1).Header("Content-Encoding", "gzip")
+
+		// Test custom encoder
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req2.Header.Set("Accept-Encoding", "custom")
+		rr2 := httptest.NewRecorder()
+		handler.ServeHTTP(rr2, req2)
+		zhtest.AssertWith(t, rr2).Header("Content-Encoding", "custom")
+	})
+
+	t.Run("nil provider uses defaults only", func(t *testing.T) {
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{config.Gzip},
+			Provider:   nil,
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
+	})
+}
+
+// testEncoder is a simple test implementation of config.CompressionEncoder
+type testEncoder struct {
+	encoding string
+	used     bool
+}
+
+func (e *testEncoder) Encode(w io.Writer, level int) io.Writer {
+	e.used = true
+	return w
+}
+
+func (e *testEncoder) Encoding() string {
+	return e.encoding
+}
+
+// testEncoderWithLevel captures the level parameter for verification
+type testEncoderWithLevel struct {
+	encoding      string
+	receivedLevel int
+}
+
+func (e *testEncoderWithLevel) Encode(w io.Writer, level int) io.Writer {
+	e.receivedLevel = level
+	return w
+}
+
+func (e *testEncoderWithLevel) Encoding() string {
+	return e.encoding
+}
+
+// testProvider is a test implementation of config.CompressionProvider
+type testProvider struct {
+	encoders map[string]config.CompressionEncoder
+}
+
+func (p *testProvider) GetEncoder(encoding string) config.CompressionEncoder {
+	if enc, ok := p.encoders[encoding]; ok {
+		return enc
+	}
+	return nil
+}
