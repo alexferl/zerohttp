@@ -46,7 +46,8 @@ type RequestLoggerConfig struct {
 	// This is opt-in due to performance and security considerations.
 	LogResponseBody bool
 	// MaxBodySize is the maximum number of bytes to log for request/response bodies.
-	// If 0, defaults to 1KB. Use -1 for unlimited (not recommended).
+	// If 0, body logging is disabled (default for safety).
+	// Must be a positive value to enable body logging.
 	MaxBodySize int
 	// SensitiveFields contains field names (case-insensitive) whose values should be
 	// masked in request/response body logs (e.g., "password", "token", "secret").
