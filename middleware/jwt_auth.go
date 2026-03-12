@@ -166,14 +166,24 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			claims, err := c.TokenStore.Validate(tokenString)
+			claims, err := c.TokenStore.Validate(r.Context(), tokenString)
 			if err != nil {
 				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleJWTError(w, r, errInvalidToken, errorHandler)
 				return
 			}
 
-			if c.TokenStore.IsRevoked(claims) {
+			revoked, err := c.TokenStore.IsRevoked(r.Context(), claims)
+			if err != nil {
+				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
+				handleJWTError(w, r, &JWTAuthError{
+					Title:  "Token Revocation Check Failed",
+					Status: http.StatusInternalServerError,
+					Detail: err.Error(),
+				}, errorHandler)
+				return
+			}
+			if revoked {
 				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleJWTError(w, r, &JWTAuthError{
 					Title:  "Token Revoked",
@@ -394,7 +404,7 @@ func GenerateAccessToken(r *http.Request, claims config.JWTClaims, cfg config.JW
 
 	claims = addExpirationToClaims(claims, ttl)
 
-	return cfg.TokenStore.Generate(claims, config.AccessToken)
+	return cfg.TokenStore.Generate(r.Context(), claims, config.AccessToken)
 }
 
 // GenerateRefreshToken generates a new refresh token for the given claims.
@@ -414,7 +424,7 @@ func GenerateRefreshToken(r *http.Request, claims config.JWTClaims, cfg config.J
 	claims = addExpirationToClaims(claims, ttl)
 	claims = addTypeToClaims(claims, config.TokenTypeRefresh)
 
-	return cfg.TokenStore.Generate(claims, config.RefreshToken)
+	return cfg.TokenStore.Generate(r.Context(), claims, config.RefreshToken)
 }
 
 // writeJWTError writes a JWTAuthError response
@@ -460,7 +470,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 
-	claims, err := cfg.TokenStore.Validate(req.RefreshToken)
+	claims, err := cfg.TokenStore.Validate(r.Context(), req.RefreshToken)
 	if err != nil {
 		writeJWTError(w, errInvalidToken)
 		return nil, false
@@ -475,7 +485,16 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 
-	if cfg.TokenStore.IsRevoked(claims) {
+	revoked, err := cfg.TokenStore.IsRevoked(r.Context(), claims)
+	if err != nil {
+		writeJWTError(w, &JWTAuthError{
+			Title:  "Token Revocation Check Failed",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+		})
+		return nil, false
+	}
+	if revoked {
 		writeJWTError(w, &JWTAuthError{
 			Title:  "Token Revoked",
 			Status: http.StatusUnauthorized,
@@ -484,7 +503,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 
-	if err := cfg.TokenStore.Revoke(claims); err != nil {
+	if err := cfg.TokenStore.Revoke(r.Context(), claims); err != nil {
 		writeJWTError(w, &JWTAuthError{
 			Title:  "Token Revocation Failed",
 			Status: http.StatusInternalServerError,

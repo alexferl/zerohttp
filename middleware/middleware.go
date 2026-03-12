@@ -23,11 +23,22 @@ func DefaultMiddlewares(cfg config.Config, logger log.Logger) []func(http.Handle
 }
 
 // pathMatches checks if a request path matches an exempt path.
-// Supports exact matches and prefix matches (paths ending with /).
-// For example, "/api/public/" matches "/api/public", "/api/public/users", and "/api/public/status".
+// Supports:
+//   - Exact matches
+//   - Prefix matches (paths ending with /)
+//   - Wildcard suffix matches (paths ending with *)
+//
+// For example:
+//   - "/api/public/" matches "/api/public", "/api/public/users", "/api/public/status"
+//   - "/api/live*" matches "/api/live", "/api/livez", "/api/health/live"
 func pathMatches(requestPath, exemptPath string) bool {
 	if exemptPath == requestPath {
 		return true
+	}
+
+	// Support wildcard suffix matching for paths ending with *
+	if base, hasSuffix := strings.CutSuffix(exemptPath, "*"); hasSuffix {
+		return strings.HasPrefix(requestPath, base)
 	}
 
 	// Support prefix matching for paths ending with /

@@ -28,27 +28,35 @@ type RequestLoggerConfig struct {
 	// Use a pointer to distinguish between "not set" and "explicitly set to false".
 	// Default: true
 	Enabled *bool
+
 	// LogErrors determines if errors should be logged (defaults to true).
 	LogErrors bool
+
 	// Fields to include in logs (defaults to all fields).
 	Fields []LogField
+
 	// ExemptPaths contains paths to skip logging (e.g., health checks).
 	ExemptPaths []string
+
 	// AllowedPaths contains paths where body logging is explicitly allowed.
 	// If set, body logging (LogRequestBody/LogResponseBody) will only occur
 	// for paths matching these patterns. Supports exact matches and prefixes (ending with /).
 	// If empty, body logging applies to all paths (subject to ExemptPaths).
 	AllowedPaths []string
+
 	// LogRequestBody enables logging of request bodies (defaults to false).
 	// This is opt-in due to performance and security considerations.
 	LogRequestBody bool
+
 	// LogResponseBody enables logging of response bodies (defaults to false).
 	// This is opt-in due to performance and security considerations.
 	LogResponseBody bool
+
 	// MaxBodySize is the maximum number of bytes to log for request/response bodies.
 	// If 0, body logging is disabled (default for safety).
 	// Must be a positive value to enable body logging.
 	MaxBodySize int
+
 	// SensitiveFields contains field names (case-insensitive) whose values should be
 	// masked in request/response body logs (e.g., "password", "token", "secret").
 	// Defaults to common sensitive field names if nil.

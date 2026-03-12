@@ -32,23 +32,32 @@ type KeyExtractor func(*http.Request) string
 type RateLimitConfig struct {
 	// Rate is requests per window (defaults to 100)
 	Rate int
+
 	// Window is the time window duration (defaults to 1 minute)
 	Window time.Duration
+
 	// Algorithm to use (defaults to TokenBucket)
 	Algorithm RateLimitAlgorithm
+
 	// KeyExtractor function to get rate limit key (defaults to IP-based)
 	KeyExtractor KeyExtractor
+
 	// StatusCode to return when rate limited (defaults to 429)
 	StatusCode int
+
 	// Message to return when rate limited
 	Message string
+
 	// Headers to include in response
 	IncludeHeaders bool
+
 	// ExemptPaths contains paths to skip rate limiting
 	ExemptPaths []string
+
 	// Store is the storage backend for rate limiting.
 	// If nil, a secure in-memory store is used.
 	Store RateLimitStore
+
 	// MaxKeys limits the number of unique keys stored in the default
 	// in-memory store. Defaults to 10000. Set to 0 for unlimited (not recommended).
 	MaxKeys int

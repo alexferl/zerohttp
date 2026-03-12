@@ -4,6 +4,7 @@ package config
 type ContentTypeConfig struct {
 	// ContentTypes is a list of allowed content types
 	ContentTypes []string
+
 	// ExemptPaths contains paths that skip content type validation
 	ExemptPaths []string
 }

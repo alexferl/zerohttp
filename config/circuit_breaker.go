@@ -9,19 +9,26 @@ import (
 type CircuitBreakerConfig struct {
 	// FailureThreshold is the number of consecutive failures before opening the circuit
 	FailureThreshold int
+
 	// RecoveryTimeout is how long to wait before trying to close the circuit
 	RecoveryTimeout time.Duration
+
 	// SuccessThreshold is the number of consecutive successes needed to close the circuit from half-open
 	SuccessThreshold int
+
 	// MaxHalfOpenRequests is the maximum number of concurrent requests allowed in half-open state.
 	// This prevents thundering herd when service recovers. Default is 1.
 	MaxHalfOpenRequests int
+
 	// IsFailure determines if a response should be considered a failure
 	IsFailure func(*http.Request, int) bool
+
 	// KeyExtractor extracts the circuit breaker key from the request (for per-endpoint circuits)
 	KeyExtractor func(*http.Request) string
+
 	// OpenStatusCode is the status code to return when circuit is open
 	OpenStatusCode int
+
 	// OpenMessage is the message to return when circuit is open
 	OpenMessage string
 }

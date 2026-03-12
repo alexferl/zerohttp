@@ -16,17 +16,23 @@ const (
 type ETagConfig struct {
 	// Algorithm selects the hashing function (defaults to FNV)
 	Algorithm ETagAlgorithm
+
 	// Weak determines if ETags should be prefixed with "W/" (defaults to true)
 	// Use a pointer to distinguish between "not set" and "explicitly set to false"
 	Weak *bool
+
 	// MaxBufferSize is the maximum response body size to buffer for ETag generation (defaults to 1MB)
 	MaxBufferSize int
+
 	// SkipStatusCodes contains status codes that should not have ETags generated (defaults to error status codes)
 	SkipStatusCodes map[int]struct{}
+
 	// SkipContentTypes contains content types that should not have ETags generated
 	SkipContentTypes map[string]struct{}
+
 	// ExemptPaths contains paths to skip ETag generation
 	ExemptPaths []string
+
 	// ExemptFunc is a custom function to determine if ETag generation should be skipped for a request
 	ExemptFunc func(r *http.Request) bool
 }

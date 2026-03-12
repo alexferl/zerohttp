@@ -4,6 +4,7 @@ package config
 type RequestBodySizeConfig struct {
 	// MaxBytes is the maximum request body size in bytes.
 	MaxBytes int64
+
 	// ExemptPaths contains paths that skip body size limiting.
 	ExemptPaths []string
 }

@@ -21,8 +21,10 @@ const (
 type Backend struct {
 	// Target is the upstream URL (e.g., "http://localhost:8081")
 	Target string
+
 	// Weight is used for weighted load balancing (defaults to 1)
 	Weight int
+
 	// Healthy indicates if the backend is currently healthy
 	Healthy bool
 }
@@ -31,6 +33,7 @@ type Backend struct {
 type RewriteRule struct {
 	// Pattern is a glob pattern to match (e.g., "/api/v1/*")
 	Pattern string
+
 	// Replacement is the replacement path (e.g., "/api/v2/$1")
 	// Use $1, $2, etc. to reference glob captures
 	Replacement string

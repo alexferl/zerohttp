@@ -4,6 +4,7 @@ package config
 type ContentEncodingConfig struct {
 	// Encodings is a list of allowed content encodings (gzip, deflate, br, etc.)
 	Encodings []string
+
 	// ExemptPaths contains paths that skip content encoding validation
 	ExemptPaths []string
 }

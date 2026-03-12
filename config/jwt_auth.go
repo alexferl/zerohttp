@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -24,21 +25,22 @@ const (
 type TokenStore interface {
 	// Validate parses and validates a JWT token, returning the claims.
 	// Returns (claims, nil) on valid token, (nil, error) on invalid.
-	Validate(token string) (JWTClaims, error)
+	Validate(ctx context.Context, token string) (JWTClaims, error)
 
 	// Generate creates a new signed JWT token for the given claims.
 	// Used for access tokens and refresh tokens.
-	Generate(claims JWTClaims, tokenType TokenType) (string, error)
+	Generate(ctx context.Context, claims JWTClaims, tokenType TokenType) (string, error)
 
 	// Revoke invalidates a refresh token (called during logout).
 	// Implement this to store revoked token identifiers (e.g., jti) in database/Redis.
 	// Return nil if revocation succeeds or if token doesn't need revocation.
-	Revoke(claims JWTClaims) error
+	Revoke(ctx context.Context, claims JWTClaims) error
 
 	// IsRevoked checks if a refresh token has been revoked.
-	// Return true if token was revoked, false otherwise.
+	// Return (true, nil) if token was revoked, (false, nil) if not revoked.
+	// Return error if the check fails (e.g., database connection error).
 	// Called during token refresh to prevent use of revoked tokens.
-	IsRevoked(claims JWTClaims) bool
+	IsRevoked(ctx context.Context, claims JWTClaims) (bool, error)
 }
 
 // JWTAuthConfig configures JWT authentication middleware

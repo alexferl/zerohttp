@@ -10,20 +10,28 @@ type OriginValidator func(origin string) bool
 type CORSConfig struct {
 	// AllowedOrigins is a list of allowed origins. Use ["*"] to allow all origins
 	AllowedOrigins []string
+
 	// AllowedMethods is a list of allowed HTTP methods (defaults to common methods)
 	AllowedMethods []string
+
 	// AllowedHeaders is a list of allowed request headers (defaults to common headers)
 	AllowedHeaders []string
+
 	// ExposedHeaders is a list of headers exposed to the client
 	ExposedHeaders []string
+
 	// AllowCredentials indicates whether credentials are allowed
 	AllowCredentials bool
+
 	// MaxAge indicates how long preflight requests can be cached (in seconds)
 	MaxAge int
+
 	// OptionsPassthrough allows OPTIONS requests to be passed to the next handler
 	OptionsPassthrough bool
+
 	// ExemptPaths contains paths that skip CORS processing
 	ExemptPaths []string
+
 	// AllowOriginFunc is a custom function to validate origins dynamically.
 	// If set, this takes precedence over AllowedOrigins matching.
 	AllowOriginFunc OriginValidator

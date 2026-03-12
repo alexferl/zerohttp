@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -36,17 +37,17 @@ func NewJWTTokenStore(secret []byte, opts middleware.HS256Options) *JWTTokenStor
 }
 
 // Validate parses and validates a JWT token
-func (s *JWTTokenStore) Validate(token string) (config.JWTClaims, error) {
-	return s.hs256.Validate(token)
+func (s *JWTTokenStore) Validate(_ context.Context, token string) (config.JWTClaims, error) {
+	return s.hs256.Validate(context.Background(), token)
 }
 
 // Generate creates a new JWT token
-func (s *JWTTokenStore) Generate(claims config.JWTClaims, tokenType config.TokenType) (string, error) {
-	return s.hs256.Generate(claims, tokenType)
+func (s *JWTTokenStore) Generate(_ context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+	return s.hs256.Generate(context.Background(), claims, tokenType)
 }
 
 // Revoke invalidates a refresh token by its jti claim
-func (s *JWTTokenStore) Revoke(claims config.JWTClaims) error {
+func (s *JWTTokenStore) Revoke(_ context.Context, claims config.JWTClaims) error {
 	jti := getJTI(claims)
 	if jti != "" {
 		s.mu.Lock()
@@ -57,14 +58,14 @@ func (s *JWTTokenStore) Revoke(claims config.JWTClaims) error {
 }
 
 // IsRevoked checks if a refresh token has been revoked
-func (s *JWTTokenStore) IsRevoked(claims config.JWTClaims) bool {
+func (s *JWTTokenStore) IsRevoked(_ context.Context, claims config.JWTClaims) (bool, error) {
 	jti := getJTI(claims)
 	if jti == "" {
-		return false
+		return false, nil
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.revoked[jti]
+	return s.revoked[jti], nil
 }
 
 // getJTI extracts the jti claim from claims

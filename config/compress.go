@@ -25,6 +25,7 @@ type CompressionEncoder interface {
 	// Encode wraps the provided io.Writer with compression.
 	// The level parameter is algorithm-specific (e.g., 1-9 for gzip, 0-11 for brotli).
 	Encode(w io.Writer, level int) io.Writer
+
 	// Encoding returns the encoding name used in Accept-Encoding/Content-Encoding headers.
 	// Common values: "gzip", "deflate", "br" (brotli), "zstd".
 	Encoding() string
@@ -59,12 +60,16 @@ type CompressionProvider interface {
 type CompressConfig struct {
 	// Level is the compression level (1-9 for gzip/deflate)
 	Level int
+
 	// Types are MIME types to compress (defaults to common text types)
 	Types []string
+
 	// Algorithms are compression algorithms to support (defaults to gzip, deflate)
 	Algorithms []CompressionAlgorithm
+
 	// ExemptPaths contains paths to skip compression
 	ExemptPaths []string
+
 	// Provider is an optional custom compression provider.
 	// If set, the provider's encoders will be used in addition to built-in gzip/deflate.
 	// This allows users to add Brotli, zstd, or other algorithms without core dependencies.
