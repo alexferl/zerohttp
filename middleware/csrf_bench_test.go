@@ -390,7 +390,7 @@ func BenchmarkCSRF_Concurrent(b *testing.B) {
 func BenchmarkCSRF_HMACComparison(b *testing.B) {
 	key := []byte("test-key-32-bytes-long-for-hmac!!")
 	data := make([]byte, 32)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	b.Run("HMAC_Generate", func(b *testing.B) {
 		b.ReportAllocs()
