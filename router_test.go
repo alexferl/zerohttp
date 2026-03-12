@@ -547,6 +547,69 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			Body("Custom 405")
 	})
 
+	t.Run("auto OPTIONS response", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/test", testHandler("get"))
+		router.POST("/test", testHandler("post"))
+
+		req := httptest.NewRequest(http.MethodOptions, "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
+
+		allowHeader := w.Header().Get("Allow")
+		if allowHeader == "" {
+			t.Error("Expected Allow header to be set")
+		}
+		// Should contain GET, POST, and implicit HEAD and OPTIONS
+		if !strings.Contains(allowHeader, http.MethodGet) {
+			t.Errorf("Expected Allow header to contain GET, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodPost) {
+			t.Errorf("Expected Allow header to contain POST, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodHead) {
+			t.Errorf("Expected Allow header to contain implicit HEAD, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodOptions) {
+			t.Errorf("Expected Allow header to contain OPTIONS, got '%s'", allowHeader)
+		}
+	})
+
+	t.Run("auto OPTIONS for unknown path returns 404", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/test", testHandler("get"))
+
+		req := httptest.NewRequest(http.MethodOptions, "/unknown", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
+	})
+
+	t.Run("explicit OPTIONS handler takes precedence", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/test", testHandler("get"))
+		router.OPTIONS("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Allow", "CUSTOM")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("custom options"))
+		}))
+
+		req := httptest.NewRequest(http.MethodOptions, "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).
+			Status(http.StatusOK).
+			Body("custom options")
+
+		if w.Header().Get("Allow") != "CUSTOM" {
+			t.Errorf("Expected Allow header to be 'CUSTOM', got '%s'", w.Header().Get("Allow"))
+		}
+	})
+
 	// Test fallback path when ProblemDetail fails
 	t.Run("default not found handler fallback", func(t *testing.T) {
 		// Use a response writer that fails when writing the JSON body
@@ -727,9 +790,20 @@ func TestUtilityFunctions(t *testing.T) {
 			}
 		}
 
+		// Implicit HEAD is added when GET is present
+		if !strings.Contains(result, http.MethodHead) {
+			t.Errorf("Expected result to contain implicit HEAD, got '%s'", result)
+		}
+
+		// OPTIONS is always implicitly allowed
+		if !strings.Contains(result, http.MethodOptions) {
+			t.Errorf("Expected result to contain OPTIONS, got '%s'", result)
+		}
+
 		parts := strings.Split(result, ", ")
-		if len(parts) != 3 {
-			t.Errorf("Expected 3 methods separated by commas, got %d parts", len(parts))
+		// 3 registered + implicit HEAD + implicit OPTIONS = 5
+		if len(parts) != 5 {
+			t.Errorf("Expected 5 methods separated by commas, got %d parts: %s", len(parts), result)
 		}
 	})
 }

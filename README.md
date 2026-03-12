@@ -18,6 +18,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Error Handling](#error-handling)
   - [Validation Errors](#validation-errors)
 - [Route Groups](#route-groups)
+- [Automatic OPTIONS Responses](#automatic-options-responses)
 - [Middleware](#middleware)
   - [Available Middlewares](#available-middlewares)
 - [Graceful Shutdown](#graceful-shutdown)
@@ -51,7 +52,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - **Request Binding**: JSON, form, multipart form, and query parameter parsing with struct tag binding
 - **Validation**: Built-in struct tag-based validation with 40+ validators
 - **Problem Details**: RFC 9457 Problem Details for HTTP APIs error responses
-- **Flexible Routing**: Method-based routing with route groups and parameter support
+- **Flexible Routing**: Method-based routing with route groups, parameter support, and automatic OPTIONS responses
 - **Middleware Support**: Comprehensive middleware system with built-in security, logging, and utility middlewares
 - **Built-in Security**: CORS, rate limiting, request body size limits, security headers, and more
 - **HTTP/2 & HTTP/3**: Automatic HTTP/2 support for TLS; optional HTTP/3 via pluggable interface
@@ -245,6 +246,30 @@ app.Group(func(api zh.Router) {
     api.PUT("/users/{id}", updateUser)
     api.DELETE("/users/{id}", deleteUser)
 })
+```
+
+## Automatic OPTIONS Responses
+
+The router automatically responds to OPTIONS requests with accurate `Allow` headers listing the registered methods for each path:
+
+```
+OPTIONS /api/users HTTP/1.1
+
+HTTP/1.1 204 No Content
+Allow: DELETE, GET, HEAD, OPTIONS, POST, PUT
+```
+
+- **Implicit HEAD**: Automatically included when GET is registered
+- **Always includes OPTIONS**: OPTIONS is always listed as an allowed method
+- **Explicit handlers take precedence**: Register your own OPTIONS handler to customize behavior
+
+```go
+// Custom OPTIONS handler - takes precedence over auto-generated response
+app.OPTIONS("/api/special", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Allow", "GET, POST, CUSTOM")
+    w.Header().Set("X-Custom-Header", "value")
+    w.WriteHeader(http.StatusNoContent)
+}))
 ```
 
 ## Middleware
