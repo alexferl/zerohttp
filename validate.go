@@ -13,13 +13,16 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	zerrors "github.com/alexferl/zerohttp/internal/errors"
 )
+
+// uuidRegex is a pre-compiled regex for UUID validation
+var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // Validate is the default validator instance used by the package
 var Validate = NewValidator()
@@ -48,18 +51,14 @@ var _ Validator = (*defaultValidator)(nil)
 
 // defaultValidator implements the Validator interface
 type defaultValidator struct {
-	mu         sync.RWMutex
-	validators map[string]ValidationFunc
+	validators atomic.Value // stores map[string]ValidationFunc
 }
 
 // NewValidator creates a new validator instance with built-in validation rules.
 func NewValidator() Validator {
-	v := &defaultValidator{
-		validators: make(map[string]ValidationFunc),
-	}
-
+	v := &defaultValidator{}
+	v.validators.Store(make(map[string]ValidationFunc))
 	v.registerBuiltins()
-
 	return v
 }
 
@@ -372,15 +371,15 @@ func (v *defaultValidator) validateField(field reflect.Value, fieldName, tag str
 		endIndex = eachIndex
 	}
 
+	validators := v.validators.Load().(map[string]ValidationFunc)
+
 	for i := 0; i < endIndex; i++ {
 		rule := rules[i]
 		if rule.Name == "omitempty" {
 			continue // Already handled above
 		}
 
-		v.mu.RLock()
-		fn, exists := v.validators[rule.Name]
-		v.mu.RUnlock()
+		fn, exists := validators[rule.Name]
 
 		if !exists {
 			errors.Add(fieldName, fmt.Sprintf("unknown validator: %s", rule.Name))
@@ -401,6 +400,8 @@ func (v *defaultValidator) validateField(field reflect.Value, fieldName, tag str
 
 // validateElements validates each element in a slice/array with the given rules.
 func (v *defaultValidator) validateElements(field reflect.Value, fieldName string, rules []validationRule, errors ValidationErrors) {
+	validators := v.validators.Load().(map[string]ValidationFunc)
+
 	switch field.Kind() {
 	case reflect.Slice, reflect.Array:
 		for j := 0; j < field.Len(); j++ {
@@ -418,9 +419,7 @@ func (v *defaultValidator) validateElements(field reflect.Value, fieldName strin
 			} else {
 				// For primitive elements, apply the validation rules
 				for _, rule := range rules {
-					v.mu.RLock()
-					fn, exists := v.validators[rule.Name]
-					v.mu.RUnlock()
+					fn, exists := validators[rule.Name]
 
 					if !exists {
 						errors.Add(elemName, fmt.Sprintf("unknown validator: %s", rule.Name))
@@ -443,9 +442,7 @@ func (v *defaultValidator) validateElements(field reflect.Value, fieldName strin
 				v.validateStruct(elem, elemName, errors)
 			} else {
 				for _, rule := range rules {
-					v.mu.RLock()
-					fn, exists := v.validators[rule.Name]
-					v.mu.RUnlock()
+					fn, exists := validators[rule.Name]
 
 					if !exists {
 						errors.Add(elemName, fmt.Sprintf("unknown validator: %s", rule.Name))
@@ -497,15 +494,22 @@ func parseTag(tag string) []validationRule {
 
 // Register adds a custom validation function.
 func (v *defaultValidator) Register(name string, fn ValidationFunc) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	v.validators[name] = fn
+	old := v.validators.Load().(map[string]ValidationFunc)
+	newMap := make(map[string]ValidationFunc, len(old)+1)
+	for k, v := range old {
+		newMap[k] = v
+	}
+	newMap[name] = fn
+	v.validators.Store(newMap)
 }
 
 // registerBuiltins registers all built-in validation functions.
 func (v *defaultValidator) registerBuiltins() {
+	// Create a local map to build the validators atomically
+	validators := make(map[string]ValidationFunc)
+
 	// required - field must not be zero value
-	v.validators["required"] = func(value reflect.Value, tag string) error {
+	validators["required"] = func(value reflect.Value, tag string) error {
 		if isZeroValue(value) {
 			return fmt.Errorf("required")
 		}
@@ -513,12 +517,12 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// omitempty - skip validation if zero value (handled in validateField)
-	v.validators["omitempty"] = func(value reflect.Value, tag string) error {
+	validators["omitempty"] = func(value reflect.Value, tag string) error {
 		return nil // Handled in validateField before calling validators
 	}
 
 	// min - minimum value for numbers, minimum length for strings/slices/arrays/maps
-	v.validators["min"] = func(value reflect.Value, tag string) error {
+	validators["min"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.String:
 			length, err := strconv.Atoi(tag)
@@ -567,7 +571,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// max - maximum value for numbers, maximum length for strings/slices/arrays/maps
-	v.validators["max"] = func(value reflect.Value, tag string) error {
+	validators["max"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.String:
 			length, err := strconv.Atoi(tag)
@@ -616,7 +620,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// len - exact length for strings/slices/arrays
-	v.validators["len"] = func(value reflect.Value, tag string) error {
+	validators["len"] = func(value reflect.Value, tag string) error {
 		length, err := strconv.Atoi(tag)
 		if err != nil {
 			return fmt.Errorf("invalid len parameter: %s", tag)
@@ -638,7 +642,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// email - validates email address format
-	v.validators["email"] = func(value reflect.Value, tag string) error {
+	validators["email"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("email validator only supports strings")
 		}
@@ -654,7 +658,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// url - validates URL format
-	v.validators["url"] = func(value reflect.Value, tag string) error {
+	validators["url"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("url validator only supports strings")
 		}
@@ -670,7 +674,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// alpha - only alphabetic characters
-	v.validators["alpha"] = func(value reflect.Value, tag string) error {
+	validators["alpha"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("alpha validator only supports strings")
 		}
@@ -687,7 +691,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// alphanum - only alphanumeric characters
-	v.validators["alphanum"] = func(value reflect.Value, tag string) error {
+	validators["alphanum"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("alphanum validator only supports strings")
 		}
@@ -704,7 +708,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// numeric - only numeric characters
-	v.validators["numeric"] = func(value reflect.Value, tag string) error {
+	validators["numeric"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("numeric validator only supports strings")
 		}
@@ -721,7 +725,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// oneof - value must be one of the specified options
-	v.validators["oneof"] = func(value reflect.Value, tag string) error {
+	validators["oneof"] = func(value reflect.Value, tag string) error {
 		options := strings.Fields(tag)
 		if len(options) == 0 {
 			return nil
@@ -761,7 +765,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// eq - equal to value
-	v.validators["eq"] = func(value reflect.Value, tag string) error {
+	validators["eq"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.String:
 			if value.String() != tag {
@@ -798,7 +802,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// ne - not equal to value
-	v.validators["ne"] = func(value reflect.Value, tag string) error {
+	validators["ne"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.String:
 			if value.String() == tag {
@@ -835,7 +839,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// gt - greater than
-	v.validators["gt"] = func(value reflect.Value, tag string) error {
+	validators["gt"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			target, err := strconv.ParseInt(tag, 10, 64)
@@ -868,7 +872,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// lt - less than
-	v.validators["lt"] = func(value reflect.Value, tag string) error {
+	validators["lt"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			target, err := strconv.ParseInt(tag, 10, 64)
@@ -901,7 +905,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// gte - greater than or equal
-	v.validators["gte"] = func(value reflect.Value, tag string) error {
+	validators["gte"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			target, err := strconv.ParseInt(tag, 10, 64)
@@ -934,7 +938,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// lte - less than or equal
-	v.validators["lte"] = func(value reflect.Value, tag string) error {
+	validators["lte"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			target, err := strconv.ParseInt(tag, 10, 64)
@@ -967,7 +971,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// uuid - validates UUID format
-	v.validators["uuid"] = func(value reflect.Value, tag string) error {
+	validators["uuid"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("uuid validator only supports strings")
 		}
@@ -975,7 +979,6 @@ func (v *defaultValidator) registerBuiltins() {
 		if uuid == "" {
 			return nil
 		}
-		uuidRegex := regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 		if !uuidRegex.MatchString(uuid) {
 			return fmt.Errorf("invalid UUID format")
 		}
@@ -983,7 +986,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// datetime - validates datetime format
-	v.validators["datetime"] = func(value reflect.Value, tag string) error {
+	validators["datetime"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("datetime validator only supports strings")
 		}
@@ -1006,7 +1009,7 @@ func (v *defaultValidator) registerBuiltins() {
 	// ===== String Content Validators =====
 
 	// contains - must contain substring
-	v.validators["contains"] = func(value reflect.Value, tag string) error {
+	validators["contains"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("contains validator only supports strings")
 		}
@@ -1021,7 +1024,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// startswith - must start with prefix
-	v.validators["startswith"] = func(value reflect.Value, tag string) error {
+	validators["startswith"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("startswith validator only supports strings")
 		}
@@ -1036,7 +1039,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// endswith - must end with suffix
-	v.validators["endswith"] = func(value reflect.Value, tag string) error {
+	validators["endswith"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("endswith validator only supports strings")
 		}
@@ -1051,7 +1054,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// excludes - must not contain substring
-	v.validators["excludes"] = func(value reflect.Value, tag string) error {
+	validators["excludes"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("excludes validator only supports strings")
 		}
@@ -1066,7 +1069,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// lowercase - must be all lowercase
-	v.validators["lowercase"] = func(value reflect.Value, tag string) error {
+	validators["lowercase"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("lowercase validator only supports strings")
 		}
@@ -1081,7 +1084,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// uppercase - must be all uppercase
-	v.validators["uppercase"] = func(value reflect.Value, tag string) error {
+	validators["uppercase"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("uppercase validator only supports strings")
 		}
@@ -1096,7 +1099,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// ascii - ASCII characters only
-	v.validators["ascii"] = func(value reflect.Value, tag string) error {
+	validators["ascii"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("ascii validator only supports strings")
 		}
@@ -1113,7 +1116,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// printascii - printable ASCII only
-	v.validators["printascii"] = func(value reflect.Value, tag string) error {
+	validators["printascii"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("printascii validator only supports strings")
 		}
@@ -1130,7 +1133,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// boolean - parseable boolean string
-	v.validators["boolean"] = func(value reflect.Value, tag string) error {
+	validators["boolean"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("boolean validator only supports strings")
 		}
@@ -1148,7 +1151,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// json - valid JSON string
-	v.validators["json"] = func(value reflect.Value, tag string) error {
+	validators["json"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("json validator only supports strings")
 		}
@@ -1166,7 +1169,7 @@ func (v *defaultValidator) registerBuiltins() {
 	// ===== Format / Network Validators =====
 
 	// ip - valid IP address (v4 or v6)
-	v.validators["ip"] = func(value reflect.Value, tag string) error {
+	validators["ip"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("ip validator only supports strings")
 		}
@@ -1181,7 +1184,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// ipv4 - valid IPv4 address
-	v.validators["ipv4"] = func(value reflect.Value, tag string) error {
+	validators["ipv4"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("ipv4 validator only supports strings")
 		}
@@ -1197,7 +1200,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// ipv6 - valid IPv6 address
-	v.validators["ipv6"] = func(value reflect.Value, tag string) error {
+	validators["ipv6"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("ipv6 validator only supports strings")
 		}
@@ -1213,7 +1216,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// cidr - valid CIDR notation
-	v.validators["cidr"] = func(value reflect.Value, tag string) error {
+	validators["cidr"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("cidr validator only supports strings")
 		}
@@ -1229,7 +1232,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// hostname - valid hostname (RFC 1123)
-	v.validators["hostname"] = func(value reflect.Value, tag string) error {
+	validators["hostname"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("hostname validator only supports strings")
 		}
@@ -1246,7 +1249,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// uri - valid URI (any scheme)
-	v.validators["uri"] = func(value reflect.Value, tag string) error {
+	validators["uri"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("uri validator only supports strings")
 		}
@@ -1262,7 +1265,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// base64 - valid base64 string
-	v.validators["base64"] = func(value reflect.Value, tag string) error {
+	validators["base64"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("base64 validator only supports strings")
 		}
@@ -1277,7 +1280,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// hexadecimal - valid hex string
-	v.validators["hexadecimal"] = func(value reflect.Value, tag string) error {
+	validators["hexadecimal"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("hexadecimal validator only supports strings")
 		}
@@ -1293,7 +1296,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// hexcolor - valid hex color code
-	v.validators["hexcolor"] = func(value reflect.Value, tag string) error {
+	validators["hexcolor"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("hexcolor validator only supports strings")
 		}
@@ -1310,7 +1313,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// e164 - E.164 phone number format
-	v.validators["e164"] = func(value reflect.Value, tag string) error {
+	validators["e164"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("e164 validator only supports strings")
 		}
@@ -1327,7 +1330,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// semver - semantic version string
-	v.validators["semver"] = func(value reflect.Value, tag string) error {
+	validators["semver"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("semver validator only supports strings")
 		}
@@ -1344,7 +1347,7 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// jwt - valid JWT format (header.payload.signature)
-	v.validators["jwt"] = func(value reflect.Value, tag string) error {
+	validators["jwt"] = func(value reflect.Value, tag string) error {
 		if value.Kind() != reflect.String {
 			return fmt.Errorf("jwt validator only supports strings")
 		}
@@ -1368,7 +1371,7 @@ func (v *defaultValidator) registerBuiltins() {
 	// ===== Collection Validators =====
 
 	// unique - all elements must be unique
-	v.validators["unique"] = func(value reflect.Value, tag string) error {
+	validators["unique"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Slice, reflect.Array:
 			seen := make(map[any]struct{})
@@ -1389,11 +1392,14 @@ func (v *defaultValidator) registerBuiltins() {
 	}
 
 	// each - validate each element in collection (handled in validateField)
-	v.validators["each"] = func(value reflect.Value, tag string) error {
+	validators["each"] = func(value reflect.Value, tag string) error {
 		// each is a special marker that tells validateField to recurse into elements
 		// The actual validation is handled in validateField
 		return nil
 	}
+
+	// Store the populated map atomically
+	v.validators.Store(validators)
 }
 
 // isZeroValue checks if a value is its zero value.
