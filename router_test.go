@@ -1082,6 +1082,85 @@ func TestRouter_Static(t *testing.T) {
 
 		router.StaticDir("testdata/static", false)
 	})
+
+	t.Run("Duplicate route registration panics with clear message", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("first"))
+		}))
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic on duplicate route registration")
+			} else {
+				msg := fmt.Sprintf("%v", r)
+				if !strings.Contains(msg, "GET /test already registered") {
+					t.Errorf("Expected clear panic message with route details, got: %v", r)
+				}
+			}
+		}()
+
+		router.GET("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("second"))
+		}))
+	})
+
+	t.Run("Static file handler logs actual status codes", func(t *testing.T) {
+		// This test verifies statusCapture captures actual response codes
+		// rather than hardcoding 200
+		router := NewRouter()
+		router.StaticDir("testdata/static", false)
+
+		// Request non-existent file - should log 404, not 200
+		req := httptest.NewRequest(http.MethodGet, "/nonexistent.txt", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected 404 for missing file, got %d", w.Code)
+		}
+	})
+}
+
+func TestStatusCapture(t *testing.T) {
+	t.Run("captures status code", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		statusCap := &statusCapture{ResponseWriter: rec, status: http.StatusOK}
+
+		statusCap.WriteHeader(http.StatusNotFound)
+
+		if statusCap.status != http.StatusNotFound {
+			t.Errorf("Expected captured status %d, got %d", http.StatusNotFound, statusCap.status)
+		}
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("Expected recorder status %d, got %d", http.StatusNotFound, rec.Code)
+		}
+	})
+
+	t.Run("implements http.Flusher", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		statusCap := &statusCapture{ResponseWriter: rec, status: http.StatusOK}
+
+		// Verify it implements http.Flusher
+		flusher, ok := interface{}(statusCap).(http.Flusher)
+		if !ok {
+			t.Error("statusCapture should implement http.Flusher")
+		}
+
+		// Verify Flush doesn't panic
+		flusher.Flush()
+	})
+
+	t.Run("Flush forwards to underlying Flusher", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		statusCap := &statusCapture{ResponseWriter: rec, status: http.StatusOK}
+
+		// Recorder implements Flusher, Flush should work
+		statusCap.Flush()
+
+		// Should not panic and should complete without error
+	})
 }
 
 func TestRouter_ServeMux(t *testing.T) {

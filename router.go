@@ -492,6 +492,24 @@ func (r *defaultRouter) StaticDir(dir string, fallback bool, apiPrefix ...string
 	r.mux.Handle("GET /{path...}", r.wrap(handler, nil))
 }
 
+// statusCapture wraps http.ResponseWriter to capture the status code.
+// Used by static file handler to log actual response status instead of hardcoded 200.
+type statusCapture struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusCapture) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *statusCapture) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, apiPrefixes []string) http.Handler {
 	// Capture config values at handler creation time to avoid data races.
 	// notFoundHandler is protected by handlerMu and accessed with locking.
@@ -539,8 +557,9 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			stat, statErr := file.Stat()
 			_ = file.Close() // Close immediately - http.FileServer will open it again
 			if statErr == nil && !stat.IsDir() {
-				http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
-				middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusOK, time.Since(start), "", "")
+				rec := &statusCapture{ResponseWriter: w, status: http.StatusOK}
+				http.FileServer(http.FS(filesystem)).ServeHTTP(rec, req)
+				middleware.LogRequest(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
 				return
 			}
 		}
@@ -549,10 +568,11 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			// Preserve original path for accurate logging and deferred middleware
 			originalPath := req.URL.Path
 			req.URL.Path = "/"
-			http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
+			rec := &statusCapture{ResponseWriter: w, status: http.StatusOK}
+			http.FileServer(http.FS(filesystem)).ServeHTTP(rec, req)
 			// Restore path before logging so SPA fallbacks are logged with their real URL
 			req.URL.Path = originalPath
-			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusOK, time.Since(start), "", "")
+			middleware.LogRequest(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
 		} else {
 			notFoundHandler.ServeHTTP(w, req)
 			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
@@ -636,6 +656,11 @@ func (r *defaultRouter) handle(method, path string, fn http.Handler, mw []func(h
 	r.routesMu.Lock()
 	if r.registeredRoutes[path] == nil {
 		r.registeredRoutes[path] = make(map[string]bool)
+	}
+	// Detect duplicate route registration before overwriting
+	if r.registeredRoutes[path][method] {
+		r.routesMu.Unlock()
+		panic(fmt.Sprintf("zerohttp: route %s %s already registered", method, path))
 	}
 	r.registeredRoutes[path][method] = true
 	r.routesMu.Unlock()
