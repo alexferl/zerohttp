@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -273,16 +274,16 @@ func TestRateLimitCustomMessage(t *testing.T) {
 		HeaderExists("Retry-After")
 }
 
-func TestRateLimitDefaultKeyExtractor(t *testing.T) {
+func TestIPKeyExtractor(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "192.168.1.1").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	key := config.DefaultKeyExtractor(req)
+	key := IPKeyExtractor()(req)
 	if key != "192.168.1.1" {
 		t.Errorf("expected key '192.168.1.1', got '%s'", key)
 	}
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
-	key = config.DefaultKeyExtractor(req)
+	key = IPKeyExtractor()(req)
 	if key != "127.0.0.1" {
 		t.Errorf("expected key '127.0.0.1', got '%s'", key)
 	}
@@ -334,5 +335,285 @@ func TestRateLimit_Metrics(t *testing.T) {
 	}
 	if counter == nil {
 		t.Fatal("expected ratelimit metrics")
+	}
+}
+
+func TestHeaderKeyExtractor(t *testing.T) {
+	tests := []struct {
+		name        string
+		headerName  string
+		headerValue string
+		expected    string
+	}{
+		{
+			name:        "X-API-Key header present",
+			headerName:  "X-API-Key",
+			headerValue: "api-key-123",
+			expected:    "api-key-123",
+		},
+		{
+			name:        "header missing",
+			headerName:  "X-User-ID",
+			headerValue: "",
+			expected:    "",
+		},
+		{
+			name:        "empty header value",
+			headerName:  "X-Auth",
+			headerValue: "",
+			expected:    "",
+		},
+		{
+			name:        "custom header",
+			headerName:  "X-Custom-Key",
+			headerValue: "custom-value",
+			expected:    "custom-value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			extractor := HeaderKeyExtractor(tt.headerName)
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+			if tt.headerValue != "" {
+				req.Header.Set(tt.headerName, tt.headerValue)
+			}
+
+			result := extractor(req)
+			if result != tt.expected {
+				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestContextKeyExtractor(t *testing.T) {
+	tests := []struct {
+		name         string
+		contextKey   string
+		contextValue any
+		expected     string
+	}{
+		{
+			name:         "string value in context",
+			contextKey:   "user_id",
+			contextValue: "user123",
+			expected:     "user123",
+		},
+		{
+			name:         "integer value in context",
+			contextKey:   "user_id",
+			contextValue: 456,
+			expected:     "",
+		},
+		{
+			name:         "missing key",
+			contextKey:   "user_id",
+			contextValue: nil,
+			expected:     "",
+		},
+		{
+			name:         "different key",
+			contextKey:   "tenant_id",
+			contextValue: "tenant-abc",
+			expected:     "tenant-abc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			extractor := ContextKeyExtractor(tt.contextKey)
+			ctx := context.Background()
+			if tt.contextValue != nil {
+				//nolint:staticcheck // Using string key is acceptable in tests
+				ctx = context.WithValue(ctx, tt.contextKey, tt.contextValue)
+			}
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build().WithContext(ctx)
+
+			result := extractor(req)
+			if result != tt.expected {
+				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestJWTSubjectKeyExtractor(t *testing.T) {
+	tests := []struct {
+		name     string
+		claims   config.JWTClaims
+		expected string
+	}{
+		{
+			name:     "has subject claim",
+			claims:   HS256Claims{"sub": "user123"},
+			expected: "user123",
+		},
+		{
+			name:     "missing subject claim",
+			claims:   HS256Claims{"iss": "my-issuer"},
+			expected: "",
+		},
+		{
+			name:     "empty claims",
+			claims:   HS256Claims{},
+			expected: "",
+		},
+		{
+			name:     "nil claims",
+			claims:   nil,
+			expected: "",
+		},
+		{
+			name:     "subject as map",
+			claims:   map[string]any{"sub": "map-user"},
+			expected: "map-user",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			extractor := JWTSubjectKeyExtractor()
+			ctx := context.WithValue(context.Background(), JWTClaimsContextKey, tt.claims)
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build().WithContext(ctx)
+
+			result := extractor(req)
+			if result != tt.expected {
+				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestCompositeKeyExtractor(t *testing.T) {
+	tests := []struct {
+		name       string
+		extractors []config.KeyExtractor
+		setupReq   func(*http.Request)
+		expected   string
+	}{
+		{
+			name: "first extractor returns value",
+			extractors: []config.KeyExtractor{
+				func(r *http.Request) string { return "first" },
+				func(r *http.Request) string { return "second" },
+			},
+			setupReq: func(r *http.Request) {},
+			expected: "first",
+		},
+		{
+			name: "first empty, second returns value",
+			extractors: []config.KeyExtractor{
+				func(r *http.Request) string { return "" },
+				func(r *http.Request) string { return "second" },
+			},
+			setupReq: func(r *http.Request) {},
+			expected: "second",
+		},
+		{
+			name: "all empty",
+			extractors: []config.KeyExtractor{
+				func(r *http.Request) string { return "" },
+				func(r *http.Request) string { return "" },
+			},
+			setupReq: func(r *http.Request) {},
+			expected: "",
+		},
+		{
+			name:       "empty extractors list",
+			extractors: []config.KeyExtractor{},
+			setupReq:   func(r *http.Request) {},
+			expected:   "",
+		},
+		{
+			name: "realistic: JWT subject then header then IP",
+			extractors: []config.KeyExtractor{
+				JWTSubjectKeyExtractor(),
+				HeaderKeyExtractor("X-API-Key"),
+				IPKeyExtractor(),
+			},
+			setupReq: func(r *http.Request) {
+				r.Header.Set("X-API-Key", "api-123")
+				r.RemoteAddr = "192.168.1.1:8080"
+			},
+			expected: "api-123",
+		},
+		{
+			name: "realistic: JWT empty, falls back to IP",
+			extractors: []config.KeyExtractor{
+				JWTSubjectKeyExtractor(),
+				IPKeyExtractor(),
+			},
+			setupReq: func(r *http.Request) {
+				r.RemoteAddr = "10.0.0.1:9090"
+			},
+			expected: "10.0.0.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			extractor := CompositeKeyExtractor(tt.extractors...)
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+			tt.setupReq(req)
+
+			result := extractor(req)
+			if result != tt.expected {
+				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestIPKeyExtractor_IPv6(t *testing.T) {
+	tests := []struct {
+		name          string
+		remoteAddr    string
+		xForwardedFor string
+		expected      string
+	}{
+		{
+			name:       "IPv6 localhost",
+			remoteAddr: "[::1]:8080",
+			expected:   "::1",
+		},
+		{
+			name:       "IPv6 full address",
+			remoteAddr: "[2001:db8::1]:443",
+			expected:   "2001:db8::1",
+		},
+		{
+			name:          "IPv6 with forwarded",
+			remoteAddr:    "[::1]:8080",
+			xForwardedFor: "2001:db8::42",
+			expected:      "2001:db8::42",
+		},
+		{
+			name:       "no port",
+			remoteAddr: "192.168.1.1",
+			expected:   "192.168.1.1",
+		},
+		{
+			name:          "forwarded with multiple IPs",
+			remoteAddr:    "10.0.0.1:1234",
+			xForwardedFor: "203.0.113.1, 198.51.100.1, 192.168.1.1",
+			expected:      "203.0.113.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+			req.RemoteAddr = tt.remoteAddr
+			if tt.xForwardedFor != "" {
+				req.Header.Set("X-Forwarded-For", tt.xForwardedFor)
+			}
+
+			extractor := IPKeyExtractor()
+			result := extractor(req)
+			if result != tt.expected {
+				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
+			}
+		})
 	}
 }
