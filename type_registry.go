@@ -33,11 +33,15 @@ func (fp fieldPath) toSlice() []int {
 
 // append creates a new fieldPath with an additional index.
 // The original path is unchanged (immutability by value).
-func (fp fieldPath) append(idx int) fieldPath {
+// Returns false if max nesting depth (4) is exceeded.
+func (fp fieldPath) append(idx int) (fieldPath, bool) {
+	if fp.len >= len(fp.indices) {
+		return fp, false
+	}
 	newPath := fieldPath{len: fp.len + 1}
 	copy(newPath.indices[:], fp.indices[:fp.len])
 	newPath.indices[fp.len] = idx
-	return newPath
+	return newPath, true
 }
 
 // single creates a new fieldPath with a single index.
@@ -135,9 +139,19 @@ func (tr *typeRegistry) analyzeType(t reflect.Type) (*typeInfo, error) {
 
 	// Second pass: pre-compute all bindable field combinations
 	// This happens during construction, before the typeInfo is visible to other goroutines.
-	info.formBindableFields = info.computeBindableFields("form", false)
-	info.formWithFilesFields = info.computeBindableFields("form", true)
-	info.queryBindableFields = info.computeBindableFields("query", false)
+	var err error
+	info.formBindableFields, err = info.computeBindableFields("form", false)
+	if err != nil {
+		return nil, err
+	}
+	info.formWithFilesFields, err = info.computeBindableFields("form", true)
+	if err != nil {
+		return nil, err
+	}
+	info.queryBindableFields, err = info.computeBindableFields("query", false)
+	if err != nil {
+		return nil, err
+	}
 
 	fileFields, err := info.computeFileBindableFields()
 	if err != nil {
@@ -161,17 +175,26 @@ func (ti *typeInfo) getBindableFields(tagName string, allowFiles bool) []bindabl
 		return ti.queryBindableFields
 	default:
 		// Fallback for unknown tags - compute on the fly (shouldn't happen in practice)
-		return ti.computeBindableFields(tagName, allowFiles)
+		// Return empty list on error rather than silently using partial results
+		fields, err := ti.computeBindableFields(tagName, allowFiles)
+		if err != nil {
+			return nil
+		}
+		return fields
 	}
 }
 
 // computeBindableFields computes bindable fields for a tag/allowFiles combination.
-func (ti *typeInfo) computeBindableFields(tagName string, allowFiles bool) []bindableField {
+func (ti *typeInfo) computeBindableFields(tagName string, allowFiles bool) ([]bindableField, error) {
 	result := make([]bindableField, 0, len(ti.fields))
 	for i := range ti.fields {
-		result = ti.collectFieldsRecursive(singleFieldPath(i), tagName, allowFiles, result)
+		var err error
+		result, err = ti.collectFieldsRecursive(singleFieldPath(i), tagName, allowFiles, result)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return result
+	return result, nil
 }
 
 // computeFileBindableFields computes file-bindable fields.
@@ -196,7 +219,7 @@ func (fi *fieldInfo) getTagValue(tagName string) string {
 // collectFieldsRecursive recursively collects fields, expanding embedded structs.
 // The path accumulates field indices for proper v.FieldByIndex access.
 // Each index in the path is relative to its parent struct type.
-func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allowFiles bool, result []bindableField) []bindableField {
+func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allowFiles bool, result []bindableField) ([]bindableField, error) {
 	fieldIdx := path.indices[path.len-1]
 	fi := &ti.fields[fieldIdx]
 
@@ -206,25 +229,34 @@ func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allow
 	// because their exported fields are still accessible via reflection.
 	if fi.isEmbedded {
 		embeddedType := fi.fieldType.Type
-		embeddedInfo, _ := globalTypeRegistry.getTypeInfo(embeddedType)
+		embeddedInfo, err := globalTypeRegistry.getTypeInfo(embeddedType)
+		if err != nil {
+			return result, fmt.Errorf("embedded struct %s: %w", fi.fieldType.Type.Name(), err)
+		}
 		for j := range embeddedInfo.fields {
 			// Build path relative to the TOP-LEVEL struct:
 			// []int{topLevelIdx, embeddedFieldIdx, ...}
-			newPath := path.append(j)
-			result = embeddedInfo.collectFieldsRecursive(newPath, tagName, allowFiles, result)
+			newPath, ok := path.append(j)
+			if !ok {
+				return result, fmt.Errorf("max nesting depth (4) exceeded in embedded struct %s", fi.fieldType.Type.Name())
+			}
+			result, err = embeddedInfo.collectFieldsRecursive(newPath, tagName, allowFiles, result)
+			if err != nil {
+				return result, err
+			}
 		}
-		return result
+		return result, nil
 	}
 
 	// Skip unexported fields (for non-embedded fields)
 	if !fi.canSet {
-		return result
+		return result, nil
 	}
 
 	// Consolidate tag lookup: single Tag.Get call per field
 	tag := fi.fieldType.Tag.Get(tagName)
 	if tag == "-" {
-		return result
+		return result, nil
 	}
 
 	// Strip tag options (e.g., "name,omitempty" -> "name")
@@ -238,14 +270,14 @@ func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allow
 
 	// Skip file fields when not allowing files
 	if !allowFiles && isFileField {
-		return result
+		return result, nil
 	}
 
 	// Skip pointer-to-struct fields (except file fields) — they are not bindable
 	// primitives and pointer embeds are not expanded (Kind() == Ptr bypassed isEmbedded check).
 	if !isFileField && fieldType.Kind() == reflect.Ptr &&
 		fieldType.Elem().Kind() == reflect.Struct {
-		return result
+		return result, nil
 	}
 
 	// Use field name as default if tag is empty
@@ -260,7 +292,7 @@ func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allow
 	}
 
 	result = append(result, bf)
-	return result
+	return result, nil
 }
 
 // collectFileFieldsRecursive recursively collects file-bindable fields.
@@ -274,10 +306,15 @@ func (ti *typeInfo) collectFileFieldsRecursive(path fieldPath, result []fileBind
 	// because their exported fields are still accessible via reflection.
 	if fi.isEmbedded {
 		embeddedType := fi.fieldType.Type
-		embeddedInfo, _ := globalTypeRegistry.getTypeInfo(embeddedType)
+		embeddedInfo, err := globalTypeRegistry.getTypeInfo(embeddedType)
+		if err != nil {
+			return result, fmt.Errorf("embedded struct %s: %w", fi.fieldType.Type.Name(), err)
+		}
 		for j := range embeddedInfo.fields {
-			newPath := path.append(j)
-			var err error
+			newPath, ok := path.append(j)
+			if !ok {
+				return result, fmt.Errorf("max nesting depth (4) exceeded in embedded struct %s", fi.fieldType.Type.Name())
+			}
 			result, err = embeddedInfo.collectFileFieldsRecursive(newPath, result)
 			if err != nil {
 				return nil, err

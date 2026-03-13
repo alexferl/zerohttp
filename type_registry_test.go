@@ -532,8 +532,8 @@ func TestFieldPathHelpers(t *testing.T) {
 	}
 
 	// append
-	fp2 := fp.append(3)
-	if fp2.len != 2 || fp2.indices[0] != 5 || fp2.indices[1] != 3 {
+	fp2, ok := fp.append(3)
+	if !ok || fp2.len != 2 || fp2.indices[0] != 5 || fp2.indices[1] != 3 {
 		t.Error("append failed")
 	}
 
@@ -549,27 +549,41 @@ func TestFieldPathHelpers(t *testing.T) {
 	}
 
 	// Test chaining up to 4 levels
-	fp3 := fp2.append(7).append(9)
-	if fp3.len != 4 {
-		t.Errorf("chained append failed, expected len 4, got %d", fp3.len)
+	fp3, ok := fp2.append(7)
+	if !ok {
+		t.Error("third append failed")
+	}
+	fp4, ok := fp3.append(9)
+	if !ok || fp4.len != 4 {
+		t.Errorf("chained append failed, expected len 4, got %d", fp4.len)
 	}
 }
 
 func TestFieldPathOverflow(t *testing.T) {
 	// Build a path of length 4 (maximum)
-	fp := singleFieldPath(0).append(1).append(2).append(3)
+	fp := singleFieldPath(0)
+	var ok bool
+	fp, ok = fp.append(1)
+	if !ok {
+		t.Fatal("first append failed")
+	}
+	fp, ok = fp.append(2)
+	if !ok {
+		t.Fatal("second append failed")
+	}
+	fp, ok = fp.append(3)
+	if !ok {
+		t.Fatal("third append failed")
+	}
 	if fp.len != 4 {
 		t.Fatalf("expected len 4, got %d", fp.len)
 	}
 
-	// Next append should panic
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic for fieldPath overflow, but didn't panic")
-		}
-	}()
-
-	_ = fp.append(4) // This should panic
+	// Next append should return false (not panic)
+	_, ok = fp.append(4)
+	if ok {
+		t.Error("expected append to return false for fieldPath overflow, but got true")
+	}
 }
 
 // TestSnakeCaseConversion verifies camelToSnake behavior.
