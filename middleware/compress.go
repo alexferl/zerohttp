@@ -199,10 +199,18 @@ func (c *Compressor) selectEncoder(h http.Header, w io.Writer) (io.Writer, strin
 
 func matchAcceptEncoding(accepted []string, encoding string) bool {
 	for _, v := range accepted {
-		v = strings.TrimSpace(v)
-		if strings.Contains(v, encoding) || v == "*" {
-			return true
+		name, params, _ := strings.Cut(strings.TrimSpace(v), ";")
+		name = strings.TrimSpace(name)
+		if name != encoding && name != "*" {
+			continue
 		}
+		// q=0 means explicitly not acceptable (RFC 7231 §5.3.1)
+		if q, ok := strings.CutPrefix(strings.TrimSpace(params), "q="); ok {
+			if q == "0" || strings.HasPrefix(q, "0.0") {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
