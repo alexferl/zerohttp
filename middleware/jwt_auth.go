@@ -439,7 +439,8 @@ func writeJWTError(w http.ResponseWriter, jwtErr *JWTAuthError) {
 // Returns the claims if validation succeeds, or an error response if it fails.
 func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTAuthConfig) (config.JWTClaims, bool) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		detail := problem.NewDetail(http.StatusMethodNotAllowed, "Method not allowed")
+		_ = detail.Render(w)
 		return nil, false
 	}
 

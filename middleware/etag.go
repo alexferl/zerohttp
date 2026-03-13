@@ -1,16 +1,13 @@
 package middleware
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"hash"
 	"hash/fnv"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
@@ -45,14 +43,11 @@ var (
 
 // etagResponseWriter wraps http.ResponseWriter to capture response body for ETag generation
 type etagResponseWriter struct {
-	http.ResponseWriter
+	*rwutil.ResponseBuffer
 	config          config.ETagConfig
-	buf             *bytes.Buffer
 	hash            hash.Hash
-	status          int
-	written         int
+	written         int64
 	skipETag        bool
-	hasWritten      bool
 	ifNoneMatch     string
 	ifMatch         string
 	ifRange         string
@@ -67,10 +62,8 @@ type etagResponseWriter struct {
 // newETagResponseWriter creates a new etagResponseWriter
 func newETagResponseWriter(w http.ResponseWriter, cfg config.ETagConfig, ifNoneMatch, ifMatch, ifRange, rangeHeader string, reg metrics.Registry) *etagResponseWriter {
 	return &etagResponseWriter{
-		ResponseWriter: w,
+		ResponseBuffer: rwutil.NewResponseBuffer(w, cfg.MaxBufferSize),
 		config:         cfg,
-		buf:            etagBufferPool.Get().(*bytes.Buffer),
-		status:         http.StatusOK,
 		ifNoneMatch:    ifNoneMatch,
 		ifMatch:        ifMatch,
 		ifRange:        ifRange,
@@ -79,10 +72,8 @@ func newETagResponseWriter(w http.ResponseWriter, cfg config.ETagConfig, ifNoneM
 	}
 }
 
-// release returns the buffer and hash to their pools
+// release returns the hash to its pool
 func (ew *etagResponseWriter) release() {
-	ew.buf.Reset()
-	etagBufferPool.Put(ew.buf)
 	if ew.hash != nil {
 		ew.hash.Reset()
 		switch ew.config.Algorithm {
@@ -97,11 +88,11 @@ func (ew *etagResponseWriter) release() {
 // writeHeaderLocked captures the status code and checks if ETag generation should be skipped.
 // Caller must hold ew.mu.
 func (ew *etagResponseWriter) writeHeaderLocked(status int) {
-	if ew.hasWritten {
+	if ew.HasWritten {
 		return
 	}
-	ew.hasWritten = true
-	ew.status = status
+	ew.HasWritten = true
+	ew.Status = status
 
 	if _, skip := ew.config.SkipStatusCodes[status]; skip {
 		ew.skipETag = true
@@ -133,8 +124,9 @@ func (ew *etagResponseWriter) writeHeaderLocked(status int) {
 
 	ew.contentEncoding = ew.ResponseWriter.Header().Get("Content-Encoding")
 
-	if ew.skipETag {
+	if ew.skipETag && !ew.HeaderWritten {
 		ew.ResponseWriter.WriteHeader(status)
+		ew.HeaderWritten = true
 	}
 }
 
@@ -149,7 +141,7 @@ func (ew *etagResponseWriter) WriteHeader(status int) {
 // Caller must hold ew.mu.
 func (ew *etagResponseWriter) writeLocked(p []byte) (int, error) {
 	n := len(p)
-	ew.written += n
+	ew.written += int64(n)
 
 	if ew.skipETag {
 		return ew.ResponseWriter.Write(p)
@@ -157,23 +149,26 @@ func (ew *etagResponseWriter) writeLocked(p []byte) (int, error) {
 
 	if ew.written > ew.config.MaxBufferSize {
 		// Flush buffered content first if any
-		if ew.buf.Len() > 0 {
-			ew.skipETag = true
-			ew.ResponseWriter.WriteHeader(ew.status)
-			_, _ = ew.ResponseWriter.Write(ew.buf.Bytes())
-			ew.buf.Reset()
+		ew.skipETag = true
+		if !ew.HeaderWritten {
+			ew.ResponseWriter.WriteHeader(ew.Status)
+			ew.HeaderWritten = true
+		}
+		if ew.Buf.Len() > 0 {
+			_, _ = ew.ResponseWriter.Write(ew.Buf.Bytes())
+			ew.Buf.Reset()
 		}
 		return ew.ResponseWriter.Write(p)
 	}
 
-	return ew.buf.Write(p)
+	return ew.Buf.Write(p)
 }
 
 // Write captures the response body for ETag generation
 func (ew *etagResponseWriter) Write(p []byte) (int, error) {
 	ew.mu.Lock()
 
-	if !ew.hasWritten {
+	if !ew.HasWritten {
 		ew.writeHeaderLocked(http.StatusOK)
 	}
 
@@ -185,7 +180,7 @@ func (ew *etagResponseWriter) Write(p []byte) (int, error) {
 // generateETag generates the ETag from the buffered content
 // Content-encoding aware: includes encoding in the hash to prevent cache poisoning
 func (ew *etagResponseWriter) generateETag() string {
-	if ew.buf.Len() == 0 {
+	if ew.Buf.Len() == 0 {
 		return ""
 	}
 
@@ -196,7 +191,7 @@ func (ew *etagResponseWriter) generateETag() string {
 	}
 
 	ew.hash.Reset()
-	ew.hash.Write(ew.buf.Bytes())
+	ew.hash.Write(ew.Buf.Bytes())
 
 	// Include content encoding in the hash for content-encoding aware ETags
 	// This prevents cache poisoning where the same ETag is returned for
@@ -216,38 +211,6 @@ func (ew *etagResponseWriter) generateETag() string {
 		return `W/"` + hashStr + `"`
 	}
 	return `"` + hashStr + `"`
-}
-
-// etagMatches checks if the provided ETag matches any in the If-None-Match header
-func etagMatches(ifNoneMatch, etag string) bool {
-	if ifNoneMatch == "*" {
-		return true
-	}
-
-	for _, et := range strings.Split(ifNoneMatch, ",") {
-		et = strings.TrimSpace(et)
-		// Compare weak ETags ignoring the W/ prefix
-		if strings.HasPrefix(et, "W/") && strings.HasPrefix(etag, "W/") {
-			if et == etag {
-				return true
-			}
-		} else if strings.HasPrefix(et, "W/") {
-			// Client has weak, we have strong - compare values
-			if et[2:] == etag {
-				return true
-			}
-		} else if strings.HasPrefix(etag, "W/") {
-			// Client has strong, we have weak - compare values
-			if et == etag[2:] {
-				return true
-			}
-		} else {
-			if et == etag {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // shouldReturn304 checks if we should return a 304 Not Modified response
@@ -295,30 +258,28 @@ func (ew *etagResponseWriter) Flush() {
 	ew.mu.Lock()
 	// If we have buffered data and haven't written to the response yet,
 	// we need to flush the ETag processing first
-	if ew.buf.Len() > 0 && !ew.skipETag && !ew.finalized {
+	if ew.Buf.Len() > 0 && !ew.skipETag && !ew.finalized {
 		ew.finalizeLocked()
+		ew.skipETag = true // switch to pass-through for any writes after flush
+	} else if !ew.HasWritten {
+		// No data written yet but flush called - commit headers without ETag
+		// to avoid implicit 200 on subsequent flush
+		ew.HasWritten = true
+		ew.skipETag = true
+		ew.ResponseWriter.WriteHeader(ew.Status)
+		ew.HeaderWritten = true
+	} else if ew.HasWritten && !ew.HeaderWritten {
+		// WriteHeader was called but no body written yet; Flush would implicitly
+		// commit headers in production net/http, so we need to do it explicitly
+		ew.skipETag = true
+		ew.ResponseWriter.WriteHeader(ew.Status)
+		ew.HeaderWritten = true
 	}
 	ew.mu.Unlock()
 
 	if f, ok := ew.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
-}
-
-// Hijack implements http.Hijacker
-func (ew *etagResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	if hj, ok := ew.ResponseWriter.(http.Hijacker); ok {
-		return hj.Hijack()
-	}
-	return nil, nil, errors.New("middleware: http.Hijacker is unavailable on the writer")
-}
-
-// Push implements http.Pusher
-func (ew *etagResponseWriter) Push(target string, opts *http.PushOptions) error {
-	if ps, ok := ew.ResponseWriter.(http.Pusher); ok {
-		return ps.Push(target, opts)
-	}
-	return errors.New("middleware: http.Pusher is unavailable on the writer")
 }
 
 // finalizeLocked processes the buffered response, generates ETag, and writes the response.
@@ -336,14 +297,20 @@ func (ew *etagResponseWriter) finalizeLocked() {
 
 		if ew.ifMatch != "" && ew.shouldReturn412(etag) {
 			ew.ResponseWriter.Header().Set("ETag", etag)
-			ew.ResponseWriter.WriteHeader(http.StatusPreconditionFailed)
+			if !ew.HeaderWritten {
+				ew.ResponseWriter.WriteHeader(http.StatusPreconditionFailed)
+				ew.HeaderWritten = true
+			}
 			ew.recordMetrics(http.StatusPreconditionFailed)
 			return
 		}
 
 		if ew.shouldReturn304(etag) {
 			ew.ResponseWriter.Header().Set("ETag", etag)
-			ew.ResponseWriter.WriteHeader(http.StatusNotModified)
+			if !ew.HeaderWritten {
+				ew.ResponseWriter.WriteHeader(http.StatusNotModified)
+				ew.HeaderWritten = true
+			}
 			ew.recordMetrics(http.StatusNotModified)
 			return
 		}
@@ -363,11 +330,14 @@ func (ew *etagResponseWriter) finalizeLocked() {
 		}
 	}
 
-	ew.ResponseWriter.WriteHeader(ew.status)
-	if ew.buf.Len() > 0 {
-		_, _ = ew.ResponseWriter.Write(ew.buf.Bytes())
+	if !ew.HeaderWritten {
+		ew.ResponseWriter.WriteHeader(ew.Status)
+		ew.HeaderWritten = true
 	}
-	ew.recordMetrics(ew.status)
+	if ew.Buf.Len() > 0 {
+		_, _ = ew.ResponseWriter.Write(ew.Buf.Bytes())
+	}
+	ew.recordMetrics(ew.Status)
 }
 
 // finalize processes the buffered response, generates ETag, and writes the response
@@ -383,12 +353,10 @@ func (ew *etagResponseWriter) recordMetrics(status int) {
 		return
 	}
 
-	// Record ETag generated
 	if ew.etagGenerated {
 		ew.reg.Counter("etag_generated_total").Inc()
 	}
 
-	// Record hit/miss based on status
 	result := "miss"
 	if status == http.StatusNotModified {
 		result = "hit"
@@ -399,7 +367,7 @@ func (ew *etagResponseWriter) recordMetrics(status int) {
 // serveRange serves a partial content response based on the Range header
 // This is a basic implementation that supports single byte ranges
 func (ew *etagResponseWriter) serveRange() {
-	content := ew.buf.Bytes()
+	content := ew.Buf.Bytes()
 	contentLength := len(content)
 
 	// Parse Range header (e.g., "bytes=0-1023" or "bytes=1024-")
@@ -407,7 +375,7 @@ func (ew *etagResponseWriter) serveRange() {
 	parts := strings.Split(rangeValue, "-")
 	if len(parts) != 2 {
 		// Invalid range, fall back to full content
-		ew.ResponseWriter.WriteHeader(ew.status)
+		ew.ResponseWriter.WriteHeader(ew.Status)
 		_, _ = ew.ResponseWriter.Write(content)
 		return
 	}
@@ -419,7 +387,7 @@ func (ew *etagResponseWriter) serveRange() {
 		end, err2 = strconv.Atoi(strings.TrimSpace(parts[1]))
 		if err2 != nil {
 			// Invalid range, fall back to full content
-			ew.ResponseWriter.WriteHeader(ew.status)
+			ew.ResponseWriter.WriteHeader(ew.Status)
 			_, _ = ew.ResponseWriter.Write(content)
 			return
 		}
@@ -427,7 +395,7 @@ func (ew *etagResponseWriter) serveRange() {
 
 	if err1 != nil || start < 0 || start > end || end >= contentLength {
 		// Invalid range, fall back to full content
-		ew.ResponseWriter.WriteHeader(ew.status)
+		ew.ResponseWriter.WriteHeader(ew.Status)
 		_, _ = ew.ResponseWriter.Write(content)
 		return
 	}
@@ -600,4 +568,36 @@ func ServeContentWithETag(w http.ResponseWriter, r *http.Request, modTime int64,
 	// Serve content using http.ServeContent which handles Range requests
 	// We need to convert int64 modTime to time.Time
 	http.ServeContent(w, r, "", time.Unix(modTime, 0), content)
+}
+
+// etagMatches checks if the provided ETag matches any in the If-None-Match header
+func etagMatches(ifNoneMatch, etag string) bool {
+	if ifNoneMatch == "*" {
+		return true
+	}
+
+	for _, et := range strings.Split(ifNoneMatch, ",") {
+		et = strings.TrimSpace(et)
+		// Compare weak ETags ignoring the W/ prefix
+		if strings.HasPrefix(et, "W/") && strings.HasPrefix(etag, "W/") {
+			if et == etag {
+				return true
+			}
+		} else if strings.HasPrefix(et, "W/") {
+			// Client has weak, we have strong - compare values
+			if et[2:] == etag {
+				return true
+			}
+		} else if strings.HasPrefix(etag, "W/") {
+			// Client has strong, we have weak - compare values
+			if et == etag[2:] {
+				return true
+			}
+		} else {
+			if et == etag {
+				return true
+			}
+		}
+	}
+	return false
 }

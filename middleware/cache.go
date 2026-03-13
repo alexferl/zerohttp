@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -68,6 +68,8 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 				}
 			}
 
+			// Note: Per RFC 9111, no-cache means revalidate, not bypass. We treat it as
+			// bypass for simplicity, which is a common implementation choice.
 			if r.Header.Get("Cache-Control") == "no-cache" || r.Header.Get("Cache-Control") == "no-store" {
 				next.ServeHTTP(w, r)
 				return
@@ -85,8 +87,11 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 				log.GetGlobalLogger().Error("Cache store get failed", log.E(err), log.F("key", key))
 			} else if found {
 				reg.Counter("cache_requests_total", "result").WithLabelValues("hit").Inc()
-				if ifNoneMatch != "" && ifNoneMatch == record.ETag {
-					w.Header().Set("ETag", record.ETag)
+				// Only return 304 if If-None-Match was actually provided
+				if ifNoneMatch != "" && etagMatches(ifNoneMatch, record.ETag) {
+					if record.ETag != "" {
+						w.Header().Set("ETag", record.ETag)
+					}
 					w.WriteHeader(http.StatusNotModified)
 					return
 				}
@@ -106,7 +111,9 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 						w.Header().Add(k, val)
 					}
 				}
-				w.Header().Set("ETag", record.ETag)
+				if record.ETag != "" {
+					w.Header().Set("ETag", record.ETag)
+				}
 				w.Header().Set("Cache-Control", c.CacheControl)
 				w.WriteHeader(record.StatusCode)
 				if r.Method != http.MethodHead {
@@ -118,25 +125,29 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 			reg.Counter("cache_requests_total", "result").WithLabelValues("miss").Inc()
 
 			recorder := &cacheResponseRecorder{
-				ResponseWriter: w,
-				maxBodySize:    c.MaxBodySize,
+				ResponseBuffer: rwutil.NewResponseBuffer(w, c.MaxBodySize),
 				statusCodeMap:  statusCodeMap,
 			}
 
 			next.ServeHTTP(recorder, r)
 
+			var etag string
+			var lastModified time.Time
+
 			if recorder.shouldCache {
+				lastModified = time.Now().UTC().Truncate(time.Second)
 				record := config.CacheRecord{
-					StatusCode:   recorder.statusCode,
+					StatusCode:   recorder.Status,
 					Headers:      recorder.headers,
-					Body:         recorder.body.Bytes(),
-					LastModified: time.Now().UTC().Truncate(time.Second),
+					Body:         recorder.Buf.Bytes(),
+					LastModified: lastModified,
 					VaryHeaders:  extractVaryHeaders(r, c.Vary),
 				}
 
 				if c.ETag {
 					hash := sha256.Sum256(record.Body)
-					record.ETag = fmt.Sprintf(`"%s"`, hex.EncodeToString(hash[:])[:16])
+					etag = fmt.Sprintf(`"%s"`, hex.EncodeToString(hash[:]))
+					record.ETag = etag
 				}
 
 				if err := store.Set(r.Context(), key, record, c.DefaultTTL); err != nil {
@@ -144,102 +155,142 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 					// (better to serve the response than fail because cache is unavailable)
 					log.GetGlobalLogger().Error("Cache store set failed", log.E(err), log.F("key", key))
 				}
-
-				if c.ETag && record.ETag != "" {
-					w.Header().Set("ETag", record.ETag)
-				}
-				if c.LastModified {
-					w.Header().Set("Last-Modified", record.LastModified.UTC().Format(http.TimeFormat))
-				}
-				w.Header().Set("Cache-Control", c.CacheControl)
 			}
+
+			// Finalize writes the response with proper headers
+			recorder.Finalize(etag, c.CacheControl, c.ETag, c.LastModified, lastModified)
 		})
 	}
 }
 
 // cacheResponseRecorder captures response data for caching.
 type cacheResponseRecorder struct {
-	http.ResponseWriter
-	statusCode    int
+	*rwutil.ResponseBuffer
 	headers       map[string][]string
-	body          bytes.Buffer
-	maxBodySize   int64
 	shouldCache   bool
 	statusCodeMap map[int]bool
-	written       bool
+	hijacked      bool
 }
 
+// WriteHeader captures the status code and determines if response should be cached.
 func (c *cacheResponseRecorder) WriteHeader(statusCode int) {
-	if c.written {
+	if c.HasWritten || c.hijacked {
 		return
 	}
-	c.written = true
-	c.statusCode = statusCode
+	c.ResponseBuffer.WriteHeader(statusCode)
 	c.shouldCache = c.statusCodeMap[statusCode]
 
 	if c.shouldCache {
 		c.headers = make(map[string][]string)
 		for k, v := range c.Header() {
-			// Skip headers that shouldn't be cached
-			if k == "Set-Cookie" || k == "Connection" || k == "Keep-Alive" {
+			// Skip hop-by-hop and sensitive headers per RFC 9111
+			switch k {
+			case "Set-Cookie", "Connection", "Keep-Alive",
+				"Authorization", "Proxy-Authenticate", "Proxy-Authorization",
+				"TE", "Trailer", "Transfer-Encoding", "Upgrade":
 				continue
 			}
-			c.headers[k] = v
+			copied := make([]string, len(v))
+			copy(copied, v)
+			c.headers[k] = copied
 		}
+		// Don't write header yet - defer until Finalize (we're caching)
+	} else if !c.HeaderWritten {
+		// Not caching - write through immediately to avoid status code loss
+		c.ResponseWriter.WriteHeader(statusCode)
+		c.HeaderWritten = true
 	}
-
-	c.ResponseWriter.WriteHeader(statusCode)
 }
 
+// Write captures the response body for caching or passes through for non-cacheable responses.
 func (c *cacheResponseRecorder) Write(p []byte) (int, error) {
-	if !c.written {
-		c.WriteHeader(http.StatusOK)
+	if c.hijacked {
+		return c.ResponseWriter.Write(p)
+	}
+	if !c.ShouldCache() {
+		return c.ResponseWriter.Write(p)
+	}
+	return c.ResponseBuffer.Write(p)
+}
+
+// ShouldCache returns true if the response should be cached.
+func (c *cacheResponseRecorder) ShouldCache() bool {
+	return c.shouldCache && c.Buffering
+}
+
+// Finalize writes the buffered response to the underlying ResponseWriter.
+// etag is the computed ETag to add (if enabled and non-empty).
+func (c *cacheResponseRecorder) Finalize(etag, cacheControl string, enableETag, enableLastMod bool, lastModified time.Time) {
+	if c.hijacked || !c.Buffering {
+		return
 	}
 
-	if c.shouldCache && int64(c.body.Len()+len(p)) <= c.maxBodySize {
-		c.body.Write(p)
-	} else if c.shouldCache {
-		c.shouldCache = false
+	// If we're not caching, the response has already been written through
+	if !c.shouldCache {
+		return
 	}
 
-	return c.ResponseWriter.Write(p)
+	// Ensure we have a valid status code
+	if !c.HasWritten {
+		c.Status = http.StatusOK
+	}
+
+	// Set cache headers before writing
+	if cacheControl != "" {
+		c.ResponseWriter.Header().Set("Cache-Control", cacheControl)
+	}
+	if enableETag && etag != "" {
+		c.ResponseWriter.Header().Set("ETag", etag)
+	}
+	if enableLastMod && !lastModified.IsZero() {
+		c.ResponseWriter.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
+	}
+
+	c.Commit()
 }
 
 func (c *cacheResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	hijacker, ok := c.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, fmt.Errorf("response writer does not support hijacking")
-	}
-	return hijacker.Hijack()
+	c.hijacked = true
+	return c.ResponseBuffer.Hijack()
 }
 
 func (c *cacheResponseRecorder) Flush() {
-	if flusher, ok := c.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
+	if c.hijacked {
+		if flusher, ok := c.ResponseWriter.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		return
 	}
+
+	c.shouldCache = false
+	flusher, _ := c.ResponseWriter.(http.Flusher)
+	c.FlushTo(flusher, nil)
 }
 
 // generateCacheKey creates a cache key from request method, URL, and vary headers.
 // GET and HEAD share the same cache key per RFC 7231.
 func generateCacheKey(r *http.Request, vary []string) string {
-	var parts []string
+	var b strings.Builder
+	b.Grow(len(r.URL.Path) + len(r.URL.RawQuery) + 32)
 	// Treat HEAD as GET for cache key purposes
-	method := r.Method
-	if method == http.MethodHead {
-		method = http.MethodGet
+	if r.Method == http.MethodHead {
+		b.WriteString(http.MethodGet)
+	} else {
+		b.WriteString(r.Method)
 	}
-	parts = append(parts, method)
-	parts = append(parts, r.URL.Path)
-	parts = append(parts, r.URL.RawQuery)
-
+	b.WriteByte('|')
+	b.WriteString(r.URL.Path)
+	b.WriteByte('|')
+	b.WriteString(r.URL.RawQuery)
 	for _, header := range vary {
 		if value := r.Header.Get(header); value != "" {
-			parts = append(parts, fmt.Sprintf("%s=%s", header, value))
+			b.WriteByte('|')
+			b.WriteString(header)
+			b.WriteByte('=')
+			b.WriteString(value)
 		}
 	}
-
-	hash := sha256.Sum256([]byte(strings.Join(parts, "|")))
-	return hex.EncodeToString(hash[:])
+	return b.String()
 }
 
 // extractVaryHeaders extracts vary header values from request.

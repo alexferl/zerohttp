@@ -1320,6 +1320,24 @@ func TestETag_Metrics(t *testing.T) {
 	}
 }
 
+func TestETag_FlushThenWrite(t *testing.T) {
+	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("before"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		_, _ = w.Write([]byte(" after"))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Body.String() != "before after" {
+		t.Errorf("expected 'before after', got %q", rec.Body.String())
+	}
+}
+
 // TestETag_ConcurrentWriteAndFlush tests that concurrent Write operations
 // don't cause a data race on the buffer field
 func TestETag_ConcurrentWriteAndFlush(t *testing.T) {

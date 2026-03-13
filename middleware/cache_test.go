@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -329,5 +330,263 @@ func TestCache_Metrics(t *testing.T) {
 		if results["hit"] != 2 {
 			t.Errorf("expected 2 hits, got %d", results["hit"])
 		}
+	})
+}
+
+func TestCache_NonCacheableResponseBody(t *testing.T) {
+	t.Run("does not drop body for non-cacheable status codes", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not found body"))
+		})
+
+		// Only cache 200 OK, not 404
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:  time.Minute,
+			StatusCodes: []int{http.StatusOK},
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound).Body("not found body")
+	})
+
+	t.Run("does not drop body for 500 errors", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("error message"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL: time.Minute,
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusInternalServerError).Body("error message")
+	})
+}
+
+func TestCache_NoDuplicateHeaders(t *testing.T) {
+	t.Run("does not duplicate handler-set headers", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Custom", "value")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"test": true}`))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			CacheControl: "public, max-age=60",
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		// Check that headers appear exactly once
+		contentTypeValues := w.Header()["Content-Type"]
+		if len(contentTypeValues) != 1 {
+			t.Errorf("expected Content-Type to appear exactly once, got %d times: %v", len(contentTypeValues), contentTypeValues)
+		}
+		if w.Header().Get("Content-Type") != "application/json" {
+			t.Errorf("expected Content-Type to be application/json, got %s", w.Header().Get("Content-Type"))
+		}
+
+		xCustomValues := w.Header()["X-Custom"]
+		if len(xCustomValues) != 1 {
+			t.Errorf("expected X-Custom to appear exactly once, got %d times: %v", len(xCustomValues), xCustomValues)
+		}
+	})
+}
+
+func TestCache_Flush(t *testing.T) {
+	t.Run("flush switches to pass-through mode", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("before flush"))
+
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+
+			_, _ = w.Write([]byte("after flush"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			CacheControl: "public, max-age=60",
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		// ResponseRecorder doesn't support real flushing, but we should still get the full body
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("before flushafter flush")
+
+		// Content-Type should be set
+		if w.Header().Get("Content-Type") != "text/plain" {
+			t.Errorf("expected Content-Type to be text/plain, got %s", w.Header().Get("Content-Type"))
+		}
+	})
+
+	t.Run("flush does not cache response", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("response " + fmt.Sprintf("%d", callCount)))
+
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			CacheControl: "public, max-age=60",
+		})
+
+		// First request
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w1 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request - should hit handler again since flushed responses aren't cached
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w2 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		if callCount != 2 {
+			t.Errorf("expected 2 handler calls (flushed response not cached), got %d", callCount)
+		}
+	})
+
+	t.Run("flush preserves non-200 status code", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte("partial"))
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			_, _ = w.Write([]byte(" content"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			CacheControl: "public, max-age=60",
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusPartialContent).Body("partial content")
+	})
+
+	t.Run("non-cacheable response with flush does not double WriteHeader", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not found"))
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		})
+
+		// Only cache 200 OK, so 404 is non-cacheable
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			StatusCodes:  []int{http.StatusOK},
+			CacheControl: "public, max-age=60",
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound).Body("not found")
+	})
+
+	t.Run("flush before WriteHeader does not double-write status", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush() // flush before WriteHeader
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("data"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			CacheControl: "public, max-age=60",
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("data")
+	})
+}
+
+func TestCache_BodyOverflow(t *testing.T) {
+	t.Run("preserves non-200 status when body overflows maxBodySize", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusPartialContent)
+			// Write more than maxBodySize (10 bytes)
+			_, _ = w.Write([]byte("this is a long response that exceeds ten bytes"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			MaxBodySize:  10, // Very small to force overflow
+			StatusCodes:  []int{http.StatusOK, http.StatusPartialContent},
+			CacheControl: "public, max-age=60",
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		// Status should be 206, not 200
+		zhtest.AssertWith(t, w).Status(http.StatusPartialContent)
+		// Body should be complete
+		if w.Body.String() != "this is a long response that exceeds ten bytes" {
+			t.Errorf("unexpected body: %s", w.Body.String())
+		}
+	})
+
+	t.Run("flush after body overflow does not double WriteHeader", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte("exceeds ten bytes easily"))
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			_, _ = w.Write([]byte(" more data"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:  time.Minute,
+			MaxBodySize: 10,
+			StatusCodes: []int{http.StatusOK, http.StatusPartialContent},
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusPartialContent)
 	})
 }
