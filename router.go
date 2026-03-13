@@ -570,9 +570,10 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			// Preserve original path for accurate logging and deferred middleware
 			originalPath := req.URL.Path
 			req.URL.Path = "/"
-			defer func() { req.URL.Path = originalPath }() // Restore even if handler panics
+			defer func() { req.URL.Path = originalPath }() // Safety net for panics upstream
 			rec := &statusCapture{ResponseWriter: w, status: http.StatusOK}
 			fileServer.ServeHTTP(rec, req)
+			req.URL.Path = originalPath // Restore NOW, before LogRequest reads req.URL.Path
 			middleware.LogRequest(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
 		} else {
 			notFoundHandler.ServeHTTP(w, req)
