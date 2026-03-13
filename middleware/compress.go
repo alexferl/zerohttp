@@ -206,7 +206,7 @@ func matchAcceptEncoding(accepted []string, encoding string) bool {
 		}
 		// q=0 means explicitly not acceptable (RFC 7231 §5.3.1)
 		if q, ok := strings.CutPrefix(strings.TrimSpace(params), "q="); ok {
-			if q == "0" || strings.HasPrefix(q, "0.0") {
+			if q == "0" || q == "0.0" || q == "0.00" || q == "0.000" {
 				return false
 			}
 		}
