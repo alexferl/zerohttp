@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -132,6 +133,86 @@ func TestEventStream_Send(t *testing.T) {
 		err = stream.Send(event)
 		if err == nil {
 			t.Error("expected error after close")
+		}
+	})
+
+	t.Run("rejects event ID with CR", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		stream, err := NewSSE(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		event := SSEEvent{ID: "abc\rdef", Data: []byte("test")}
+		err = stream.Send(event)
+		if err == nil {
+			t.Error("expected error for ID with CR")
+		}
+	})
+
+	t.Run("rejects event ID with LF", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		stream, err := NewSSE(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		event := SSEEvent{ID: "abc\ndef", Data: []byte("test")}
+		err = stream.Send(event)
+		if err == nil {
+			t.Error("expected error for ID with LF")
+		}
+	})
+
+	t.Run("rejects event ID with NULL", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		stream, err := NewSSE(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		event := SSEEvent{ID: "abc\x00def", Data: []byte("test")}
+		err = stream.Send(event)
+		if err == nil {
+			t.Error("expected error for ID with NULL")
+		}
+	})
+
+	t.Run("rejects event name with CR", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		stream, err := NewSSE(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		event := SSEEvent{Name: "update\rnotify", Data: []byte("test")}
+		err = stream.Send(event)
+		if err == nil {
+			t.Error("expected error for Name with CR")
+		}
+	})
+
+	t.Run("rejects event name with LF", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		stream, err := NewSSE(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		event := SSEEvent{Name: "update\nnotify", Data: []byte("test")}
+		err = stream.Send(event)
+		if err == nil {
+			t.Error("expected error for Name with LF")
 		}
 	})
 }
@@ -275,6 +356,7 @@ func TestEventStream_Send_WriteError(t *testing.T) {
 			flusher: f,
 			ctx:     r.Context(),
 			closed:  make(chan struct{}),
+			cancel:  func() {},
 		}
 
 		event := SSEEvent{Data: []byte("test")}
@@ -298,6 +380,7 @@ func TestEventStream_SendComment_WriteError(t *testing.T) {
 			flusher: f,
 			ctx:     r.Context(),
 			closed:  make(chan struct{}),
+			cancel:  func() {},
 		}
 
 		err := stream.SendComment("test")
@@ -396,6 +479,38 @@ func TestSSEWriter_WriteEvent(t *testing.T) {
 			BodyContains("retry: 3000").
 			BodyContains("data: hello")
 	})
+
+	t.Run("rejects event ID with CRLF", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		writer, err := NewSSEWriter(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		event := SSEEvent{ID: "abc\r\ndef", Data: []byte("test")}
+		err = writer.WriteEvent(event)
+		if err == nil {
+			t.Error("expected error for ID with CRLF")
+		}
+	})
+
+	t.Run("rejects event name with LF", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+
+		writer, err := NewSSEWriter(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		event := SSEEvent{Name: "update\nnotify", Data: []byte("test")}
+		err = writer.WriteEvent(event)
+		if err == nil {
+			t.Error("expected error for Name with LF")
+		}
+	})
 }
 
 func TestSSEWriter_WriteComment(t *testing.T) {
@@ -414,6 +529,28 @@ func TestSSEWriter_WriteComment(t *testing.T) {
 		}
 
 		zhtest.AssertWith(t, w).BodyContains(": keepalive")
+	})
+
+	t.Run("returns error when context cancelled", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		ctx, cancel := context.WithCancel(context.Background())
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
+
+		writer, err := NewSSEWriter(w, r)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		cancel()
+		time.Sleep(10 * time.Millisecond)
+
+		err = writer.WriteComment("test")
+		if err == nil {
+			t.Error("expected error when context cancelled")
+		}
+		if !strings.Contains(err.Error(), "sse:") {
+			t.Errorf("expected error to contain 'sse:' prefix, got: %v", err)
+		}
 	})
 }
 
@@ -567,6 +704,20 @@ func TestSSEWithReplay(t *testing.T) {
 			t.Error("expected error for invalid Last-Event-ID")
 		}
 	})
+
+	t.Run("returns error when Last-Event-ID present but replayer is nil", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+		r.Header.Set(HeaderLastEventID, "1")
+
+		_, err := SSEWithReplay(w, r, nil)
+		if err == nil {
+			t.Error("expected error when Last-Event-ID present but replayer is nil")
+		}
+		if !strings.Contains(err.Error(), "no replayer configured") {
+			t.Errorf("expected error to contain 'no replayer configured', got: %v", err)
+		}
+	})
 }
 
 // SSEHub tests
@@ -685,6 +836,7 @@ func TestSSEHub(t *testing.T) {
 			ctx:     r.Context(),
 			closed:  make(chan struct{}),
 			done:    make(chan struct{}),
+			cancel:  func() {},
 		}
 		hub.Register(badStream)
 
@@ -719,6 +871,7 @@ func TestSSEHub(t *testing.T) {
 			ctx:     r.Context(),
 			closed:  make(chan struct{}),
 			done:    make(chan struct{}),
+			cancel:  func() {},
 		}
 		hub.Subscribe(badStream, "test-topic")
 

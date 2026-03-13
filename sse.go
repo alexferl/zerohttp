@@ -3,6 +3,7 @@ package zerohttp
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,8 +12,6 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 )
-
-// Re-export SSE types from config package for convenience.
 
 // SSEConnection is an alias for config.SSEConnection.
 type SSEConnection = config.SSEConnection
@@ -35,10 +34,22 @@ type SSE struct {
 	retry   time.Duration
 }
 
+// sseLineEndingReplacer normalizes CR, LF, and CRLF to LF for SSE spec compliance.
+// The SSE spec allows lines to be terminated by CRLF, LF, or bare CR.
+var sseLineEndingReplacer = strings.NewReplacer("\r\n", "\n", "\r", "\n")
+
+func normalizeLineEndings(s string) string {
+	return sseLineEndingReplacer.Replace(s)
+}
+
 // setupSSEResponse sets up the SSE headers and returns the flusher.
 // This is a helper shared between NewSSE and NewSSEWriter.
+//
+// Note: The Content-Type check is a heuristic. It may false-positive if
+// middleware sets Content-Type before the SSE handler runs. Consider avoiding
+// Content-Type middleware on SSE routes.
 func setupSSEResponse(w http.ResponseWriter) (http.Flusher, error) {
-	if w.Header().Get("Content-Type") != "" {
+	if w.Header().Get(HeaderContentType) != "" {
 		return nil, fmt.Errorf("sse: response headers already sent")
 	}
 
@@ -47,9 +58,9 @@ func setupSSEResponse(w http.ResponseWriter) (http.Flusher, error) {
 		return nil, fmt.Errorf("sse: streaming not supported")
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set(HeaderContentType, MIMETextEventStream)
+	w.Header().Set(HeaderCacheControl, CacheControlNoCache)
+	w.Header().Set(HeaderConnection, ConnectionKeepAlive)
 
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
@@ -102,6 +113,14 @@ func (s *SSE) Send(event SSEEvent) error {
 	default:
 	}
 
+	// Validate ID and Name per SSE spec: must not contain CR, LF, or NULL
+	if strings.ContainsAny(event.ID, "\r\n\x00") {
+		return fmt.Errorf("sse: event ID must not contain CR, LF, or NULL")
+	}
+	if strings.ContainsAny(event.Name, "\r\n") {
+		return fmt.Errorf("sse: event name must not contain CR or LF")
+	}
+
 	var buf strings.Builder
 
 	if event.ID != "" {
@@ -127,7 +146,7 @@ func (s *SSE) Send(event SSEEvent) error {
 	}
 
 	if len(event.Data) > 0 {
-		lines := strings.Split(string(event.Data), "\n")
+		lines := strings.Split(normalizeLineEndings(string(event.Data)), "\n")
 		for _, line := range lines {
 			buf.WriteString("data: ")
 			buf.WriteString(line)
@@ -140,7 +159,7 @@ func (s *SSE) Send(event SSEEvent) error {
 	// Empty line terminates the event
 	buf.WriteByte('\n')
 
-	_, err := s.w.Write([]byte(buf.String()))
+	_, err := io.WriteString(s.w, buf.String())
 	if err != nil {
 		return fmt.Errorf("sse: write error: %w", err)
 	}
@@ -163,7 +182,7 @@ func (s *SSE) SendComment(comment string) error {
 	}
 
 	// Comments start with colon
-	lines := strings.Split(comment, "\n")
+	lines := strings.Split(normalizeLineEndings(comment), "\n")
 	var buf strings.Builder
 	for _, line := range lines {
 		buf.WriteString(": ")
@@ -171,7 +190,7 @@ func (s *SSE) SendComment(comment string) error {
 		buf.WriteByte('\n')
 	}
 
-	_, err := s.w.Write([]byte(buf.String()))
+	_, err := io.WriteString(s.w, buf.String())
 	if err != nil {
 		return fmt.Errorf("sse: write error: %w", err)
 	}
@@ -190,9 +209,7 @@ func (s *SSE) Close() error {
 		return nil
 	default:
 		close(s.closed)
-		if s.cancel != nil {
-			s.cancel()
-		}
+		s.cancel()
 		return nil
 	}
 }
@@ -201,18 +218,6 @@ func (s *SSE) Close() error {
 // This is primarily used for testing to verify goroutine cleanup.
 func (s *SSE) WaitDone() {
 	<-s.done
-}
-
-// isOpen returns true if the connection is still open (not closed).
-func (s *SSE) isOpen() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	select {
-	case <-s.closed:
-		return false
-	default:
-		return true
-	}
 }
 
 // SetRetry sets the default reconnection time for this connection.
@@ -241,6 +246,7 @@ func (p *DefaultProvider) NewSSE(w http.ResponseWriter, r *http.Request) (SSECon
 type SSEWriter struct {
 	w       http.ResponseWriter
 	flusher http.Flusher
+	ctx     context.Context
 	mu      sync.Mutex
 }
 
@@ -255,45 +261,28 @@ func NewSSEWriter(w http.ResponseWriter, r *http.Request) (*SSEWriter, error) {
 	return &SSEWriter{
 		w:       w,
 		flusher: flusher,
+		ctx:     r.Context(),
 	}, nil
 }
 
 // WriteEvent writes an SSE event.
 func (s *SSEWriter) WriteEvent(event SSEEvent) error {
-	return s.writeEvent(event)
-}
-
-// WriteComment writes an SSE comment.
-func (s *SSEWriter) WriteComment(comment string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	lines := strings.Split(comment, "\n")
-	var buf strings.Builder
-	for _, line := range lines {
-		buf.WriteString(": ")
-		buf.WriteString(line)
-		buf.WriteByte('\n')
+	select {
+	case <-s.ctx.Done():
+		return fmt.Errorf("sse: %w", s.ctx.Err())
+	default:
 	}
 
-	_, err := s.w.Write([]byte(buf.String()))
-	if err != nil {
-		return err
+	// Validate ID and Name per SSE spec: must not contain CR, LF, or NULL
+	if strings.ContainsAny(event.ID, "\r\n\x00") {
+		return fmt.Errorf("sse: event ID must not contain CR, LF, or NULL")
 	}
-	s.flusher.Flush()
-	return nil
-}
-
-// Flush flushes the underlying writer.
-func (s *SSEWriter) Flush() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.flusher.Flush()
-}
-
-func (s *SSEWriter) writeEvent(event SSEEvent) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if strings.ContainsAny(event.Name, "\r\n") {
+		return fmt.Errorf("sse: event name must not contain CR or LF")
+	}
 
 	var buf strings.Builder
 
@@ -316,7 +305,7 @@ func (s *SSEWriter) writeEvent(event SSEEvent) error {
 	}
 
 	if len(event.Data) > 0 {
-		lines := strings.Split(string(event.Data), "\n")
+		lines := strings.Split(normalizeLineEndings(string(event.Data)), "\n")
 		for _, line := range lines {
 			buf.WriteString("data: ")
 			buf.WriteString(line)
@@ -328,12 +317,46 @@ func (s *SSEWriter) writeEvent(event SSEEvent) error {
 
 	buf.WriteByte('\n')
 
-	_, err := s.w.Write([]byte(buf.String()))
+	_, err := io.WriteString(s.w, buf.String())
 	if err != nil {
-		return err
+		return fmt.Errorf("sse: write error: %w", err)
 	}
 	s.flusher.Flush()
 	return nil
+}
+
+// WriteComment writes an SSE comment.
+func (s *SSEWriter) WriteComment(comment string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	select {
+	case <-s.ctx.Done():
+		return fmt.Errorf("sse: %w", s.ctx.Err())
+	default:
+	}
+
+	lines := strings.Split(normalizeLineEndings(comment), "\n")
+	var buf strings.Builder
+	for _, line := range lines {
+		buf.WriteString(": ")
+		buf.WriteString(line)
+		buf.WriteByte('\n')
+	}
+
+	_, err := io.WriteString(s.w, buf.String())
+	if err != nil {
+		return fmt.Errorf("sse: write error: %w", err)
+	}
+	s.flusher.Flush()
+	return nil
+}
+
+// Flush flushes the underlying writer.
+func (s *SSEWriter) Flush() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.flusher.Flush()
 }
 
 // IsClientDisconnected checks if the client has disconnected.
@@ -396,8 +419,9 @@ func (r *InMemoryReplayer) Store(event SSEEvent) SSEEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	now := time.Now()
+
 	if r.ttl > 0 {
-		now := time.Now()
 		valid := make([]storedEvent, 0, len(r.events))
 		for _, e := range r.events {
 			if now.Sub(e.timestamp) < r.ttl {
@@ -413,7 +437,7 @@ func (r *InMemoryReplayer) Store(event SSEEvent) SSEEvent {
 	r.events = append(r.events, storedEvent{
 		id:        r.lastID,
 		event:     event,
-		timestamp: time.Now(),
+		timestamp: now,
 	})
 
 	if r.maxEvents > 0 && len(r.events) > r.maxEvents {
@@ -425,9 +449,6 @@ func (r *InMemoryReplayer) Store(event SSEEvent) SSEEvent {
 
 // Replay sends all events after the given ID to the provided send function.
 func (r *InMemoryReplayer) Replay(afterID string, send func(SSEEvent) error) (int, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	startID := int64(0)
 	if afterID != "" {
 		var err error
@@ -437,14 +458,22 @@ func (r *InMemoryReplayer) Replay(afterID string, send func(SSEEvent) error) (in
 		}
 	}
 
-	count := 0
+	// Snapshot events under lock, then release before I/O
+	r.mu.RLock()
+	var snapshot []SSEEvent
 	for _, se := range r.events {
 		if se.id > startID {
-			if err := send(se.event); err != nil {
-				return count, err
-			}
-			count++
+			snapshot = append(snapshot, se.event)
 		}
+	}
+	r.mu.RUnlock()
+
+	count := 0
+	for _, event := range snapshot {
+		if err := send(event); err != nil {
+			return count, err
+		}
+		count++
 	}
 	return count, nil
 }
@@ -458,8 +487,12 @@ func SSEWithReplay(w http.ResponseWriter, r *http.Request, replayer SSEReplayer)
 	}
 
 	// Check for Last-Event-ID header for replay
-	lastEventID := r.Header.Get("Last-Event-ID")
-	if lastEventID != "" && replayer != nil {
+	lastEventID := r.Header.Get(HeaderLastEventID)
+	if lastEventID != "" {
+		if replayer == nil {
+			_ = stream.Close()
+			return nil, fmt.Errorf("sse: Last-Event-ID header present but no replayer configured")
+		}
 		_, err := replayer.Replay(lastEventID, func(event SSEEvent) error {
 			return stream.Send(event)
 		})
@@ -541,12 +574,7 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 
 	var failed []*SSE
 	for _, conn := range connections {
-		// Check if connection is still registered and not closed before sending
-		if h.isConnectionActive(conn) {
-			if err := conn.Send(event); err != nil {
-				failed = append(failed, conn)
-			}
-		} else {
+		if err := conn.Send(event); err != nil {
 			failed = append(failed, conn)
 		}
 	}
@@ -556,11 +584,6 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 		h.Unregister(conn)
 		_ = conn.Close()
 	}
-}
-
-// isConnectionActive checks if a connection is still open (not closed).
-func (h *SSEHub) isConnectionActive(conn *SSE) bool {
-	return conn.isOpen()
 }
 
 // BroadcastTo sends an event to all connections subscribed to a topic.
@@ -578,12 +601,7 @@ func (h *SSEHub) BroadcastTo(topic string, event SSEEvent) {
 
 	var failed []*SSE
 	for _, conn := range connections {
-		// Check if connection is still registered and not closed before sending
-		if h.isConnectionActive(conn) {
-			if err := conn.Send(event); err != nil {
-				failed = append(failed, conn)
-			}
-		} else {
+		if err := conn.Send(event); err != nil {
 			failed = append(failed, conn)
 		}
 	}
