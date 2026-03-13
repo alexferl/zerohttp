@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
@@ -1021,6 +1022,66 @@ func TestRouter_Static(t *testing.T) {
 		// Should return 404, not serve any file
 		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 	})
+
+	t.Run("Static - panics on GET / conflict", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/", testHandler("root"))
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic when Static() conflicts with GET / route")
+			} else if !strings.Contains(fmt.Sprintf("%v", r), "Static()") {
+				t.Errorf("Expected panic message to contain 'Static()', got: %v", r)
+			}
+		}()
+
+		router.Static(testStaticFS, "testdata/static", false)
+	})
+
+	t.Run("StaticDir - panics on GET / conflict", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/", testHandler("root"))
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic when StaticDir() conflicts with GET / route")
+			} else if !strings.Contains(fmt.Sprintf("%v", r), "StaticDir()") {
+				t.Errorf("Expected panic message to contain 'StaticDir()', got: %v", r)
+			}
+		}()
+
+		router.StaticDir("testdata/static", false)
+	})
+
+	t.Run("Static - panics on double Static() call", func(t *testing.T) {
+		router := NewRouter()
+		router.Static(testStaticFS, "testdata/static", false)
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic when Static() called twice")
+			} else if !strings.Contains(fmt.Sprintf("%v", r), "Static()") {
+				t.Errorf("Expected panic message to contain 'Static()', got: %v", r)
+			}
+		}()
+
+		router.Static(testStaticFS, "testdata/static", false)
+	})
+
+	t.Run("StaticDir - panics on double StaticDir() call", func(t *testing.T) {
+		router := NewRouter()
+		router.StaticDir("testdata/static", false)
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic when StaticDir() called twice")
+			} else if !strings.Contains(fmt.Sprintf("%v", r), "StaticDir()") {
+				t.Errorf("Expected panic message to contain 'StaticDir()', got: %v", r)
+			}
+		}()
+
+		router.StaticDir("testdata/static", false)
+	})
 }
 
 func TestRouter_ServeMux(t *testing.T) {
@@ -1233,4 +1294,402 @@ func TestJSONMethodNotAllowedHandler(t *testing.T) {
 		Header(HeaderAllow, "GET, HEAD").
 		BodyContains(`"title":"Method Not Allowed"`).
 		BodyContains(`"status":405`)
+}
+
+// Concurrent access tests for race condition verification
+// These tests verify the fixes for issues identified in ISSUES.md
+
+func TestRouter_ConcurrentRouteRegistration(t *testing.T) {
+	t.Run("concurrent route registration and request handling", func(t *testing.T) {
+		router := NewRouter()
+
+		// Pre-register some routes
+		router.GET("/existing", testHandler("existing"))
+		router.POST("/existing", testHandler("existing-post"))
+
+		const numGoroutines = 50
+		const iterations = 20
+
+		done := make(chan struct{})
+
+		// Goroutine 1: Register new routes continuously
+		go func() {
+			defer close(done)
+			for i := 0; i < iterations; i++ {
+				path := fmt.Sprintf("/new-route-%d", i)
+				router.GET(path, testHandler(fmt.Sprintf("handler-%d", i)))
+			}
+		}()
+
+		// Goroutines 2-N: Make requests to various paths
+		var wg sync.WaitGroup
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					// Request existing route
+					req := httptest.NewRequest(http.MethodGet, "/existing", nil)
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+
+					// Request non-existent route (triggers 404 handling with registeredRoutes access)
+					req = httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+					w = httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+
+					// Request with wrong method (triggers 405 handling with registeredRoutes access)
+					req = httptest.NewRequest(http.MethodPut, "/existing", nil)
+					w = httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+				}
+			}(i)
+		}
+
+		<-done
+		wg.Wait()
+	})
+
+	t.Run("concurrent route registration to unique paths", func(t *testing.T) {
+		router := NewRouter()
+
+		const numGoroutines = 20
+		const iterations = 10
+
+		var wg sync.WaitGroup
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					// Each goroutine registers unique paths to avoid ServeMux panic
+					switch id % 4 {
+					case 0:
+						router.GET(fmt.Sprintf("/shared-%d-%d", id, j), testHandler("get"))
+					case 1:
+						router.POST(fmt.Sprintf("/shared-%d-%d", id, j), testHandler("post"))
+					case 2:
+						router.PUT(fmt.Sprintf("/shared-%d-%d", id, j), testHandler("put"))
+					case 3:
+						router.DELETE(fmt.Sprintf("/shared-%d-%d", id, j), testHandler("delete"))
+					}
+				}
+			}(i)
+		}
+
+		// Concurrently make requests to registered and non-existent paths
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					// Request to non-existent path (triggers 404 handling)
+					req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+				}
+			}(i)
+		}
+
+		wg.Wait()
+	})
+}
+
+func TestRouter_ConcurrentNotFoundChange(t *testing.T) {
+	t.Run("concurrent NotFound handler changes", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/exists", testHandler("exists"))
+
+		const numGoroutines = 30
+		const iterations = 20
+
+		var wg sync.WaitGroup
+
+		// Goroutines that change the NotFound handler
+		for i := 0; i < numGoroutines/3; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.WriteHeader(http.StatusNotFound)
+						_, _ = fmt.Fprintf(w, "custom-404-%d", id)
+					}))
+				}
+			}(i)
+		}
+
+		// Goroutines that request non-existent paths
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+				}
+			}(i)
+		}
+
+		wg.Wait()
+	})
+
+	t.Run("concurrent MethodNotAllowed handler changes", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/test", testHandler("get"))
+		router.POST("/test", testHandler("post"))
+
+		const numGoroutines = 30
+		const iterations = 20
+
+		var wg sync.WaitGroup
+
+		// Goroutines that change the MethodNotAllowed handler
+		for i := 0; i < numGoroutines/3; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.WriteHeader(http.StatusMethodNotAllowed)
+						_, _ = fmt.Fprintf(w, "custom-405-%d", id)
+					}))
+				}
+			}(i)
+		}
+
+		// Goroutines that trigger 405 responses
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					req := httptest.NewRequest(http.MethodPut, "/test", nil)
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+				}
+			}(i)
+		}
+
+		wg.Wait()
+	})
+}
+
+func TestRouter_ConcurrentGroupCreation(t *testing.T) {
+	t.Run("concurrent Group() calls with handler changes", func(t *testing.T) {
+		router := NewRouter()
+
+		// Set up initial handlers
+		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("parent-404"))
+		}))
+
+		const numGoroutines = 20
+		const iterations = 10
+
+		var wg sync.WaitGroup
+
+		// Goroutines that create groups
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					router.Group(func(api Router) {
+						// Register routes in group
+						api.GET(fmt.Sprintf("/group-%d/route-%d", id, j), testHandler("group"))
+					})
+				}
+			}(i)
+		}
+
+		// Goroutines that change handlers on parent
+		for i := 0; i < numGoroutines/2; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						w.WriteHeader(http.StatusNotFound)
+						_, _ = fmt.Fprintf(w, "updated-404-%d", id)
+					}))
+				}
+			}(i)
+		}
+
+		// Goroutines that make requests
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					// Request non-existent path (triggers NotFound handler)
+					req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+				}
+			}(i)
+		}
+
+		wg.Wait()
+	})
+
+	t.Run("concurrent group route registration and access", func(t *testing.T) {
+		router := NewRouter()
+
+		const numGoroutines = 30
+		const iterations = 20
+
+		var wg sync.WaitGroup
+
+		// Create initial group
+		router.Group(func(api Router) {
+			api.GET("/api/v1/users", testHandler("users"))
+			api.POST("/api/v1/users", testHandler("create-user"))
+		})
+
+		// Concurrently add more groups and routes
+		for i := 0; i < numGoroutines/2; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					router.Group(func(api Router) {
+						api.GET(fmt.Sprintf("/api/v%d/resource-%d", id, j), testHandler("resource"))
+					})
+				}
+			}(i)
+		}
+
+		// Concurrently make requests to various paths
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for j := 0; j < iterations; j++ {
+					// Request existing group route
+					req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+
+					// Request with wrong method (405 path)
+					req = httptest.NewRequest(http.MethodPut, "/api/v1/users", nil)
+					w = httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+				}
+			}(i)
+		}
+
+		wg.Wait()
+	})
+}
+
+func TestRouter_ConcurrentMixedOperations(t *testing.T) {
+	t.Run("comprehensive mixed concurrent operations", func(t *testing.T) {
+		router := NewRouter()
+
+		// Set up initial state
+		router.GET("/", testHandler("root"))
+		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not-found"))
+		}))
+		router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_, _ = w.Write([]byte("method-not-allowed"))
+		}))
+
+		const numWorkers = 10
+		const iterations = 50
+
+		var wg sync.WaitGroup
+
+		// Worker 1: Register routes
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				router.GET(fmt.Sprintf("/route-%d", i), testHandler(fmt.Sprintf("handler-%d", i)))
+				router.POST(fmt.Sprintf("/route-%d", i), testHandler(fmt.Sprintf("post-handler-%d", i)))
+			}
+		}()
+
+		// Worker 2: Create groups with routes
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				router.Group(func(api Router) {
+					api.GET(fmt.Sprintf("/group-%d/item", i), testHandler("group-item"))
+					api.Use(func(next http.Handler) http.Handler {
+						return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+							next.ServeHTTP(w, r)
+						})
+					})
+				})
+			}
+		}()
+
+		// Worker 3: Change NotFound handler
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusNotFound)
+					_, _ = fmt.Fprintf(w, "404-v%d", i)
+				}))
+			}
+		}()
+
+		// Worker 4: Change MethodNotAllowed handler
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					_, _ = fmt.Fprintf(w, "405-v%d", i)
+				}))
+			}
+		}()
+
+		// Workers 5-10: Make various requests
+		for workerID := 0; workerID < numWorkers-4; workerID++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				for i := 0; i < iterations; i++ {
+					// Existing route
+					req := httptest.NewRequest(http.MethodGet, "/", nil)
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+
+					// Registered route
+					req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/route-%d", i%10), nil)
+					w = httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+
+					// Non-existent route (404)
+					req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/unknown-%d-%d", id, i), nil)
+					w = httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+
+					// Wrong method (405)
+					req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/route-%d", i%10), nil)
+					w = httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+
+					// Group route
+					req = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/group-%d/item", i%10), nil)
+					w = httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+				}
+			}(workerID)
+		}
+
+		wg.Wait()
+	})
 }
