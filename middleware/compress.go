@@ -224,7 +224,6 @@ type compressResponseWriter struct {
 	encoding         string
 	wroteHeader      bool
 	compressible     bool
-	buffer           []byte
 }
 
 func (cw *compressResponseWriter) isCompressible() bool {
@@ -285,16 +284,6 @@ type compressFlusher interface {
 }
 
 func (cw *compressResponseWriter) Flush() {
-	// Flush any buffered data first
-	if len(cw.buffer) > 0 {
-		if cw.compressible {
-			_, _ = cw.w.Write(cw.buffer)
-		} else {
-			_, _ = cw.ResponseWriter.Write(cw.buffer)
-		}
-		cw.buffer = nil
-	}
-
 	if f, ok := cw.writer().(http.Flusher); ok {
 		f.Flush()
 	}
@@ -321,16 +310,6 @@ func (cw *compressResponseWriter) Push(target string, opts *http.PushOptions) er
 }
 
 func (cw *compressResponseWriter) Close() error {
-	// Write any remaining buffered data
-	if len(cw.buffer) > 0 {
-		if cw.compressible {
-			_, _ = cw.w.Write(cw.buffer)
-		} else {
-			_, _ = cw.ResponseWriter.Write(cw.buffer)
-		}
-		cw.buffer = nil
-	}
-
 	if c, ok := cw.writer().(io.WriteCloser); ok {
 		return c.Close()
 	}
