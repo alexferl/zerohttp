@@ -197,27 +197,47 @@ func TestServer_ListenAndServe_NoServer(t *testing.T) {
 	}
 }
 
-func TestServer_Close_WithListeners(t *testing.T) {
+func TestServer_Close_WithServers(t *testing.T) {
+	// Test Close() with servers configured (new behavior - uses server.Close() not listener.Close())
 	server := New()
 
-	// Create real listeners for testing close behavior
-	httpListener, _ := net.Listen("tcp", "127.0.0.1:0")
-	tlsListener, _ := net.Listen("tcp", "127.0.0.1:0")
+	// Create http.Servers directly (simulating Start() path where listener is nil)
+	server.server = &http.Server{Addr: "127.0.0.1:0"}
+	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
 
-	server.listener = httpListener
-	server.tlsListener = tlsListener
-
+	// Close should work even with nil listeners (uses server.Close() internally)
 	err := server.Close()
 	if err != nil {
-		t.Errorf("Expected no error closing listeners, got %v", err)
+		t.Errorf("Expected no error closing servers, got %v", err)
 	}
 
-	// Listeners should be closed now
-	// Calling Close again should handle closed listeners gracefully
+	// Calling Close again should handle closed servers gracefully
 	err = server.Close()
-	// May return error from already closed listeners, but shouldn't crash
+	// May return error from already closed servers, but shouldn't crash
 	if err != nil {
 		t.Logf("Second Close() returned error (expected): %v", err)
+	}
+}
+
+func TestServer_Start_NoServersConfigured(t *testing.T) {
+	// When no servers are configured, Start() should return immediately without hanging
+	server := New()
+	server.server = nil
+	server.metricsServer = nil
+	// tlsServer will be nil since we didn't configure TLS
+
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Start()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Expected no error when no servers configured, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Error("Start() hung when no servers configured - expected immediate return")
 	}
 }
 
@@ -232,6 +252,152 @@ func TestServer_Shutdown_NoServers(t *testing.T) {
 	err := server.Shutdown(ctx)
 	if err != nil {
 		t.Errorf("Expected no error when no servers, got %v", err)
+	}
+}
+
+func TestServer_Shutdown_AfterStart(t *testing.T) {
+	// Test that Shutdown works when server was started via Start()
+	// (where listener fields are nil)
+	server := New()
+	server.server = &http.Server{Addr: "127.0.0.1:0"}
+	// Note: server.listener is nil - Start() creates its own listener
+
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Start()
+	}()
+
+	// Give server time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Shutdown should work even though server.listener is nil
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := server.Shutdown(ctx)
+	if err != nil {
+		t.Errorf("Expected no error during shutdown, got %v", err)
+	}
+
+	// Wait for Start() to return
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for Start() to return after shutdown")
+	}
+}
+
+func TestServer_Close_AfterStart(t *testing.T) {
+	// Test that Close works when server was started via Start()
+	// (where listener fields are nil)
+	server := New()
+	server.server = &http.Server{Addr: "127.0.0.1:0"}
+	// Note: server.listener is nil - Start() creates its own listener
+
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Start()
+	}()
+
+	// Give server time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Close should work even though server.listener is nil
+	err := server.Close()
+	if err != nil {
+		t.Errorf("Expected no error during close, got %v", err)
+	}
+
+	// Wait for Start() to return
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for Start() to return after close")
+	}
+}
+
+func TestServer_Start_MultipleServers_CleanShutdown(t *testing.T) {
+	// Test Start() with multiple servers and verify clean shutdown returns nil
+	server := New()
+	server.server = &http.Server{Addr: "127.0.0.1:0"}
+	server.metricsServer = &http.Server{Addr: "127.0.0.1:0"}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Start()
+	}()
+
+	// Give servers time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Clean shutdown should make Start() return nil
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := server.Shutdown(ctx)
+	if err != nil {
+		t.Errorf("Expected no error during shutdown, got %v", err)
+	}
+
+	select {
+	case startErr := <-done:
+		if startErr != nil {
+			t.Errorf("Expected Start() to return nil after clean shutdown, got %v", startErr)
+		}
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for Start() to return after shutdown")
+	}
+}
+
+func TestServer_Shutdown_DrainsHookErrors(t *testing.T) {
+	// Test that Shutdown properly drains hookErrCh and logs errors
+	server := New()
+	server.server = &http.Server{Addr: "127.0.0.1:0"}
+
+	// Register shutdown hooks that return errors
+	hook1Called := false
+	hook2Called := false
+	server.RegisterShutdownHook("error-hook-1", func(ctx context.Context) error {
+		hook1Called = true
+		return errors.New("hook 1 error")
+	})
+	server.RegisterShutdownHook("error-hook-2", func(ctx context.Context) error {
+		hook2Called = true
+		return errors.New("hook 2 error")
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Start()
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// Shutdown should complete without deadlock even with hook errors
+	err := server.Shutdown(ctx)
+	if err != nil {
+		t.Errorf("Expected no error (hooks logged but don't fail shutdown), got %v", err)
+	}
+
+	// Wait for Start() to complete
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("timeout waiting for Start() to return")
+	}
+
+	// Verify hooks were called
+	if !hook1Called {
+		t.Error("hook 1 was not called")
+	}
+	if !hook2Called {
+		t.Error("hook 2 was not called")
 	}
 }
 
