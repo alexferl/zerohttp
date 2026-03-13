@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/tls"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
@@ -251,5 +252,135 @@ func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
 			zhtest.AssertWith(t, w).Status(http.StatusOK)
 			zhtest.AssertWith(t, w).Header(tt.header, tt.expected)
 		})
+	}
+}
+
+func TestSecurityHeaders_CSPNonce(t *testing.T) {
+	tests := []struct {
+		name            string
+		csp             string
+		nonceEnabled    bool
+		wantNonce       bool
+		wantCSPContains string
+	}{
+		{
+			name:            "Nonce generated and replaced",
+			csp:             "script-src 'nonce-{{nonce}}'",
+			nonceEnabled:    true,
+			wantNonce:       true,
+			wantCSPContains: "script-src 'nonce-",
+		},
+		{
+			name:            "No nonce when disabled",
+			csp:             "script-src 'nonce-{{nonce}}'",
+			nonceEnabled:    false,
+			wantNonce:       false,
+			wantCSPContains: "script-src 'nonce-{{nonce}}'",
+		},
+		{
+			name:            "No placeholder no nonce",
+			csp:             "default-src 'self'",
+			nonceEnabled:    true,
+			wantNonce:       false,
+			wantCSPContains: "default-src 'self'",
+		},
+		{
+			name:            "Multiple placeholders replaced",
+			csp:             "script-src 'nonce-{{nonce}}'; style-src 'nonce-{{nonce}}'",
+			nonceEnabled:    true,
+			wantNonce:       true,
+			wantCSPContains: "'nonce-",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedNonce string
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedNonce = GetCSPNonce(r)
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := zhtest.NewRequest(http.MethodGet, "/").Build()
+			mw := SecurityHeaders(config.SecurityHeadersConfig{
+				ContentSecurityPolicy:             tt.csp,
+				ContentSecurityPolicyNonceEnabled: tt.nonceEnabled,
+			})
+			w := zhtest.TestMiddlewareWithHandler(mw, handler, req)
+
+			zhtest.AssertWith(t, w).Status(http.StatusOK)
+
+			csp := w.Header().Get("Content-Security-Policy")
+			if !strings.Contains(csp, tt.wantCSPContains) {
+				t.Errorf("CSP header = %q, want containing %q", csp, tt.wantCSPContains)
+			}
+
+			if tt.wantNonce {
+				if capturedNonce == "" {
+					t.Error("Expected nonce in context, got empty string")
+				}
+				if !strings.Contains(csp, capturedNonce) {
+					t.Errorf("CSP header %q does not contain nonce %q", csp, capturedNonce)
+				}
+			} else {
+				if capturedNonce != "" {
+					t.Errorf("Expected no nonce, got %q", capturedNonce)
+				}
+			}
+		})
+	}
+}
+
+func TestSecurityHeaders_CSPNonceReportOnly(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	mw := SecurityHeaders(config.SecurityHeadersConfig{
+		ContentSecurityPolicy:             "script-src 'nonce-{{nonce}}'",
+		ContentSecurityPolicyReportOnly:   true,
+		ContentSecurityPolicyNonceEnabled: true,
+	})
+	w := zhtest.TestMiddlewareWithHandler(mw, handler, req)
+
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+	zhtest.AssertWith(t, w).HeaderNotExists("Content-Security-Policy")
+
+	csp := w.Header().Get("Content-Security-Policy-Report-Only")
+	if !strings.Contains(csp, "'nonce-") {
+		t.Errorf("CSP-Report-Only header should contain nonce, got: %s", csp)
+	}
+}
+
+func TestSecurityHeaders_CSPNonceCustomContextKey(t *testing.T) {
+	customKey := config.CSPNonceContextKey("my_custom_nonce_key")
+	var capturedNonce string
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedNonce = GetCSPNonce(r, customKey)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	mw := SecurityHeaders(config.SecurityHeadersConfig{
+		ContentSecurityPolicy:                "script-src 'nonce-{{nonce}}'",
+		ContentSecurityPolicyNonceEnabled:    true,
+		ContentSecurityPolicyNonceContextKey: customKey,
+	})
+	w := zhtest.TestMiddlewareWithHandler(mw, handler, req)
+
+	zhtest.AssertWith(t, w).Status(http.StatusOK)
+
+	if capturedNonce == "" {
+		t.Error("Expected nonce with custom context key, got empty string")
+	}
+}
+
+func TestGetCSPNonce_NotFound(t *testing.T) {
+	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+	nonce := GetCSPNonce(req)
+	if nonce != "" {
+		t.Errorf("Expected empty string for missing nonce, got %q", nonce)
 	}
 }

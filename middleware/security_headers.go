@@ -1,8 +1,12 @@
 package middleware
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/alexferl/zerohttp/config"
 )
@@ -47,11 +51,26 @@ func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) htt
 				}
 			}
 
-			if c.ContentSecurityPolicy != "" {
+			csp := c.ContentSecurityPolicy
+
+			// Generate CSP nonce if enabled and placeholder is present
+			if c.ContentSecurityPolicyNonceEnabled && strings.Contains(csp, config.CSPNoncePlaceholder) {
+				nonce := generateNonce()
+				csp = strings.ReplaceAll(csp, config.CSPNoncePlaceholder, nonce)
+
+				// Store nonce in context for handlers to use
+				ctxKey := c.ContentSecurityPolicyNonceContextKey
+				if ctxKey == "" {
+					ctxKey = config.DefaultCSPNonceContextKey
+				}
+				r = r.WithContext(context.WithValue(r.Context(), ctxKey, nonce))
+			}
+
+			if csp != "" {
 				if c.ContentSecurityPolicyReportOnly {
-					w.Header().Set("Content-Security-Policy-Report-Only", c.ContentSecurityPolicy)
+					w.Header().Set("Content-Security-Policy-Report-Only", csp)
 				} else {
-					w.Header().Set("Content-Security-Policy", c.ContentSecurityPolicy)
+					w.Header().Set("Content-Security-Policy", csp)
 				}
 			}
 
@@ -107,4 +126,26 @@ func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil ||
 		r.Header.Get("X-Forwarded-Proto") == "https" ||
 		r.Header.Get("X-Forwarded-Protocol") == "https"
+}
+
+// generateNonce creates a random base64-encoded nonce for CSP
+func generateNonce() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// GetCSPNonce retrieves the CSP nonce from the request context.
+// Returns empty string if nonce is not present.
+func GetCSPNonce(r *http.Request, key ...config.CSPNonceContextKey) string {
+	var ctxKey any
+	if len(key) > 0 {
+		ctxKey = key[0]
+	} else {
+		ctxKey = config.DefaultCSPNonceContextKey
+	}
+	if nonce, ok := r.Context().Value(ctxKey).(string); ok {
+		return nonce
+	}
+	return ""
 }
