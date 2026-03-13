@@ -518,6 +518,8 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 	requestLoggerConfig := r.config.RequestLogger
 	logger := r.logger
 
+	fileServer := http.FileServer(http.FS(filesystem))
+
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		requestID := req.Header.Get(requestIDHeader)
@@ -540,7 +542,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			return
 		}
 
-		cleanPath := path.Clean(req.URL.Path) // ✅ path.Clean, not filepath.Clean
+		cleanPath := path.Clean(req.URL.Path)
 
 		// Skip API routes - return 404
 		for _, prefix := range apiPrefixes {
@@ -558,7 +560,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			_ = file.Close() // Close immediately - http.FileServer will open it again
 			if statErr == nil && !stat.IsDir() {
 				rec := &statusCapture{ResponseWriter: w, status: http.StatusOK}
-				http.FileServer(http.FS(filesystem)).ServeHTTP(rec, req)
+				fileServer.ServeHTTP(rec, req)
 				middleware.LogRequest(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
 				return
 			}
@@ -568,10 +570,9 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			// Preserve original path for accurate logging and deferred middleware
 			originalPath := req.URL.Path
 			req.URL.Path = "/"
+			defer func() { req.URL.Path = originalPath }() // Restore even if handler panics
 			rec := &statusCapture{ResponseWriter: w, status: http.StatusOK}
-			http.FileServer(http.FS(filesystem)).ServeHTTP(rec, req)
-			// Restore path before logging so SPA fallbacks are logged with their real URL
-			req.URL.Path = originalPath
+			fileServer.ServeHTTP(rec, req)
 			middleware.LogRequest(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
 		} else {
 			notFoundHandler.ServeHTTP(w, req)
