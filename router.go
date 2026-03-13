@@ -244,11 +244,18 @@ type defaultRouter struct {
 	// chain contains the middleware functions that will be applied to all routes
 	chain []func(http.Handler) http.Handler
 
+	// handlerMu protects notFoundHandler and methodNotAllowedHandler.
+	// These handlers can be changed at runtime via NotFound() and MethodNotAllowed().
+	handlerMu sync.RWMutex
+
 	// notFoundHandler is called when no route matches the request path
 	notFoundHandler http.Handler
 
 	// methodNotAllowedHandler is called when a path exists but the HTTP method is not allowed
 	methodNotAllowedHandler http.Handler
+
+	// routesMu protects registeredRoutes. Uses pointer so groups share the same mutex.
+	routesMu *sync.RWMutex
 
 	// registeredRoutes tracks which HTTP methods are registered for each path
 	// This is used to distinguish between 404 Not Found and 405 Method Not Allowed
@@ -286,6 +293,7 @@ func NewRouter(mw ...func(http.Handler) http.Handler) Router {
 		chain:                   mw,
 		notFoundHandler:         defaultNotFoundHandler,
 		methodNotAllowedHandler: defaultMethodNotAllowedHandler,
+		routesMu:                &sync.RWMutex{},
 		registeredRoutes:        make(map[string]map[string]bool),
 		logger:                  logger,
 		config:                  cfg,
@@ -316,12 +324,18 @@ func (r *defaultRouter) Use(mw ...func(http.Handler) http.Handler) {
 //	    api.POST("/users", createUserHandler)
 //	})
 func (r *defaultRouter) Group(fn func(Router)) {
+	r.handlerMu.RLock()
+	notFoundHandler := r.notFoundHandler
+	methodNotAllowedHandler := r.methodNotAllowedHandler
+	r.handlerMu.RUnlock()
+
 	groupRouter := &defaultRouter{
 		mux:                     r.mux,
 		chain:                   slices.Clone(r.chain), // Clone to avoid affecting parent
-		notFoundHandler:         r.notFoundHandler,
-		methodNotAllowedHandler: r.methodNotAllowedHandler,
-		registeredRoutes:        r.registeredRoutes,
+		notFoundHandler:         notFoundHandler,
+		methodNotAllowedHandler: methodNotAllowedHandler,
+		routesMu:                r.routesMu,         // Share mutex with parent
+		registeredRoutes:        r.registeredRoutes, // Share map with parent
 		logger:                  r.logger,
 		config:                  r.config,
 	}
@@ -386,6 +400,8 @@ func (r *defaultRouter) CONNECT(path string, h http.Handler, mw ...func(http.Han
 //	    http.Error(w, "Custom 404 message", http.StatusNotFound)
 //	}))
 func (r *defaultRouter) NotFound(h http.Handler) {
+	r.handlerMu.Lock()
+	defer r.handlerMu.Unlock()
 	r.notFoundHandler = h
 }
 
@@ -400,6 +416,8 @@ func (r *defaultRouter) NotFound(h http.Handler) {
 //	    http.Error(w, fmt.Sprintf("Method not allowed. Allowed: %s", allow), http.StatusMethodNotAllowed)
 //	}))
 func (r *defaultRouter) MethodNotAllowed(h http.Handler) {
+	r.handlerMu.Lock()
+	defer r.handlerMu.Unlock()
 	r.methodNotAllowedHandler = h
 }
 
@@ -429,12 +447,30 @@ func (r *defaultRouter) FilesDir(prefix, dir string) {
 	r.mux.Handle("GET "+prefix, r.wrap(handler, nil))
 }
 
+// checkAndMarkRoot atomically verifies that GET / is not yet claimed
+// and claims it for Static/StaticDir. Panics with the caller's name on conflict.
+func (r *defaultRouter) checkAndMarkRoot(caller string) {
+	r.routesMu.Lock()
+	defer r.routesMu.Unlock()
+
+	if r.registeredRoutes["/"] != nil && r.registeredRoutes["/"][http.MethodGet] {
+		panic(fmt.Sprintf("zerohttp: %s conflicts with an existing GET / route", caller))
+	}
+	if r.registeredRoutes["/"] == nil {
+		r.registeredRoutes["/"] = make(map[string]bool)
+	}
+	r.registeredRoutes["/"][http.MethodGet] = true
+}
+
 // Static serves a static web application from embedded FS with fallback to index.html.
 func (r *defaultRouter) Static(embedFS embed.FS, distDir string, fallback bool, apiPrefix ...string) {
+	// Validate filesystem first before claiming root to avoid blocking recovery
 	subFS, err := fs.Sub(embedFS, distDir)
 	if err != nil {
 		panic(fmt.Errorf("failed to create sub-filesystem: %w", err))
 	}
+
+	r.checkAndMarkRoot("Static()")
 
 	handler := r.createStaticHandler(subFS, fallback, apiPrefix)
 
@@ -444,7 +480,12 @@ func (r *defaultRouter) Static(embedFS embed.FS, distDir string, fallback bool, 
 
 // StaticDir serves a static web application from a directory with fallback to index.html.
 func (r *defaultRouter) StaticDir(dir string, fallback bool, apiPrefix ...string) {
+	// Note: os.DirFS does not validate the path at construction time.
+	// Unlike fs.Sub in Static(), validation is deferred to Open calls.
 	filesystem := os.DirFS(dir)
+
+	r.checkAndMarkRoot("StaticDir()")
+
 	handler := r.createStaticHandler(filesystem, fallback, apiPrefix)
 
 	r.mux.Handle("GET /{$}", r.wrap(handler, nil))
@@ -452,21 +493,32 @@ func (r *defaultRouter) StaticDir(dir string, fallback bool, apiPrefix ...string
 }
 
 func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, apiPrefixes []string) http.Handler {
+	// Capture config values at handler creation time to avoid data races.
+	// notFoundHandler is protected by handlerMu and accessed with locking.
+	requestIDHeader := r.config.RequestID.Header
+	requestIDGenerator := r.config.RequestID.Generator
+	requestLoggerConfig := r.config.RequestLogger
+	logger := r.logger
+
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		requestID := req.Header.Get(r.config.RequestID.Header)
+		requestID := req.Header.Get(requestIDHeader)
 		if requestID == "" {
-			requestID = r.config.RequestID.Generator()
+			requestID = requestIDGenerator()
 		}
-		w.Header().Set(r.config.RequestID.Header, requestID)
+		w.Header().Set(requestIDHeader, requestID)
+
+		r.handlerMu.RLock()
+		notFoundHandler := r.notFoundHandler
+		r.handlerMu.RUnlock()
 
 		// Security: reject any request whose raw path contains ".." before
 		// it can be resolved away by cleaning. fs.FS also enforces this at
 		// Open time via fs.ValidPath, but blocking early allows accurate logging.
 		if strings.Contains(req.URL.Path, "..") {
-			r.logger.Warn("Path traversal attempt blocked", log.F("path", req.URL.Path))
-			r.notFoundHandler.ServeHTTP(w, req)
-			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
+			logger.Warn("Path traversal attempt blocked", log.F("path", req.URL.Path))
+			notFoundHandler.ServeHTTP(w, req)
+			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
 			return
 		}
 
@@ -475,34 +527,35 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		// Skip API routes - return 404
 		for _, prefix := range apiPrefixes {
 			if strings.HasPrefix(cleanPath, prefix) {
-				r.notFoundHandler.ServeHTTP(w, req)
-				middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
+				notFoundHandler.ServeHTTP(w, req)
+				middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
 				return
 			}
 		}
 
+		// Check if file exists and is not a directory
+		// Close immediately after stat - we only need to verify existence
 		if file, err := filesystem.Open(strings.TrimPrefix(cleanPath, "/")); err == nil {
-			defer func() {
-				if closeErr := file.Close(); closeErr != nil {
-					r.logger.Error("Failed to close file", log.F("error", closeErr), log.F("path", cleanPath))
-				}
-			}()
-
-			stat, err := file.Stat()
-			if err == nil && !stat.IsDir() {
+			stat, statErr := file.Stat()
+			_ = file.Close() // Close immediately - http.FileServer will open it again
+			if statErr == nil && !stat.IsDir() {
 				http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
-				middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusOK, time.Since(start), "", "")
+				middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusOK, time.Since(start), "", "")
 				return
 			}
 		}
 
 		if fallback {
+			// Preserve original path for accurate logging and deferred middleware
+			originalPath := req.URL.Path
 			req.URL.Path = "/"
 			http.FileServer(http.FS(filesystem)).ServeHTTP(w, req)
-			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusOK, time.Since(start), "", "")
+			// Restore path before logging so SPA fallbacks are logged with their real URL
+			req.URL.Path = originalPath
+			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusOK, time.Since(start), "", "")
 		} else {
-			r.notFoundHandler.ServeHTTP(w, req)
-			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
+			notFoundHandler.ServeHTTP(w, req)
+			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
 		}
 	})
 }
@@ -522,16 +575,6 @@ func (r *defaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		r.mux.Handle("/", r.wrap(r.catchAllHandler(), nil))
 	})
 	r.mux.ServeHTTP(w, req)
-}
-
-// finalize registers the catch-all handler for 404/405 responses.
-// This must be called after all routes are registered and before serving requests.
-// The catch-all handler is wrapped with the current middleware chain.
-// Safe to call multiple times; only executes once.
-func (r *defaultRouter) finalize() {
-	r.finalizeOnce.Do(func() {
-		r.mux.Handle("/", r.wrap(r.catchAllHandler(), nil))
-	})
 }
 
 // Logger returns the logger instance used by the router for logging
@@ -590,10 +633,12 @@ func (r *defaultRouter) wrap(fn http.Handler, mw []func(http.Handler) http.Handl
 // It tracks registered routes for proper 404/405 handling and registers the handler with ServeMux.
 func (r *defaultRouter) handle(method, path string, fn http.Handler, mw []func(http.Handler) http.Handler) {
 	// Track the route and method for 404/405 determination
+	r.routesMu.Lock()
 	if r.registeredRoutes[path] == nil {
 		r.registeredRoutes[path] = make(map[string]bool)
 	}
 	r.registeredRoutes[path][method] = true
+	r.routesMu.Unlock()
 
 	// Special handling for root path to prevent catch-all behavior
 	// The {$} pattern ensures exact match for the root path
@@ -617,8 +662,14 @@ func (r *defaultRouter) shouldLogRequest() bool {
 // It determines whether to return a 404 Not Found or 405 Method Not Allowed response
 // based on whether any methods are registered for the requested path.
 func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
+	// Capture config values at handler creation time to avoid data races.
+	// Handler fields are protected by handlerMu and accessed with locking.
 	useJSON := r.config.ErrorResponseType == config.ErrorResponseJSON
 	shouldLog := r.shouldLogRequest()
+	requestIDHeader := r.config.RequestID.Header
+	requestIDGenerator := r.config.RequestID.Generator
+	requestLoggerConfig := r.config.RequestLogger
+	logger := r.logger
 
 	return func(w http.ResponseWriter, req *http.Request) {
 		var start time.Time
@@ -627,48 +678,77 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			start = time.Now()
 
 			// Lazy request ID generation - only when logging
-			requestID := req.Header.Get(r.config.RequestID.Header)
+			requestID := req.Header.Get(requestIDHeader)
 			if requestID == "" {
-				requestID = r.config.RequestID.Generator()
+				requestID = requestIDGenerator()
 			}
-			w.Header().Set(r.config.RequestID.Header, requestID)
+			w.Header().Set(requestIDHeader, requestID)
 		}
 
-		if methods, exists := r.registeredRoutes[req.URL.Path]; exists {
+		// Access registered routes with proper locking.
+		// Must hold lock while reading from the inner map to avoid races
+		// with handle() which writes to the same inner map.
+		r.routesMu.RLock()
+		methods, exists := r.registeredRoutes[req.URL.Path]
+		if exists {
 			// Auto-generate OPTIONS response
 			if req.Method == http.MethodOptions {
-				w.Header().Set(HeaderAllow, allowedMethods(methods))
+				allowHeader := allowedMethods(methods)
+				r.routesMu.RUnlock()
+				w.Header().Set(HeaderAllow, allowHeader)
 				w.WriteHeader(http.StatusNoContent)
 				if shouldLog {
-					middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNoContent, time.Since(start), "", "")
+					middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNoContent, time.Since(start), "", "")
 				}
 				return
 			}
 
-			if !methods[req.Method] {
-				w.Header().Set(HeaderAllow, allowedMethods(methods))
+			methodAllowed := methods[req.Method]
+			var allowHeader string
+			if !methodAllowed {
+				allowHeader = allowedMethods(methods)
+			}
+			r.routesMu.RUnlock()
+
+			if !methodAllowed {
+				w.Header().Set(HeaderAllow, allowHeader)
 
 				if useJSON {
 					jsonMethodNotAllowedHandler(w, req)
 				} else {
-					r.methodNotAllowedHandler.ServeHTTP(w, req)
+					r.handlerMu.RLock()
+					methodNotAllowedHandler := r.methodNotAllowedHandler
+					r.handlerMu.RUnlock()
+					methodNotAllowedHandler.ServeHTTP(w, req)
 				}
 
 				if shouldLog {
-					middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusMethodNotAllowed, time.Since(start), "", "")
+					middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusMethodNotAllowed, time.Since(start), "", "")
 				}
 				return
 			}
+
+			// This path should be unreachable: if the method is registered,
+			// ServeMux should have routed to its handler before the catch-all.
+			// Log a warning to help diagnose route registration issues.
+			logger.Warn("Catch-all reached for registered route - route table out of sync",
+				log.F("path", req.URL.Path),
+				log.F("method", req.Method))
+		} else {
+			r.routesMu.RUnlock()
 		}
 
 		if useJSON {
 			jsonNotFoundHandler(w, req)
 		} else {
-			r.notFoundHandler.ServeHTTP(w, req)
+			r.handlerMu.RLock()
+			notFoundHandler := r.notFoundHandler
+			r.handlerMu.RUnlock()
+			notFoundHandler.ServeHTTP(w, req)
 		}
 
 		if shouldLog {
-			middleware.LogRequest(r.logger, r.config.RequestLogger, nil, req, http.StatusNotFound, time.Since(start), "", "")
+			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
 		}
 	}
 }
@@ -691,7 +771,7 @@ var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.R
 })
 
 // jsonNotFoundHandler returns a JSON problem detail 404 response.
-func jsonNotFoundHandler(w http.ResponseWriter, r *http.Request) {
+func jsonNotFoundHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write(preEncodedNotFoundJSON)
@@ -699,7 +779,7 @@ func jsonNotFoundHandler(w http.ResponseWriter, r *http.Request) {
 
 // jsonMethodNotAllowedHandler returns a JSON problem detail 405 response.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
-func jsonMethodNotAllowedHandler(w http.ResponseWriter, r *http.Request) {
+func jsonMethodNotAllowedHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	_, _ = w.Write(preEncodedMethodNotAllowedJSON)
