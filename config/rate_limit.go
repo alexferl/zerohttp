@@ -2,9 +2,7 @@ package config
 
 import (
 	"context"
-	"net"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -63,35 +61,13 @@ type RateLimitConfig struct {
 	MaxKeys int
 }
 
-// DefaultKeyExtractor extracts IP address as the rate limit key.
-// It strips the port from RemoteAddr so all connections from the same IP
-// share the same rate limit. For X-Forwarded-For, it uses the first IP.
-func DefaultKeyExtractor(r *http.Request) string {
-	var ip string
-
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
-		// Use the first one (client IP)
-		ip, _, _ = strings.Cut(xff, ",")
-		ip = strings.TrimSpace(ip)
-	} else {
-		ip = r.RemoteAddr
-	}
-
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		return host
-	}
-
-	// If SplitHostPort fails (no port), return as-is
-	return ip
-}
-
 // DefaultRateLimitConfig contains the default values for rate limit configuration.
+// The default KeyExtractor is IP-based (via middleware.IPKeyExtractor).
 var DefaultRateLimitConfig = RateLimitConfig{
 	Rate:           100,
 	Window:         time.Minute,
 	Algorithm:      TokenBucket,
-	KeyExtractor:   DefaultKeyExtractor,
+	KeyExtractor:   nil, // Uses middleware.IPKeyExtractor() by default
 	StatusCode:     http.StatusTooManyRequests,
 	Message:        "Rate limit exceeded",
 	IncludeHeaders: true,

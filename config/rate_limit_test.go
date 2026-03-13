@@ -18,8 +18,8 @@ func TestRateLimitConfig_DefaultValues(t *testing.T) {
 	if cfg.Algorithm != TokenBucket {
 		t.Errorf("expected default algorithm = %s, got %s", TokenBucket, cfg.Algorithm)
 	}
-	if cfg.KeyExtractor == nil {
-		t.Error("expected default key extractor to be set")
+	if cfg.KeyExtractor != nil {
+		t.Error("expected default key extractor to be nil (falls back to middleware.IPKeyExtractor)")
 	}
 	if cfg.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("expected default status code = %d, got %d", http.StatusTooManyRequests, cfg.StatusCode)
@@ -32,36 +32,6 @@ func TestRateLimitConfig_DefaultValues(t *testing.T) {
 	}
 	if len(cfg.ExemptPaths) != 0 {
 		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
-	}
-}
-
-func TestDefaultKeyExtractorFunction(t *testing.T) {
-	tests := []struct {
-		name          string
-		remoteAddr    string
-		xForwardedFor string
-		expectedKey   string
-	}{
-		{"no forwarded header", "192.168.1.1:8080", "", "192.168.1.1"},
-		{"with forwarded header", "192.168.1.1:8080", "203.0.113.1", "203.0.113.1"},
-		{"empty forwarded header", "192.168.1.1:8080", "", "192.168.1.1"},
-		{"forwarded with multiple IPs", "192.168.1.1:8080", "203.0.113.1, 198.51.100.1", "203.0.113.1"},
-		{"IPv6 address", "[::1]:8080", "", "::1"},
-		{"IPv6 with forwarded", "[::1]:8080", "2001:db8::1", "2001:db8::1"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest(http.MethodGet, "/test", nil)
-			req.RemoteAddr = tt.remoteAddr
-			if tt.xForwardedFor != "" {
-				req.Header.Set("X-Forwarded-For", tt.xForwardedFor)
-			}
-			result := DefaultKeyExtractor(req)
-			if result != tt.expectedKey {
-				t.Errorf("expected key = %s, got %s", tt.expectedKey, result)
-			}
-		})
 	}
 }
 
