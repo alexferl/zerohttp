@@ -370,43 +370,21 @@ func (s *Server) ListenAndServe() error {
 	return s.server.Serve(s.listener)
 }
 
-// Start begins serving both HTTP and HTTPS traffic concurrently.
-// It starts the HTTP server (if configured) and the HTTPS server (if configured
-// with certificates or TLS config). The method returns when the first server
-// encounters an error.
+// Start begins serving HTTP, HTTPS, and metrics traffic concurrently.
+// It starts all configured servers (HTTP, HTTPS, metrics, HTTP/3, WebTransport)
+// in separate goroutines and blocks until all servers exit.
 //
 // For HTTPS, the server will start if:
 //   - TLS server is configured AND
 //   - Either certificates are loaded in TLS config OR certificate files are specified
 //
-// This method is non-blocking for individual servers but blocks until one fails.
-// Returns the first error encountered by any server during startup or operation.
+// Start blocks until all servers exit. If any server encounters an unexpected
+// error (i.e. not ErrServerClosed), that error is returned immediately.
+// Returns nil when all servers shut down cleanly (e.g. via Shutdown()).
 func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
-	errCh := make(chan error, 4)
 
 	handler := s.Router
-
-	// Start metrics server if configured
-	if s.metricsServer != nil {
-		go func() {
-			s.logger.Info("Starting metrics server...", log.F("addr", fmtHTTPAddr(s.metricsServer.Addr)))
-			if err := s.startMetricsServer(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				errCh <- fmt.Errorf("metrics server error: %w", err)
-			}
-		}()
-	}
-
-	// Start HTTP server
-	if s.server != nil {
-		s.server.Handler = handler
-		go func() {
-			s.logger.Info("Starting HTTP server...", log.F("addr", fmtHTTPAddr(s.server.Addr)))
-			if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				errCh <- fmt.Errorf("HTTP server error: %w", err)
-			}
-		}()
-	}
 
 	// Determine if we should start HTTPS server
 	shouldStartTLS := s.tlsServer != nil &&
@@ -414,7 +392,8 @@ func (s *Server) Start() error {
 			(len(s.tlsServer.TLSConfig.Certificates) > 0 || s.tlsServer.TLSConfig.GetCertificate != nil)) ||
 			(s.certFile != "" && s.keyFile != ""))
 
-	// Start HTTPS server
+	// Validate and load certificates before starting any goroutines.
+	// This avoids orphaning the HTTP/metrics server goroutines on cert failure.
 	if shouldStartTLS {
 		if s.tlsServer.TLSConfig == nil {
 			s.tlsServer.TLSConfig = &tls.Config{
@@ -429,18 +408,51 @@ func (s *Server) Start() error {
 			cert, err := tls.LoadX509KeyPair(s.certFile, s.keyFile)
 			if err != nil {
 				s.logger.Error("Failed to load TLS certificate", log.E(err))
-				errCh <- fmt.Errorf("failed to load certificate files: %w", err)
-				return <-errCh
+				return fmt.Errorf("failed to load certificate files: %w", err)
 			}
 			s.tlsServer.TLSConfig.Certificates = []tls.Certificate{cert}
 		}
+	}
 
+	var wg sync.WaitGroup
+	errCh := make(chan error, 4)
+
+	// Start metrics server if configured
+	if s.metricsServer != nil {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
+			s.logger.Info("Starting metrics server...", log.F("addr", fmtHTTPAddr(s.metricsServer.Addr)))
+			if err := s.startMetricsServer(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("metrics server error: %w", err)
+			}
+		}()
+	}
+
+	// Start HTTP server
+	if s.server != nil {
+		s.server.Handler = handler
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.logger.Info("Starting HTTP server...", log.F("addr", fmtHTTPAddr(s.server.Addr)))
+			if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- fmt.Errorf("HTTP server error: %w", err)
+			}
+		}()
+	}
+
+	// Start HTTPS server
+	if shouldStartTLS {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			s.logger.Info("Starting HTTPS server...",
 				log.F("addr", fmtHTTPSAddr(s.tlsServer.Addr)),
 				log.F("cert_file", s.certFile),
 				log.F("key_file", s.keyFile))
-			if err := s.tlsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			// Pass empty strings - certs are already loaded in TLSConfig.Certificates
+			if err := s.tlsServer.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("HTTPS server error: %w", err)
 			}
 		}()
@@ -452,7 +464,8 @@ func (s *Server) Start() error {
 			s.logger.Info("Starting HTTP/3 server...",
 				log.F("cert_file", s.certFile),
 				log.F("key_file", s.keyFile))
-			if err := s.http3Server.ListenAndServeTLS(s.certFile, s.keyFile); err != nil {
+			// Pass empty strings - certs are already loaded in TLSConfig.Certificates
+			if err := s.http3Server.ListenAndServeTLS("", ""); err != nil {
 				s.logger.Error("HTTP/3 server error", log.E(err))
 			}
 		}()
@@ -464,14 +477,41 @@ func (s *Server) Start() error {
 			s.logger.Info("Starting WebTransport server...",
 				log.F("cert_file", s.certFile),
 				log.F("key_file", s.keyFile))
-			if err := s.webTransportServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil {
+			// Pass empty strings - certs are already loaded in TLSConfig.Certificates
+			if err := s.webTransportServer.ListenAndServeTLS("", ""); err != nil {
 				s.logger.Error("WebTransport server error", log.E(err))
 			}
 		}()
 	}
 
-	// Wait for any server to return error
-	return <-errCh
+	// Guard against hanging if no servers were started
+	started := 0
+	if s.metricsServer != nil {
+		started++
+	}
+	if s.server != nil {
+		started++
+	}
+	if shouldStartTLS {
+		started++
+	}
+	if started == 0 {
+		s.logger.Warn("No servers configured, Start() returning immediately")
+		return nil
+	}
+
+	// Close errCh when all goroutines complete, then range to collect any errors
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ListenerAddr returns the network address that the HTTP server is listening on.
@@ -572,9 +612,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	hookWg, hookErrCh := s.startShutdownHooks(ctx)
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 4)
+	errCh := make(chan error, 5) // 5 potential goroutines: server, tlsServer, webTransport, http3, metrics
 
-	if s.server != nil && s.listener != nil {
+	if s.server != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -588,7 +628,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}()
 	}
 
-	if s.tlsServer != nil && s.tlsListener != nil {
+	if s.tlsServer != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -602,7 +642,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}()
 	}
 
-	// Shutdown WebTransport first since it depends on HTTP/3
+	// Shutdown WebTransport and HTTP/3 concurrently
 	if s.webTransportServer != nil {
 		wg.Add(1)
 		go func() {
@@ -632,7 +672,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 
 	// Shutdown metrics server
-	if s.metricsServer != nil && s.metricsListener != nil {
+	if s.metricsServer != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -649,23 +689,32 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	wg.Wait()
 	close(errCh)
 
+	// Collect errors from servers and return the first one
+	var firstErr error
+	for err := range errCh {
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
 	// Wait for shutdown hooks to complete
 	hookWg.Wait()
 	close(hookErrCh)
+
+	// Drain hook errors (log them but don't fail shutdown)
+	for err := range hookErrCh {
+		if err != nil {
+			s.logger.Error("Shutdown hook error", log.E(err))
+		}
+	}
 
 	// Execute post-shutdown hooks sequentially
 	if err := s.runPostShutdownHooks(ctx); err != nil {
 		s.logger.Error("Post-shutdown hook error", log.E(err))
 	}
 
-	for err := range errCh {
-		if err != nil {
-			return err
-		}
-	}
-
 	s.logger.Info("Server shutdown complete")
-	return nil
+	return firstErr
 }
 
 // Close immediately closes all server listeners, terminating any active connections.
@@ -681,18 +730,20 @@ func (s *Server) Close() error {
 	s.logger.Debug("Closing server listeners...")
 	var lastErr error
 
-	if s.listener != nil {
-		s.logger.Debug("Closing HTTP listener")
-		if err := s.listener.Close(); err != nil {
-			s.logger.Error("Error closing HTTP listener", log.F("error", err))
+	// Close HTTP server directly - works for both ListenAndServe() and Start()
+	if s.server != nil {
+		s.logger.Debug("Closing HTTP server")
+		if err := s.server.Close(); err != nil {
+			s.logger.Error("Error closing HTTP server", log.F("error", err))
 			lastErr = err
 		}
 	}
 
-	if s.tlsListener != nil {
-		s.logger.Debug("Closing HTTPS listener")
-		if err := s.tlsListener.Close(); err != nil {
-			s.logger.Error("Error closing HTTPS listener", log.F("error", err))
+	// Close HTTPS server directly - works for both ListenAndServe() and Start()
+	if s.tlsServer != nil {
+		s.logger.Debug("Closing HTTPS server")
+		if err := s.tlsServer.Close(); err != nil {
+			s.logger.Error("Error closing HTTPS server", log.F("error", err))
 			lastErr = err
 		}
 	}
@@ -713,10 +764,11 @@ func (s *Server) Close() error {
 		}
 	}
 
-	if s.metricsListener != nil {
-		s.logger.Debug("Closing metrics listener")
-		if err := s.metricsListener.Close(); err != nil {
-			s.logger.Error("Error closing metrics listener", log.F("error", err))
+	// Close metrics server directly - works for both ListenAndServe() and Start()
+	if s.metricsServer != nil {
+		s.logger.Debug("Closing metrics server")
+		if err := s.metricsServer.Close(); err != nil {
+			s.logger.Error("Error closing metrics server", log.F("error", err))
 			lastErr = err
 		}
 	}
