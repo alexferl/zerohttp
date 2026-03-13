@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"math"
 	"math/rand"
@@ -108,9 +110,8 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 
 			r.Body = io.NopCloser(bytes.NewReader(body))
 
-			// Generate composite cache key using simple string join
-			// (not SHA-256 since this is just a map key, not a security primitive)
-			cacheKey := idempotencyKey + ":" + r.Method + ":" + r.URL.Path + ":" + string(body)
+			bodyHash := sha256.Sum256(body)
+			cacheKey := idempotencyKey + ":" + r.Method + ":" + r.URL.Path + ":" + hex.EncodeToString(bodyHash[:])
 
 			record, found, err := store.Get(r.Context(), cacheKey)
 			if err != nil {
