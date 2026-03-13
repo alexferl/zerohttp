@@ -15,6 +15,58 @@ import (
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
+func TestMatchAcceptEncoding(t *testing.T) {
+	tests := []struct {
+		name     string
+		accepted []string
+		encoding string
+		want     bool
+	}{
+		// Basic matching
+		{"exact match", []string{"gzip"}, "gzip", true},
+		{"no match", []string{"deflate"}, "gzip", false},
+		{"wildcard", []string{"*"}, "gzip", true},
+
+		// Quality values (RFC 7231)
+		{"q=0 rejected", []string{"gzip;q=0"}, "gzip", false},
+		{"q=0.0 rejected", []string{"gzip;q=0.0"}, "gzip", false},
+		{"q=0.00 rejected", []string{"gzip;q=0.00"}, "gzip", false},
+		{"q=0.000 rejected", []string{"gzip;q=0.000"}, "gzip", false},
+		{"q=0 with spaces", []string{"gzip; q=0"}, "gzip", false},
+		{"q=0.0 with spaces", []string{"gzip; q=0.0"}, "gzip", false},
+
+		// Non-zero q-values accepted
+		{"q=1 accepted", []string{"gzip;q=1"}, "gzip", true},
+		{"q=0.5 accepted", []string{"gzip;q=0.5"}, "gzip", true},
+		{"q=0.05 accepted", []string{"gzip;q=0.05"}, "gzip", true},
+		{"q=0.001 accepted", []string{"gzip;q=0.001"}, "gzip", true},
+
+		// No substring matching (br vs brotli)
+		{"br not match brotli", []string{"brotli"}, "br", false},
+		{"gzip not match gzip2", []string{"gzip2"}, "gzip", false},
+		{"deflate not match deflatefast", []string{"deflatefast"}, "deflate", false},
+
+		// Multiple encodings
+		{"second encoding matches", []string{"br", "gzip"}, "gzip", true},
+		{"first encoding q=0, second matches", []string{"br;q=0", "gzip"}, "br", false},
+		{"first encoding q=0, second matches encoding", []string{"br;q=0", "gzip"}, "gzip", true},
+
+		// Wildcard with q=0
+		{"wildcard q=0 rejected", []string{"*;q=0"}, "gzip", false},
+		{"wildcard q=0.0 rejected", []string{"*;q=0.0"}, "gzip", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchAcceptEncoding(tt.accepted, tt.encoding)
+			if got != tt.want {
+				t.Errorf("matchAcceptEncoding(%v, %q) = %v, want %v",
+					tt.accepted, tt.encoding, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCompress(t *testing.T) {
 	middleware := Compress(config.CompressConfig{
 		Types: []string{"text/html", "application/json"},

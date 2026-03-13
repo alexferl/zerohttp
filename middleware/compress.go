@@ -199,10 +199,18 @@ func (c *Compressor) selectEncoder(h http.Header, w io.Writer) (io.Writer, strin
 
 func matchAcceptEncoding(accepted []string, encoding string) bool {
 	for _, v := range accepted {
-		v = strings.TrimSpace(v)
-		if strings.Contains(v, encoding) || v == "*" {
-			return true
+		name, params, _ := strings.Cut(strings.TrimSpace(v), ";")
+		name = strings.TrimSpace(name)
+		if name != encoding && name != "*" {
+			continue
 		}
+		// q=0 means explicitly not acceptable (RFC 7231 §5.3.1)
+		if q, ok := strings.CutPrefix(strings.TrimSpace(params), "q="); ok {
+			if q == "0" || q == "0.0" || q == "0.00" || q == "0.000" {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
@@ -224,7 +232,6 @@ type compressResponseWriter struct {
 	encoding         string
 	wroteHeader      bool
 	compressible     bool
-	buffer           []byte
 }
 
 func (cw *compressResponseWriter) isCompressible() bool {
@@ -285,16 +292,6 @@ type compressFlusher interface {
 }
 
 func (cw *compressResponseWriter) Flush() {
-	// Flush any buffered data first
-	if len(cw.buffer) > 0 {
-		if cw.compressible {
-			_, _ = cw.w.Write(cw.buffer)
-		} else {
-			_, _ = cw.ResponseWriter.Write(cw.buffer)
-		}
-		cw.buffer = nil
-	}
-
 	if f, ok := cw.writer().(http.Flusher); ok {
 		f.Flush()
 	}
@@ -321,16 +318,6 @@ func (cw *compressResponseWriter) Push(target string, opts *http.PushOptions) er
 }
 
 func (cw *compressResponseWriter) Close() error {
-	// Write any remaining buffered data
-	if len(cw.buffer) > 0 {
-		if cw.compressible {
-			_, _ = cw.w.Write(cw.buffer)
-		} else {
-			_, _ = cw.ResponseWriter.Write(cw.buffer)
-		}
-		cw.buffer = nil
-	}
-
 	if c, ok := cw.writer().(io.WriteCloser); ok {
 		return c.Close()
 	}
