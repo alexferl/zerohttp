@@ -566,12 +566,7 @@ func buildCanonicalRequest(
 ) string {
 	var b strings.Builder
 
-	b.WriteString(strings.ToUpper(r.Method))
-	b.WriteByte('\n')
-
-	b.WriteString(url.PathEscape(r.URL.Path))
-	b.WriteByte('\n')
-
+	// Pre-allocate capacity: method (~6) + path + query + headers + bodyHash + newlines
 	// For presigned URLs, exclude HMAC-related query params from canonical request
 	query := r.URL.Query()
 	if parsed.IsPresigned {
@@ -580,10 +575,19 @@ func buildCanonicalRequest(
 		query.Del("X-HMAC-SignedHeaders")
 		query.Del("X-HMAC-Signature")
 	}
-	b.WriteString(buildCanonicalQueryString(query))
+	queryString := buildCanonicalQueryString(query)
+	signedHeaders := buildSignedHeaders(r, parsed.Headers, timestampHeader, parsed.Timestamp)
+	b.Grow(len(r.Method) + len(r.URL.Path) + len(queryString) + len(signedHeaders) + len(bodyHash) + 8)
+
+	b.WriteString(strings.ToUpper(r.Method))
 	b.WriteByte('\n')
 
-	signedHeaders := buildSignedHeaders(r, parsed.Headers, timestampHeader, parsed.Timestamp)
+	b.WriteString(url.PathEscape(r.URL.Path))
+	b.WriteByte('\n')
+
+	b.WriteString(queryString)
+	b.WriteByte('\n')
+
 	b.WriteString(signedHeaders)
 	b.WriteString("\n\n") // Two newlines: end headers section + blank line
 
