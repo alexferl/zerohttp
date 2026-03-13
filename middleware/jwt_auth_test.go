@@ -12,6 +12,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/metrics"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // slicesEqual compares two string slices for equality
@@ -829,6 +830,7 @@ func TestRefreshTokenHandler_InvalidMethod(t *testing.T) {
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
 	}
+	zhtest.AssertWith(t, rr).IsProblemDetail().ProblemDetailDetail("Method not allowed")
 }
 
 func TestRefreshTokenHandler_MissingToken(t *testing.T) {
@@ -1050,6 +1052,7 @@ func TestLogoutTokenHandler_InvalidMethod(t *testing.T) {
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
 	}
+	zhtest.AssertWith(t, rr).IsProblemDetail().ProblemDetailDetail("Method not allowed")
 }
 
 func TestLogoutTokenHandler_NoTokenStore(t *testing.T) {

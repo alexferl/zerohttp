@@ -125,12 +125,27 @@ func (s *HMACSigner) GenerateSignature(req *http.Request, timestamp time.Time) (
 
 	bodyHash := s.computeBodyHash(req)
 
+	// Pre-compute query string and headers size for buffer pre-allocation
+	queryString := s.buildCanonicalQueryString(req.URL.Query())
+	headersSize := 0
+	for _, h := range signedHeaders {
+		value := ""
+		if h == "host" {
+			value = host
+		} else {
+			value = req.Header.Get(h)
+		}
+		headersSize += len(h) + len(strings.TrimSpace(value)) + 2 // name + value + ":\n"
+	}
+
 	var b strings.Builder
+	b.Grow(len(req.Method) + len(req.URL.Path) + len(queryString) + headersSize + len(bodyHash) + 6)
+
 	b.WriteString(strings.ToUpper(req.Method))
 	b.WriteByte('\n')
 	b.WriteString(url.PathEscape(req.URL.Path))
 	b.WriteByte('\n')
-	b.WriteString(s.buildCanonicalQueryString(req.URL.Query()))
+	b.WriteString(queryString)
 	b.WriteByte('\n')
 
 	for _, h := range signedHeaders {
@@ -232,11 +247,26 @@ func (s *HMACSigner) buildSignedHeadersList(req *http.Request) []string {
 func (s *HMACSigner) buildCanonicalRequest(req *http.Request, signedHeaders []string, bodyHash string) string {
 	var b strings.Builder
 
+	// Pre-allocate capacity: method (~6) + path + query + headers + bodyHash + newlines
+	// Headers: each header adds "name:value\n" (name + value + 2)
+	queryString := s.buildCanonicalQueryString(req.URL.Query())
+	headersSize := 0
+	for _, h := range signedHeaders {
+		value := ""
+		if h == "host" {
+			value = req.Host
+		} else {
+			value = req.Header.Get(h)
+		}
+		headersSize += len(h) + len(strings.TrimSpace(value)) + 2 // name + value + ":\n"
+	}
+	b.Grow(len(req.Method) + len(req.URL.Path) + len(queryString) + headersSize + len(bodyHash) + 6)
+
 	b.WriteString(strings.ToUpper(req.Method))
 	b.WriteByte('\n')
 	b.WriteString(url.PathEscape(req.URL.Path))
 	b.WriteByte('\n')
-	b.WriteString(s.buildCanonicalQueryString(req.URL.Query()))
+	b.WriteString(queryString)
 	b.WriteByte('\n')
 
 	for _, h := range signedHeaders {

@@ -22,7 +22,7 @@ type ETagConfig struct {
 	Weak *bool
 
 	// MaxBufferSize is the maximum response body size to buffer for ETag generation (defaults to 1MB)
-	MaxBufferSize int
+	MaxBufferSize int64
 
 	// SkipStatusCodes contains status codes that should not have ETags generated (defaults to error status codes)
 	SkipStatusCodes map[int]struct{}

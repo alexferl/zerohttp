@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/rwutil"
 )
 
 // BenchmarkETag_HashAlgorithms compares FNV vs MD5 hashing performance
@@ -64,8 +65,8 @@ func BenchmarkETag_GenerateETag(b *testing.B) {
 
 		b.Run(fmt.Sprintf("FNV_%dB", size), func(b *testing.B) {
 			ew := &etagResponseWriter{
-				config: config.ETagConfig{Algorithm: config.FNV},
-				buf:    bytes.NewBuffer(data),
+				config:         config.ETagConfig{Algorithm: config.FNV},
+				ResponseBuffer: &rwutil.ResponseBuffer{Buf: *bytes.NewBuffer(data)},
 			}
 
 			b.ReportAllocs()
@@ -78,8 +79,8 @@ func BenchmarkETag_GenerateETag(b *testing.B) {
 
 		b.Run(fmt.Sprintf("MD5_%dB", size), func(b *testing.B) {
 			ew := &etagResponseWriter{
-				config: config.ETagConfig{Algorithm: config.MD5},
-				buf:    bytes.NewBuffer(data),
+				config:         config.ETagConfig{Algorithm: config.MD5},
+				ResponseBuffer: &rwutil.ResponseBuffer{Buf: *bytes.NewBuffer(data)},
 			}
 
 			b.ReportAllocs()
@@ -93,8 +94,8 @@ func BenchmarkETag_GenerateETag(b *testing.B) {
 		b.Run(fmt.Sprintf("FNV_Weak_%dB", size), func(b *testing.B) {
 			weak := true
 			ew := &etagResponseWriter{
-				config: config.ETagConfig{Algorithm: config.FNV, Weak: &weak},
-				buf:    bytes.NewBuffer(data),
+				config:         config.ETagConfig{Algorithm: config.FNV, Weak: &weak},
+				ResponseBuffer: &rwutil.ResponseBuffer{Buf: *bytes.NewBuffer(data)},
 			}
 
 			b.ReportAllocs()
