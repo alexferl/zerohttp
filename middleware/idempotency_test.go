@@ -577,6 +577,102 @@ func TestIdempotencyMemoryStore_MaxKeys(t *testing.T) {
 	})
 }
 
+func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
+	t.Run("does not duplicate headers already set by middleware", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.Header().Set("X-Custom", "handler-value")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL: time.Hour,
+		})
+
+		// First request - handler sets headers
+		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req1.Header.Set("Idempotency-Key", "dup-key")
+		w1 := httptest.NewRecorder()
+
+		// Simulate middleware that sets headers before idempotency
+		w1.Header().Set("X-Security-Header", "security-value")
+		w1.Header().Set("X-Request-Id", "req-123")
+
+		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request - should replay cached response
+		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req2.Header.Set("Idempotency-Key", "dup-key")
+		w2 := httptest.NewRecorder()
+
+		// Simulate same middleware setting headers before idempotency replay
+		w2.Header().Set("X-Security-Header", "security-value")
+		w2.Header().Set("X-Request-Id", "req-456") // Different request ID
+
+		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
+
+		// Verify no duplicate headers
+		securityHeaders := w2.Header()["X-Security-Header"]
+		if len(securityHeaders) != 1 {
+			t.Errorf("X-Security-Header should appear once, got %d: %v", len(securityHeaders), securityHeaders)
+		}
+
+		requestIds := w2.Header()["X-Request-Id"]
+		if len(requestIds) != 1 {
+			t.Errorf("X-Request-Id should appear once, got %d: %v", len(requestIds), requestIds)
+		}
+		// Should have the NEW request ID (from middleware), not the cached one
+		if requestIds[0] != "req-456" {
+			t.Errorf("X-Request-Id should be 'req-456' (from middleware), got %q", requestIds[0])
+		}
+
+		// Custom header from handler should be present
+		if w2.Header().Get("X-Custom") != "handler-value" {
+			t.Error("X-Custom header should be replayed from cache")
+		}
+
+		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+			t.Error("Expected X-Idempotency-Replay header on replay")
+		}
+	})
+
+	t.Run("preserves multi-value headers from cache", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.Header().Add("X-Multi", "value1")
+			w.Header().Add("X-Multi", "value2")
+			w.Header().Add("X-Multi", "value3")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL: time.Hour,
+		})
+
+		// First request
+		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req1.Header.Set("Idempotency-Key", "multi-key")
+		w1 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request - replay
+		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req2.Header.Set("Idempotency-Key", "multi-key")
+		w2 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
+
+		// All three values should be present
+		multiHeaders := w2.Header()["X-Multi"]
+		if len(multiHeaders) != 3 {
+			t.Errorf("X-Multi should have 3 values, got %d: %v", len(multiHeaders), multiHeaders)
+		}
+	})
+}
+
 func TestIdempotency_HandlerWritesNothing(t *testing.T) {
 	t.Run("does not cache when handler writes nothing", func(t *testing.T) {
 		callCount := 0

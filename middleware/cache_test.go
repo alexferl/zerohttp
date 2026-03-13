@@ -405,6 +405,98 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 			t.Errorf("expected X-Custom to appear exactly once, got %d times: %v", len(xCustomValues), xCustomValues)
 		}
 	})
+
+	t.Run("does not duplicate middleware-set headers on cache hit", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.Header().Set("X-Custom", "handler-value")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":"test"}`))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			CacheControl: "public, max-age=60",
+		})
+
+		// First request - simulate middleware setting headers before cache
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w1 := httptest.NewRecorder()
+		w1.Header().Set("X-Security-Header", "security-value")
+		w1.Header().Set("X-Request-Id", "req-123")
+
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		if callCount != 1 {
+			t.Errorf("expected 1 handler call, got %d", callCount)
+		}
+
+		// Second request - cache hit, simulate different request ID from middleware
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w2 := httptest.NewRecorder()
+		w2.Header().Set("X-Security-Header", "security-value")
+		w2.Header().Set("X-Request-Id", "req-456")
+
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		if callCount != 1 {
+			t.Errorf("expected still 1 handler call (cached), got %d", callCount)
+		}
+
+		// Verify no duplicate security headers
+		securityHeaders := w2.Header()["X-Security-Header"]
+		if len(securityHeaders) != 1 {
+			t.Errorf("X-Security-Header should appear exactly once, got %d: %v", len(securityHeaders), securityHeaders)
+		}
+
+		// Request ID should be the NEW one (from middleware), not cached
+		requestIDs := w2.Header()["X-Request-Id"]
+		if len(requestIDs) != 1 {
+			t.Errorf("X-Request-Id should appear exactly once, got %d: %v", len(requestIDs), requestIDs)
+		}
+		if w2.Header().Get("X-Request-Id") != "req-456" {
+			t.Errorf("X-Request-Id should be 'req-456' (from middleware), got %q", w2.Header().Get("X-Request-Id"))
+		}
+
+		// Handler's custom header should be present from cache
+		if w2.Header().Get("X-Custom") != "handler-value" {
+			t.Errorf("X-Custom should be 'handler-value' from cache, got %q", w2.Header().Get("X-Custom"))
+		}
+	})
+
+	t.Run("preserves multi-value headers from cache", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.Header().Add("X-Multi", "value1")
+			w.Header().Add("X-Multi", "value2")
+			w.Header().Add("X-Multi", "value3")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"data":"test"}`))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:   time.Minute,
+			CacheControl: "public, max-age=60",
+		})
+
+		// First request
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w1 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request - cache hit
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w2 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		// All three values should be present
+		multiHeaders := w2.Header()["X-Multi"]
+		if len(multiHeaders) != 3 {
+			t.Errorf("X-Multi should have 3 values, got %d: %v", len(multiHeaders), multiHeaders)
+		}
+	})
 }
 
 func TestCache_Flush(t *testing.T) {

@@ -106,7 +106,12 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 					}
 				}
 
+				// Replay headers from cache, skipping keys already set by other middleware
 				for k, v := range record.Headers {
+					// Skip if this header key is already present (from security middleware, etc.)
+					if w.Header().Get(k) != "" {
+						continue
+					}
 					for _, val := range v {
 						w.Header().Add(k, val)
 					}

@@ -117,10 +117,8 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 				// Log error and continue (fail open)
 				log.GetGlobalLogger().Error("Idempotency store get failed", log.E(err), log.F("key", cacheKey))
 			} else if found {
-				// Replay headers from flat slice [key1, val1, key2, val2, ...]
-				for i := 0; i < len(record.Headers)-1; i += 2 {
-					w.Header().Add(record.Headers[i], record.Headers[i+1])
-				}
+				// Replay headers from cached record, avoiding duplicates from other middleware
+				replayHeaders(w, record.Headers)
 				w.Header().Set("X-Idempotency-Replay", "true")
 				w.WriteHeader(record.StatusCode)
 				_, _ = w.Write(record.Body)
@@ -159,10 +157,8 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 						return
 					}
 					if found {
-						// Replay headers from flat slice
-						for i := 0; i < len(record.Headers)-1; i += 2 {
-							w.Header().Add(record.Headers[i], record.Headers[i+1])
-						}
+						// Replay headers from cached record, avoiding duplicates from other middleware
+						replayHeaders(w, record.Headers)
 						w.Header().Set("X-Idempotency-Replay", "true")
 						w.WriteHeader(record.StatusCode)
 						_, _ = w.Write(record.Body)
@@ -239,6 +235,33 @@ func (i *idempotencyResponseRecorder) Write(p []byte) (int, error) {
 	// Buffer for caching and write through to client
 	_, _ = i.Buf.Write(p)
 	return i.ResponseWriter.Write(p)
+}
+
+// replayHeaders writes cached headers to the response, skipping headers
+// that may already be present from other middleware (e.g., security headers).
+// Headers are stored as a flat slice [key1, val1, key2, val2, ...].
+func replayHeaders(w http.ResponseWriter, headers []string) {
+	// Check which header keys are already present (set by other middleware)
+	// We do this once before replay to avoid duplicates while still allowing
+	// multi-value headers to be replayed correctly.
+	existingKeys := make(map[string]bool, len(headers)/2)
+	for i := 0; i < len(headers)-1; i += 2 {
+		key := headers[i]
+		if !existingKeys[key] {
+			if w.Header().Get(key) != "" {
+				existingKeys[key] = true
+			}
+		}
+	}
+
+	// Replay all headers, skipping keys that were already set by middleware
+	for i := 0; i < len(headers)-1; i += 2 {
+		key := headers[i]
+		if existingKeys[key] {
+			continue
+		}
+		w.Header().Add(key, headers[i+1])
+	}
 }
 
 // addJitter returns a duration with random jitter between 0.5x and 1.5x the base duration.
