@@ -243,7 +243,7 @@ curl -X POST http://localhost:8080/orders -H "Content-Type: application/json" -d
   "customer_id":"550e8400-e29b-41d4-a716-446655440000",
   "status":"pending",
   "discount":5.00,
-  "total":54.98,
+  "total":59.98,
   "items":[
     {"product_id":"550e8400-e29b-41d4-a716-446655440001","quantity":2,"price":29.99}
   ]
