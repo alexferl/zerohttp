@@ -1,4 +1,4 @@
-package zerohttp
+package validator
 
 import (
 	"errors"
@@ -42,7 +42,7 @@ func TestRequiredValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -89,7 +89,7 @@ func TestRequiredOnPointer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -129,7 +129,7 @@ func TestRequiredOnSlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -169,7 +169,7 @@ func TestRequiredOnMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -221,7 +221,7 @@ func TestOmitEmptyValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -268,7 +268,7 @@ func TestOmitEmptyOnPointer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -314,7 +314,7 @@ func TestRequiredWithOmitEmpty(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -390,7 +390,7 @@ func TestMinMaxValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -446,7 +446,7 @@ func TestLenValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -465,7 +465,7 @@ func TestLenOnUnsupportedType(t *testing.T) {
 		Value int `validate:"len=5"`
 	}
 	input := TestLenInt{Value: 10}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for len on int")
 	}
@@ -489,7 +489,7 @@ func TestLenOnMap(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestLenMap{Items: tt.items}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %v", tt.items)
 			}
@@ -522,7 +522,7 @@ func TestEqValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error")
 			}
@@ -570,7 +570,7 @@ func TestEqInvalidParam(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := tt.setup()
-			err := V.Struct(input)
+			err := NewValidator().Struct(input)
 			if err == nil {
 				t.Error("expected error")
 			}
@@ -600,7 +600,7 @@ func TestNeValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error")
 			}
@@ -648,7 +648,7 @@ func TestNeInvalidParam(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := tt.setup()
-			err := V.Struct(input)
+			err := NewValidator().Struct(input)
 			if err == nil {
 				t.Error("expected error")
 			}
@@ -676,7 +676,7 @@ func TestGtLtValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error")
 			}
@@ -709,7 +709,7 @@ func TestGteLteValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error")
 			}
@@ -766,7 +766,7 @@ func TestGtLtInvalidParamAndUnsupportedType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := tt.setup()
-			err := V.Struct(input)
+			err := NewValidator().Struct(input)
 			if err == nil {
 				t.Error("expected error")
 			}
@@ -820,7 +820,7 @@ func TestGteLteInvalidParamAndUnsupportedType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := tt.setup()
-			err := V.Struct(input)
+			err := NewValidator().Struct(input)
 			if err == nil {
 				t.Error("expected error")
 			}
@@ -851,7 +851,7 @@ func TestEmailValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestEmail{Email: tt.email}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.email)
 			}
@@ -867,7 +867,7 @@ func TestEmailOnNonString(t *testing.T) {
 		Value int `validate:"email"`
 	}
 	input := TestEmailInt{Value: 123}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for email validator on non-string type")
 	}
@@ -893,7 +893,7 @@ func TestAlphaValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestAlpha{Name: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -909,7 +909,7 @@ func TestAlphaOnNonString(t *testing.T) {
 		Value int `validate:"alpha"`
 	}
 	input := TestAlphaInt{Value: 123}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for alpha validator on non-string type")
 	}
@@ -934,7 +934,7 @@ func TestAlphanumValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestAlphanum{Code: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -950,7 +950,7 @@ func TestAlphanumOnNonString(t *testing.T) {
 		Value int `validate:"alphanum"`
 	}
 	input := TestAlphanumInt{Value: 123}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for alphanum validator on non-string type")
 	}
@@ -976,7 +976,7 @@ func TestNumericValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestNumeric{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -992,7 +992,7 @@ func TestNumericOnNonString(t *testing.T) {
 		Value int `validate:"numeric"`
 	}
 	input := TestNumericInt{Value: 123}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for numeric validator on non-string type")
 	}
@@ -1018,7 +1018,7 @@ func TestOneOfValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error")
 			}
@@ -1047,7 +1047,7 @@ func TestOneOfUint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestOneOfUint{Code: tt.input}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %d", tt.input)
 			}
@@ -1063,7 +1063,7 @@ func TestOneOfEmptyOptions(t *testing.T) {
 		Value string `validate:"oneof="`
 	}
 	input := TestOneOfEmpty{Value: "anything"}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err != nil {
 		t.Errorf("expected no error with empty options, got %v", err)
 	}
@@ -1074,7 +1074,7 @@ func TestOneOfUnsupportedType(t *testing.T) {
 		Value float64 `validate:"oneof=1.5 2.5"`
 	}
 	input := TestOneOfFloat{Value: 1.5}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for oneof on float64")
 	}
@@ -1102,7 +1102,7 @@ func TestUUIDValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestUUID{ID: tt.id}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.id)
 			}
@@ -1118,7 +1118,7 @@ func TestUUIDOnNonString(t *testing.T) {
 		Value int `validate:"uuid"`
 	}
 	input := TestUUIDInt{Value: 123}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for uuid validator on non-string type")
 	}
@@ -1143,7 +1143,7 @@ func TestDatetimeValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestDatetime{Date: tt.date}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.date)
 			}
@@ -1159,7 +1159,7 @@ func TestDatetimeOnNonString(t *testing.T) {
 		Value int `validate:"datetime"`
 	}
 	input := TestDatetimeInt{Value: 123}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for datetime validator on non-string type")
 	}
@@ -1184,7 +1184,7 @@ func TestDatetimeDefaultFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestDatetimeDefault{Timestamp: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -1235,7 +1235,7 @@ func TestCoreValidatorsCombined(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -1286,7 +1286,7 @@ func TestTimeFieldSkipped(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -1328,7 +1328,7 @@ func TestUnexportedFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -1375,7 +1375,7 @@ func TestSliceOfPointerToStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -1421,7 +1421,7 @@ func TestMapOfPointerToStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}

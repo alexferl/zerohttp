@@ -13,6 +13,9 @@ import (
 	"github.com/alexferl/zerohttp/metrics"
 )
 
+// DefaultMaxKeys is the default maximum number of unique rate limit keys to store in memory.
+const DefaultMaxKeys = 10000
+
 // RateLimit creates a rate limiting middleware.
 func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRateLimitConfig
@@ -24,14 +27,13 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 		c.KeyExtractor = IPKeyExtractor()
 	}
 
-	// Use provided store or create default in-memory store
 	var store RateLimitStore
 	if c.Store != nil {
 		store = c.Store
 	} else {
 		maxKeys := c.MaxKeys
 		if maxKeys == 0 {
-			maxKeys = 10000
+			maxKeys = DefaultMaxKeys
 		}
 		store = NewInMemoryStore(c.Algorithm, c.Window, c.Rate, maxKeys)
 	}

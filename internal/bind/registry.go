@@ -1,4 +1,4 @@
-package zerohttp
+package bind
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"sync"
 )
 
-// Pre-computed types for efficient comparison
 var (
 	fileHeaderType      = reflect.TypeOf(FileHeader{})
 	fileHeaderPtrType   = reflect.TypeOf(&FileHeader{})
@@ -24,10 +23,10 @@ type fieldPath struct {
 	len     int
 }
 
-// toSlice returns the valid portion of the path as a slice for FieldByIndex.
+// ToSlice returns the valid portion of the path as a slice for FieldByIndex.
 // This creates a new slice header but shares the underlying array (safe because
 // the array is fixed-size and value-copied).
-func (fp fieldPath) toSlice() []int {
+func (fp fieldPath) ToSlice() []int {
 	return fp.indices[:fp.len]
 }
 
@@ -60,16 +59,16 @@ type fieldInfo struct {
 
 // bindableField represents a field that can be bound from form/query values.
 type bindableField struct {
-	path fieldPath
-	name string
-	tag  string
+	Path fieldPath
+	Name string
+	Tag  string
 }
 
 // fileBindableField represents a field that can be bound from multipart file uploads.
 type fileBindableField struct {
-	path    fieldPath
-	tag     string
-	isSlice bool // true for []*FileHeader, false for *FileHeader
+	Path    fieldPath
+	Tag     string
+	IsSlice bool // true for []*FileHeader, false for *FileHeader
 }
 
 // typeInfo stores cached reflection information for a struct type.
@@ -82,7 +81,7 @@ type typeInfo struct {
 	formBindableFields  []bindableField // tag="form", allowFiles=false
 	formWithFilesFields []bindableField // tag="form", allowFiles=true
 	queryBindableFields []bindableField // tag="query", allowFiles=false
-	fileBindableFields  []fileBindableField
+	FileBindableFields  []fileBindableField
 }
 
 // typeRegistry caches reflection information for struct types using sync.Map.
@@ -91,12 +90,12 @@ type typeRegistry struct {
 	cache sync.Map // map[reflect.Type]*typeInfo
 }
 
-// globalTypeRegistry is the package-level type registry instance.
-var globalTypeRegistry = &typeRegistry{}
+// TypeRegistry is the package-level type registry instance.
+var TypeRegistry = &typeRegistry{}
 
-// getTypeInfo retrieves cached type information for the given type.
+// GetTypeInfo retrieves cached type information for the given type.
 // If the type hasn't been analyzed yet, it analyzes and caches it.
-func (tr *typeRegistry) getTypeInfo(t reflect.Type) (*typeInfo, error) {
+func (tr *typeRegistry) GetTypeInfo(t reflect.Type) (*typeInfo, error) {
 	// Fast path: sync.Map Load
 	if info, ok := tr.cache.Load(t); ok {
 		return info.(*typeInfo), nil
@@ -157,14 +156,14 @@ func (tr *typeRegistry) analyzeType(t reflect.Type) (*typeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	info.fileBindableFields = fileFields
+	info.FileBindableFields = fileFields
 
 	return info, nil
 }
 
-// getBindableFields returns all bindable fields for a given tag name.
+// GetBindableFields returns all bindable fields for a given tag name.
 // Uses pre-computed slices - no lazy initialization.
-func (ti *typeInfo) getBindableFields(tagName string, allowFiles bool) []bindableField {
+func (ti *typeInfo) GetBindableFields(tagName string, allowFiles bool) []bindableField {
 	switch tagName {
 	case "form":
 		if allowFiles {
@@ -229,7 +228,7 @@ func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allow
 	// because their exported fields are still accessible via reflection.
 	if fi.isEmbedded {
 		embeddedType := fi.fieldType.Type
-		embeddedInfo, err := globalTypeRegistry.getTypeInfo(embeddedType)
+		embeddedInfo, err := TypeRegistry.GetTypeInfo(embeddedType)
 		if err != nil {
 			return result, fmt.Errorf("embedded struct %s: %w", fi.fieldType.Type.Name(), err)
 		}
@@ -286,9 +285,9 @@ func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allow
 	}
 
 	bf := bindableField{
-		path: path,
-		name: fi.name,
-		tag:  tag,
+		Path: path,
+		Name: fi.name,
+		Tag:  tag,
 	}
 
 	result = append(result, bf)
@@ -306,7 +305,7 @@ func (ti *typeInfo) collectFileFieldsRecursive(path fieldPath, result []fileBind
 	// because their exported fields are still accessible via reflection.
 	if fi.isEmbedded {
 		embeddedType := fi.fieldType.Type
-		embeddedInfo, err := globalTypeRegistry.getTypeInfo(embeddedType)
+		embeddedInfo, err := TypeRegistry.GetTypeInfo(embeddedType)
 		if err != nil {
 			return result, fmt.Errorf("embedded struct %s: %w", fi.fieldType.Type.Name(), err)
 		}
@@ -359,11 +358,23 @@ func (ti *typeInfo) collectFileFieldsRecursive(path fieldPath, result []fileBind
 	}
 
 	bff := fileBindableField{
-		path:    path,
-		tag:     tag,
-		isSlice: isSlice,
+		Path:    path,
+		Tag:     tag,
+		IsSlice: isSlice,
 	}
 
 	result = append(result, bff)
 	return result, nil
+}
+
+// camelToSnake converts CamelCase to snake_case.
+func camelToSnake(s string) string {
+	var result strings.Builder
+	for i, r := range s {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			result.WriteByte('_')
+		}
+		result.WriteRune(r)
+	}
+	return strings.ToLower(result.String())
 }

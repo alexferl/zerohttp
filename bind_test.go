@@ -3,7 +3,6 @@ package zerohttp
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -409,121 +408,13 @@ func TestBinder_MultipartForm(t *testing.T) {
 			tt.expected(t, &result)
 
 			// Cleanup: close any open file handles
-			if result.Document != nil && result.Document.file != nil {
-				_ = result.Document.file.Close()
+			if result.Document != nil && result.Document.File != nil {
+				_ = result.Document.File.Close()
 			}
 			for _, fh := range result.Attachments {
-				if fh != nil && fh.file != nil {
-					_ = fh.file.Close()
+				if fh != nil && fh.File != nil {
+					_ = fh.File.Close()
 				}
-			}
-		})
-	}
-}
-
-func TestFileHeader_Open(t *testing.T) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	fileWriter, _ := writer.CreateFormFile("test", "hello.txt")
-	_, _ = fileWriter.Write([]byte("Hello"))
-	_ = writer.Close()
-
-	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set(HeaderContentType, writer.FormDataContentType())
-
-	if err := req.ParseMultipartForm(32 << 20); err != nil {
-		t.Fatalf("failed to parse multipart form: %v", err)
-	}
-
-	fileHeaders := req.MultipartForm.File["test"]
-	if len(fileHeaders) == 0 {
-		t.Fatal("no files found")
-	}
-
-	file, err := fileHeaders[0].Open()
-	if err != nil {
-		t.Fatalf("failed to open file: %v", err)
-	}
-	defer func() { _ = file.Close() }()
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		t.Fatalf("failed to read file: %v", err)
-	}
-
-	if string(content) != "Hello" {
-		t.Errorf("expected content 'Hello', got %q", string(content))
-	}
-}
-
-func TestFileHeader_ReadAll(t *testing.T) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	fileWriter, _ := writer.CreateFormFile("test", "hello.txt")
-	_, _ = fileWriter.Write([]byte("Hello, World!"))
-	_ = writer.Close()
-
-	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set(HeaderContentType, writer.FormDataContentType())
-
-	var result struct {
-		File *FileHeader `form:"test"`
-	}
-
-	err := B.MultipartForm(req, &result, 32<<20)
-	if err != nil {
-		t.Fatalf("failed to bind multipart form: %v", err)
-	}
-
-	if result.File == nil {
-		t.Fatal("expected File to be set")
-	}
-
-	content, err := result.File.ReadAll()
-	if err != nil {
-		t.Fatalf("failed to read file: %v", err)
-	}
-
-	if string(content) != "Hello, World!" {
-		t.Errorf("expected content 'Hello, World!', got %q", string(content))
-	}
-}
-
-func TestFileHeader_Open_AfterClose(t *testing.T) {
-	fh := &FileHeader{
-		Filename: "test.txt",
-		Size:     5,
-		file:     nil, // Simulate closed file
-	}
-
-	_, err := fh.Open()
-	if err == nil {
-		t.Fatal("expected error when opening closed file")
-	}
-
-	if !strings.Contains(err.Error(), "no longer available") {
-		t.Errorf("expected 'no longer available' error, got %v", err)
-	}
-}
-
-func TestCamelToSnake(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"Name", "name"},
-		{"UserName", "user_name"},
-		{"EmailAddress", "email_address"},
-		{"ID", "i_d"},
-		{"Simple", "simple"},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := camelToSnake(tt.input)
-			if result != tt.expected {
-				t.Errorf("camelToSnake(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -1314,23 +1205,6 @@ func TestBindEmbeddedStruct_ErrorPropagation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid integer") {
 		t.Errorf("expected 'invalid integer' error, got %v", err)
-	}
-}
-
-func TestFileHeader_ReadAll_OpenError(t *testing.T) {
-	// Create a FileHeader with no internal file reference
-	fh := &FileHeader{
-		Filename: "test.txt",
-		Size:     5,
-		file:     nil, // Simulate closed/unavailable file
-	}
-
-	_, err := fh.ReadAll()
-	if err == nil {
-		t.Fatal("expected error when file is not available")
-	}
-	if !strings.Contains(err.Error(), "no longer available") {
-		t.Errorf("expected 'no longer available' error, got %v", err)
 	}
 }
 
