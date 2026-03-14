@@ -30,10 +30,11 @@ func slicesEqual(a, b []string) bool {
 
 // mockTokenStore is a test implementation of config.TokenStore
 type mockTokenStore struct {
-	validateFunc func(ctx context.Context, token string) (config.JWTClaims, error)
-	generateFunc func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error)
-	revokeFunc   func(ctx context.Context, claims config.JWTClaims) error
-	isRevoked    bool
+	validateFunc  func(ctx context.Context, token string) (config.JWTClaims, error)
+	generateFunc  func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error)
+	revokeFunc    func(ctx context.Context, claims config.JWTClaims) error
+	isRevoked     bool
+	isRevokedFunc func(ctx context.Context, claims config.JWTClaims) (bool, error)
 }
 
 func (m *mockTokenStore) Validate(ctx context.Context, token string) (config.JWTClaims, error) {
@@ -58,6 +59,9 @@ func (m *mockTokenStore) Revoke(ctx context.Context, claims config.JWTClaims) er
 }
 
 func (m *mockTokenStore) IsRevoked(ctx context.Context, claims config.JWTClaims) (bool, error) {
+	if m.isRevokedFunc != nil {
+		return m.isRevokedFunc(ctx, claims)
+	}
 	return m.isRevoked, nil
 }
 
@@ -2117,5 +2121,239 @@ func TestJWTAuth_Metrics(t *testing.T) {
 	}
 	if results["valid"] != 1 {
 		t.Errorf("expected 1 valid, got %d", results["valid"])
+	}
+}
+
+// Test for IsRevoked error path in JWTAuth middleware
+func TestJWTAuth_IsRevokedCheckError(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
+			return map[string]any{"sub": "user123"}, nil
+		},
+		isRevokedFunc: func(ctx context.Context, claims config.JWTClaims) (bool, error) {
+			return false, errors.New("database connection failed")
+		},
+	}
+
+	middleware := JWTAuth(config.JWTAuthConfig{
+		TokenStore: store,
+	})
+
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Test JSON response
+	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+	}
+
+	var errResp JWTAuthError
+	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+	if !strings.Contains(errResp.Title, "Token Revocation Check Failed") {
+		t.Errorf("expected 'Token Revocation Check Failed', got %q", errResp.Title)
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	}
+}
+
+// Test for IsRevoked error path in RefreshTokenHandler
+func TestRefreshTokenHandler_IsRevokedCheckError(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
+			return map[string]any{
+				"sub":  "user123",
+				"type": config.TokenTypeRefresh,
+			}, nil
+		},
+		isRevokedFunc: func(ctx context.Context, claims config.JWTClaims) (bool, error) {
+			return false, errors.New("database connection failed")
+		},
+	}
+	cfg := config.JWTAuthConfig{
+		TokenStore: store,
+	}
+	handler := RefreshTokenHandler(cfg)
+
+	body := `{"refresh_token":"valid-refresh-token"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+	}
+}
+
+// Test for getStringClaim with []any slice containing non-string elements
+func TestGetStringClaim_AnySliceWithNonString(t *testing.T) {
+	claims := map[string]any{
+		"aud": []any{123, "aud2"}, // First element is not a string
+	}
+
+	result := getStringClaim(claims, "aud")
+	if result != "" {
+		t.Errorf("expected empty string for non-string first element, got %q", result)
+	}
+
+	// Test with empty []any slice
+	claims2 := map[string]any{
+		"aud": []any{},
+	}
+
+	result2 := getStringClaim(claims2, "aud")
+	if result2 != "" {
+		t.Errorf("expected empty string for empty slice, got %q", result2)
+	}
+}
+
+// Test for getStringClaim with reflection path for non-map claims
+func TestGetStringClaim_ReflectionPath(t *testing.T) {
+	// Use a custom map type that requires reflection
+	claims := customMapClaims{
+		"sub": "user123",
+	}
+
+	result := getStringClaim(claims, "sub")
+	if result != "user123" {
+		t.Errorf("expected 'user123', got %q", result)
+	}
+
+	// Test missing key via reflection
+	result2 := getStringClaim(claims, "missing")
+	if result2 != "" {
+		t.Errorf("expected empty string for missing key, got %q", result2)
+	}
+}
+
+// Test for deepCopySlice with nested []any
+func TestDeepCopySlice_NestedSlice(t *testing.T) {
+	original := []any{
+		"simple",
+		[]any{"nested1", "nested2"},
+		map[string]any{"key": "value"},
+	}
+
+	copied := deepCopySlice(original)
+
+	// Modify original
+	original[0] = "modified"
+	original[1].([]any)[0] = "modified-nested"
+	original[2].(map[string]any)["key"] = "modified-value"
+
+	// Check copy wasn't affected
+	if copied[0] != "simple" {
+		t.Error("deep copy failed - simple element was modified")
+	}
+	nested := copied[1].([]any)
+	if nested[0] != "nested1" {
+		t.Error("deep copy failed - nested slice element was modified")
+	}
+	m := copied[2].(map[string]any)
+	if m["key"] != "value" {
+		t.Error("deep copy failed - nested map element was modified")
+	}
+}
+
+// Test for addExpirationToClaims with HS256Claims
+func TestAddExpirationToClaims_HS256Claims(t *testing.T) {
+	ttl := 15 * time.Minute
+	claims := HS256Claims{"sub": "user123"}
+
+	result := addExpirationToClaims(claims, ttl)
+
+	resultMap, ok := result.(HS256Claims)
+	if !ok {
+		t.Fatal("result should be HS256Claims")
+	}
+
+	if resultMap["sub"] != "user123" {
+		t.Errorf("expected sub = 'user123', got %v", resultMap["sub"])
+	}
+
+	if _, exists := resultMap["exp"]; !exists {
+		t.Error("exp claim should be added")
+	}
+
+	// Original should not be modified
+	if _, exists := claims["exp"]; exists {
+		t.Error("original claims should not be modified")
+	}
+}
+
+// Test for addTypeToClaims with HS256Claims
+func TestAddTypeToClaims_HS256Claims(t *testing.T) {
+	claims := HS256Claims{"sub": "user123"}
+
+	result := addTypeToClaims(claims, "refresh")
+
+	resultMap, ok := result.(HS256Claims)
+	if !ok {
+		t.Fatal("result should be HS256Claims")
+	}
+
+	if resultMap["type"] != "refresh" {
+		t.Errorf("expected type = 'refresh', got %v", resultMap["type"])
+	}
+
+	// Original should not be modified
+	if _, exists := claims["type"]; exists {
+		t.Error("original claims should not be modified")
+	}
+}
+
+// Test for RefreshTokenHandler GenerateRefreshToken error
+func TestRefreshTokenHandler_GenerateRefreshTokenError(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
+			return map[string]any{
+				"sub":  "user123",
+				"type": config.TokenTypeRefresh,
+			}, nil
+		},
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+			if tokenType == config.RefreshToken {
+				return "", errors.New("refresh token generation failed")
+			}
+			return "access-token", nil
+		},
+		isRevokedFunc: func(ctx context.Context, claims config.JWTClaims) (bool, error) {
+			return false, nil
+		},
+		revokeFunc: func(ctx context.Context, claims config.JWTClaims) error {
+			return nil
+		},
+	}
+	cfg := config.JWTAuthConfig{
+		TokenStore: store,
+	}
+	handler := RefreshTokenHandler(cfg)
+
+	body := `{"refresh_token":"valid-refresh-token"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
 	}
 }
