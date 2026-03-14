@@ -218,9 +218,10 @@ func TestCSRF_InvalidToken(t *testing.T) {
 
 	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
-	// Make POST request with invalid token
+	// Make POST request with invalid token - test JSON response
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	req.Header.Set("X-CSRF-Token", "invalid-token")
+	req.Header.Set("Accept", "application/json")
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "invalid-token"})
 
 	rr := httptest.NewRecorder()
@@ -230,6 +231,18 @@ func TestCSRF_InvalidToken(t *testing.T) {
 		Status(http.StatusForbidden).
 		IsProblemDetail().
 		ProblemDetailTitle("Forbidden")
+
+	// Test plain text response without Accept header
+	req = httptest.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set("X-CSRF-Token", "invalid-token")
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "invalid-token"})
+
+	rr = httptest.NewRecorder()
+	csrf.ServeHTTP(rr, req)
+
+	zhtest.AssertWith(t, rr).
+		Status(http.StatusForbidden).
+		Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestCSRF_MissingToken(t *testing.T) {

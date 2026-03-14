@@ -8,7 +8,7 @@ const (
 	MIMETextEventStream           = "text/event-stream"
 	MIMEApplicationJSON           = "application/json"
 	MIMEApplicationJSONCharset    = "application/json; charset=utf-8"
-	MIMEApplicationProblem        = "application/problem+json"
+	MIMEApplicationProblemJSON    = "application/problem+json"
 	MIMEApplicationFormURLEncoded = "application/x-www-form-urlencoded"
 	MIMEMultipartFormData         = "multipart/form-data"
 )

@@ -351,7 +351,7 @@ func TestRenderer_ProblemDetail(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(HeaderContentType, MIMEApplicationProblem).
+			Header(HeaderContentType, MIMEApplicationProblemJSON).
 			IsProblemDetail().
 			ProblemDetailTitle("Not Found").
 			ProblemDetailDetail("Resource not found")

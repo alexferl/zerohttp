@@ -31,7 +31,7 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 			user, pass, ok := r.BasicAuth()
 			if !ok {
 				reg.Counter("basic_auth_requests_total", "result").WithLabelValues("missing").Inc()
-				basicAuthFailed(w, c.Realm)
+				basicAuthFailed(w, r, c.Realm)
 				return
 			}
 
@@ -48,7 +48,7 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 
 			if !isValid {
 				reg.Counter("basic_auth_requests_total", "result").WithLabelValues("invalid").Inc()
-				basicAuthFailed(w, c.Realm)
+				basicAuthFailed(w, r, c.Realm)
 				return
 			}
 
@@ -58,8 +58,8 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 	}
 }
 
-func basicAuthFailed(w http.ResponseWriter, realm string) {
+func basicAuthFailed(w http.ResponseWriter, r *http.Request, realm string) {
 	w.Header().Add("WWW-Authenticate", `Basic realm="`+realm+`"`)
 	detail := problem.NewDetail(http.StatusUnauthorized, "Authentication required")
-	_ = detail.Render(w)
+	_ = detail.RenderAuto(w, r)
 }

@@ -51,13 +51,23 @@ func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
 	}
 
-	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	// Test JSON response (with Accept header)
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
 	w := zhtest.Serve(middleware, req)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
 		IsProblemDetail().
 		ProblemDetailDetail("Service temporarily unavailable")
+
+	// Test plain text response (without Accept header)
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(middleware, req)
+
+	zhtest.AssertWith(t, w).
+		Status(http.StatusServiceUnavailable).
+		Header("Content-Type", "text/plain; charset=utf-8")
+
 	if handler.getCallCount() != 3 {
 		t.Errorf("Expected handler to be called 3 times, got %d", handler.getCallCount())
 	}
@@ -190,13 +200,22 @@ func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
 		zhtest.Serve(middleware, req)
 	}
 
-	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	// Test JSON response
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
 	w := zhtest.Serve(middleware, req)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusTooManyRequests).
 		IsProblemDetail().
 		ProblemDetailDetail("Circuit breaker active")
+
+	// Test plain text response
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(middleware, req)
+
+	zhtest.AssertWith(t, w).
+		Status(http.StatusTooManyRequests).
+		Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {

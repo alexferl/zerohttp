@@ -38,10 +38,15 @@ func TestRateLimitStatusCodeAndMessageDefaults(t *testing.T) {
 	handler := m(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(handler, req)
-	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	// Test JSON response
+	req = zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
 	w := zhtest.Serve(handler, req)
-
 	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).IsProblemDetail().ProblemDetailDetail("Rate limit exceeded")
+
+	// Test plain text response
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(handler, req)
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestRateLimitMessageDefaults(t *testing.T) {
@@ -50,10 +55,16 @@ func TestRateLimitMessageDefaults(t *testing.T) {
 	handler := m(next)
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(handler, req) // 1st OK
-	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
-	w := zhtest.Serve(handler, req) // 2nd rate limited
 
+	// Test JSON response
+	req = zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
+	w := zhtest.Serve(handler, req)
 	zhtest.AssertWith(t, w).IsProblemDetail().ProblemDetailDetail("Rate limit exceeded")
+
+	// Test plain text response
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	w = zhtest.Serve(handler, req)
+	zhtest.AssertWith(t, w).Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestRateLimitTokenBucket(t *testing.T) {
@@ -76,11 +87,18 @@ func TestRateLimitTokenBucket(t *testing.T) {
 			t.Errorf("request %d: expected status 200, got %d", i+1, w.Code)
 		}
 	}
-	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	// Test JSON response
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := zhtest.Serve(handler, req)
-
 	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).IsProblemDetail().ProblemDetailDetail("Rate limit exceeded")
+
+	// Test plain text response
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	req.RemoteAddr = "127.0.0.1:12345"
+	w = zhtest.Serve(handler, req)
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header("Content-Type", "text/plain; charset=utf-8")
+
 	if count != 2 {
 		t.Errorf("expected 2 successful requests, got %d", count)
 	}
@@ -263,15 +281,23 @@ func TestRateLimitCustomMessage(t *testing.T) {
 	req.RemoteAddr = "127.0.0.1:12345"
 	zhtest.Serve(handler, req)
 
-	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	// Test JSON response
+	req = zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := zhtest.Serve(handler, req)
-
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
 		IsProblemDetail().
 		ProblemDetailDetail("Too many requests, please slow down").
 		HeaderExists("Retry-After")
+
+	// Test plain text response
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	req.RemoteAddr = "127.0.0.1:12345"
+	w = zhtest.Serve(handler, req)
+	zhtest.AssertWith(t, w).
+		Status(http.StatusServiceUnavailable).
+		Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestIPKeyExtractor(t *testing.T) {

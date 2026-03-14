@@ -128,7 +128,7 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 				if requestMethod != "" && !allowedMethodMap[strings.ToUpper(requestMethod)] {
 					detail := problem.NewDetail(http.StatusMethodNotAllowed, "Method not allowed")
 					w.Header().Set("Allow", allowedMethodsHeader)
-					_ = detail.Render(w)
+					_ = detail.RenderAuto(w, r)
 					return
 				}
 
@@ -140,7 +140,7 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 						header = strings.ToLower(strings.TrimSpace(header))
 						if !allowedHeaderMap[header] {
 							detail := problem.NewDetail(http.StatusForbidden, "Request header not allowed")
-							_ = detail.Render(w)
+							_ = detail.RenderAuto(w, r)
 							return
 						}
 					}

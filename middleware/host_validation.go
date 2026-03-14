@@ -64,7 +64,7 @@ func HostValidation(cfg ...config.HostValidationConfig) func(http.Handler) http.
 
 			if r.Host == "" {
 				detail := problem.NewDetail(c.StatusCode, c.Message)
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 
@@ -82,14 +82,14 @@ func HostValidation(cfg ...config.HostValidationConfig) func(http.Handler) http.
 				expectedPort := strconv.Itoa(c.Port)
 				if port != expectedPort {
 					detail := problem.NewDetail(c.StatusCode, c.Message)
-					_ = detail.Render(w)
+					_ = detail.RenderAuto(w, r)
 					return
 				}
 			}
 
 			if !isValidHost(hostWithoutPort, allowedHosts, c.AllowSubdomains) {
 				detail := problem.NewDetail(c.StatusCode, c.Message)
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 

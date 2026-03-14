@@ -57,7 +57,7 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 
 			if c.Required && idempotencyKey == "" {
 				detail := problem.NewDetail(http.StatusBadRequest, "Idempotency-Key header is required")
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 
@@ -70,7 +70,7 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 			if err != nil {
 				log.GetGlobalLogger().Error("Failed to read request body for idempotency", log.E(err))
 				detail := problem.NewDetail(http.StatusInternalServerError, "Failed to read request body")
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 			_ = r.Body.Close()
@@ -115,7 +115,7 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 					case <-time.After(jitteredInterval):
 					case <-r.Context().Done():
 						detail := problem.NewDetail(http.StatusServiceUnavailable, "Request cancelled")
-						_ = detail.Render(w)
+						_ = detail.RenderAuto(w, r)
 						return
 					}
 
@@ -141,7 +141,7 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 				}
 				// Max retries exhausted, another request is still in-flight
 				detail := problem.NewDetail(http.StatusConflict, "Idempotent request is still being processed")
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 

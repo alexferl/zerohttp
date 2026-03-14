@@ -3,6 +3,7 @@ package problem
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 // Detail represents an RFC 9457 Problem Details response.
@@ -80,6 +81,25 @@ func (p *Detail) Render(w http.ResponseWriter) error {
 	return json.NewEncoder(w).Encode(p)
 }
 
+// RenderAuto writes the Detail as an HTTP response, automatically selecting the
+// content type based on the Accept header. Returns JSON if the client accepts
+// application/json or application/problem+json; otherwise returns plain text.
+func (p *Detail) RenderAuto(w http.ResponseWriter, r *http.Request) error {
+	if !AcceptsJSON(r) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(p.Status)
+		text := p.Detail
+		if text == "" {
+			text = p.Title
+		}
+		if text != "" {
+			_, _ = w.Write([]byte(text + "\n"))
+		}
+		return nil
+	}
+	return p.Render(w)
+}
+
 // ValidationError represents a single validation error with optional field location information
 type ValidationError struct {
 	// Detail describes what went wrong with the validation
@@ -99,4 +119,18 @@ func NewValidationDetail[T any](detail string, errors []T) *Detail {
 	problem := NewDetail(http.StatusUnprocessableEntity, detail)
 	problem.Set("errors", errors)
 	return problem
+}
+
+// AcceptsJSON checks if the client accepts JSON responses based on the Accept header.
+// Returns true if the Accept header includes application/json or application/problem+json.
+func AcceptsJSON(r *http.Request) bool {
+	accept := r.Header.Get("Accept")
+	if accept == "" {
+		return false
+	}
+	if strings.Contains(accept, "application/json") ||
+		strings.Contains(accept, "application/problem+json") {
+		return true
+	}
+	return strings.Contains(accept, "*/*")
 }

@@ -76,9 +76,10 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -88,6 +89,14 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
 	}
 }
 
@@ -106,9 +115,11 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// Test JSON response
 	reg := metrics.NewRegistry()
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
+	req.Header.Set("Accept", "application/json")
 	req = req.WithContext(metrics.WithRegistry(req.Context(), reg))
 	rr := httptest.NewRecorder()
 
@@ -137,6 +148,15 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected jwt_auth_requests_total metric with result='invalid' to be 1")
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
 	}
 }
 
@@ -262,10 +282,11 @@ func TestJWTAuth_RequiredClaims(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusForbidden {
@@ -275,6 +296,15 @@ func TestJWTAuth_RequiredClaims(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
 	}
 }
 
@@ -830,7 +860,18 @@ func TestRefreshTokenHandler_InvalidMethod(t *testing.T) {
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
 	}
+
+	// Test JSON response
+	req.Header.Set("Accept", "application/json")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
 	zhtest.AssertWith(t, rr).IsProblemDetail().ProblemDetailDetail("Method not allowed")
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/auth/refresh", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	zhtest.AssertWith(t, rr).Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestRefreshTokenHandler_MissingToken(t *testing.T) {
@@ -939,11 +980,12 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 
 	handler := RefreshTokenHandler(cfg)
 
+	// Test JSON response
 	body := `{"refresh_token":"revoked-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -953,6 +995,15 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
 	}
 }
 
@@ -1052,7 +1103,18 @@ func TestLogoutTokenHandler_InvalidMethod(t *testing.T) {
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rr.Code)
 	}
+
+	// Test JSON response
+	req.Header.Set("Accept", "application/json")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
 	zhtest.AssertWith(t, rr).IsProblemDetail().ProblemDetailDetail("Method not allowed")
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/auth/logout", nil)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	zhtest.AssertWith(t, rr).Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestLogoutTokenHandler_NoTokenStore(t *testing.T) {
@@ -1168,11 +1230,12 @@ func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 
 	handler := LogoutTokenHandler(cfg)
 
+	// Test JSON response
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
@@ -1182,6 +1245,15 @@ func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
 	}
 }
 
@@ -1912,10 +1984,11 @@ func TestJWTAuth_RevokedToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	req.Header.Set("Authorization", "Bearer revoked-token")
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -1925,6 +1998,15 @@ func TestJWTAuth_RevokedToken(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer revoked-token")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
 	}
 }
 
@@ -1946,10 +2028,11 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	req.Header.Set("Authorization", "Bearer refresh-token")
+	req.Header.Set("Accept", "application/json")
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -1959,6 +2042,15 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 	var errResp JWTAuthError
 	if err := json.Unmarshal(rr.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
+	}
+
+	// Test plain text response
+	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+	req.Header.Set("Authorization", "Bearer refresh-token")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
 	}
 }
 

@@ -190,11 +190,17 @@ func TestHostValidation_CustomStatusCodeAndMessage(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	// Test JSON response
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
 	req.Host = "evil.com"
 	w := zhtest.Serve(handler, req)
-
 	zhtest.AssertWith(t, w).Status(http.StatusForbidden).IsProblemDetail().ProblemDetailDetail("Forbidden host")
+
+	// Test plain text response
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	req.Host = "evil.com"
+	w = zhtest.Serve(handler, req)
+	zhtest.AssertWith(t, w).Status(http.StatusForbidden).Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestHostValidation_DefaultsFallback(t *testing.T) {
@@ -207,12 +213,17 @@ func TestHostValidation_DefaultsFallback(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
+	// Test JSON response
+	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
 	req.Host = "evil.com"
 	w := zhtest.Serve(handler, req)
-
-	// Should use default 400 status code
 	zhtest.AssertWith(t, w).Status(http.StatusBadRequest).IsProblemDetail().ProblemDetailDetail("Invalid Host header")
+
+	// Test plain text response
+	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
+	req.Host = "evil.com"
+	w = zhtest.Serve(handler, req)
+	zhtest.AssertWith(t, w).Status(http.StatusBadRequest).Header("Content-Type", "text/plain; charset=utf-8")
 }
 
 func TestHostValidation_StrictPort(t *testing.T) {

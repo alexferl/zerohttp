@@ -414,11 +414,11 @@ func GenerateRefreshToken(r *http.Request, claims config.JWTClaims, cfg config.J
 }
 
 // writeJWTError writes a JWTAuthError response
-func writeJWTError(w http.ResponseWriter, jwtErr *JWTAuthError) {
+func writeJWTError(w http.ResponseWriter, r *http.Request, jwtErr *JWTAuthError) {
 	detail := problem.NewDetail(jwtErr.Status, jwtErr.Detail)
 	detail.Type = jwtErr.Type
 	detail.Title = jwtErr.Title
-	_ = detail.Render(w)
+	_ = detail.RenderAuto(w, r)
 }
 
 // tokenHandlerRequest parses and validates the refresh token from the request body.
@@ -426,12 +426,12 @@ func writeJWTError(w http.ResponseWriter, jwtErr *JWTAuthError) {
 func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTAuthConfig) (config.JWTClaims, bool) {
 	if r.Method != http.MethodPost {
 		detail := problem.NewDetail(http.StatusMethodNotAllowed, "Method not allowed")
-		_ = detail.Render(w)
+		_ = detail.RenderAuto(w, r)
 		return nil, false
 	}
 
 	if cfg.TokenStore == nil {
-		writeJWTError(w, errTokenStoreNotConfigured)
+		writeJWTError(w, r, errTokenStoreNotConfigured)
 		return nil, false
 	}
 
@@ -440,7 +440,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJWTError(w, &JWTAuthError{
+		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Invalid Request",
 			Status: http.StatusBadRequest,
 			Detail: "Request body must contain refresh_token",
@@ -449,7 +449,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 	}
 
 	if req.RefreshToken == "" {
-		writeJWTError(w, &JWTAuthError{
+		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Missing Refresh Token",
 			Status: http.StatusUnprocessableEntity,
 			Detail: "refresh_token is required",
@@ -459,12 +459,12 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 	claims, err := cfg.TokenStore.Validate(r.Context(), req.RefreshToken)
 	if err != nil {
-		writeJWTError(w, errInvalidToken)
+		writeJWTError(w, r, errInvalidToken)
 		return nil, false
 	}
 
 	if tokenType := getStringClaim(claims, config.JWTClaimType); tokenType != config.TokenTypeRefresh {
-		writeJWTError(w, &JWTAuthError{
+		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Invalid Token Type",
 			Status: http.StatusUnprocessableEntity,
 			Detail: "Provided token is not a refresh token",
@@ -474,7 +474,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 	revoked, err := cfg.TokenStore.IsRevoked(r.Context(), claims)
 	if err != nil {
-		writeJWTError(w, &JWTAuthError{
+		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Token Revocation Check Failed",
 			Status: http.StatusInternalServerError,
 			Detail: err.Error(),
@@ -482,7 +482,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 	if revoked {
-		writeJWTError(w, &JWTAuthError{
+		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Token Revoked",
 			Status: http.StatusUnauthorized,
 			Detail: "token has been revoked",
@@ -491,7 +491,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 	}
 
 	if err := cfg.TokenStore.Revoke(r.Context(), claims); err != nil {
-		writeJWTError(w, &JWTAuthError{
+		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Token Revocation Failed",
 			Status: http.StatusInternalServerError,
 			Detail: err.Error(),
@@ -515,13 +515,13 @@ func RefreshTokenHandler(cfg config.JWTAuthConfig) http.HandlerFunc {
 
 		accessToken, err := GenerateAccessToken(r, claims, cfg)
 		if err != nil {
-			writeJWTError(w, errTokenGeneratorNotConfigured)
+			writeJWTError(w, r, errTokenGeneratorNotConfigured)
 			return
 		}
 
 		refreshToken, err := GenerateRefreshToken(r, claims, cfg)
 		if err != nil {
-			writeJWTError(w, errTokenGeneratorNotConfigured)
+			writeJWTError(w, r, errTokenGeneratorNotConfigured)
 			return
 		}
 
@@ -599,7 +599,7 @@ func defaultJWTErrorHandler(w http.ResponseWriter, r *http.Request) {
 	detail := problem.NewDetail(jwtErr.Status, jwtErr.Detail)
 	detail.Type = jwtErr.Type
 	detail.Title = jwtErr.Title
-	_ = detail.Render(w)
+	_ = detail.RenderAuto(w, r)
 }
 
 // hasClaim checks if a claim exists in the claims

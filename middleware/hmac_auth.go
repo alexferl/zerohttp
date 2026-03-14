@@ -665,5 +665,5 @@ func defaultHMACErrorHandler(w http.ResponseWriter, r *http.Request) {
 	detail := problem.NewDetail(hmacErr.Status, hmacErr.Detail)
 	detail.Type = hmacErr.Type
 	detail.Title = hmacErr.Title
-	_ = detail.Render(w)
+	_ = detail.RenderAuto(w, r)
 }
