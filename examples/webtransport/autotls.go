@@ -88,9 +88,13 @@ func main() {
 	app := zh.New(
 		config.Config{
 			DisableDefaultMiddlewares: true,
-			Addr:                      ":80",  // HTTP port for ACME challenges
-			TLSAddr:                   ":443", // HTTPS port
-			AutocertManager:           wrappedMgr,
+			Addr:                      ":80", // HTTP port for ACME challenges
+			TLS: config.TLSConfig{
+				Addr: ":443", // HTTPS port
+			},
+			Extensions: config.ExtensionsConfig{
+				AutocertManager: wrappedMgr,
+			},
 		},
 	)
 

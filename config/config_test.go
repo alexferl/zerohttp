@@ -15,8 +15,8 @@ func TestDefaultConfigValues(t *testing.T) {
 	if cfg.Addr != "localhost:8080" {
 		t.Errorf("expected Addr = localhost:8080, got %s", cfg.Addr)
 	}
-	if cfg.TLSAddr != "localhost:8443" {
-		t.Errorf("expected TLSAddr = localhost:8443, got %s", cfg.TLSAddr)
+	if cfg.TLS.Addr != "localhost:8443" {
+		t.Errorf("expected Addr = localhost:8443, got %s", cfg.TLS.Addr)
 	}
 	if cfg.DisableDefaultMiddlewares {
 		t.Error("expected DisableDefaultMiddlewares to be false")
@@ -27,26 +27,26 @@ func TestDefaultConfigValues(t *testing.T) {
 	if cfg.Logger != nil {
 		t.Error("expected Logger to be nil")
 	}
-	if cfg.CertFile != "" {
-		t.Errorf("expected CertFile to be empty, got %s", cfg.CertFile)
+	if cfg.TLS.CertFile != "" {
+		t.Errorf("expected CertFile to be empty, got %s", cfg.TLS.CertFile)
 	}
-	if cfg.KeyFile != "" {
-		t.Errorf("expected KeyFile to be empty, got %s", cfg.KeyFile)
+	if cfg.TLS.KeyFile != "" {
+		t.Errorf("expected KeyFile to be empty, got %s", cfg.TLS.KeyFile)
 	}
-	if cfg.AutocertManager != nil {
+	if cfg.Extensions.AutocertManager != nil {
 		t.Error("expected AutocertManager to be nil")
 	}
 	if cfg.Server != nil {
 		t.Error("expected Server to be nil in default config")
 	}
-	if cfg.TLSServer != nil {
-		t.Error("expected TLSServer to be nil in default config")
+	if cfg.TLS.Server != nil {
+		t.Error("expected Server to be nil in default config")
 	}
 	if cfg.Listener != nil {
 		t.Error("expected Listener to be nil")
 	}
-	if cfg.TLSListener != nil {
-		t.Error("expected TLSListener to be nil")
+	if cfg.TLS.Listener != nil {
+		t.Error("expected Listener to be nil")
 	}
 
 	// Test middleware configs are initialized with defaults
@@ -66,8 +66,8 @@ func TestConfigZeroValues(t *testing.T) {
 	if cfg.Addr != "" {
 		t.Error("expected zero value for Addr to be empty string")
 	}
-	if cfg.TLSAddr != "" {
-		t.Error("expected zero value for TLSAddr to be empty string")
+	if cfg.TLS.Addr != "" {
+		t.Error("expected zero value for Addr to be empty string")
 	}
 	if cfg.DisableDefaultMiddlewares != false {
 		t.Error("expected zero value for DisableDefaultMiddlewares to be false")
@@ -81,22 +81,22 @@ func TestConfigZeroValues(t *testing.T) {
 	if cfg.Server != nil {
 		t.Error("expected zero value for Server to be nil")
 	}
-	if cfg.TLSServer != nil {
-		t.Error("expected zero value for TLSServer to be nil")
+	if cfg.TLS.Server != nil {
+		t.Error("expected zero value for Server to be nil")
 	}
 	if cfg.Listener != nil {
 		t.Error("expected zero value for Listener to be nil")
 	}
-	if cfg.TLSListener != nil {
-		t.Error("expected zero value for TLSListener to be nil")
+	if cfg.TLS.Listener != nil {
+		t.Error("expected zero value for Listener to be nil")
 	}
-	if cfg.CertFile != "" {
+	if cfg.TLS.CertFile != "" {
 		t.Error("expected zero value for CertFile to be empty string")
 	}
-	if cfg.KeyFile != "" {
+	if cfg.TLS.KeyFile != "" {
 		t.Error("expected zero value for KeyFile to be empty string")
 	}
-	if cfg.AutocertManager != nil {
+	if cfg.Extensions.AutocertManager != nil {
 		t.Error("expected zero value for AutocertManager to be nil")
 	}
 }
@@ -111,9 +111,9 @@ func (m *mockHTTP3Server) Close() error                                     { re
 func TestWithHTTP3Server(t *testing.T) {
 	cfg := DefaultConfig
 	mockServer := &mockHTTP3Server{}
-	cfg.HTTP3Server = mockServer
+	cfg.Extensions.HTTP3Server = mockServer
 
-	if cfg.HTTP3Server == nil {
+	if cfg.Extensions.HTTP3Server == nil {
 		t.Error("expected HTTP3Server to be set")
 	}
 }
@@ -127,9 +127,9 @@ func (m *mockWebTransportServer) Close() error                                  
 func TestWithWebTransportServer(t *testing.T) {
 	cfg := DefaultConfig
 	mockServer := &mockWebTransportServer{}
-	cfg.WebTransportServer = mockServer
+	cfg.Extensions.WebTransportServer = mockServer
 
-	if cfg.WebTransportServer == nil {
+	if cfg.Extensions.WebTransportServer == nil {
 		t.Error("expected WebTransportServer to be set")
 	}
 }
@@ -141,9 +141,9 @@ func TestShutdownHookWithError(t *testing.T) {
 	}
 
 	cfg := DefaultConfig
-	cfg.ShutdownHooks = []ShutdownHookConfig{{Name: "error-hook", Hook: hook}}
+	cfg.Lifecycle.ShutdownHooks = []ShutdownHookConfig{{Name: "error-hook", Hook: hook}}
 
-	err := cfg.ShutdownHooks[0].Hook(context.Background())
+	err := cfg.Lifecycle.ShutdownHooks[0].Hook(context.Background())
 	if !errors.Is(err, expectedErr) {
 		t.Errorf("Expected error '%v', got '%v'", expectedErr, err)
 	}
@@ -160,13 +160,13 @@ func TestShutdownHookContextCancellation(t *testing.T) {
 	}
 
 	cfg := DefaultConfig
-	cfg.ShutdownHooks = []ShutdownHookConfig{{Name: "ctx-hook", Hook: hook}}
+	cfg.Lifecycle.ShutdownHooks = []ShutdownHookConfig{{Name: "ctx-hook", Hook: hook}}
 
 	// Test with cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := cfg.ShutdownHooks[0].Hook(ctx)
+	err := cfg.Lifecycle.ShutdownHooks[0].Hook(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("Expected context.Canceled error, got %v", err)
 	}
@@ -240,9 +240,9 @@ func (m *mockWebSocketUpgrader) Upgrade(w http.ResponseWriter, r *http.Request) 
 func TestWebSocketUpgrader(t *testing.T) {
 	cfg := DefaultConfig
 	mockUpgrader := &mockWebSocketUpgrader{}
-	cfg.WebSocketUpgrader = mockUpgrader
+	cfg.Extensions.WebSocketUpgrader = mockUpgrader
 
-	if cfg.WebSocketUpgrader == nil {
+	if cfg.Extensions.WebSocketUpgrader == nil {
 		t.Error("expected WebSocketUpgrader to be set")
 	}
 }
@@ -265,9 +265,9 @@ func (m *mockSSEProvider) NewSSE(w http.ResponseWriter, r *http.Request) (SSECon
 func TestSSEProvider(t *testing.T) {
 	cfg := DefaultConfig
 	mockProvider := &mockSSEProvider{}
-	cfg.SSEProvider = mockProvider
+	cfg.Extensions.SSEProvider = mockProvider
 
-	if cfg.SSEProvider == nil {
+	if cfg.Extensions.SSEProvider == nil {
 		t.Error("expected SSEProvider to be set")
 	}
 }

@@ -37,9 +37,13 @@ func main() {
 
 	app := zh.New(
 		config.Config{
-			Addr:            ":80",   // HTTP port for ACME challenges
-			TLSAddr:         ":443",  // HTTPS port
-			AutocertManager: manager, // Enable auto TLS
+			Addr: ":80", // HTTP port for ACME challenges
+			TLS: config.TLSConfig{
+				Addr: ":443", // HTTPS port
+			},
+			Extensions: config.ExtensionsConfig{
+				AutocertManager: manager, // Enable auto TLS
+			},
 		},
 	)
 

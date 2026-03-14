@@ -17,7 +17,9 @@ func main() {
 	// Create zerohttp server with TLS
 	app := zh.New(
 		config.Config{
-			TLSAddr: ":8443",
+			TLS: config.TLSConfig{
+				Addr: ":8443",
+			},
 		},
 	)
 

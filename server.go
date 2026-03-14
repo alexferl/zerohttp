@@ -67,6 +67,10 @@ type Server struct {
 	// for recording HTTP requests, errors, and server lifecycle events.
 	logger log.Logger
 
+	// startupHooks execute sequentially before the server starts accepting connections.
+	// If any startup hook returns an error, the server will not start.
+	startupHooks []config.StartupHookConfig
+
 	// preShutdownHooks execute sequentially before server shutdown begins.
 	preShutdownHooks []config.ShutdownHookConfig
 
@@ -169,10 +173,10 @@ func New(cfg ...config.Config) *Server {
 		}
 	}
 
-	tlsServer := c.TLSServer
+	tlsServer := c.TLS.Server
 	if tlsServer == nil {
 		tlsServer = &http.Server{
-			Addr:           c.TLSAddr,
+			Addr:           c.TLS.Addr,
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			IdleTimeout:    60 * time.Second,
@@ -197,21 +201,22 @@ func New(cfg ...config.Config) *Server {
 		server:             server,
 		listener:           c.Listener,
 		tlsServer:          tlsServer,
-		tlsListener:        c.TLSListener,
-		certFile:           c.CertFile,
-		keyFile:            c.KeyFile,
-		autocertManager:    c.AutocertManager,
-		http3Server:        c.HTTP3Server,
-		webTransportServer: c.WebTransportServer,
-		webSocketUpgrader:  c.WebSocketUpgrader,
-		sseProvider:        c.SSEProvider,
+		tlsListener:        c.TLS.Listener,
+		certFile:           c.TLS.CertFile,
+		keyFile:            c.TLS.KeyFile,
+		autocertManager:    c.Extensions.AutocertManager,
+		http3Server:        c.Extensions.HTTP3Server,
+		webTransportServer: c.Extensions.WebTransportServer,
+		webSocketUpgrader:  c.Extensions.WebSocketUpgrader,
+		sseProvider:        c.Extensions.SSEProvider,
 		metricsRegistry:    registry,
 		metricsServerAddr:  c.Metrics.ServerAddr,
 		validator:          c.Validator,
 		logger:             logger,
-		preShutdownHooks:   c.PreShutdownHooks,
-		shutdownHooks:      c.ShutdownHooks,
-		postShutdownHooks:  c.PostShutdownHooks,
+		startupHooks:       c.Lifecycle.StartupHooks,
+		preShutdownHooks:   c.Lifecycle.PreShutdownHooks,
+		shutdownHooks:      c.Lifecycle.ShutdownHooks,
+		postShutdownHooks:  c.Lifecycle.PostShutdownHooks,
 		baseCtx:            baseCtx,
 		cancelBaseCtx:      cancelBaseCtx,
 	}
@@ -323,6 +328,13 @@ func (s *Server) ListenAndServe() error {
 // Returns nil when all servers shut down cleanly (e.g. via Shutdown()).
 func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
+
+	// Run startup hooks before starting any servers
+	// If any hook fails, the server will not start
+	if err := s.runStartupHooks(s.baseCtx); err != nil {
+		s.logger.Error("Startup hook failed, server not starting", log.E(err))
+		return err
+	}
 
 	handler := s.Router
 

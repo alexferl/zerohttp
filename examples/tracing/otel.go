@@ -113,7 +113,9 @@ func main() {
 
 	// Configure the server
 	app := zh.New(config.Config{
-		Tracer: tracer,
+		Tracer: config.TracerConfig{
+			TracerField: tracer,
+		},
 	})
 
 	// Add the tracing middleware

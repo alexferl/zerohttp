@@ -43,7 +43,9 @@ func main() {
 		config.Config{
 			Server:                    customServer,
 			DisableDefaultMiddlewares: true,
-			SSEProvider:               zh.NewDefaultProvider(),
+			Extensions: config.ExtensionsConfig{
+				SSEProvider: zh.NewDefaultProvider(),
+			},
 		},
 	)
 

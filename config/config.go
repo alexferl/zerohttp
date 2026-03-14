@@ -18,10 +18,6 @@ type Config struct {
 	// Default: "localhost:8080"
 	Addr string
 
-	// TLSAddr is the address for the HTTPS server to listen on.
-	// Default: "localhost:8443"
-	TLSAddr string
-
 	// Server is the HTTP server instance for plain (non-TLS) traffic.
 	// Default: preconfigured server listening on "localhost:8080"
 	Server *http.Server
@@ -30,40 +26,15 @@ type Config struct {
 	// Default: nil (system default listener will be created)
 	Listener net.Listener
 
-	// TLSServer is the HTTPS server instance for encrypted traffic.
-	// Default: preconfigured server listening on "localhost:8443"
-	TLSServer *http.Server
+	// TLS holds the configuration for the HTTPS server.
+	TLS TLSConfig
 
-	// TLSListener allows specifying a custom net.Listener for HTTPS traffic (optional).
-	// Default: nil (system default listener will be created)
-	TLSListener net.Listener
-
-	// CertFile is the file path to the TLS certificate (PEM) when serving HTTPS.
-	// Default: "" (no certificate loaded unless specified)
-	CertFile string
-
-	// KeyFile is the file path to the TLS private key (PEM) when serving HTTPS.
-	// Default: "" (no key loaded unless specified)
-	KeyFile string
+	// Lifecycle holds the server startup and shutdown hook configuration.
+	Lifecycle LifecycleConfig
 
 	// Logger is the logger instance used by the server and middlewares.
 	// Default: nil (a default logger will be created if nil)
 	Logger log.Logger
-
-	// PreShutdownHooks are hooks that execute sequentially before server shutdown begins.
-	// These run before any servers start shutting down.
-	// Default: nil
-	PreShutdownHooks []ShutdownHookConfig
-
-	// ShutdownHooks are hooks that execute concurrently with server shutdown.
-	// These run alongside the HTTP/HTTPS/HTTP3 server shutdown.
-	// Default: nil
-	ShutdownHooks []ShutdownHookConfig
-
-	// PostShutdownHooks are hooks that execute sequentially after all servers are shut down.
-	// These run after all servers have completed shutdown.
-	// Default: nil
-	PostShutdownHooks []ShutdownHookConfig
 
 	// DisableDefaultMiddlewares disables all built-in default middlewares when true.
 	// Default: false (default middlewares are enabled)
@@ -91,6 +62,10 @@ type Config struct {
 	// Metrics holds the configuration for the metrics middleware.
 	Metrics MetricsConfig
 
+	// Tracer holds the configuration for the tracing middleware.
+	// Default: DefaultTracerConfig
+	Tracer TracerConfig
+
 	// Validator is an optional struct validator for validating request data.
 	// Users can inject their own implementation (e.g., github.com/go-playground/validator/v10).
 	// The validator must implement the Validator interface.
@@ -98,6 +73,55 @@ type Config struct {
 	// Default: nil
 	Validator Validator
 
+	// Extensions holds optional protocol and feature extensions.
+	Extensions ExtensionsConfig
+}
+
+type TLSConfig struct {
+	// Addr is the address for the HTTPS server to listen on.
+	// Default: "localhost:8443"
+	Addr string
+	// Server is the HTTPS server instance for encrypted traffic.
+	// Default: preconfigured server listening on "localhost:8443"
+	Server *http.Server
+
+	// Listener allows specifying a custom net.Listener for HTTPS traffic (optional).
+	// Default: nil (system default listener will be created)
+	Listener net.Listener
+
+	// CertFile is the file path to the TLS certificate (PEM) when serving HTTPS.
+	// Default: "" (no certificate loaded unless specified)
+	CertFile string
+
+	// KeyFile is the file path to the TLS private key (PEM) when serving HTTPS.
+	// Default: "" (no key loaded unless specified)
+	KeyFile string
+}
+
+type LifecycleConfig struct {
+	// StartupHooks are hooks that execute sequentially before the server starts
+	// accepting connections. If any startup hook returns an error, the server
+	// will not start.
+	// Default: nil
+	StartupHooks []StartupHookConfig
+
+	// PreShutdownHooks are hooks that execute sequentially before server shutdown begins.
+	// These run before any servers start shutting down.
+	// Default: nil
+	PreShutdownHooks []ShutdownHookConfig
+
+	// ShutdownHooks are hooks that execute concurrently with server shutdown.
+	// These run alongside the HTTP/HTTPS/HTTP3 server shutdown.
+	// Default: nil
+	ShutdownHooks []ShutdownHookConfig
+
+	// PostShutdownHooks are hooks that execute sequentially after all servers are shut down.
+	// These run after all servers have completed shutdown.
+	// Default: nil
+	PostShutdownHooks []ShutdownHookConfig
+}
+
+type ExtensionsConfig struct {
 	// AutocertManager is an optional autocert manager for automatic certificate management (AutoTLS).
 	// Users can inject their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager)
 	// by implementing the AutocertManager interface.
@@ -129,24 +153,16 @@ type Config struct {
 	// The server will be started automatically when ListenAndServeTLS or Start is called.
 	// Default: nil
 	WebTransportServer WebTransportServer
-
-	// Tracer is an optional tracer for distributed tracing.
-	// Users can inject their own implementation (e.g., wrapping go.opentelemetry.io/otel).
-	// The tracer must implement the trace.Tracer interface.
-	// If nil, tracing is disabled.
-	// Default: nil
-	Tracer TracerField
-
-	// TracerConfig holds the configuration for the tracing middleware.
-	// Default: DefaultTracerConfig
-	TracerConfig TracerConfig
 }
 
 // DefaultConfig contains all default values used by Config.
 // Update this file if you want to change system-wide defaults.
 var DefaultConfig = Config{
-	Addr:                      "localhost:8080",
-	TLSAddr:                   "localhost:8443",
+	Addr: "localhost:8080",
+	TLS: TLSConfig{
+		Addr:   "localhost:8443",
+		Server: nil,
+	},
 	DisableDefaultMiddlewares: false,
 	DefaultMiddlewares:        nil, // means use DefaultMiddlewares
 	Recover:                   DefaultRecoverConfig,
@@ -157,7 +173,32 @@ var DefaultConfig = Config{
 	Metrics:                   DefaultMetricsConfig,
 	Logger:                    nil, // means use DefaultLogger
 	Server:                    nil,
-	TLSServer:                 nil,
+}
+
+// ============================================================================
+// Startup Hook Types
+// ============================================================================
+
+// StartupHook is a function called before the server starts accepting connections.
+// The context passed to the hook has a deadline based on any configured timeout.
+//
+// Startup hooks execute sequentially in registration order.
+// If any startup hook returns an error, the server will not start.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, startup will hang.
+//
+// Example:
+//
+//	app.RegisterStartupHook("migrations", func(ctx context.Context) error {
+//	    return goose.Up(db.DB, "migrations")
+//	})
+type StartupHook func(ctx context.Context) error
+
+// StartupHookConfig configures a startup hook.
+type StartupHookConfig struct {
+	Name string
+	Hook StartupHook
 }
 
 // ============================================================================
