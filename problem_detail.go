@@ -4,11 +4,11 @@ import (
 	"github.com/alexferl/zerohttp/internal/problem"
 )
 
-// ProblemDetail is an alias to problem.Detail for backward compatibility.
+// ProblemDetail is an alias to problem.Detail.
 // It represents an RFC 9457 Problem Details response.
 type ProblemDetail = problem.Detail
 
-// ValidationError is an alias to problem.ValidationError for backward compatibility.
+// ValidationError is an alias to problem.ValidationError.
 // It represents a single validation error with optional field location information.
 type ValidationError = problem.ValidationError
 
