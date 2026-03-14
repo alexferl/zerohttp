@@ -2,11 +2,62 @@ package zerohttp
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
 )
+
+// RegisterStartupHook registers a hook to run before the server starts accepting connections.
+// Startup hooks execute sequentially in registration order.
+// If any startup hook returns an error, the server will not start.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, startup will hang.
+//
+// Example:
+//
+//	app.RegisterStartupHook("migrations", func(ctx context.Context) error {
+//	    return goose.Up(db.DB, "migrations")
+//	})
+func (s *Server) RegisterStartupHook(name string, hook config.StartupHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.startupHooks = append(s.startupHooks, config.StartupHookConfig{Name: name, Hook: hook})
+}
+
+// runStartupHooks executes startup hooks sequentially in registration order.
+// If any hook returns an error, execution stops and the error is returned.
+func (s *Server) runStartupHooks(ctx context.Context) error {
+	s.mu.RLock()
+	hooks := s.startupHooks
+	s.mu.RUnlock()
+
+	if len(hooks) == 0 {
+		return nil
+	}
+
+	s.logger.Debug("Running startup hooks", log.F("count", len(hooks)))
+
+	for _, hook := range hooks {
+		select {
+		case <-ctx.Done():
+			s.logger.Warn("Startup hook aborted due to context cancellation", log.F("hook", hook.Name))
+			return ctx.Err()
+		default:
+		}
+
+		s.logger.Debug("Running startup hook", log.F("hook", hook.Name))
+		if err := hook.Hook(ctx); err != nil {
+			s.logger.Error("Startup hook failed", log.F("hook", hook.Name), log.E(err))
+			return fmt.Errorf("startup hook %q failed: %w", hook.Name, err)
+		}
+	}
+
+	s.logger.Debug("All startup hooks completed successfully")
+	return nil
+}
 
 // RegisterPreShutdownHook registers a hook to run before server shutdown begins.
 // Pre-shutdown hooks execute sequentially in registration order.

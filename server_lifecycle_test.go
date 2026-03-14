@@ -262,23 +262,25 @@ func TestServer_ConfigWithShutdownHooks(t *testing.T) {
 	var preCalled, shutdownCalled, postCalled bool
 
 	server := New(config.Config{
-		PreShutdownHooks: []config.ShutdownHookConfig{
-			{Name: "pre", Hook: func(ctx context.Context) error {
-				preCalled = true
-				return nil
-			}},
-		},
-		ShutdownHooks: []config.ShutdownHookConfig{
-			{Name: "shutdown", Hook: func(ctx context.Context) error {
-				shutdownCalled = true
-				return nil
-			}},
-		},
-		PostShutdownHooks: []config.ShutdownHookConfig{
-			{Name: "post", Hook: func(ctx context.Context) error {
-				postCalled = true
-				return nil
-			}},
+		Lifecycle: config.LifecycleConfig{
+			PreShutdownHooks: []config.ShutdownHookConfig{
+				{Name: "pre", Hook: func(ctx context.Context) error {
+					preCalled = true
+					return nil
+				}},
+			},
+			ShutdownHooks: []config.ShutdownHookConfig{
+				{Name: "shutdown", Hook: func(ctx context.Context) error {
+					shutdownCalled = true
+					return nil
+				}},
+			},
+			PostShutdownHooks: []config.ShutdownHookConfig{
+				{Name: "post", Hook: func(ctx context.Context) error {
+					postCalled = true
+					return nil
+				}},
+			},
 		},
 	})
 
@@ -302,5 +304,217 @@ func TestServer_ConfigWithShutdownHooks(t *testing.T) {
 	}
 	if !postCalled {
 		t.Error("Expected post-shutdown hook to be called")
+	}
+}
+
+// ============================================================================
+// Startup Hook Tests
+// ============================================================================
+
+func TestServer_RegisterStartupHook(t *testing.T) {
+	server := New()
+
+	called := false
+	server.RegisterStartupHook("test-hook", func(ctx context.Context) error {
+		called = true
+		return nil
+	})
+
+	if len(server.startupHooks) != 1 {
+		t.Errorf("Expected 1 startup hook, got %d", len(server.startupHooks))
+	}
+
+	if server.startupHooks[0].Name != "test-hook" {
+		t.Errorf("Expected hook name 'test-hook', got '%s'", server.startupHooks[0].Name)
+	}
+
+	err := server.startupHooks[0].Hook(context.Background())
+	if err != nil {
+		t.Errorf("Expected no error from hook, got %v", err)
+	}
+
+	if !called {
+		t.Error("Expected hook to be called")
+	}
+}
+
+func TestServer_StartupHooks_RunInOrder(t *testing.T) {
+	var order []string
+	server := New(config.Config{
+		Lifecycle: config.LifecycleConfig{
+			StartupHooks: []config.StartupHookConfig{
+				{Name: "hook-1", Hook: func(ctx context.Context) error {
+					order = append(order, "hook-1")
+					return nil
+				}},
+				{Name: "hook-2", Hook: func(ctx context.Context) error {
+					order = append(order, "hook-2")
+					return nil
+				}},
+			},
+		},
+	})
+
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+	server.server = &http.Server{Addr: listener.Addr().String()}
+
+	// Start server in goroutine - it will fail because we don't actually run it
+	// but startup hooks will run
+	go func() {
+		_ = server.Start()
+	}()
+
+	// Give time for startup hooks to run
+	time.Sleep(100 * time.Millisecond)
+
+	// Shutdown to clean up
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	if len(order) != 2 {
+		t.Errorf("Expected 2 hooks to run, got %d", len(order))
+	}
+
+	if len(order) >= 2 && (order[0] != "hook-1" || order[1] != "hook-2") {
+		t.Errorf("Expected hooks to run in registration order, got %v", order)
+	}
+}
+
+func TestServer_StartupHook_FailsServerStart(t *testing.T) {
+	server := New(config.Config{
+		Lifecycle: config.LifecycleConfig{
+			StartupHooks: []config.StartupHookConfig{
+				{Name: "failing-hook", Hook: func(ctx context.Context) error {
+					return errors.New("startup failed")
+				}},
+			},
+		},
+	})
+
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+	server.server = &http.Server{Addr: listener.Addr().String()}
+
+	err := server.Start()
+	if err == nil {
+		t.Error("Expected server start to fail due to startup hook error")
+	}
+
+	if !errors.Is(err, context.Canceled) && err.Error() != `startup hook "failing-hook" failed: startup failed` {
+		t.Errorf("Expected startup hook error, got: %v", err)
+	}
+}
+
+func TestServer_StartupHook_StopsOnFirstError(t *testing.T) {
+	var calls []string
+	server := New(config.Config{
+		Lifecycle: config.LifecycleConfig{
+			StartupHooks: []config.StartupHookConfig{
+				{Name: "first", Hook: func(ctx context.Context) error {
+					calls = append(calls, "first")
+					return errors.New("first failed")
+				}},
+				{Name: "second", Hook: func(ctx context.Context) error {
+					calls = append(calls, "second")
+					return nil
+				}},
+			},
+		},
+	})
+
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+	server.server = &http.Server{Addr: listener.Addr().String()}
+
+	_ = server.Start()
+
+	// Only first hook should have run
+	if len(calls) != 1 {
+		t.Errorf("Expected only 1 hook to run, got %d: %v", len(calls), calls)
+	}
+
+	if len(calls) > 0 && calls[0] != "first" {
+		t.Errorf("Expected first hook to run, got %v", calls)
+	}
+}
+
+func TestServer_StartupHook_RespectsContextCancellation(t *testing.T) {
+	// Create a server with a startup hook that checks context
+	var hookCalled bool
+	server := New(config.Config{
+		Lifecycle: config.LifecycleConfig{
+			StartupHooks: []config.StartupHookConfig{
+				{Name: "context-check", Hook: func(ctx context.Context) error {
+					hookCalled = true
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						return nil
+					}
+				}},
+			},
+		},
+	})
+
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+	server.server = &http.Server{Addr: listener.Addr().String()}
+
+	// Cancel the base context before starting
+	server.cancelBaseCtx()
+
+	err := server.Start()
+	if err == nil {
+		t.Error("Expected server start to fail due to cancelled context")
+	}
+
+	// When context is cancelled before hooks run, hooks should not be called
+	if hookCalled {
+		t.Error("Expected hook not to be called when context is already cancelled")
+	}
+}
+
+func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
+	var order []string
+	server := New()
+
+	server.RegisterStartupHook("hook-a", func(ctx context.Context) error {
+		order = append(order, "hook-a")
+		return nil
+	})
+	server.RegisterStartupHook("hook-b", func(ctx context.Context) error {
+		order = append(order, "hook-b")
+		return nil
+	})
+
+	// Also add some via config (simulating what New() does with c.StartupHooks)
+	server.startupHooks = append(server.startupHooks, config.StartupHookConfig{
+		Name: "hook-config",
+		Hook: func(ctx context.Context) error {
+			order = append(order, "hook-config")
+			return nil
+		},
+	})
+
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	server.listener = listener
+	server.server = &http.Server{Addr: listener.Addr().String()}
+
+	go func() {
+		_ = server.Start()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+
+	// Should have 3 hooks: hook-a, hook-b, hook-config
+	if len(order) != 3 {
+		t.Errorf("Expected 3 hooks to run, got %d: %v", len(order), order)
 	}
 }

@@ -9,6 +9,8 @@ import (
 
 // TracerConfig holds configuration for the tracing middleware.
 type TracerConfig struct {
+	TracerField trace.Tracer
+
 	// ExemptPaths is a list of paths that should not be traced.
 	// Requests to these paths will not create spans.
 	// Default: nil (all paths are traced)
@@ -54,7 +56,3 @@ func (w *TracerConfigWrapper) GetSpanName(r *http.Request) string {
 	}
 	return DefaultSpanNameFormatter(r)
 }
-
-// TracerField is a type alias for trace.Tracer to avoid import cycles
-// when embedding in Config. The actual field in Config is of type trace.Tracer.
-type TracerField = trace.Tracer

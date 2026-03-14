@@ -87,9 +87,13 @@ func main() {
 	// Create zerohttp server with autocert manager
 	app := zh.New(
 		config.Config{
-			Addr:            ":80",
-			TLSAddr:         ":443",
-			AutocertManager: wrappedManager,
+			Addr: ":80",
+			TLS: config.TLSConfig{
+				Addr: ":443",
+			},
+			Extensions: config.ExtensionsConfig{
+				AutocertManager: wrappedManager,
+			},
 		},
 	)
 

@@ -69,7 +69,9 @@ func main() {
 	app := zh.New(
 		config.Config{
 			DisableDefaultMiddlewares: true,
-			WebSocketUpgrader:         &myUpgrader{upgrader: gupgrader},
+			Extensions: config.ExtensionsConfig{
+				WebSocketUpgrader: &myUpgrader{upgrader: gupgrader},
+			},
 		},
 	)
 

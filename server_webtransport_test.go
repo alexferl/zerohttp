@@ -61,8 +61,10 @@ func TestServer_StartAutoTLS_WithWebTransportAutocert(t *testing.T) {
 
 	// Use unique port to avoid conflicts with other tests
 	server := New(config.Config{
-		AutocertManager: mgr,
-		TLSAddr:         "localhost:28443",
+		TLS: config.TLSConfig{
+			Addr: "localhost:28443",
+		},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetWebTransportServer(wtServer)
 
@@ -102,7 +104,7 @@ func TestServer_StartAutoTLS_WithWebTransportNoAutocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	wtServer := &mockWebTransportServer{} // This doesn't implement WebTransportServerWithAutocert
 
-	server := New(config.Config{AutocertManager: mgr})
+	server := New(config.Config{Extensions: config.ExtensionsConfig{AutocertManager: mgr}})
 	server.SetWebTransportServer(wtServer)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -262,7 +264,7 @@ func TestServer_SetWebTransportServer(t *testing.T) {
 
 func TestServer_SetWebTransportServer_WithConfig(t *testing.T) {
 	mockWT := &mockWebTransportServer{}
-	server := New(config.Config{WebTransportServer: mockWT})
+	server := New(config.Config{Extensions: config.ExtensionsConfig{WebTransportServer: mockWT}})
 
 	if server.webTransportServer != mockWT {
 		t.Error("Expected WebTransport server to be set via config")

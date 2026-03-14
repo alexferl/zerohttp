@@ -31,10 +31,12 @@ func httpsRedirectMiddleware(httpsPort string) func(http.Handler) http.Handler {
 func main() {
 	app := zh.New(
 		config.Config{
-			Addr:     "localhost:8080",
-			TLSAddr:  "localhost:8443",
-			CertFile: "cert.pem",
-			KeyFile:  "key.pem",
+			Addr: "localhost:8080",
+			TLS: config.TLSConfig{
+				Addr:     "localhost:8443",
+				CertFile: "cert.pem",
+				KeyFile:  "key.pem",
+			},
 		},
 	)
 

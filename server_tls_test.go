@@ -92,7 +92,7 @@ func (m *mockAutocertManager) Hostnames() []string {
 
 func TestServer_StartAutoTLS_WithManager(t *testing.T) {
 	mgr := &mockAutocertManager{}
-	server := New(config.Config{AutocertManager: mgr})
+	server := New(config.Config{Extensions: config.ExtensionsConfig{AutocertManager: mgr}})
 
 	// Verify manager was set (compare using concrete type assertion)
 	if server.autocertManager == nil {
@@ -126,9 +126,11 @@ func TestStartAutoTLS_HTTPReadyGatesWarmUp(t *testing.T) {
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
 	server := New(config.Config{
-		AutocertManager: mgr,
-		TLSAddr:         "localhost:0",
-		Addr:            "localhost:0",
+		Addr: "localhost:0",
+		TLS: config.TLSConfig{
+			Addr: "localhost:0",
+		},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetHTTP3Server(h3Server)
 
@@ -173,9 +175,11 @@ func TestStartAutoTLS_SyncOnceSignalsOnce(t *testing.T) {
 	wtServer := &mockWebTransportServerWithAutocert{}
 
 	server := New(config.Config{
-		AutocertManager: mgr,
-		TLSAddr:         "localhost:0",
-		Addr:            "localhost:0",
+		Addr: "localhost:0",
+		TLS: config.TLSConfig{
+			Addr: "localhost:0",
+		},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetHTTP3Server(h3Server)
 	server.SetWebTransportServer(wtServer)
@@ -205,9 +209,11 @@ func TestStartAutoTLS_MultipleConsumersUnblock(t *testing.T) {
 	mgr := &mockAutocertManager{}
 
 	server := New(config.Config{
-		AutocertManager: mgr,
-		TLSAddr:         "localhost:0",
-		Addr:            "localhost:0",
+		Addr: "localhost:0",
+		TLS: config.TLSConfig{
+			Addr: "localhost:0",
+		},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 
 	h3Server := &mockHTTP3ServerWithAutocert{}
@@ -250,14 +256,16 @@ func TestStartAutoTLS_WarmUpTimeout(t *testing.T) {
 	// The actual timeout behavior is verified by code inspection
 
 	// Create a manager that never returns a cert
-	neverReadyMgr := &neverReadyAutocertManager{}
+	mgr := &neverReadyAutocertManager{}
 
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
 	server := New(config.Config{
-		AutocertManager: neverReadyMgr,
-		TLSAddr:         "localhost:0",
-		Addr:            "localhost:0",
+		Addr: "localhost:0",
+		TLS: config.TLSConfig{
+			Addr: "localhost:0",
+		},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetHTTP3Server(h3Server)
 
@@ -298,9 +306,11 @@ func TestStartAutoTLS_EmptyHostnames(t *testing.T) {
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
 	server := New(config.Config{
-		AutocertManager: mgr,
-		TLSAddr:         "localhost:0",
-		Addr:            "localhost:0",
+		Addr: "localhost:0",
+		TLS: config.TLSConfig{
+			Addr: "localhost:0",
+		},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetHTTP3Server(h3Server)
 
@@ -324,9 +334,11 @@ func TestStartAutoTLS_NoHTTPServer(t *testing.T) {
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
 	server := New(config.Config{
-		AutocertManager: mgr,
-		TLSAddr:         "localhost:0",
 		// No Addr - no HTTP server
+		TLS: config.TLSConfig{
+			Addr: "localhost:0",
+		},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetHTTP3Server(h3Server)
 

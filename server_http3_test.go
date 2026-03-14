@@ -301,8 +301,8 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 
 	// Use unique port to avoid conflicts with other tests
 	server := New(config.Config{
-		AutocertManager: mgr,
-		TLSAddr:         "localhost:18443",
+		TLS:        config.TLSConfig{Addr: "localhost:18443"},
+		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetHTTP3Server(h3Server)
 
@@ -342,7 +342,7 @@ func TestServer_StartAutoTLS_WithHTTP3NoAutocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	h3Server := &mockHTTP3Server{} // This doesn't implement HTTP3ServerWithAutocert
 
-	server := New(config.Config{AutocertManager: mgr})
+	server := New(config.Config{Extensions: config.ExtensionsConfig{AutocertManager: mgr}})
 	server.SetHTTP3Server(h3Server)
 
 	// Run StartAutoTLS in a goroutine since it blocks

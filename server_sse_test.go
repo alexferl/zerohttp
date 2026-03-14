@@ -26,7 +26,7 @@ func TestServer_SSEProvider(t *testing.T) {
 
 	t.Run("SSEProvider works with config option", func(t *testing.T) {
 		provider := NewDefaultProvider()
-		s := New(config.Config{SSEProvider: provider})
+		s := New(config.Config{Extensions: config.ExtensionsConfig{SSEProvider: provider}})
 
 		if s.SSEProvider() != provider {
 			t.Error("expected SSEProvider from config option")
