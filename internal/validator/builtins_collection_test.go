@@ -2,6 +2,7 @@ package validator
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -579,5 +580,50 @@ func TestArrayValidation(t *testing.T) {
 	err := NewValidator().Struct(&input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestEachValidatorDirectly tests the each validator function directly
+func TestEachValidatorDirectly(t *testing.T) {
+	v := NewValidator()
+	dv := v.(*defaultValidator)
+	validators := dv.validators.Load().(map[string]ValidationFunc)
+
+	// The each validator should always return nil (it's handled specially)
+	eachFn := validators["each"]
+	if eachFn == nil {
+		t.Fatal("each validator not found")
+	}
+
+	// Call on various types - should always return nil
+	if err := eachFn(reflect.ValueOf([]int{1, 2, 3}), ""); err != nil {
+		t.Errorf("each validator returned error: %v", err)
+	}
+	if err := eachFn(reflect.ValueOf("hello"), "min=1"); err != nil {
+		t.Errorf("each validator returned error: %v", err)
+	}
+}
+
+// TestOmitEmptyValidatorDirectly tests the omitempty validator function directly
+func TestOmitEmptyValidatorDirectly(t *testing.T) {
+	v := NewValidator()
+	dv := v.(*defaultValidator)
+	validators := dv.validators.Load().(map[string]ValidationFunc)
+
+	// The omitempty validator should always return nil (it's handled specially)
+	omitemptyFn := validators["omitempty"]
+	if omitemptyFn == nil {
+		t.Fatal("omitempty validator not found")
+	}
+
+	// Call on various types - should always return nil
+	if err := omitemptyFn(reflect.ValueOf(""), ""); err != nil {
+		t.Errorf("omitempty validator returned error: %v", err)
+	}
+	if err := omitemptyFn(reflect.ValueOf("hello"), ""); err != nil {
+		t.Errorf("omitempty validator returned error: %v", err)
+	}
+	if err := omitemptyFn(reflect.ValueOf(0), ""); err != nil {
+		t.Errorf("omitempty validator returned error: %v", err)
 	}
 }

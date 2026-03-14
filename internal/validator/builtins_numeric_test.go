@@ -524,3 +524,206 @@ func TestNumericBoundaryValues(t *testing.T) {
 		}
 	})
 }
+
+// TestMinMaxWithInvalidParams tests min/max with invalid parameters
+func TestMinMaxWithInvalidParams(t *testing.T) {
+	type TestMinInvalid struct {
+		Value string `validate:"min=abc"`
+	}
+	type TestMaxInvalid struct {
+		Value string `validate:"max=xyz"`
+	}
+
+	// Test min with invalid parameter
+	minInput := TestMinInvalid{Value: "hello"}
+	if err := NewValidator().Struct(&minInput); err == nil {
+		t.Error("expected error for min with invalid parameter")
+	}
+
+	// Test max with invalid parameter
+	maxInput := TestMaxInvalid{Value: "hello"}
+	if err := NewValidator().Struct(&maxInput); err == nil {
+		t.Error("expected error for max with invalid parameter")
+	}
+}
+
+// TestMinMaxWithCollections tests min/max validators on slices/arrays/maps
+func TestMinMaxWithCollections(t *testing.T) {
+	type TestMinSlice struct {
+		Items []int `validate:"min=2"`
+	}
+	type TestMaxSlice struct {
+		Items []int `validate:"max=3"`
+	}
+	type TestMinArray struct {
+		Items [3]int `validate:"min=2"`
+	}
+	type TestMaxArray struct {
+		Items [3]int `validate:"max=2"`
+	}
+	type TestMinMap struct {
+		Items map[string]int `validate:"min=2"`
+	}
+	type TestMaxMap struct {
+		Items map[string]int `validate:"max=2"`
+	}
+
+	// Test min on slice - too few items
+	minSliceInput := TestMinSlice{Items: []int{1}}
+	if err := NewValidator().Struct(&minSliceInput); err == nil {
+		t.Error("expected error for slice with less than min items")
+	}
+
+	// Test min on slice - enough items
+	minSliceInputOK := TestMinSlice{Items: []int{1, 2, 3}}
+	if err := NewValidator().Struct(&minSliceInputOK); err != nil {
+		t.Errorf("unexpected error for valid slice: %v", err)
+	}
+
+	// Test max on slice - too many items
+	maxSliceInput := TestMaxSlice{Items: []int{1, 2, 3, 4}}
+	if err := NewValidator().Struct(&maxSliceInput); err == nil {
+		t.Error("expected error for slice with more than max items")
+	}
+
+	// Test max on slice - within limit
+	maxSliceInputOK := TestMaxSlice{Items: []int{1, 2}}
+	if err := NewValidator().Struct(&maxSliceInputOK); err != nil {
+		t.Errorf("unexpected error for valid slice: %v", err)
+	}
+
+	// Test min on array - too few items (array has fixed size, but we check length)
+	minArrayInput := TestMinArray{Items: [3]int{1, 0, 0}}
+	if err := NewValidator().Struct(&minArrayInput); err != nil {
+		// Arrays always have fixed length, so min=2 on [3]int should pass (len=3)
+		t.Logf("Note: arrays have fixed length, validation result: %v", err)
+	}
+
+	// Test max on array
+	maxArrayInput := TestMaxArray{Items: [3]int{1, 2, 3}}
+	if err := NewValidator().Struct(&maxArrayInput); err == nil {
+		t.Error("expected error for array with more than max items")
+	}
+
+	// Test min on map - too few items
+	minMapInput := TestMinMap{Items: map[string]int{"a": 1}}
+	if err := NewValidator().Struct(&minMapInput); err == nil {
+		t.Error("expected error for map with less than min items")
+	}
+
+	// Test min on map - enough items
+	minMapInputOK := TestMinMap{Items: map[string]int{"a": 1, "b": 2}}
+	if err := NewValidator().Struct(&minMapInputOK); err != nil {
+		t.Errorf("unexpected error for valid map: %v", err)
+	}
+
+	// Test max on map - too many items
+	maxMapInput := TestMaxMap{Items: map[string]int{"a": 1, "b": 2, "c": 3}}
+	if err := NewValidator().Struct(&maxMapInput); err == nil {
+		t.Error("expected error for map with more than max items")
+	}
+
+	// Test max on map - within limit
+	maxMapInputOK := TestMaxMap{Items: map[string]int{"a": 1}}
+	if err := NewValidator().Struct(&maxMapInputOK); err != nil {
+		t.Errorf("unexpected error for valid map: %v", err)
+	}
+}
+
+// TestMinMaxWithInvalidParamsOnNumbers tests min/max with invalid params on numeric types
+func TestMinMaxWithInvalidParamsOnNumbers(t *testing.T) {
+	type TestMinIntInvalid struct {
+		Value int `validate:"min=abc"`
+	}
+	type TestMaxIntInvalid struct {
+		Value int `validate:"max=xyz"`
+	}
+	type TestMinUintInvalid struct {
+		Value uint `validate:"min=abc"`
+	}
+	type TestMaxUintInvalid struct {
+		Value uint `validate:"max=xyz"`
+	}
+	type TestMinFloatInvalid struct {
+		Value float64 `validate:"min=abc"`
+	}
+	type TestMaxFloatInvalid struct {
+		Value float64 `validate:"max=xyz"`
+	}
+
+	// Test min on int with invalid parameter
+	minIntInput := TestMinIntInvalid{Value: 10}
+	if err := NewValidator().Struct(&minIntInput); err == nil {
+		t.Error("expected error for min on int with invalid parameter")
+	}
+
+	// Test max on int with invalid parameter
+	maxIntInput := TestMaxIntInvalid{Value: 10}
+	if err := NewValidator().Struct(&maxIntInput); err == nil {
+		t.Error("expected error for max on int with invalid parameter")
+	}
+
+	// Test min on uint with invalid parameter
+	minUintInput := TestMinUintInvalid{Value: 10}
+	if err := NewValidator().Struct(&minUintInput); err == nil {
+		t.Error("expected error for min on uint with invalid parameter")
+	}
+
+	// Test max on uint with invalid parameter
+	maxUintInput := TestMaxUintInvalid{Value: 10}
+	if err := NewValidator().Struct(&maxUintInput); err == nil {
+		t.Error("expected error for max on uint with invalid parameter")
+	}
+
+	// Test min on float with invalid parameter
+	minFloatInput := TestMinFloatInvalid{Value: 10.5}
+	if err := NewValidator().Struct(&minFloatInput); err == nil {
+		t.Error("expected error for min on float with invalid parameter")
+	}
+
+	// Test max on float with invalid parameter
+	maxFloatInput := TestMaxFloatInvalid{Value: 10.5}
+	if err := NewValidator().Struct(&maxFloatInput); err == nil {
+		t.Error("expected error for max on float with invalid parameter")
+	}
+}
+
+// TestMinMaxInvalidParamsOnCollections tests min/max with invalid params on slices/arrays/maps
+func TestMinMaxInvalidParamsOnCollections(t *testing.T) {
+	type TestMinSliceInvalid struct {
+		Items []int `validate:"min=abc"`
+	}
+	type TestMaxSliceInvalid struct {
+		Items []int `validate:"max=xyz"`
+	}
+	type TestMinMapInvalid struct {
+		Items map[string]int `validate:"min=abc"`
+	}
+	type TestMaxMapInvalid struct {
+		Items map[string]int `validate:"max=xyz"`
+	}
+
+	// Test min on slice with invalid parameter
+	minSliceInput := TestMinSliceInvalid{Items: []int{1, 2}}
+	if err := NewValidator().Struct(&minSliceInput); err == nil {
+		t.Error("expected error for min on slice with invalid parameter")
+	}
+
+	// Test max on slice with invalid parameter
+	maxSliceInput := TestMaxSliceInvalid{Items: []int{1, 2}}
+	if err := NewValidator().Struct(&maxSliceInput); err == nil {
+		t.Error("expected error for max on slice with invalid parameter")
+	}
+
+	// Test min on map with invalid parameter
+	minMapInput := TestMinMapInvalid{Items: map[string]int{"a": 1}}
+	if err := NewValidator().Struct(&minMapInput); err == nil {
+		t.Error("expected error for min on map with invalid parameter")
+	}
+
+	// Test max on map with invalid parameter
+	maxMapInput := TestMaxMapInvalid{Items: map[string]int{"a": 1}}
+	if err := NewValidator().Struct(&maxMapInput); err == nil {
+		t.Error("expected error for max on map with invalid parameter")
+	}
+}

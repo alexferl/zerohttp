@@ -2,6 +2,8 @@ package validator
 
 import (
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1429,5 +1431,155 @@ func TestMapOfPointerToStruct(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// TestValidationErrors_Error tests the Error() method
+func TestValidationErrors_Error(t *testing.T) {
+	tests := []struct {
+		name         string
+		errors       ValidationErrors
+		wantExact    string
+		wantContains []string
+	}{
+		{
+			name:      "empty errors",
+			errors:    ValidationErrors{},
+			wantExact: "validation failed",
+		},
+		{
+			name:      "single field error",
+			errors:    ValidationErrors{"name": {"required"}},
+			wantExact: "validation failed: name: required",
+		},
+		{
+			name:         "multiple field errors",
+			errors:       ValidationErrors{"name": {"required"}, "email": {"invalid format"}},
+			wantContains: []string{"name: required", "email: invalid format"},
+		},
+		{
+			name:      "multiple errors per field",
+			errors:    ValidationErrors{"password": {"too short", "must contain number"}},
+			wantExact: "validation failed: password: too short, must contain number",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.errors.Error()
+			if tt.wantExact != "" && got != tt.wantExact {
+				t.Errorf("Error() = %q, want %q", got, tt.wantExact)
+			}
+			for _, substr := range tt.wantContains {
+				if !strings.Contains(got, substr) {
+					t.Errorf("Error() = %q, should contain %q", got, substr)
+				}
+			}
+		})
+	}
+}
+
+// TestValidationErrors_HasErrors tests the HasErrors() method
+func TestValidationErrors_HasErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		errors ValidationErrors
+		want   bool
+	}{
+		{
+			name:   "empty errors",
+			errors: ValidationErrors{},
+			want:   false,
+		},
+		{
+			name:   "nil errors",
+			errors: nil,
+			want:   false,
+		},
+		{
+			name:   "has errors",
+			errors: ValidationErrors{"field": {"error"}},
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.errors.HasErrors()
+			if got != tt.want {
+				t.Errorf("HasErrors() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestValidationErrors_ValidationErrors tests the ValidationErrors() method
+func TestValidationErrors_ValidationErrors(t *testing.T) {
+	errors := ValidationErrors{"field": {"error1", "error2"}}
+	got := errors.ValidationErrors()
+
+	if len(got) != 1 {
+		t.Errorf("ValidationErrors() returned %d entries, want 1", len(got))
+	}
+
+	if errs, ok := got["field"]; !ok || len(errs) != 2 {
+		t.Errorf("ValidationErrors() = %v, want map with field having 2 errors", got)
+	}
+}
+
+// TestRegister tests custom validator registration
+func TestRegister(t *testing.T) {
+	type TestCustom struct {
+		Value string `validate:"custom"`
+	}
+
+	v := NewValidator()
+
+	// Register a custom validator
+	customCalled := false
+	v.Register("custom", func(value reflect.Value, param string) error {
+		customCalled = true
+		if value.String() != "valid" {
+			return errors.New("must be 'valid'")
+		}
+		return nil
+	})
+
+	// Test valid case
+	valid := TestCustom{Value: "valid"}
+	if err := v.Struct(&valid); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !customCalled {
+		t.Error("custom validator was not called")
+	}
+
+	// Test invalid case
+	customCalled = false
+	invalid := TestCustom{Value: "invalid"}
+	if err := v.Struct(&invalid); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+// TestRegister_MultipleCustomValidators tests registering multiple custom validators
+func TestRegister_MultipleCustomValidators(t *testing.T) {
+	type TestMultiple struct {
+		A string `validate:"customA"`
+		B string `validate:"customB"`
+	}
+
+	v := NewValidator()
+	v.Register("customA", func(value reflect.Value, param string) error {
+		return nil
+	})
+	v.Register("customB", func(value reflect.Value, param string) error {
+		return errors.New("customB error")
+	})
+
+	input := TestMultiple{A: "a", B: "b"}
+	err := v.Struct(&input)
+	if err == nil {
+		t.Error("expected error from customB")
 	}
 }
