@@ -47,12 +47,13 @@ var DefaultStrictTransportSecurity = StrictTransportSecurity{
 	PreloadEnabled:    false,
 }
 
-// CSPNonceContextKey is the context key for CSP nonce values
-type CSPNonceContextKey string
+// cspNonceContextKey is the context key type for CSP nonce values.
+type cspNonceContextKey struct{}
+
+// CSPNonceContextKey is the context key for CSP nonces.
+var CSPNonceContextKey = cspNonceContextKey{}
 
 const (
-	// DefaultCSPNonceContextKey is the default context key for CSP nonces
-	DefaultCSPNonceContextKey CSPNonceContextKey = "csp_nonce"
 	// CSPNoncePlaceholder is the placeholder string replaced with the actual nonce
 	CSPNoncePlaceholder = "{{nonce}}"
 )
@@ -71,7 +72,7 @@ type SecurityHeadersConfig struct {
 	ContentSecurityPolicyNonceEnabled bool
 
 	// ContentSecurityPolicyNonceContextKey overrides the default context key for storing the nonce
-	ContentSecurityPolicyNonceContextKey CSPNonceContextKey
+	ContentSecurityPolicyNonceContextKey any
 
 	// CrossOriginEmbedderPolicy sets the `Cross-Origin-Embedder-Policy` header
 	CrossOriginEmbedderPolicy string

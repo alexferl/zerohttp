@@ -14,15 +14,13 @@ func TestRequestIDConfig_DefaultValues(t *testing.T) {
 	if cfg.Generator == nil {
 		t.Error("expected default generator to be set")
 	}
-	if cfg.ContextKey != "request_id" {
-		t.Errorf("expected default context key = 'request_id', got %s", string(cfg.ContextKey))
+	if cfg.ContextKey != RequestIDContextKey {
+		t.Errorf("expected default context key = RequestIDContextKey, got %v", cfg.ContextKey)
 	}
 
 	// Test context key type
-	if key, ok := any(cfg.ContextKey).(RequestIDContextKey); !ok {
-		t.Error("expected ContextKey to be of type RequestIDContextKey")
-	} else if string(key) != "request_id" {
-		t.Errorf("expected context key string value = 'request_id', got %s", string(key))
+	if _, ok := cfg.ContextKey.(requestIDContextKey); !ok {
+		t.Error("expected ContextKey to be of type requestIDContextKey")
 	}
 }
 
@@ -105,7 +103,7 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 		cfg := RequestIDConfig{
 			Header:     "X-Trace-Id",
 			Generator:  GenerateRequestID,
-			ContextKey: RequestIDContextKey("request_id"),
+			ContextKey: RequestIDContextKey,
 		}
 		if cfg.Header != "X-Trace-Id" {
 			t.Errorf("expected header = 'X-Trace-Id', got %s", cfg.Header)
@@ -117,7 +115,7 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 		cfg := RequestIDConfig{
 			Header:     "X-Request-Id",
 			Generator:  customGenerator,
-			ContextKey: RequestIDContextKey("request_id"),
+			ContextKey: RequestIDContextKey,
 		}
 		if cfg.Generator == nil {
 			t.Error("expected generator to be set")
@@ -129,27 +127,25 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 	})
 
 	t.Run("context key assignment", func(t *testing.T) {
-		customKey := RequestIDContextKey("trace_id")
+		// Custom context key using a different struct type
+		type customKey struct{}
+		customKeyInstance := customKey{}
 		cfg := RequestIDConfig{
 			Header:     "X-Request-Id",
 			Generator:  GenerateRequestID,
-			ContextKey: customKey,
+			ContextKey: customKeyInstance,
 		}
-		if cfg.ContextKey != customKey {
-			t.Errorf("expected context key = 'trace_id', got %s", string(cfg.ContextKey))
-		}
-		if string(cfg.ContextKey) != "trace_id" {
-			t.Errorf("expected context key string = 'trace_id', got %s", string(cfg.ContextKey))
+		if cfg.ContextKey != customKeyInstance {
+			t.Errorf("expected context key to be customKeyInstance, got %v", cfg.ContextKey)
 		}
 	})
 
 	t.Run("multiple fields assignment", func(t *testing.T) {
 		customGenerator := func() string { return "multi-option-id" }
-		customKey := RequestIDContextKey("custom_request_id")
 		cfg := RequestIDConfig{
 			Header:     "X-Custom-Request-Id",
 			Generator:  customGenerator,
-			ContextKey: customKey,
+			ContextKey: RequestIDContextKey,
 		}
 
 		if cfg.Header != "X-Custom-Request-Id" {
@@ -161,8 +157,8 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 		if cfg.Generator() != "multi-option-id" {
 			t.Error("expected custom generator to work")
 		}
-		if cfg.ContextKey != customKey {
-			t.Errorf("expected context key = 'custom_request_id', got %s", string(cfg.ContextKey))
+		if cfg.ContextKey != RequestIDContextKey {
+			t.Errorf("expected context key = RequestIDContextKey, got %v", cfg.ContextKey)
 		}
 	})
 }
@@ -175,7 +171,7 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 				cfg := RequestIDConfig{
 					Header:     header,
 					Generator:  GenerateRequestID,
-					ContextKey: RequestIDContextKey("request_id"),
+					ContextKey: RequestIDContextKey,
 				}
 				if cfg.Header != header {
 					t.Errorf("expected header = %s, got %s", header, cfg.Header)
@@ -201,7 +197,7 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 				cfg := RequestIDConfig{
 					Header:     "X-Request-Id",
 					Generator:  tt.generator,
-					ContextKey: RequestIDContextKey("request_id"),
+					ContextKey: RequestIDContextKey,
 				}
 				result := cfg.Generator()
 				if result != tt.expected {
@@ -211,29 +207,25 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 		}
 	})
 
-	t.Run("context keys", func(t *testing.T) {
+	t.Run("custom context keys", func(t *testing.T) {
 		tests := []struct {
-			key      RequestIDContextKey
-			expected string
+			name string
+			key  any
 		}{
-			{RequestIDContextKey("request_id"), "request_id"},
-			{RequestIDContextKey("trace_id"), "trace_id"},
-			{RequestIDContextKey("correlation_id"), "correlation_id"},
-			{RequestIDContextKey("session_id"), "session_id"},
-			{RequestIDContextKey("req-id"), "req-id"},
-			{RequestIDContextKey("x-request-id"), "x-request-id"},
-			{RequestIDContextKey(""), ""},
+			{"default struct key", RequestIDContextKey},
+			{"custom string key", "my_request_id"},
+			{"custom int key", 42},
 		}
 
 		for _, tt := range tests {
-			t.Run(string(tt.key), func(t *testing.T) {
+			t.Run(tt.name, func(t *testing.T) {
 				cfg := RequestIDConfig{
 					Header:     "X-Request-Id",
 					Generator:  GenerateRequestID,
 					ContextKey: tt.key,
 				}
-				if string(cfg.ContextKey) != tt.expected {
-					t.Errorf("expected context key = %s, got %s", tt.expected, string(cfg.ContextKey))
+				if cfg.ContextKey != tt.key {
+					t.Errorf("expected context key = %v, got %v", tt.key, cfg.ContextKey)
 				}
 			})
 		}
@@ -251,7 +243,7 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 				cfg := RequestIDConfig{
 					Header:     header,
 					Generator:  GenerateRequestID,
-					ContextKey: RequestIDContextKey("request_id"),
+					ContextKey: RequestIDContextKey,
 				}
 				if cfg.Header != header {
 					t.Errorf("expected header = %s, got %s", header, cfg.Header)
@@ -266,24 +258,24 @@ func TestRequestIDConfig_EdgeCases(t *testing.T) {
 		cfg := RequestIDConfig{
 			Header:     "X-Request-Id",
 			Generator:  nil,
-			ContextKey: RequestIDContextKey("request_id"),
+			ContextKey: RequestIDContextKey,
 		}
 		if cfg.Generator != nil {
 			t.Error("expected generator to be nil")
 		}
 	})
 
-	t.Run("empty string values", func(t *testing.T) {
+	t.Run("empty string context key", func(t *testing.T) {
 		cfg := RequestIDConfig{
 			Header:     "",
 			Generator:  GenerateRequestID,
-			ContextKey: RequestIDContextKey(""),
+			ContextKey: "",
 		}
 		if cfg.Header != "" {
 			t.Errorf("expected empty header, got %s", cfg.Header)
 		}
-		if string(cfg.ContextKey) != "" {
-			t.Errorf("expected empty context key, got %s", string(cfg.ContextKey))
+		if cfg.ContextKey != "" {
+			t.Errorf("expected empty context key, got %v", cfg.ContextKey)
 		}
 	})
 
@@ -295,8 +287,8 @@ func TestRequestIDConfig_EdgeCases(t *testing.T) {
 		if cfg.Generator != nil {
 			t.Error("expected zero generator = nil, got non-nil function")
 		}
-		if string(cfg.ContextKey) != "" {
-			t.Errorf("expected zero context key = '', got %s", string(cfg.ContextKey))
+		if cfg.ContextKey != nil {
+			t.Errorf("expected zero context key = nil, got %v", cfg.ContextKey)
 		}
 	})
 }

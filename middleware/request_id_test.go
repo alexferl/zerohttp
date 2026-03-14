@@ -83,7 +83,9 @@ func TestRequestID_CustomGenerator(t *testing.T) {
 
 func TestRequestID_CustomContextKey(t *testing.T) {
 	handler := &testHandler{}
-	customKey := config.RequestIDContextKey("trace_id")
+	// Custom context key using a struct type
+	type traceKey struct{}
+	customKey := traceKey{}
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.TestMiddlewareWithHandler(RequestID(config.RequestIDConfig{
 		ContextKey: customKey,
@@ -129,7 +131,9 @@ func TestRequestID_MultipleOptions(t *testing.T) {
 }
 
 func TestGetRequestID_WithCustomKey(t *testing.T) {
-	customKey := config.RequestIDContextKey("my_request_id")
+	// Custom context key using a struct type
+	type myRequestKey struct{}
+	customKey := myRequestKey{}
 	testRequestID := "test-123"
 	ctx := context.WithValue(context.Background(), customKey, testRequestID)
 	retrievedID := GetRequestID(ctx, customKey)
@@ -165,8 +169,8 @@ func TestDefaultRequestIDConfig(t *testing.T) {
 	if cfg.Generator == nil {
 		t.Error("Expected default generator to be set")
 	}
-	if cfg.ContextKey != config.RequestIDContextKey("request_id") {
-		t.Errorf("Expected default context key 'request_id', got %s", cfg.ContextKey)
+	if cfg.ContextKey != config.RequestIDContextKey {
+		t.Errorf("Expected default context key to be RequestIDContextKey, got %v", cfg.ContextKey)
 	}
 	id := cfg.Generator()
 	if len(id) != 32 {

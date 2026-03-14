@@ -65,14 +65,18 @@ var (
 	}
 )
 
-// HMACAuthContextKey is the context key type for HMAC auth info
-type HMACAuthContextKey string
+type (
+	// hmacAuthContextKey is the context key type for HMAC access key ID.
+	hmacAuthContextKey struct{}
+	// hmacErrorContextKey is the context key type for HMAC auth errors.
+	hmacErrorContextKey struct{}
+)
 
-const (
+var (
 	// HMACAccessKeyIDContextKey holds the verified access key ID in the request context
-	HMACAccessKeyIDContextKey HMACAuthContextKey = "hmac_access_key_id"
+	HMACAccessKeyIDContextKey = hmacAuthContextKey{}
 	// HMACErrorContextKey holds the HMACAuthError in the request context (only set on auth failures)
-	HMACErrorContextKey HMACAuthContextKey = "hmac_error"
+	HMACErrorContextKey = hmacErrorContextKey{}
 )
 
 // GetHMACAccessKeyID retrieves the verified access key ID from the request context.

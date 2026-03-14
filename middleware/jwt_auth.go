@@ -46,16 +46,19 @@ import (
 	"github.com/alexferl/zerohttp/metrics"
 )
 
-// JWTAuthContextKey is the context key type for JWT auth
-type JWTAuthContextKey string
+type (
+	jwtClaimsContextKey struct{}
+	jwtErrorContextKey  struct{}
+	jwtTokenContextKey  struct{}
+)
 
-const (
+var (
 	// JWTClaimsContextKey holds the validated JWT claims
-	JWTClaimsContextKey JWTAuthContextKey = "jwt_claims"
+	JWTClaimsContextKey = jwtClaimsContextKey{}
 	// JWTErrorContextKey holds the JWT validation error
-	JWTErrorContextKey JWTAuthContextKey = "jwt_error"
+	JWTErrorContextKey = jwtErrorContextKey{}
 	// JWTTokenContextKey holds the raw token string
-	JWTTokenContextKey JWTAuthContextKey = "jwt_token"
+	JWTTokenContextKey = jwtTokenContextKey{}
 )
 
 // JWTAuthError represents a JWT authentication error with RFC 9457 Problem Details

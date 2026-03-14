@@ -5,8 +5,11 @@ import (
 	"encoding/hex"
 )
 
-// RequestIDContextKey is a custom type for context keys to avoid collisions.
-type RequestIDContextKey string
+// requestIDContextKey is the context key type for request ID.
+type requestIDContextKey struct{}
+
+// RequestIDContextKey is the context key for request ID.
+var RequestIDContextKey = requestIDContextKey{}
 
 // RequestIDConfig allows customization of request ID generation.
 type RequestIDConfig struct {
@@ -17,15 +20,16 @@ type RequestIDConfig struct {
 	// The default generator uses crypto/rand (CSPRNG) for 128 bits of entropy.
 	Generator func() string
 
-	// ContextKey is the key to store the request ID in context (defaults to "request_id").
-	ContextKey RequestIDContextKey
+	// ContextKey is the key to store the request ID in context.
+	// Defaults to the package-provided RequestIDContextKey.
+	ContextKey any
 }
 
 // DefaultRequestIDConfig contains the default configuration for request ID generation.
 var DefaultRequestIDConfig = RequestIDConfig{
 	Header:     "X-Request-Id",
 	Generator:  GenerateRequestID,
-	ContextKey: RequestIDContextKey("request_id"),
+	ContextKey: RequestIDContextKey,
 }
 
 // GenerateRequestID creates a unique request ID using crypto/rand.
