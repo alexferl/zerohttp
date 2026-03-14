@@ -18,12 +18,13 @@ import (
 	"github.com/alexferl/zerohttp/metrics"
 )
 
-// CSRFContextKey is the key type for CSRF token in context
-type CSRFContextKey string
+// csrfContextKey is the key type for CSRF token in context.
+type csrfContextKey struct{}
+
+// CSRFTokenContextKey is the context key for the CSRF token.
+var CSRFTokenContextKey = csrfContextKey{}
 
 const (
-	// csrfTokenContextKey is the context key for the CSRF token
-	csrfTokenContextKey CSRFContextKey = "csrf_token"
 	// defaultTokenLength is the length of the random token in bytes
 	defaultTokenLength = 32
 	// defaultMaxMultipartMemory is the maximum memory allocated for parsing multipart forms (32 MB)
@@ -91,7 +92,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 				}
 
 				ctx := r.Context()
-				ctx = context.WithValue(ctx, csrfTokenContextKey, token)
+				ctx = context.WithValue(ctx, CSRFTokenContextKey, token)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -128,7 +129,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 			setCSRFCookie(w, c, newToken)
 
 			ctx := r.Context()
-			ctx = context.WithValue(ctx, csrfTokenContextKey, newToken)
+			ctx = context.WithValue(ctx, CSRFTokenContextKey, newToken)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -138,7 +139,7 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 // GetCSRFToken retrieves the CSRF token from the request context
 // Returns empty string if no token is present
 func GetCSRFToken(r *http.Request) string {
-	token, ok := r.Context().Value(csrfTokenContextKey).(string)
+	token, ok := r.Context().Value(CSRFTokenContextKey).(string)
 	if !ok {
 		return ""
 	}

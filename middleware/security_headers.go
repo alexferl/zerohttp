@@ -38,8 +38,8 @@ func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) htt
 
 				// Store nonce in context for handlers to use
 				ctxKey := c.ContentSecurityPolicyNonceContextKey
-				if ctxKey == "" {
-					ctxKey = config.DefaultCSPNonceContextKey
+				if ctxKey == nil {
+					ctxKey = config.CSPNonceContextKey
 				}
 				r = r.WithContext(context.WithValue(r.Context(), ctxKey, nonce))
 			}
@@ -115,12 +115,12 @@ func generateNonce() string {
 
 // GetCSPNonce retrieves the CSP nonce from the request context.
 // Returns empty string if nonce is not present.
-func GetCSPNonce(r *http.Request, key ...config.CSPNonceContextKey) string {
+func GetCSPNonce(r *http.Request, key ...any) string {
 	var ctxKey any
 	if len(key) > 0 {
 		ctxKey = key[0]
 	} else {
-		ctxKey = config.DefaultCSPNonceContextKey
+		ctxKey = config.CSPNonceContextKey
 	}
 	if nonce, ok := r.Context().Value(ctxKey).(string); ok {
 		return nonce

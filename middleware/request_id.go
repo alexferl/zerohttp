@@ -36,8 +36,8 @@ func RequestID(cfg ...config.RequestIDConfig) func(http.Handler) http.Handler {
 
 // GetRequestID retrieves the request ID from context using the specified key
 // If no key is provided, uses the default key
-func GetRequestID(ctx context.Context, key ...config.RequestIDContextKey) string {
-	var contextKey config.RequestIDContextKey
+func GetRequestID(ctx context.Context, key ...any) string {
+	var contextKey any
 	if len(key) > 0 {
 		contextKey = key[0]
 	} else {

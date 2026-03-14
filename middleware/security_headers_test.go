@@ -354,7 +354,8 @@ func TestSecurityHeaders_CSPNonceReportOnly(t *testing.T) {
 }
 
 func TestSecurityHeaders_CSPNonceCustomContextKey(t *testing.T) {
-	customKey := config.CSPNonceContextKey("my_custom_nonce_key")
+	type myNonceKey struct{}
+	customKey := myNonceKey{}
 	var capturedNonce string
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
