@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
@@ -20,13 +21,7 @@ import (
 func Recover(logger log.Logger, cfg ...config.RecoverConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRecoverConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-	if c.StackSize <= 0 {
-		c.StackSize = config.DefaultRecoverConfig.StackSize
-	}
-	if c.RequestIDHeader == "" {
-		c.RequestIDHeader = config.DefaultRecoverConfig.RequestIDHeader
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return func(next http.Handler) http.Handler {

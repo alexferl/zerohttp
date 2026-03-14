@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/trace"
 )
@@ -16,7 +17,7 @@ func Tracing(tracer trace.Tracer, cfg ...config.TracerConfig) func(http.Handler)
 
 	c := config.DefaultTracerConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	wrapper := c.Wrap()

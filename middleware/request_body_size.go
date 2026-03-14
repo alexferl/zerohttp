@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
@@ -11,13 +12,12 @@ import (
 func RequestBodySize(cfg ...config.RequestBodySizeConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRequestBodySizeConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
+
+	// Validate MaxBytes - use default if invalid
 	if c.MaxBytes <= 0 {
 		c.MaxBytes = config.DefaultRequestBodySizeConfig.MaxBytes
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultRequestBodySizeConfig.ExemptPaths
 	}
 
 	return func(next http.Handler) http.Handler {

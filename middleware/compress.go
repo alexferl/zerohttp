@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
@@ -348,20 +349,7 @@ func encoderDeflate(w io.Writer, level int) io.Writer {
 func Compress(cfg ...config.CompressConfig) func(http.Handler) http.Handler {
 	c := config.DefaultCompressConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.Level <= 0 {
-		c.Level = config.DefaultCompressConfig.Level
-	}
-	if c.Types == nil {
-		c.Types = config.DefaultCompressConfig.Types
-	}
-	if c.Algorithms == nil {
-		c.Algorithms = config.DefaultCompressConfig.Algorithms
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultCompressConfig.ExemptPaths
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	compressor := NewCompressor(c.Level, c.Types...)

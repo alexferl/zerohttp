@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -106,7 +107,7 @@ type parsedAuth struct {
 func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 	c := config.DefaultHMACAuthConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	if c.CredentialStore == nil {
@@ -115,30 +116,6 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 
 	if c.Algorithm == "" {
 		c.Algorithm = config.HMACSHA256
-	}
-	if c.MaxSkew == 0 {
-		c.MaxSkew = config.DefaultHMACAuthConfig.MaxSkew
-	}
-	if c.ClockSkewGrace == 0 {
-		c.ClockSkewGrace = config.DefaultHMACAuthConfig.ClockSkewGrace
-	}
-	if c.AuthHeaderName == "" {
-		c.AuthHeaderName = config.DefaultHMACAuthConfig.AuthHeaderName
-	}
-	if c.TimestampHeader == "" {
-		c.TimestampHeader = config.DefaultHMACAuthConfig.TimestampHeader
-	}
-	if c.RequiredHeaders == nil {
-		c.RequiredHeaders = config.DefaultHMACAuthConfig.RequiredHeaders
-	}
-	if c.OptionalHeaders == nil {
-		c.OptionalHeaders = config.DefaultHMACAuthConfig.OptionalHeaders
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultHMACAuthConfig.ExemptPaths
-	}
-	if c.MaxBodySize == 0 {
-		c.MaxBodySize = config.DefaultHMACAuthConfig.MaxBodySize
 	}
 
 	errorHandler := c.ErrorHandler

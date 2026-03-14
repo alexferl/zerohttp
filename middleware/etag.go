@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -410,32 +411,11 @@ func (ew *etagResponseWriter) serveRange() {
 func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 	c := config.DefaultETagConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	if c.Algorithm != config.FNV && c.Algorithm != config.MD5 {
 		c.Algorithm = config.DefaultETagConfig.Algorithm
-	}
-
-	if c.SkipStatusCodes == nil {
-		c.SkipStatusCodes = config.DefaultETagConfig.SkipStatusCodes
-	}
-
-	if c.SkipContentTypes == nil {
-		c.SkipContentTypes = config.DefaultETagConfig.SkipContentTypes
-	}
-
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultETagConfig.ExemptPaths
-	}
-
-	if c.MaxBufferSize == 0 {
-		c.MaxBufferSize = config.DefaultETagConfig.MaxBufferSize
-	}
-
-	// For Weak: use provided value if set, otherwise use default
-	if c.Weak == nil {
-		c.Weak = config.DefaultETagConfig.Weak
 	}
 
 	return func(next http.Handler) http.Handler {

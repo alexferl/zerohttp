@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/log"
@@ -21,35 +22,7 @@ import (
 func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handler {
 	c := config.DefaultIdempotencyConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.HeaderName == "" {
-		c.HeaderName = config.DefaultIdempotencyConfig.HeaderName
-	}
-	if c.TTL == 0 {
-		c.TTL = config.DefaultIdempotencyConfig.TTL
-	}
-	if c.MaxBodySize == 0 {
-		c.MaxBodySize = config.DefaultIdempotencyConfig.MaxBodySize
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultIdempotencyConfig.ExemptPaths
-	}
-	if c.MaxKeys == 0 {
-		c.MaxKeys = config.DefaultIdempotencyConfig.MaxKeys
-	}
-	if c.LockRetryInterval == 0 {
-		c.LockRetryInterval = config.DefaultIdempotencyConfig.LockRetryInterval
-	}
-	if c.LockMaxRetries == 0 {
-		c.LockMaxRetries = config.DefaultIdempotencyConfig.LockMaxRetries
-	}
-	if c.LockMaxInterval == 0 {
-		c.LockMaxInterval = config.DefaultIdempotencyConfig.LockMaxInterval
-	}
-	if c.LockBackoffMultiplier == 0 {
-		c.LockBackoffMultiplier = config.DefaultIdempotencyConfig.LockBackoffMultiplier
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	var store config.IdempotencyStore

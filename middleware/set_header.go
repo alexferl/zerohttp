@@ -4,13 +4,14 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
 // SetHeader is a middleware that sets response headers
 func SetHeader(cfg ...config.SetHeaderConfig) func(http.Handler) http.Handler {
 	c := config.DefaultSetHeaderConfig
 	if len(cfg) > 0 {
-		c.Headers = cfg[len(cfg)-1].Headers
+		zconfig.Merge(&c, cfg[len(cfg)-1])
 	}
 
 	return func(next http.Handler) http.Handler {

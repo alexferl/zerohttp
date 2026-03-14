@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -13,13 +14,7 @@ import (
 func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 	c := config.DefaultBasicAuthConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-	if c.Realm == "" {
-		c.Realm = config.DefaultBasicAuthConfig.Realm
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultBasicAuthConfig.ExemptPaths
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return func(next http.Handler) http.Handler {

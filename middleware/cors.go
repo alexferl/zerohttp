@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -14,24 +15,7 @@ import (
 func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 	c := config.DefaultCORSConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	// Set defaults if not provided
-	if c.AllowedOrigins == nil {
-		c.AllowedOrigins = config.DefaultCORSConfig.AllowedOrigins
-	}
-	if c.AllowedMethods == nil {
-		c.AllowedMethods = config.DefaultCORSConfig.AllowedMethods
-	}
-	if c.AllowedHeaders == nil {
-		c.AllowedHeaders = config.DefaultCORSConfig.AllowedHeaders
-	}
-	if c.MaxAge == 0 {
-		c.MaxAge = config.DefaultCORSConfig.MaxAge
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultCORSConfig.ExemptPaths
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	allowedOriginMap := make(map[string]bool)

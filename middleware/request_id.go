@@ -5,22 +5,14 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
 // RequestID creates a request ID middleware with the provided configuration
 func RequestID(cfg ...config.RequestIDConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRequestIDConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-	if c.Header == "" {
-		c.Header = config.DefaultRequestIDConfig.Header
-	}
-	if c.Generator == nil {
-		c.Generator = config.DefaultRequestIDConfig.Generator
-	}
-	if c.ContextKey == "" {
-		c.ContextKey = config.DefaultRequestIDConfig.ContextKey
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return func(next http.Handler) http.Handler {

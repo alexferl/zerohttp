@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
@@ -33,43 +34,7 @@ const (
 func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 	c := config.DefaultCSRFConfig
 	if len(cfg) > 0 {
-		if cfg[0].CookieName != "" {
-			c.CookieName = cfg[0].CookieName
-		}
-		if cfg[0].CookieMaxAge != 0 {
-			c.CookieMaxAge = cfg[0].CookieMaxAge
-		}
-		if cfg[0].CookiePath != "" {
-			c.CookiePath = cfg[0].CookiePath
-		}
-		if cfg[0].CookieDomain != "" {
-			c.CookieDomain = cfg[0].CookieDomain
-		}
-		// For CookieSecure: use provided value if set, otherwise use default
-		if cfg[0].CookieSecure != nil {
-			c.CookieSecure = cfg[0].CookieSecure
-		}
-		if cfg[0].CookieSameSite != 0 {
-			c.CookieSameSite = cfg[0].CookieSameSite
-		}
-		if cfg[0].TokenLookup != "" {
-			c.TokenLookup = cfg[0].TokenLookup
-		}
-		if cfg[0].ErrorHandler != nil {
-			c.ErrorHandler = cfg[0].ErrorHandler
-		}
-		if cfg[0].ExemptPaths != nil {
-			c.ExemptPaths = cfg[0].ExemptPaths
-		}
-		if cfg[0].ExemptMethods != nil {
-			c.ExemptMethods = cfg[0].ExemptMethods
-		}
-		if cfg[0].HMACKey != nil {
-			c.HMACKey = cfg[0].HMACKey
-		}
-		if cfg[0].TokenGenerator != nil {
-			c.TokenGenerator = cfg[0].TokenGenerator
-		}
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	// HMAC key is required - fail fast if not provided

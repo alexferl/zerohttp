@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/metrics"
@@ -42,32 +43,7 @@ type circuitBreakerMiddleware struct {
 func CircuitBreaker(cfg ...config.CircuitBreakerConfig) func(http.Handler) http.Handler {
 	c := config.DefaultCircuitBreakerConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.FailureThreshold <= 0 {
-		c.FailureThreshold = config.DefaultCircuitBreakerConfig.FailureThreshold
-	}
-	if c.RecoveryTimeout <= 0 {
-		c.RecoveryTimeout = config.DefaultCircuitBreakerConfig.RecoveryTimeout
-	}
-	if c.SuccessThreshold <= 0 {
-		c.SuccessThreshold = config.DefaultCircuitBreakerConfig.SuccessThreshold
-	}
-	if c.IsFailure == nil {
-		c.IsFailure = config.DefaultCircuitBreakerConfig.IsFailure
-	}
-	if c.KeyExtractor == nil {
-		c.KeyExtractor = config.DefaultCircuitBreakerConfig.KeyExtractor
-	}
-	if c.OpenStatusCode == 0 {
-		c.OpenStatusCode = config.DefaultCircuitBreakerConfig.OpenStatusCode
-	}
-	if c.OpenMessage == "" {
-		c.OpenMessage = config.DefaultCircuitBreakerConfig.OpenMessage
-	}
-	if c.MaxHalfOpenRequests <= 0 {
-		c.MaxHalfOpenRequests = config.DefaultCircuitBreakerConfig.MaxHalfOpenRequests
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	cbm := &circuitBreakerMiddleware{

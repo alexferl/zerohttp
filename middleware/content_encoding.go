@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
 
@@ -12,14 +13,7 @@ import (
 func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) http.Handler {
 	c := config.DefaultContentEncodingConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.Encodings == nil {
-		c.Encodings = config.DefaultContentEncodingConfig.Encodings
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultContentEncodingConfig.ExemptPaths
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	allowedEncodings := make(map[string]struct{}, len(c.Encodings))

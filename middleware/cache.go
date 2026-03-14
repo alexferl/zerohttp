@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
@@ -21,23 +22,7 @@ import (
 func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 	c := config.DefaultCacheConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.CacheControl == "" {
-		c.CacheControl = config.DefaultCacheConfig.CacheControl
-	}
-	if c.DefaultTTL == 0 {
-		c.DefaultTTL = config.DefaultCacheConfig.DefaultTTL
-	}
-	if c.MaxBodySize == 0 {
-		c.MaxBodySize = config.DefaultCacheConfig.MaxBodySize
-	}
-	if c.Vary == nil {
-		c.Vary = config.DefaultCacheConfig.Vary
-	}
-	if c.StatusCodes == nil {
-		c.StatusCodes = config.DefaultCacheConfig.StatusCodes
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	statusCodeMap := make(map[int]bool)

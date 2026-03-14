@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -16,26 +17,11 @@ import (
 func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRateLimitConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
-	if c.Rate <= 0 {
-		c.Rate = config.DefaultRateLimitConfig.Rate
-	}
-	if c.Window <= 0 {
-		c.Window = config.DefaultRateLimitConfig.Window
-	}
-	if c.Algorithm == "" {
-		c.Algorithm = config.DefaultRateLimitConfig.Algorithm
-	}
 	if c.KeyExtractor == nil {
 		c.KeyExtractor = IPKeyExtractor()
-	}
-	if c.StatusCode == 0 {
-		c.StatusCode = config.DefaultRateLimitConfig.StatusCode
-	}
-	if c.Message == "" {
-		c.Message = config.DefaultRateLimitConfig.Message
 	}
 
 	// Use provided store or create default in-memory store
