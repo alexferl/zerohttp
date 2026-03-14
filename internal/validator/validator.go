@@ -119,57 +119,46 @@ func (v *defaultValidator) Struct(dst any) error {
 
 // validateStruct recursively validates a struct and its fields.
 func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, errors ValidationErrors) {
-	typ := val.Type()
+	// Get cached type info
+	info := ValidatorRegistry.GetTypeInfo(val.Type())
 
 	// Check if the struct itself implements Validate() error
 	// This allows custom validation methods on the struct type
-	if val.CanAddr() {
-		if validator, ok := val.Addr().Interface().(interface{ Validate() error }); ok {
-			if err := validator.Validate(); err != nil {
-				// Use the prefix if available, otherwise use the struct type name
-				key := prefix
-				if key == "" {
-					key = typ.Name()
-				}
-				errors.Add(key, err.Error())
+	if info.hasCustomValidate && val.CanAddr() {
+		if err := val.Addr().Interface().(interface{ Validate() error }).Validate(); err != nil {
+			// Use the prefix if available, otherwise use the struct type name
+			key := prefix
+			if key == "" {
+				key = val.Type().Name()
 			}
+			errors.Add(key, err.Error())
 		}
 	}
 
-	for i := 0; i < val.NumField(); i++ {
-		field := val.Field(i)
-		fieldType := typ.Field(i)
+	for i := range info.fields {
+		fi := &info.fields[i]
 
-		// Skip unexported fields
-		if !field.CanInterface() {
-			continue
-		}
+		// Get the field value using the cached index
+		field := val.Field(fi.index)
 
 		// Handle embedded structs - validate them recursively
-		if fieldType.Anonymous && field.Kind() == reflect.Struct {
+		if fi.isEmbedded {
 			v.validateStruct(field, prefix, errors)
 			continue
 		}
 
-		// Use json tag name if available, otherwise use struct field name
-		fieldName := getJSONFieldName(fieldType)
+		// Use cached JSON field name
+		fieldName := fi.name
 		if prefix != "" {
 			fieldName = prefix + "." + fieldName
 		}
 
 		// Handle pointer fields
-		if field.Kind() == reflect.Ptr {
+		if fi.isPtr {
 			if field.IsNil() {
-				// Check if this is a required pointer field
-				tag := fieldType.Tag.Get("validate")
-				if tag != "" && tag != "-" {
-					rules := parseTag(tag)
-					for _, rule := range rules {
-						if rule.Name == "required" {
-							errors.Add(fieldName, "required")
-							break
-						}
-					}
+				// Check if this is a required pointer field using cached info
+				if fi.hasRequired {
+					errors.Add(fieldName, "required")
 				}
 				continue
 			}
@@ -177,21 +166,16 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 			field = field.Elem()
 		}
 
-		// Get validate tag
-		tag := fieldType.Tag.Get("validate")
-		if tag != "" && tag != "-" {
-			v.validateField(field, fieldName, tag, errors)
+		// Validate field if it has rules
+		if len(fi.rules) > 0 {
+			v.validateFieldWithInfo(field, fieldName, fi, errors)
 		}
 
 		// Recursively validate nested structs
-		switch field.Kind() {
-		case reflect.Struct:
-			// Skip time.Time and other common types
-			if field.Type().String() == "time.Time" {
-				continue
-			}
+		switch {
+		case fi.isStruct && !fi.isTimeTime:
 			v.validateStruct(field, fieldName, errors)
-		case reflect.Slice, reflect.Array:
+		case fi.isSlice, fi.isArray:
 			for j := 0; j < field.Len(); j++ {
 				elem := field.Index(j)
 				elemName := fmt.Sprintf("%s[%d]", fieldName, j)
@@ -201,7 +185,7 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 					v.validateStruct(elem.Elem(), elemName, errors)
 				}
 			}
-		case reflect.Map:
+		case fi.isMap:
 			// Recursively validate struct values in maps
 			for _, key := range field.MapKeys() {
 				elem := field.MapIndex(key)
@@ -218,40 +202,23 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 	}
 }
 
-// validateField validates a single field based on its validate tag.
-func (v *defaultValidator) validateField(field reflect.Value, fieldName, tag string, errors ValidationErrors) {
-	// Parse and execute each validation rule
-	rules := parseTag(tag)
-
-	// Check for omitempty first
-	for _, rule := range rules {
-		if rule.Name == "omitempty" {
-			if isZeroValue(field) {
-				return // Skip all other validators
-			}
-			break
-		}
-	}
-
-	// Find each position to handle slice/array element validation
-	eachIndex := -1
-	for i, rule := range rules {
-		if rule.Name == "each" {
-			eachIndex = i
-			break
-		}
+// validateFieldWithInfo validates a single field using pre-parsed field info.
+func (v *defaultValidator) validateFieldWithInfo(field reflect.Value, fieldName string, fi *validatedFieldInfo, errors ValidationErrors) {
+	// Check for omitempty first using cached value
+	if fi.omitempty && isZeroValue(field) {
+		return // Skip all other validators
 	}
 
 	// Run validators before each on the field itself
-	endIndex := len(rules)
-	if eachIndex >= 0 {
-		endIndex = eachIndex
+	endIndex := len(fi.rules)
+	if fi.eachIndex >= 0 {
+		endIndex = fi.eachIndex
 	}
 
 	validators := v.validators.Load().(map[string]ValidationFunc)
 
 	for i := 0; i < endIndex; i++ {
-		rule := rules[i]
+		rule := fi.rules[i]
 		if rule.Name == "omitempty" {
 			continue // Already handled above
 		}
@@ -269,8 +236,8 @@ func (v *defaultValidator) validateField(field reflect.Value, fieldName, tag str
 	}
 
 	// If each is present, validate each element with remaining validators
-	if eachIndex >= 0 && eachIndex < len(rules)-1 {
-		elementRules := rules[eachIndex+1:]
+	if fi.eachIndex >= 0 && fi.eachIndex < len(fi.rules)-1 {
+		elementRules := fi.rules[fi.eachIndex+1:]
 		v.validateElements(field, fieldName, elementRules, errors)
 	}
 }
