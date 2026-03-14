@@ -273,8 +273,9 @@ func TestBasicAuthNilExemptPathsFallback(t *testing.T) {
 }
 
 func TestBasicAuthFailedFunction(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
-	basicAuthFailed(w, "Test Realm")
+	basicAuthFailed(w, req, "Test Realm")
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusUnauthorized).

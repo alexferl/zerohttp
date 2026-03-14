@@ -45,7 +45,7 @@ func ContentType(cfg ...config.ContentTypeConfig) func(http.Handler) http.Handle
 				if len(c.ContentTypes) > 0 {
 					w.Header().Set("Accept-Post", c.ContentTypes[0])
 				}
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 

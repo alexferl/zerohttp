@@ -264,5 +264,5 @@ func setCSRFCookie(w http.ResponseWriter, cfg config.CSRFConfig, token string) {
 // defaultCSRFErrorHandler is the default handler for CSRF validation failures
 func defaultCSRFErrorHandler(w http.ResponseWriter, r *http.Request) {
 	detail := problem.NewDetail(http.StatusForbidden, "CSRF token is missing or invalid")
-	_ = detail.Render(w)
+	_ = detail.RenderAuto(w, r)
 }

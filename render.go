@@ -181,7 +181,7 @@ func (r *defaultRenderer) Redirect(w http.ResponseWriter, req *http.Request, url
 
 // ProblemDetail writes an RFC 9457 Problem Details response
 func (r *defaultRenderer) ProblemDetail(w http.ResponseWriter, problem *ProblemDetail) error {
-	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+	w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
 	w.WriteHeader(problem.Status)
 	return json.NewEncoder(w).Encode(problem)
 }

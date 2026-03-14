@@ -86,7 +86,7 @@ func Timeout(cfg ...config.TimeoutConfig) func(http.Handler) http.Handler {
 					metrics.SafeRegistry(metrics.GetRegistry(r.Context())).Counter("timeout_requests_total").Inc()
 
 					detail := problem.NewDetail(c.StatusCode, c.Message)
-					_ = detail.Render(w) // Best effort - client may have disconnected
+					_ = detail.RenderAuto(w, r) // Best effort - client may have disconnected
 					tw.err = ErrTimeoutWrite
 				}
 			}

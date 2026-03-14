@@ -66,7 +66,7 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 				reg.Counter("ratelimit_rejected_total", "key").WithLabelValues(key).Inc()
 				w.Header().Set("Retry-After", strconv.Itoa(int(time.Until(resetTime).Seconds())))
 				detail := problem.NewDetail(c.StatusCode, c.Message)
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 

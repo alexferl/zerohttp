@@ -55,7 +55,7 @@ func Recover(logger log.Logger, cfg ...config.RecoverConfig) func(http.Handler) 
 
 					if r.Header.Get("Connection") != "Upgrade" {
 						detail := problem.NewDetail(http.StatusInternalServerError, "Internal server error")
-						_ = detail.Render(w)
+						_ = detail.RenderAuto(w, r)
 					}
 				}
 			}()

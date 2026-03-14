@@ -306,7 +306,9 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	logger := &mockLogger{}
 	// Regular panic (not a handler error wrapper)
 	handler := Recover(logger)(panicHandler("random panic"))
-	req := zhtest.NewRequest(http.MethodGet, "/").Build()
+
+	// Test JSON response with Accept header
+	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("Accept", "application/json").Build()
 	w := zhtest.Serve(handler, req)
 
 	// Should return 500
@@ -330,6 +332,17 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	}
 	if !strings.Contains(body, `"title":"Internal Server Error"`) {
 		t.Errorf("Expected body to contain title 'Internal Server Error', got %s", body)
+	}
+
+	// Test plain text response without Accept header
+	logger = &mockLogger{} // Reset logger
+	handler = Recover(logger)(panicHandler("random panic"))
+	req = zhtest.NewRequest(http.MethodGet, "/").Build()
+	w = zhtest.Serve(handler, req)
+
+	contentType = w.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/plain") {
+		t.Errorf("Expected Content-Type to contain text/plain, got %s", contentType)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware"
 )
@@ -69,7 +70,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	// Check for validation errors (422)
 	var verr ValidationErrorer
 	if errors.As(err, &verr) {
-		w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+		w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		response := map[string]any{
 			"title":  "Unprocessable Entity",
@@ -85,7 +86,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 
 	// Check for binding errors (400)
 	if IsBindError(err) {
-		w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+		w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
 		w.WriteHeader(http.StatusBadRequest)
 		response := map[string]any{
 			"title":  "Bad Request",
@@ -99,7 +100,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	}
 
 	// For all other errors, return 500 Internal Server Error
-	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+	w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
 	w.WriteHeader(http.StatusInternalServerError)
 	response := map[string]any{
 		"title":  "Internal Server Error",
@@ -691,7 +692,6 @@ func (r *defaultRouter) shouldLogRequest() bool {
 func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 	// Capture config values at handler creation time to avoid data races.
 	// Handler fields are protected by handlerMu and accessed with locking.
-	useJSON := r.config.ErrorResponseType == config.ErrorResponseJSON
 	shouldLog := r.shouldLogRequest()
 	requestIDHeader := r.config.RequestID.Header
 	requestIDGenerator := r.config.RequestID.Generator
@@ -740,7 +740,7 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			if !methodAllowed {
 				w.Header().Set(HeaderAllow, allowHeader)
 
-				if useJSON {
+				if problem.AcceptsJSON(req) {
 					jsonMethodNotAllowedHandler(w, req)
 				} else {
 					r.handlerMu.RLock()
@@ -765,7 +765,7 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			r.routesMu.RUnlock()
 		}
 
-		if useJSON {
+		if problem.AcceptsJSON(req) {
 			jsonNotFoundHandler(w, req)
 		} else {
 			r.handlerMu.RLock()
@@ -799,7 +799,7 @@ var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.R
 
 // jsonNotFoundHandler returns a JSON problem detail 404 response.
 func jsonNotFoundHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+	w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write(preEncodedNotFoundJSON)
 }
@@ -807,7 +807,7 @@ func jsonNotFoundHandler(w http.ResponseWriter, _ *http.Request) {
 // jsonMethodNotAllowedHandler returns a JSON problem detail 405 response.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
 func jsonMethodNotAllowedHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set(HeaderContentType, MIMEApplicationProblem)
+	w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	_, _ = w.Write(preEncodedMethodNotAllowedJSON)
 }

@@ -30,7 +30,7 @@ func ContentCharset(cfg ...config.ContentCharsetConfig) func(http.Handler) http.
 				if len(c.Charsets) > 0 {
 					w.Header().Set("Accept-Post", "application/json; charset="+c.Charsets[0])
 				}
-				_ = detail.Render(w)
+				_ = detail.RenderAuto(w, r)
 				return
 			}
 			next.ServeHTTP(w, r)

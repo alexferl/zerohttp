@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -197,7 +198,18 @@ func TestIdempotency_Required(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Expected 400 when key is required, got %d", w.Code)
 		}
+
+		// Test JSON response
+		req.Header.Set("Accept", "application/json")
+		w = httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w, req)
 		zhtest.AssertWith(t, w).IsProblemDetail().ProblemDetailDetail("Idempotency-Key header is required")
+
+		// Test plain text response
+		req = httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{}`)))
+		w = httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w, req)
+		zhtest.AssertWith(t, w).Header("Content-Type", "text/plain; charset=utf-8")
 	})
 
 	t.Run("allows request when key is provided and required", func(t *testing.T) {
@@ -430,7 +442,23 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 		if w2.Code != http.StatusConflict {
 			t.Errorf("Expected 409 Conflict, got %d", w2.Code)
 		}
+
+		// Test JSON response
+		req2.Header.Set("Accept", "application/json")
+		w2 = httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 		zhtest.AssertWith(t, w2).IsProblemDetail().ProblemDetailDetail("Idempotent request is still being processed")
+
+		// Test plain text response
+		req2 = httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req2.Header.Set("Idempotency-Key", "slow-key")
+		w2 = httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
+		// Note: This may return 409 (still processing) or 201 (completed) depending on timing
+		// The important thing is that when it returns 409, the content type is plain text
+		if w2.Code == http.StatusConflict {
+			zhtest.AssertWith(t, w2).Header("Content-Type", "text/plain; charset=utf-8")
+		}
 	})
 }
 
@@ -731,6 +759,260 @@ func TestIdempotency_HandlerWritesNothing(t *testing.T) {
 		}
 		if w2.Header().Get("X-Idempotency-Replay") != "true" {
 			t.Error("Expected X-Idempotency-Replay header on replay")
+		}
+	})
+}
+
+// errorStore is a mock store that returns errors for testing error handling
+type errorStore struct {
+	failGet    bool
+	failLock   bool
+	failUnlock bool
+	failSet    bool
+}
+
+func (e *errorStore) Get(ctx context.Context, key string) (config.IdempotencyRecord, bool, error) {
+	if e.failGet {
+		return config.IdempotencyRecord{}, false, errors.New("store get error")
+	}
+	return config.IdempotencyRecord{}, false, nil
+}
+
+func (e *errorStore) Set(ctx context.Context, key string, record config.IdempotencyRecord, ttl time.Duration) error {
+	if e.failSet {
+		return errors.New("store set error")
+	}
+	return nil
+}
+
+func (e *errorStore) Lock(ctx context.Context, key string) (bool, error) {
+	if e.failLock {
+		return false, errors.New("store lock error")
+	}
+	return true, nil
+}
+
+func (e *errorStore) Unlock(ctx context.Context, key string) error {
+	if e.failUnlock {
+		return errors.New("store unlock error")
+	}
+	return nil
+}
+
+func TestIdempotency_StoreErrors(t *testing.T) {
+	t.Run("continues to handler when store Get fails", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		store := &errorStore{failGet: true}
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL:   time.Hour,
+			Store: store,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req.Header.Set("Idempotency-Key", "key-error")
+		w := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w, req)
+
+		// Should fail open and call handler
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call (fail open), got %d", callCount)
+		}
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected 201, got %d", w.Code)
+		}
+	})
+
+	t.Run("continues to handler when store Lock fails", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		store := &errorStore{failLock: true}
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL:   time.Hour,
+			Store: store,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req.Header.Set("Idempotency-Key", "key-lock-error")
+		w := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w, req)
+
+		// Should fail open and call handler
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call (fail open on lock error), got %d", callCount)
+		}
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected 201, got %d", w.Code)
+		}
+	})
+
+	t.Run("logs error but does not fail when store Unlock fails", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		store := &errorStore{failUnlock: true}
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL:   time.Hour,
+			Store: store,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req.Header.Set("Idempotency-Key", "key-unlock-error")
+		w := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w, req)
+
+		// Should complete successfully even if unlock fails
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call, got %d", callCount)
+		}
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected 201, got %d", w.Code)
+		}
+	})
+
+	t.Run("logs error but does not fail when store Set fails", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		store := &errorStore{failSet: true}
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL:   time.Hour,
+			Store: store,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req.Header.Set("Idempotency-Key", "key-set-error")
+		w := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w, req)
+
+		// Should complete successfully even if set fails
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call, got %d", callCount)
+		}
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected 201, got %d", w.Code)
+		}
+	})
+}
+
+func TestIdempotency_PanicRecovery(t *testing.T) {
+	t.Run("unlocks store when handler panics", func(t *testing.T) {
+		store := NewIdempotencyMemoryStore(100)
+
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			panic("handler panic")
+		})
+
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL:   time.Hour,
+			Store: store,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req.Header.Set("Idempotency-Key", "key-panic")
+		w := httptest.NewRecorder()
+
+		// Use defer/recover to catch the panic
+		func() {
+			defer func() {
+				_ = recover() // Expected panic, ignore it
+			}()
+			idempotencyMiddleware(handler).ServeHTTP(w, req)
+		}()
+
+		// Verify lock was released by trying to lock again
+		ctx := context.Background()
+		locked, err := store.Lock(ctx, "key-panic:POST:/api/payments:fef5c3c40c3c0f3887720d0d0bc7e26d61ebd42d82697109469727e790f35837")
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if !locked {
+			t.Error("Lock should succeed after panic recovery (unlock was called)")
+		}
+	})
+}
+
+func TestIdempotency_WriteHeaderHopByHop(t *testing.T) {
+	t.Run("skips hop-by-hop headers in cache", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.Header().Set("Connection", "keep-alive")
+			w.Header().Set("Keep-Alive", "timeout=5")
+			w.Header().Set("X-Custom", "value")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL: time.Hour,
+		})
+
+		// First request
+		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req1.Header.Set("Idempotency-Key", "key-hop")
+		w1 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request - replay
+		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req2.Header.Set("Idempotency-Key", "key-hop")
+		w2 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
+
+		// Hop-by-hop headers should not be replayed
+		if w2.Header().Get("Connection") != "" {
+			t.Error("Connection header should not be replayed (hop-by-hop)")
+		}
+		if w2.Header().Get("Keep-Alive") != "" {
+			t.Error("Keep-Alive header should not be replayed (hop-by-hop)")
+		}
+		// Custom header should be replayed
+		if w2.Header().Get("X-Custom") != "value" {
+			t.Error("X-Custom header should be replayed")
+		}
+	})
+}
+
+func TestIdempotency_WriteHeaderIdempotent(t *testing.T) {
+	t.Run("WriteHeader is idempotent", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(http.StatusOK) // Second call should be ignored
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL: time.Hour,
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req.Header.Set("Idempotency-Key", "key-idempotent")
+		w := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected 201 (first WriteHeader), got %d", w.Code)
 		}
 	})
 }

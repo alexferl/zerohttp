@@ -1353,7 +1353,7 @@ func TestJSONNotFoundHandler(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusNotFound).
-		Header(HeaderContentType, MIMEApplicationProblem).
+		Header(HeaderContentType, MIMEApplicationProblemJSON).
 		BodyContains(`"title":"Not Found"`).
 		BodyContains(`"status":404`)
 }
@@ -1369,7 +1369,7 @@ func TestJSONMethodNotAllowedHandler(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusMethodNotAllowed).
-		Header(HeaderContentType, MIMEApplicationProblem).
+		Header(HeaderContentType, MIMEApplicationProblemJSON).
 		Header(HeaderAllow, "GET, HEAD").
 		BodyContains(`"title":"Method Not Allowed"`).
 		BodyContains(`"status":405`)

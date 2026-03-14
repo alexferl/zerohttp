@@ -48,7 +48,7 @@ func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) htt
 							if len(c.Encodings) > 0 {
 								w.Header().Set("Accept-Encoding", strings.Join(c.Encodings, ", "))
 							}
-							_ = detail.Render(w)
+							_ = detail.RenderAuto(w, r)
 							return
 						}
 					}

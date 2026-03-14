@@ -83,7 +83,26 @@ func TestCORSPreflightRequest(t *testing.T) {
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 
 			if tt.checkProblemDetail {
+				// Test JSON response with Accept header
+				req.Header.Set("Accept", "application/json")
+				rr = httptest.NewRecorder()
+				mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 				zhtest.AssertWith(t, rr).IsProblemDetail()
+
+				// Test plain text response without Accept header
+				req = httptest.NewRequest(http.MethodOptions, "/test", nil)
+				if tt.origin != "" {
+					req.Header.Set("Origin", tt.origin)
+				}
+				if tt.method != "" {
+					req.Header.Set("Access-Control-Request-Method", tt.method)
+				}
+				if tt.headers != "" {
+					req.Header.Set("Access-Control-Request-Headers", tt.headers)
+				}
+				rr = httptest.NewRecorder()
+				mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
+				zhtest.AssertWith(t, rr).Header("Content-Type", "text/plain; charset=utf-8")
 			}
 			if tt.checkAllowHeader {
 				zhtest.AssertWith(t, rr).HeaderExists("Allow")

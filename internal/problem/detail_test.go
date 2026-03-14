@@ -245,6 +245,101 @@ func TestDetail_Render_WithExtensions(t *testing.T) {
 	}
 }
 
+func TestDetail_RenderAuto(t *testing.T) {
+	tests := []struct {
+		name         string
+		acceptHeader string
+		wantJSON     bool
+	}{
+		{"accepts JSON", "application/json", true},
+		{"accepts problem+json", "application/problem+json", true},
+		{"accepts wildcard", "*/*", true},
+		{"accepts HTML only", "text/html", false},
+		{"empty accept header", "", false},
+		{"accepts JSON with quality", "application/json;q=0.9", true},
+		{"accepts HTML with wildcard", "text/html,*/*;q=0.8", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detail := NewDetail(http.StatusBadRequest, "Invalid request")
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tt.acceptHeader != "" {
+				r.Header.Set("Accept", tt.acceptHeader)
+			}
+
+			err := detail.RenderAuto(w, r)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			if tt.wantJSON {
+				zhtest.AssertWith(t, w).
+					Status(http.StatusBadRequest).
+					Header("Content-Type", "application/problem+json").
+					JSONPathEqual("title", "Bad Request").
+					JSONPathEqual("detail", "Invalid request")
+			} else {
+				zhtest.AssertWith(t, w).
+					Status(http.StatusBadRequest).
+					Header("Content-Type", "text/plain; charset=utf-8").
+					BodyContains("Invalid request")
+			}
+		})
+	}
+}
+
+func TestDetail_RenderAuto_FallbackToTitle(t *testing.T) {
+	detail := &Detail{Title: "Custom Error Title", Status: http.StatusInternalServerError}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Accept", "text/plain")
+
+	err := detail.RenderAuto(w, r)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	zhtest.AssertWith(t, w).
+		Status(http.StatusInternalServerError).
+		Header("Content-Type", "text/plain; charset=utf-8").
+		BodyContains("Custom Error Title")
+}
+
+func TestAcceptsJSON(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   bool
+	}{
+		{"empty header", "", false},
+		{"application/json", "application/json", true},
+		{"application/problem+json", "application/problem+json", true},
+		{"text/html", "text/html", false},
+		{"text/plain", "text/plain", false},
+		{"*/*", "*/*", true},
+		{"wildcard after json", "application/json, text/plain", true},
+		{"json after wildcard", "text/plain, application/json", true},
+		{"json with quality", "application/json;q=0.9", true},
+		{"problem+json with quality", "application/problem+json;q=0.8", true},
+		{"html only", "text/html,application/xhtml+xml,application/xml;q=0.9", false},
+		{"html with wildcard", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tt.header != "" {
+				req.Header.Set("Accept", tt.header)
+			}
+			if got := AcceptsJSON(req); got != tt.want {
+				t.Errorf("AcceptsJSON() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func equalValues(a, b any) bool {
 	if slice, ok := b.([]string); ok {
 		aSlice, ok := a.([]any)
