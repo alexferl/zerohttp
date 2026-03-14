@@ -15,6 +15,11 @@ import (
 	"unicode/utf8"
 )
 
+var booleanValues = map[string]struct{}{
+	"true": {}, "false": {}, "1": {}, "0": {},
+	"yes": {}, "no": {}, "on": {}, "off": {},
+}
+
 // registerBuiltins registers all built-in validation functions.
 func (v *defaultValidator) registerBuiltins() {
 	// Create a local map to build the validators atomically
@@ -26,11 +31,6 @@ func (v *defaultValidator) registerBuiltins() {
 			return fmt.Errorf("required")
 		}
 		return nil
-	}
-
-	// omitempty - skip validation if zero value (handled in validateField)
-	validators["omitempty"] = func(value reflect.Value, tag string) error {
-		return nil // Handled in validateField before calling validators
 	}
 
 	// min - minimum value for numbers, minimum length for strings/slices/arrays/maps
@@ -45,25 +45,25 @@ func (v *defaultValidator) registerBuiltins() {
 				return fmt.Errorf("must be at least %d characters", length)
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			target, err := strconv.ParseInt(tag, 10, 64)
+			target, err := parseIntParam(tag, "min")
 			if err != nil {
-				return fmt.Errorf("invalid min parameter: %s", tag)
+				return err
 			}
 			if value.Int() < target {
 				return fmt.Errorf("must be at least %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			target, err := strconv.ParseUint(tag, 10, 64)
+			target, err := parseUintParam(tag, "min")
 			if err != nil {
-				return fmt.Errorf("invalid min parameter: %s", tag)
+				return err
 			}
 			if value.Uint() < target {
 				return fmt.Errorf("must be at least %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			target, err := strconv.ParseFloat(tag, 64)
+			target, err := parseFloatParam(tag, "min")
 			if err != nil {
-				return fmt.Errorf("invalid min parameter: %s", tag)
+				return err
 			}
 			if value.Float() < target {
 				return fmt.Errorf("must be at least %v", target)
@@ -94,25 +94,25 @@ func (v *defaultValidator) registerBuiltins() {
 				return fmt.Errorf("must be at most %d characters", length)
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			target, err := strconv.ParseInt(tag, 10, 64)
+			target, err := parseIntParam(tag, "max")
 			if err != nil {
-				return fmt.Errorf("invalid max parameter: %s", tag)
+				return err
 			}
 			if value.Int() > target {
 				return fmt.Errorf("must be at most %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			target, err := strconv.ParseUint(tag, 10, 64)
+			target, err := parseUintParam(tag, "max")
 			if err != nil {
-				return fmt.Errorf("invalid max parameter: %s", tag)
+				return err
 			}
 			if value.Uint() > target {
 				return fmt.Errorf("must be at most %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			target, err := strconv.ParseFloat(tag, 64)
+			target, err := parseFloatParam(tag, "max")
 			if err != nil {
-				return fmt.Errorf("invalid max parameter: %s", tag)
+				return err
 			}
 			if value.Float() > target {
 				return fmt.Errorf("must be at most %v", target)
@@ -155,14 +155,11 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// email - validates email address format
 	validators["email"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("email validator only supports strings")
+		email, empty, err := stringVal(value, "email")
+		if err != nil || empty {
+			return err
 		}
-		email := value.String()
-		if email == "" {
-			return nil // Let "required" handle empty strings
-		}
-		_, err := mail.ParseAddress(email)
+		_, err = mail.ParseAddress(email)
 		if err != nil {
 			return fmt.Errorf("invalid email format")
 		}
@@ -171,12 +168,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// url - validates URL format
 	validators["url"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("url validator only supports strings")
-		}
-		urlStr := value.String()
-		if urlStr == "" {
-			return nil // Let "required" handle empty strings
+		urlStr, empty, err := stringVal(value, "url")
+		if err != nil || empty {
+			return err
 		}
 		// Simple URL validation
 		if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
@@ -187,12 +181,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// alpha - only alphabetic characters
 	validators["alpha"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("alpha validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "alpha")
+		if err != nil || empty {
+			return err
 		}
 		for _, r := range s {
 			if !unicode.IsLetter(r) {
@@ -204,12 +195,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// alphanum - only alphanumeric characters
 	validators["alphanum"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("alphanum validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "alphanum")
+		if err != nil || empty {
+			return err
 		}
 		for _, r := range s {
 			if !unicode.IsLetter(r) && !unicode.IsNumber(r) {
@@ -221,12 +209,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// numeric - only numeric characters
 	validators["numeric"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("numeric validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "numeric")
+		if err != nil || empty {
+			return err
 		}
 		for _, r := range s {
 			if !unicode.IsNumber(r) {
@@ -284,25 +269,25 @@ func (v *defaultValidator) registerBuiltins() {
 				return fmt.Errorf("must be equal to %s", tag)
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			n, err := strconv.ParseInt(tag, 10, 64)
+			n, err := parseIntParam(tag, "eq")
 			if err != nil {
-				return fmt.Errorf("invalid eq parameter: %s", tag)
+				return err
 			}
 			if value.Int() != n {
 				return fmt.Errorf("must be equal to %d", n)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			n, err := strconv.ParseUint(tag, 10, 64)
+			n, err := parseUintParam(tag, "eq")
 			if err != nil {
-				return fmt.Errorf("invalid eq parameter: %s", tag)
+				return err
 			}
 			if value.Uint() != n {
 				return fmt.Errorf("must be equal to %d", n)
 			}
 		case reflect.Float32, reflect.Float64:
-			n, err := strconv.ParseFloat(tag, 64)
+			n, err := parseFloatParam(tag, "eq")
 			if err != nil {
-				return fmt.Errorf("invalid eq parameter: %s", tag)
+				return err
 			}
 			if value.Float() != n {
 				return fmt.Errorf("must be equal to %v", n)
@@ -321,25 +306,25 @@ func (v *defaultValidator) registerBuiltins() {
 				return fmt.Errorf("must not be equal to %s", tag)
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			n, err := strconv.ParseInt(tag, 10, 64)
+			n, err := parseIntParam(tag, "ne")
 			if err != nil {
-				return fmt.Errorf("invalid ne parameter: %s", tag)
+				return err
 			}
 			if value.Int() == n {
 				return fmt.Errorf("must not be equal to %d", n)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			n, err := strconv.ParseUint(tag, 10, 64)
+			n, err := parseUintParam(tag, "ne")
 			if err != nil {
-				return fmt.Errorf("invalid ne parameter: %s", tag)
+				return err
 			}
 			if value.Uint() == n {
 				return fmt.Errorf("must not be equal to %d", n)
 			}
 		case reflect.Float32, reflect.Float64:
-			n, err := strconv.ParseFloat(tag, 64)
+			n, err := parseFloatParam(tag, "ne")
 			if err != nil {
-				return fmt.Errorf("invalid ne parameter: %s", tag)
+				return err
 			}
 			if value.Float() == n {
 				return fmt.Errorf("must not be equal to %v", n)
@@ -354,25 +339,25 @@ func (v *defaultValidator) registerBuiltins() {
 	validators["gt"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			target, err := strconv.ParseInt(tag, 10, 64)
+			target, err := parseIntParam(tag, "gt")
 			if err != nil {
-				return fmt.Errorf("invalid gt parameter: %s", tag)
+				return err
 			}
 			if value.Int() <= target {
 				return fmt.Errorf("must be greater than %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			target, err := strconv.ParseUint(tag, 10, 64)
+			target, err := parseUintParam(tag, "gt")
 			if err != nil {
-				return fmt.Errorf("invalid gt parameter: %s", tag)
+				return err
 			}
 			if value.Uint() <= target {
 				return fmt.Errorf("must be greater than %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			target, err := strconv.ParseFloat(tag, 64)
+			target, err := parseFloatParam(tag, "gt")
 			if err != nil {
-				return fmt.Errorf("invalid gt parameter: %s", tag)
+				return err
 			}
 			if value.Float() <= target {
 				return fmt.Errorf("must be greater than %v", target)
@@ -387,25 +372,25 @@ func (v *defaultValidator) registerBuiltins() {
 	validators["lt"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			target, err := strconv.ParseInt(tag, 10, 64)
+			target, err := parseIntParam(tag, "lt")
 			if err != nil {
-				return fmt.Errorf("invalid lt parameter: %s", tag)
+				return err
 			}
 			if value.Int() >= target {
 				return fmt.Errorf("must be less than %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			target, err := strconv.ParseUint(tag, 10, 64)
+			target, err := parseUintParam(tag, "lt")
 			if err != nil {
-				return fmt.Errorf("invalid lt parameter: %s", tag)
+				return err
 			}
 			if value.Uint() >= target {
 				return fmt.Errorf("must be less than %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			target, err := strconv.ParseFloat(tag, 64)
+			target, err := parseFloatParam(tag, "lt")
 			if err != nil {
-				return fmt.Errorf("invalid lt parameter: %s", tag)
+				return err
 			}
 			if value.Float() >= target {
 				return fmt.Errorf("must be less than %v", target)
@@ -420,25 +405,25 @@ func (v *defaultValidator) registerBuiltins() {
 	validators["gte"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			target, err := strconv.ParseInt(tag, 10, 64)
+			target, err := parseIntParam(tag, "gte")
 			if err != nil {
-				return fmt.Errorf("invalid gte parameter: %s", tag)
+				return err
 			}
 			if value.Int() < target {
 				return fmt.Errorf("must be greater than or equal to %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			target, err := strconv.ParseUint(tag, 10, 64)
+			target, err := parseUintParam(tag, "gte")
 			if err != nil {
-				return fmt.Errorf("invalid gte parameter: %s", tag)
+				return err
 			}
 			if value.Uint() < target {
 				return fmt.Errorf("must be greater than or equal to %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			target, err := strconv.ParseFloat(tag, 64)
+			target, err := parseFloatParam(tag, "gte")
 			if err != nil {
-				return fmt.Errorf("invalid gte parameter: %s", tag)
+				return err
 			}
 			if value.Float() < target {
 				return fmt.Errorf("must be greater than or equal to %v", target)
@@ -453,25 +438,25 @@ func (v *defaultValidator) registerBuiltins() {
 	validators["lte"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			target, err := strconv.ParseInt(tag, 10, 64)
+			target, err := parseIntParam(tag, "lte")
 			if err != nil {
-				return fmt.Errorf("invalid lte parameter: %s", tag)
+				return err
 			}
 			if value.Int() > target {
 				return fmt.Errorf("must be less than or equal to %d", target)
 			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			target, err := strconv.ParseUint(tag, 10, 64)
+			target, err := parseUintParam(tag, "lte")
 			if err != nil {
-				return fmt.Errorf("invalid lte parameter: %s", tag)
+				return err
 			}
 			if value.Uint() > target {
 				return fmt.Errorf("must be less than or equal to %d", target)
 			}
 		case reflect.Float32, reflect.Float64:
-			target, err := strconv.ParseFloat(tag, 64)
+			target, err := parseFloatParam(tag, "lte")
 			if err != nil {
-				return fmt.Errorf("invalid lte parameter: %s", tag)
+				return err
 			}
 			if value.Float() > target {
 				return fmt.Errorf("must be less than or equal to %v", target)
@@ -484,12 +469,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// uuid - validates UUID format
 	validators["uuid"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("uuid validator only supports strings")
-		}
-		uuid := value.String()
-		if uuid == "" {
-			return nil
+		uuid, empty, err := stringVal(value, "uuid")
+		if err != nil || empty {
+			return err
 		}
 		if !uuidRegex.MatchString(uuid) {
 			return fmt.Errorf("invalid UUID format")
@@ -499,19 +481,16 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// datetime - validates datetime format
 	validators["datetime"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("datetime validator only supports strings")
-		}
-		dt := value.String()
-		if dt == "" {
-			return nil
+		dt, empty, err := stringVal(value, "datetime")
+		if err != nil || empty {
+			return err
 		}
 		// Default to RFC3339 if no format specified
 		format := tag
 		if format == "" {
 			format = time.RFC3339
 		}
-		_, err := time.Parse(format, dt)
+		_, err = time.Parse(format, dt)
 		if err != nil {
 			return fmt.Errorf("invalid datetime format, expected %s", format)
 		}
@@ -522,12 +501,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// contains - must contain substring
 	validators["contains"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("contains validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "contains")
+		if err != nil || empty {
+			return err
 		}
 		if !strings.Contains(s, tag) {
 			return fmt.Errorf("must contain %s", tag)
@@ -537,12 +513,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// startswith - must start with prefix
 	validators["startswith"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("startswith validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "startswith")
+		if err != nil || empty {
+			return err
 		}
 		if !strings.HasPrefix(s, tag) {
 			return fmt.Errorf("must start with %s", tag)
@@ -552,12 +525,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// endswith - must end with suffix
 	validators["endswith"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("endswith validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "endswith")
+		if err != nil || empty {
+			return err
 		}
 		if !strings.HasSuffix(s, tag) {
 			return fmt.Errorf("must end with %s", tag)
@@ -567,12 +537,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// excludes - must not contain substring
 	validators["excludes"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("excludes validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "excludes")
+		if err != nil || empty {
+			return err
 		}
 		if strings.Contains(s, tag) {
 			return fmt.Errorf("must not contain %s", tag)
@@ -582,12 +549,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// lowercase - must be all lowercase
 	validators["lowercase"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("lowercase validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "lowercase")
+		if err != nil || empty {
+			return err
 		}
 		if s != strings.ToLower(s) {
 			return fmt.Errorf("must be lowercase")
@@ -597,12 +561,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// uppercase - must be all uppercase
 	validators["uppercase"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("uppercase validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "uppercase")
+		if err != nil || empty {
+			return err
 		}
 		if s != strings.ToUpper(s) {
 			return fmt.Errorf("must be uppercase")
@@ -612,12 +573,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// ascii - ASCII characters only
 	validators["ascii"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("ascii validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "ascii")
+		if err != nil || empty {
+			return err
 		}
 		for _, r := range s {
 			if r > 127 {
@@ -629,12 +587,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// printascii - printable ASCII only
 	validators["printascii"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("printascii validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "printascii")
+		if err != nil || empty {
+			return err
 		}
 		for _, r := range s {
 			if r < 32 || r > 126 {
@@ -646,30 +601,21 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// boolean - parseable boolean string
 	validators["boolean"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("boolean validator only supports strings")
+		s, empty, err := stringVal(value, "boolean")
+		if err != nil || empty {
+			return err
 		}
-		s := strings.ToLower(value.String())
-		if s == "" {
-			return nil
+		if _, ok := booleanValues[strings.ToLower(s)]; !ok {
+			return fmt.Errorf("must be a valid boolean value")
 		}
-		valid := []string{"true", "false", "1", "0", "yes", "no", "on", "off"}
-		for _, v := range valid {
-			if s == v {
-				return nil
-			}
-		}
-		return fmt.Errorf("must be a valid boolean value")
+		return nil
 	}
 
 	// json - valid JSON string
 	validators["json"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("json validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "json")
+		if err != nil || empty {
+			return err
 		}
 		var js any
 		if err := json.Unmarshal([]byte(s), &js); err != nil {
@@ -682,12 +628,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// ip - valid IP address (v4 or v6)
 	validators["ip"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("ip validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "ip")
+		if err != nil || empty {
+			return err
 		}
 		if net.ParseIP(s) == nil {
 			return fmt.Errorf("must be a valid IP address")
@@ -697,12 +640,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// ipv4 - valid IPv4 address
 	validators["ipv4"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("ipv4 validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "ipv4")
+		if err != nil || empty {
+			return err
 		}
 		ip := net.ParseIP(s)
 		if ip == nil || ip.To4() == nil {
@@ -713,12 +653,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// ipv6 - valid IPv6 address
 	validators["ipv6"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("ipv6 validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "ipv6")
+		if err != nil || empty {
+			return err
 		}
 		ip := net.ParseIP(s)
 		if ip == nil || ip.To4() != nil {
@@ -729,14 +666,11 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// cidr - valid CIDR notation
 	validators["cidr"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("cidr validator only supports strings")
+		s, empty, err := stringVal(value, "cidr")
+		if err != nil || empty {
+			return err
 		}
-		s := value.String()
-		if s == "" {
-			return nil
-		}
-		_, _, err := net.ParseCIDR(s)
+		_, _, err = net.ParseCIDR(s)
 		if err != nil {
 			return fmt.Errorf("must be valid CIDR notation")
 		}
@@ -745,12 +679,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// hostname - valid hostname (RFC 1123)
 	validators["hostname"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("hostname validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "hostname")
+		if err != nil || empty {
+			return err
 		}
 		if !hostnameRegex.MatchString(s) || len(s) > 253 {
 			return fmt.Errorf("must be a valid hostname")
@@ -760,12 +691,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// uri - valid URI (any scheme)
 	validators["uri"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("uri validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "uri")
+		if err != nil || empty {
+			return err
 		}
 		u, err := url.Parse(s)
 		if err != nil || u.Scheme == "" || u.Host == "" {
@@ -776,12 +704,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// base64 - valid base64 string
 	validators["base64"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("base64 validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "base64")
+		if err != nil || empty {
+			return err
 		}
 		if _, err := base64.StdEncoding.DecodeString(s); err != nil {
 			return fmt.Errorf("must be valid base64")
@@ -791,14 +716,10 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// hexadecimal - valid hex string
 	validators["hexadecimal"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("hexadecimal validator only supports strings")
+		s, empty, err := stringVal(value, "hexadecimal")
+		if err != nil || empty {
+			return err
 		}
-		s := value.String()
-		if s == "" {
-			return nil
-		}
-
 		if !hexRegex.MatchString(s) {
 			return fmt.Errorf("must be valid hexadecimal")
 		}
@@ -807,12 +728,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// hexcolor - valid hex color code
 	validators["hexcolor"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("hexcolor validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "hexcolor")
+		if err != nil || empty {
+			return err
 		}
 		if !hexColorRegex.MatchString(s) {
 			return fmt.Errorf("must be valid hex color code")
@@ -822,12 +740,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// e164 - E.164 phone number format
 	validators["e164"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("e164 validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "e164")
+		if err != nil || empty {
+			return err
 		}
 		if !e164Regex.MatchString(s) {
 			return fmt.Errorf("must be valid E.164 phone number")
@@ -837,12 +752,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// semver - semantic version string
 	validators["semver"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("semver validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "semver")
+		if err != nil || empty {
+			return err
 		}
 		if !semverRegex.MatchString(s) {
 			return fmt.Errorf("must be valid semantic version")
@@ -852,12 +764,9 @@ func (v *defaultValidator) registerBuiltins() {
 
 	// jwt - valid JWT format (header.payload.signature)
 	validators["jwt"] = func(value reflect.Value, tag string) error {
-		if value.Kind() != reflect.String {
-			return fmt.Errorf("jwt validator only supports strings")
-		}
-		s := value.String()
-		if s == "" {
-			return nil
+		s, empty, err := stringVal(value, "jwt")
+		if err != nil || empty {
+			return err
 		}
 		parts := strings.Split(s, ".")
 		if len(parts) != 3 {
@@ -895,13 +804,38 @@ func (v *defaultValidator) registerBuiltins() {
 		}
 	}
 
-	// each - validate each element in collection (handled in validateField)
-	validators["each"] = func(value reflect.Value, tag string) error {
-		// each is a special marker that tells validateField to recurse into elements
-		// The actual validation is handled in validateField
-		return nil
-	}
-
 	// Store the populated map atomically
 	v.validators.Store(validators)
+}
+
+func stringVal(value reflect.Value, name string) (string, bool, error) {
+	if value.Kind() != reflect.String {
+		return "", false, fmt.Errorf("%s validator only supports strings", name)
+	}
+	s := value.String()
+	return s, s == "", nil
+}
+
+func parseIntParam(tag, name string) (int64, error) {
+	n, err := strconv.ParseInt(tag, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s parameter: %s", name, tag)
+	}
+	return n, nil
+}
+
+func parseUintParam(tag, name string) (uint64, error) {
+	n, err := strconv.ParseUint(tag, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s parameter: %s", name, tag)
+	}
+	return n, nil
+}
+
+func parseFloatParam(tag, name string) (float64, error) {
+	n, err := strconv.ParseFloat(tag, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s parameter: %s", name, tag)
+	}
+	return n, nil
 }
