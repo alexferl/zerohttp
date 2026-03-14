@@ -9,8 +9,14 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
-	"strings"
+
+	"github.com/alexferl/zerohttp/internal/bind"
 )
+
+// FileHeader represents an uploaded file in a multipart form.
+// It provides access to the file's metadata and content.
+// This is an alias to internal/bind.FileHeader.
+type FileHeader = bind.FileHeader
 
 // Bind is the default binder instance used by the package
 var Bind Binder = &defaultBinder{}
@@ -58,46 +64,6 @@ func (b *defaultBinder) JSON(r io.Reader, dst any) error {
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(dst)
-}
-
-// FileHeader represents an uploaded file in a multipart form.
-// It provides access to the file's metadata and content.
-type FileHeader struct {
-	Filename string
-	Size     int64
-	Header   map[string][]string
-	file     multipart.File // internal reference to the open file
-}
-
-// Open opens the uploaded file for reading.
-// The caller is responsible for closing the file.
-// Returns an error if the file cannot be opened or has already been closed.
-func (fh *FileHeader) Open() (multipart.File, error) {
-	if fh.file == nil {
-		return nil, fmt.Errorf("file %s: no longer available (already processed or closed)", fh.Filename)
-	}
-	return fh.file, nil
-}
-
-// ReadAll reads the entire file content into a byte slice.
-// This is a convenience method that opens, reads, and closes the file.
-// Uses the Size field to limit reading; returns an error if actual file size
-// exceeds the declared Size to prevent OOM attacks.
-// Note: This loads the entire file into memory; use Open() for large files.
-func (fh *FileHeader) ReadAll() (data []byte, err error) {
-	file, err := fh.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-	if fh.Size > 0 {
-		return io.ReadAll(io.LimitReader(file, fh.Size))
-	}
-	return io.ReadAll(file)
 }
 
 // Form binds form data from a url.Values to a destination struct.
@@ -152,30 +118,30 @@ func bindValues(values url.Values, dst any, tagName string, allowFiles bool) err
 	t := v.Type()
 
 	// Get cached type information from the registry
-	info, err := globalTypeRegistry.getTypeInfo(t)
+	info, err := bind.TypeRegistry.GetTypeInfo(t)
 	if err != nil {
 		return err
 	}
 
 	// Get pre-computed bindable fields for this tag
-	bindableFields := info.getBindableFields(tagName, allowFiles)
+	bindableFields := info.GetBindableFields(tagName, allowFiles)
 
 	// Bind each field using the pre-computed path
 	for _, bf := range bindableFields {
 		// Get the field value using the cached path
-		field := v.FieldByIndex(bf.path.toSlice())
+		field := v.FieldByIndex(bf.Path.ToSlice())
 		if !field.IsValid() {
 			continue // Skip invalid fields (shouldn't happen with correct paths)
 		}
 
 		// Get value(s) from url.Values
-		fieldValues, exists := values[bf.tag]
+		fieldValues, exists := values[bf.Tag]
 		if !exists || len(fieldValues) == 0 {
 			continue
 		}
 
 		if err := setFieldValue(field, fieldValues); err != nil {
-			return fmt.Errorf("field %s: %w", bf.name, err)
+			return fmt.Errorf("field %s: %w", bf.Name, err)
 		}
 	}
 
@@ -251,18 +217,6 @@ func setSliceValue(field reflect.Value, values []string) error {
 	return nil
 }
 
-// camelToSnake converts CamelCase to snake_case.
-func camelToSnake(s string) string {
-	var result strings.Builder
-	for i, r := range s {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			result.WriteByte('_')
-		}
-		result.WriteRune(r)
-	}
-	return strings.ToLower(result.String())
-}
-
 // BindMultipartFormFiles binds file uploads to struct fields after the main form binding.
 // This is called internally by handler logic when processing multipart forms.
 // Exported for advanced use cases.
@@ -289,27 +243,27 @@ func bindFilesToStruct(v reflect.Value, files map[string][]*multipart.FileHeader
 	t := v.Type()
 
 	// Get cached type information from the registry
-	info, err := globalTypeRegistry.getTypeInfo(t)
+	info, err := bind.TypeRegistry.GetTypeInfo(t)
 	if err != nil {
 		return err
 	}
 
 	// Use pre-computed file bindable fields
-	for _, fbf := range info.fileBindableFields {
+	for _, fbf := range info.FileBindableFields {
 		// Check for files with this field tag
-		fileHeaders, exists := files[fbf.tag]
+		fileHeaders, exists := files[fbf.Tag]
 		if !exists {
 			continue
 		}
 
 		// Get the field using the cached path
-		field := v.FieldByIndex(fbf.path.toSlice())
+		field := v.FieldByIndex(fbf.Path.ToSlice())
 		if !field.IsValid() {
 			continue
 		}
 
 		// Bind based on field type (single file or slice)
-		if fbf.isSlice {
+		if fbf.IsSlice {
 			// Slice of files
 			fileList := make([]*FileHeader, len(fileHeaders))
 			for j, fh := range fileHeaders {
@@ -321,7 +275,7 @@ func bindFilesToStruct(v reflect.Value, files map[string][]*multipart.FileHeader
 					Filename: fh.Filename,
 					Size:     fh.Size,
 					Header:   fh.Header,
-					file:     file,
+					File:     file,
 				}
 			}
 			field.Set(reflect.ValueOf(fileList))
@@ -337,7 +291,7 @@ func bindFilesToStruct(v reflect.Value, files map[string][]*multipart.FileHeader
 					Filename: fh.Filename,
 					Size:     fh.Size,
 					Header:   fh.Header,
-					file:     file,
+					File:     file,
 				}))
 			}
 		}

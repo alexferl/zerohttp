@@ -1,4 +1,4 @@
-package zerohttp
+package validator
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ func TestMinMaxInvalidType(t *testing.T) {
 			Value complex128 `validate:"min=5"`
 		}
 		input := TestMin{Value: 10}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for min on complex128")
 		}
@@ -23,7 +23,7 @@ func TestMinMaxInvalidType(t *testing.T) {
 			Value complex128 `validate:"max=5"`
 		}
 		input := TestMax{Value: 10}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for max on complex128")
 		}
@@ -36,7 +36,7 @@ func TestValidatorErrorCases(t *testing.T) {
 			Value int `validate:"min=notanumber"`
 		}
 		input := TestMin{Value: 5}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for invalid min param")
 		}
@@ -47,7 +47,7 @@ func TestValidatorErrorCases(t *testing.T) {
 			Value int `validate:"max=notanumber"`
 		}
 		input := TestMax{Value: 5}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for invalid max param")
 		}
@@ -58,7 +58,7 @@ func TestValidatorErrorCases(t *testing.T) {
 			Value string `validate:"len=notanumber"`
 		}
 		input := TestLen{Value: "hello"}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for invalid len param")
 		}
@@ -69,7 +69,7 @@ func TestValidatorErrorCases(t *testing.T) {
 			Value int `validate:"eq=notanumber"`
 		}
 		input := TestEq{Value: 5}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for invalid eq param")
 		}
@@ -148,7 +148,7 @@ func TestUintComparisonValidators(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -232,7 +232,7 @@ func TestFloatBoundaryValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
+			err := NewValidator().Struct(&tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -252,7 +252,7 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 			Value complex128 `validate:"min=5"`
 		}
 		input := TestMinComplex{Value: 10 + 5i}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for min on complex128")
 			return
@@ -277,7 +277,7 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 			Value complex128 `validate:"max=5"`
 		}
 		input := TestMaxComplex{Value: 10 + 5i}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for max on complex128")
 			return
@@ -302,7 +302,7 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 			Value bool `validate:"min=1"`
 		}
 		input := TestMinBool{Value: true}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for min on bool")
 		}
@@ -313,7 +313,7 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 			Value bool `validate:"max=1"`
 		}
 		input := TestMaxBool{Value: true}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for max on bool")
 		}
@@ -391,7 +391,7 @@ func TestInvalidValidatorParams(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := tt.setup()
-			err := V.Struct(input)
+			err := NewValidator().Struct(input)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error for invalid validator param")
@@ -415,7 +415,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 			MaxInt32: 2147483647,
 			MinInt32: -2147483648,
 		}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -427,7 +427,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 		}
 		// Large value should fail
 		input := TestMax{Value: 2147483647}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for large value exceeding max")
 		}
@@ -438,7 +438,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 			Value uint64 `validate:"gte=0,lte=18446744073709551615"`
 		}
 		input := TestUint64{Value: ^uint64(0)}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -451,7 +451,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 			Value float64 `validate:"gte=0"`
 		}
 		input := TestNaN{Value: math.NaN()}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		// NaN < 0 returns false, so gte=0 passes (no error)
 		// Documenting current behavior - NaN is not explicitly rejected
 		if err != nil {
@@ -463,7 +463,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 			Value float64 `validate:"lt=1000"`
 		}
 		input2 := TestInf{Value: math.Inf(1)}
-		err = V.Struct(&input2)
+		err = NewValidator().Struct(&input2)
 		if err == nil {
 			t.Error("expected error for +Inf")
 		}
@@ -473,7 +473,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 			Value float64 `validate:"gt=-1000"`
 		}
 		input3 := TestNegInf{Value: math.Inf(-1)}
-		err = V.Struct(&input3)
+		err = NewValidator().Struct(&input3)
 		if err == nil {
 			t.Error("expected error for -Inf")
 		}
@@ -510,7 +510,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				err := V.Struct(&tt.input)
+				err := NewValidator().Struct(&tt.input)
 				if tt.wantErr {
 					if err == nil {
 						t.Error("expected error")

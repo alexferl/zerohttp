@@ -1,4 +1,4 @@
-package zerohttp
+package validator
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ func TestContainsValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestContains{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -39,7 +39,7 @@ func TestContainsOnNonString(t *testing.T) {
 		Value int `validate:"contains=test"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for contains on non-string")
 	}
 }
@@ -64,7 +64,7 @@ func TestStartsWithValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestStartsWith{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -80,7 +80,7 @@ func TestStartsWithOnNonString(t *testing.T) {
 		Value int `validate:"startswith=hello"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for startswith on non-string")
 	}
 }
@@ -105,7 +105,7 @@ func TestEndsWithValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestEndsWith{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -121,7 +121,7 @@ func TestEndsWithOnNonString(t *testing.T) {
 		Value int `validate:"endswith=world"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for endswith on non-string")
 	}
 }
@@ -146,7 +146,7 @@ func TestExcludesValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestExcludes{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -162,7 +162,7 @@ func TestExcludesOnNonString(t *testing.T) {
 		Value int `validate:"excludes=test"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for excludes on non-string")
 	}
 }
@@ -189,7 +189,7 @@ func TestLowercaseValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestLowercase{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -205,7 +205,7 @@ func TestLowercaseOnNonString(t *testing.T) {
 		Value int `validate:"lowercase"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for lowercase on non-string")
 	}
 }
@@ -230,7 +230,7 @@ func TestUppercaseValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestUppercase{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -246,7 +246,7 @@ func TestUppercaseOnNonString(t *testing.T) {
 		Value int `validate:"uppercase"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for uppercase on non-string")
 	}
 }
@@ -273,7 +273,7 @@ func TestASCIIValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestASCII{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -289,7 +289,7 @@ func TestASCIOnNonString(t *testing.T) {
 		Value int `validate:"ascii"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for ascii on non-string")
 	}
 }
@@ -315,7 +315,7 @@ func TestPrintASCIIValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestPrintASCII{Value: tt.value}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -331,7 +331,7 @@ func TestPrintASCIOnNonString(t *testing.T) {
 		Value int `validate:"printascii"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for printascii on non-string")
 	}
 }
@@ -367,7 +367,7 @@ func TestBooleanValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestBoolean{Value: tt.value})
+			err := NewValidator().Struct(&TestBoolean{Value: tt.value})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -383,7 +383,7 @@ func TestBooleanOnNonString(t *testing.T) {
 		Value int `validate:"boolean"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for boolean on non-string")
 	}
 }
@@ -411,7 +411,7 @@ func TestJSONValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestJSON{Value: tt.value})
+			err := NewValidator().Struct(&TestJSON{Value: tt.value})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -427,7 +427,7 @@ func TestJSONOnNonString(t *testing.T) {
 		Value int `validate:"json"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for json on non-string")
 	}
 }

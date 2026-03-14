@@ -1,4 +1,4 @@
-package zerohttp
+package validator
 
 import (
 	"testing"
@@ -27,7 +27,7 @@ func TestIPValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestIP{IP: tt.ip})
+			err := NewValidator().Struct(&TestIP{IP: tt.ip})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.ip)
 			}
@@ -43,7 +43,7 @@ func TestIPOnNonString(t *testing.T) {
 		Value int `validate:"ip"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for ip on non-string")
 	}
 }
@@ -75,7 +75,7 @@ func TestIPv4Validator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestIPv4{IPv4: tt.ip})
+			err := NewValidator().Struct(&TestIPv4{IPv4: tt.ip})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.ip)
 			}
@@ -91,7 +91,7 @@ func TestIPv4OnNonString(t *testing.T) {
 		Value int `validate:"ipv4"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for ipv4 on non-string")
 	}
 }
@@ -124,7 +124,7 @@ func TestIPv6Validator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestIPv6{IPv6: tt.ip})
+			err := NewValidator().Struct(&TestIPv6{IPv6: tt.ip})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.ip)
 			}
@@ -140,7 +140,7 @@ func TestIPv6OnNonString(t *testing.T) {
 		Value int `validate:"ipv6"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for ipv6 on non-string")
 	}
 }
@@ -173,7 +173,7 @@ func TestCIDRValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestCIDR{CIDR: tt.cidr})
+			err := NewValidator().Struct(&TestCIDR{CIDR: tt.cidr})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.cidr)
 			}
@@ -189,7 +189,7 @@ func TestCIDROnNonString(t *testing.T) {
 		Value int `validate:"cidr"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for cidr on non-string")
 	}
 }
@@ -223,7 +223,7 @@ func TestHostnameValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestHostname{Hostname: tt.hostname})
+			err := NewValidator().Struct(&TestHostname{Hostname: tt.hostname})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.hostname)
 			}
@@ -239,7 +239,7 @@ func TestHostnameOnNonString(t *testing.T) {
 		Value int `validate:"hostname"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for hostname on non-string")
 	}
 }
@@ -273,7 +273,7 @@ func TestURIValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&TestURI{URI: tt.uri})
+			err := NewValidator().Struct(&TestURI{URI: tt.uri})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.uri)
 			}
@@ -289,7 +289,7 @@ func TestURIOnNonString(t *testing.T) {
 		Value int `validate:"uri"`
 	}
 	input := Test{Value: 123}
-	if err := V.Struct(&input); err == nil {
+	if err := NewValidator().Struct(&input); err == nil {
 		t.Error("expected error for uri on non-string")
 	}
 }
@@ -331,7 +331,7 @@ func TestURLValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestURL{Website: tt.url}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.url)
 			}
@@ -347,7 +347,7 @@ func TestURLOnNonString(t *testing.T) {
 		Value int `validate:"url"`
 	}
 	input := TestURLInt{Value: 123}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err == nil {
 		t.Error("expected error for url validator on non-string type")
 	}

@@ -1,4 +1,4 @@
-package zerohttp
+package bind
 
 import (
 	"reflect"
@@ -15,20 +15,20 @@ func TestFieldPathImmutability(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(Outer{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
 	// Get bindable fields
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 	if len(fields) == 0 {
 		t.Fatal("expected bindable fields")
 	}
 
 	// Verify path is a value type (struct with array), not a slice
 	// The fieldPath struct is immutable by value - copying it creates a full copy
-	originalPath := fields[0].path
+	originalPath := fields[0].Path
 
 	// Create a "modified" copy - this does not affect the original
 	modifiedPath := originalPath
@@ -37,13 +37,13 @@ func TestFieldPathImmutability(t *testing.T) {
 	}
 
 	// Get fields again - should be identical to original
-	fields2 := info.getBindableFields("form", false)
+	fields2 := info.GetBindableFields("form", false)
 	if len(fields2) == 0 {
 		t.Fatal("expected bindable fields on second call")
 	}
 
 	// Original path should be unchanged (value type semantics)
-	if originalPath != fields2[0].path {
+	if originalPath != fields2[0].Path {
 		t.Error("cached paths were affected by modification of copy")
 	}
 
@@ -63,12 +63,12 @@ func TestEmbeddedStructFieldOrdering(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(Outer{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 	if len(fields) != 2 {
 		t.Fatalf("expected 2 bindable fields, got %d", len(fields))
 	}
@@ -84,9 +84,9 @@ func TestEmbeddedStructFieldOrdering(t *testing.T) {
 
 	// Both fields should be accessible via FieldByIndex
 	for _, f := range fields {
-		fieldVal := v.FieldByIndex(f.path.toSlice())
+		fieldVal := v.FieldByIndex(f.Path.ToSlice())
 		if !fieldVal.IsValid() {
-			t.Errorf("invalid field for path %+v", f.path)
+			t.Errorf("invalid field for path %+v", f.Path)
 		}
 	}
 }
@@ -100,12 +100,12 @@ func TestTagLookupConsolidation(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(TestStruct{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 
 	// Should have Name, Default, Internal (3 fields)
 	// Skipped should be excluded
@@ -116,7 +116,7 @@ func TestTagLookupConsolidation(t *testing.T) {
 	// Verify correct fields are included
 	fieldNames := make(map[string]bool)
 	for _, f := range fields {
-		fieldNames[f.tag] = true
+		fieldNames[f.Tag] = true
 	}
 
 	if !fieldNames["name"] {
@@ -141,12 +141,12 @@ func TestFileBindableFieldsAccess(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(TestStruct{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fileFields := info.fileBindableFields
+	fileFields := info.FileBindableFields
 
 	if len(fileFields) != 2 {
 		t.Errorf("expected 2 file bindable fields, got %d", len(fileFields))
@@ -154,9 +154,9 @@ func TestFileBindableFieldsAccess(t *testing.T) {
 
 	v := reflect.ValueOf(TestStruct{})
 	for _, ff := range fileFields {
-		fieldVal := v.FieldByIndex(ff.path.toSlice())
+		fieldVal := v.FieldByIndex(ff.Path.ToSlice())
 		if !fieldVal.IsValid() {
-			t.Errorf("invalid field for path %+v", ff.path)
+			t.Errorf("invalid field for path %+v", ff.Path)
 		}
 	}
 }
@@ -173,20 +173,20 @@ func TestThreeLevelEmbedding(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(C{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 	if len(fields) != 1 {
 		t.Fatalf("expected 1 bindable field, got %d", len(fields))
 	}
 
 	// Path should be [1, 0, 0]: C.B.A.X (B at index 0 in C, A at index 0 in B, X at index 0 in A)
 	// Actually: C has B at 0, B has A at 0, A has X at 0 -> path [0, 0, 0]
-	if fields[0].path.len != 3 {
-		t.Errorf("expected path length 3, got %d", fields[0].path.len)
+	if fields[0].Path.len != 3 {
+		t.Errorf("expected path length 3, got %d", fields[0].Path.len)
 	}
 
 	// Verify FieldByIndex works correctly
@@ -196,7 +196,7 @@ func TestThreeLevelEmbedding(t *testing.T) {
 		},
 	}
 	v := reflect.ValueOf(c)
-	fieldVal := v.FieldByIndex(fields[0].path.toSlice())
+	fieldVal := v.FieldByIndex(fields[0].Path.ToSlice())
 	if !fieldVal.IsValid() || fieldVal.String() != "value_x" {
 		t.Errorf("FieldByIndex failed: got %v", fieldVal)
 	}
@@ -216,12 +216,12 @@ func TestUnexportedEmbeddedWithExportedFields(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(Outer{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 
 	// The exported field "Name" should be bindable, even within unexported embedded struct
 	if len(fields) != 1 {
@@ -231,7 +231,7 @@ func TestUnexportedEmbeddedWithExportedFields(t *testing.T) {
 	// Verify the path works with FieldByIndex
 	outer := Outer{inner: inner{Name: "test_value"}}
 	v := reflect.ValueOf(outer)
-	fieldVal := v.FieldByIndex(fields[0].path.toSlice())
+	fieldVal := v.FieldByIndex(fields[0].Path.ToSlice())
 	if !fieldVal.IsValid() || fieldVal.String() != "test_value" {
 		t.Errorf("FieldByIndex failed: got %v", fieldVal)
 	}
@@ -245,7 +245,7 @@ func TestFileFieldsExcludedFromNonFileBinding(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(TestStruct{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestFileFieldsExcludedFromNonFileBinding(t *testing.T) {
 	// formBindableFields (allowFiles=false) should NOT include file fields
 	formFields := info.formBindableFields
 	for _, f := range formFields {
-		if f.tag == "file" || f.tag == "files" {
+		if f.Tag == "file" || f.Tag == "files" {
 			t.Error("file fields should not appear in formBindableFields")
 		}
 	}
@@ -261,16 +261,16 @@ func TestFileFieldsExcludedFromNonFileBinding(t *testing.T) {
 	// queryBindableFields should NOT include file fields
 	queryFields := info.queryBindableFields
 	for _, f := range queryFields {
-		if f.tag == "file" || f.tag == "files" {
+		if f.Tag == "file" || f.Tag == "files" {
 			t.Error("file fields should not appear in queryBindableFields")
 		}
 	}
 
 	// Verify counts
-	if len(formFields) != 1 || formFields[0].tag != "name" {
+	if len(formFields) != 1 || formFields[0].Tag != "name" {
 		t.Errorf("expected only 'name' in form fields, got %v", formFields)
 	}
-	if len(queryFields) != 1 || queryFields[0].tag != "name" {
+	if len(queryFields) != 1 || queryFields[0].Tag != "name" {
 		t.Errorf("expected only 'name' in query fields, got %v", queryFields)
 	}
 
@@ -281,7 +281,7 @@ func TestFileFieldsExcludedFromNonFileBinding(t *testing.T) {
 	}
 	tags := make(map[string]bool)
 	for _, f := range withFilesFields {
-		tags[f.tag] = true
+		tags[f.Tag] = true
 	}
 	if !tags["file"] || !tags["files"] || !tags["name"] {
 		t.Error("formWithFilesFields should include file, files, and name")
@@ -310,7 +310,7 @@ func TestConcurrentRegistration(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			info, err := freshRegistry.getTypeInfo(typ)
+			info, err := freshRegistry.GetTypeInfo(typ)
 			if err != nil {
 				errChan <- err
 				return
@@ -352,12 +352,12 @@ func TestPointerToStructEmbedded(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(Outer{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 	if len(fields) != 0 {
 		t.Errorf("expected 0 fields, pointer-to-struct embed should be excluded, got %d", len(fields))
 	}
@@ -369,19 +369,19 @@ func TestTagWithOptionsSuffix(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(TestStruct{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 	if len(fields) != 1 {
 		t.Fatalf("expected 1 field, got %d", len(fields))
 	}
 
 	// Tag options should be stripped: "name,omitempty" -> "name"
-	if fields[0].tag != "name" {
-		t.Errorf("expected tag 'name' (options stripped), got '%s'", fields[0].tag)
+	if fields[0].Tag != "name" {
+		t.Errorf("expected tag 'name' (options stripped), got '%s'", fields[0].Tag)
 	}
 }
 
@@ -394,23 +394,23 @@ func TestQueryTagIndependentFromFormTag(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(TestStruct{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
 	// Form binding
-	formFields := info.getBindableFields("form", false)
+	formFields := info.GetBindableFields("form", false)
 	formTags := make(map[string]bool)
 	for _, f := range formFields {
-		formTags[f.tag] = true
+		formTags[f.Tag] = true
 	}
 
 	// Query binding
-	queryFields := info.getBindableFields("query", false)
+	queryFields := info.GetBindableFields("query", false)
 	queryTags := make(map[string]bool)
 	for _, f := range queryFields {
-		queryTags[f.tag] = true
+		queryTags[f.Tag] = true
 	}
 
 	// Form tags should use form tag or snake_case
@@ -455,7 +455,7 @@ func TestAnalyzeTypeDeterministic(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		// Create fresh registry to force re-analysis
 		reg := &typeRegistry{}
-		info, err := reg.getTypeInfo(typ)
+		info, err := reg.GetTypeInfo(typ)
 		if err != nil {
 			t.Fatalf("failed to get type info: %v", err)
 		}
@@ -468,7 +468,7 @@ func TestAnalyzeTypeDeterministic(t *testing.T) {
 		if len(info.formBindableFields) != len(first.formBindableFields) {
 			t.Errorf("run %d: formBindableFields length mismatch", i)
 		}
-		if len(info.fileBindableFields) != len(first.fileBindableFields) {
+		if len(info.FileBindableFields) != len(first.FileBindableFields) {
 			t.Errorf("run %d: fileBindableFields length mismatch", i)
 		}
 		if len(info.fields) != len(first.fields) {
@@ -480,8 +480,8 @@ func TestAnalyzeTypeDeterministic(t *testing.T) {
 			if j >= len(first.formBindableFields) {
 				break
 			}
-			if f.tag != first.formBindableFields[j].tag {
-				t.Errorf("run %d: field %d tag mismatch: %s vs %s", i, j, f.tag, first.formBindableFields[j].tag)
+			if f.Tag != first.formBindableFields[j].Tag {
+				t.Errorf("run %d: field %d tag mismatch: %s vs %s", i, j, f.Tag, first.formBindableFields[j].Tag)
 			}
 		}
 	}
@@ -491,7 +491,7 @@ func TestEmptyStruct(t *testing.T) {
 	type Empty struct{}
 
 	typ := reflect.TypeOf(Empty{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
@@ -502,8 +502,8 @@ func TestEmptyStruct(t *testing.T) {
 	if len(info.formBindableFields) != 0 {
 		t.Errorf("expected 0 form bindable fields, got %d", len(info.formBindableFields))
 	}
-	if len(info.fileBindableFields) != 0 {
-		t.Errorf("expected 0 file bindable fields, got %d", len(info.fileBindableFields))
+	if len(info.FileBindableFields) != 0 {
+		t.Errorf("expected 0 file bindable fields, got %d", len(info.FileBindableFields))
 	}
 }
 
@@ -514,7 +514,7 @@ func TestAllSkippedFields(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(AllSkipped{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
@@ -543,7 +543,7 @@ func TestFieldPathHelpers(t *testing.T) {
 	}
 
 	// toSlice
-	slice := fp2.toSlice()
+	slice := fp2.ToSlice()
 	if len(slice) != 2 || slice[0] != 5 || slice[1] != 3 {
 		t.Errorf("toSlice returned wrong values: %v", slice)
 	}
@@ -620,18 +620,18 @@ func TestEmbeddedWithFormTag(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(Outer{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
 	// Should recurse into embedded Inner and find inner_field
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 	if len(fields) != 1 {
 		t.Fatalf("expected 1 field from embedded Inner, got %d", len(fields))
 	}
-	if fields[0].tag != "inner_field" {
-		t.Errorf("expected 'inner_field', got %s", fields[0].tag)
+	if fields[0].Tag != "inner_field" {
+		t.Errorf("expected 'inner_field', got %s", fields[0].Tag)
 	}
 }
 
@@ -643,13 +643,13 @@ func TestUnknownTagFallback(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(TestStruct{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
 	// Unknown tag triggers computeBindableFields on the fly
-	fields := info.getBindableFields("custom", false)
+	fields := info.GetBindableFields("custom", false)
 
 	// Should find A and C (B is skipped with "-")
 	if len(fields) != 2 {
@@ -658,7 +658,7 @@ func TestUnknownTagFallback(t *testing.T) {
 
 	tags := make(map[string]bool)
 	for _, f := range fields {
-		tags[f.tag] = true
+		tags[f.Tag] = true
 	}
 	if !tags["custom_a"] {
 		t.Error("expected 'custom_a' field")
@@ -681,21 +681,44 @@ func TestMixedEmbeddedAndRegular(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(Outer{})
-	info, err := globalTypeRegistry.getTypeInfo(typ)
+	info, err := TypeRegistry.GetTypeInfo(typ)
 	if err != nil {
 		t.Fatalf("failed to get type info: %v", err)
 	}
 
-	fields := info.getBindableFields("form", false)
+	fields := info.GetBindableFields("form", false)
 	if len(fields) != 2 {
 		t.Fatalf("expected 2 fields (a from embedded + b), got %d", len(fields))
 	}
 
 	tags := make(map[string]bool)
 	for _, f := range fields {
-		tags[f.tag] = true
+		tags[f.Tag] = true
 	}
 	if !tags["a"] || !tags["b"] {
 		t.Errorf("expected both 'a' and 'b', got %v", tags)
+	}
+}
+
+func TestCamelToSnake(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Name", "name"},
+		{"UserName", "user_name"},
+		{"EmailAddress", "email_address"},
+		{"ID", "i_d"},
+		{"Simple", "simple"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := camelToSnake(tt.input)
+			if result != tt.expected {
+				t.Errorf("camelToSnake(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
 	}
 }

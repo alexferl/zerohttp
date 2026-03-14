@@ -1,4 +1,4 @@
-package zerohttp
+package validator
 
 import (
 	"errors"
@@ -23,7 +23,7 @@ func TestUniqueValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestUnique{Items: tt.items}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Errorf("expected error for duplicates in %v", tt.items)
 				}
@@ -50,7 +50,7 @@ func TestUniqueValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestUnique{Items: tt.items}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Errorf("expected error for duplicates in %v", tt.items)
 				}
@@ -66,7 +66,7 @@ func TestUniqueValidator(t *testing.T) {
 			Value string `validate:"unique"`
 		}
 		input := TestUnique{Value: "hello"}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for unique on string type")
 		}
@@ -77,7 +77,7 @@ func TestUniqueValidator(t *testing.T) {
 			Items []string `validate:"unique"`
 		}
 		input := TestUnique{Items: []string{}}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -93,7 +93,7 @@ func TestUniqueValidator(t *testing.T) {
 		input := TestUnique{
 			Items: []Item{{Name: "a"}, {Name: "a"}},
 		}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err == nil {
 			t.Error("expected error for unique on struct slice")
 		}
@@ -107,7 +107,7 @@ func TestUniqueValidator(t *testing.T) {
 		input := TestUnique{
 			Items: []*string{&a, &b, &c},
 		}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -120,7 +120,7 @@ func TestUniqueValidator(t *testing.T) {
 		input := TestUnique{
 			Items: map[string]int{"a": 1, "b": 2, "c": 3},
 		}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err != nil {
 			t.Errorf("unexpected error for unique on map: %v", err)
 		}
@@ -133,7 +133,7 @@ func TestUniqueValidator(t *testing.T) {
 		input := TestUnique{
 			Items: map[string]int{},
 		}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err != nil {
 			t.Errorf("unexpected error for unique on empty map: %v", err)
 		}
@@ -146,7 +146,7 @@ func TestUniqueValidator(t *testing.T) {
 		input := TestUnique{
 			Items: nil,
 		}
-		err := V.Struct(&input)
+		err := NewValidator().Struct(&input)
 		if err != nil {
 			t.Errorf("unexpected error for unique on nil map: %v", err)
 		}
@@ -188,7 +188,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestEach{Items: tt.items}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error for invalid each item")
 				}
@@ -217,7 +217,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestTags{Tags: tt.tags}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Errorf("expected error for invalid tags %v", tt.tags)
 				}
@@ -250,7 +250,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestEmails{Emails: tt.emails}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error for invalid email")
 				}
@@ -282,7 +282,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestCodes{Codes: tt.codes}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error for non-alphanumeric code")
 				}
@@ -310,7 +310,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestArray{Tags: tt.tags}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error for short tag in array")
 				}
@@ -348,7 +348,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestPtrSlice{Items: tt.items}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error for invalid pointer element")
 				}
@@ -377,7 +377,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestMap{Tags: tt.tags}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error for short map value")
 				}
@@ -424,7 +424,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestMapStruct{Grades: tt.grades}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error")
 				}
@@ -486,7 +486,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestMapDive{Scores: tt.scores}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Errorf("expected error, got nil")
 					return
@@ -529,7 +529,7 @@ func TestEachValidator(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestPtrSlice{Items: tt.items}
-				err := V.Struct(&input)
+				err := NewValidator().Struct(&input)
 				if tt.wantErr && err == nil {
 					t.Error("expected error for invalid pointer element")
 				}
@@ -559,7 +559,7 @@ func TestMapValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestMap{Items: tt.items}
-			err := V.Struct(&input)
+			err := NewValidator().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Error("expected error for empty/nil map")
 			}
@@ -576,7 +576,7 @@ func TestArrayValidation(t *testing.T) {
 	}
 
 	input := TestArray{Items: [3]int{1, 2, 3}}
-	err := V.Struct(&input)
+	err := NewValidator().Struct(&input)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
