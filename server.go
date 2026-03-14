@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/middleware"
@@ -133,7 +134,7 @@ type Server struct {
 //	server := zerohttp.New()
 //
 //	// With custom config
-//	server := zerohttp.New(config.Config{
+//	server := zerohttp.New(config.Merge{
 //	    Addr: ":8080",
 //	    Logger: myLogger,
 //	})
@@ -141,70 +142,10 @@ func New(cfg ...config.Config) *Server {
 	c := config.DefaultConfig
 	if len(cfg) > 0 {
 		userCfg := cfg[0]
-		if userCfg.Addr != "" {
-			c.Addr = userCfg.Addr
-		}
-		if userCfg.TLSAddr != "" {
-			c.TLSAddr = userCfg.TLSAddr
-		}
-		if userCfg.Server != nil {
-			c.Server = userCfg.Server
-		}
-		if userCfg.Listener != nil {
-			c.Listener = userCfg.Listener
-		}
-		if userCfg.TLSServer != nil {
-			c.TLSServer = userCfg.TLSServer
-		}
-		if userCfg.TLSListener != nil {
-			c.TLSListener = userCfg.TLSListener
-		}
-		if userCfg.CertFile != "" {
-			c.CertFile = userCfg.CertFile
-		}
-		if userCfg.KeyFile != "" {
-			c.KeyFile = userCfg.KeyFile
-		}
-		if userCfg.Logger != nil {
-			c.Logger = userCfg.Logger
-		}
-		if len(userCfg.PreShutdownHooks) > 0 {
-			c.PreShutdownHooks = userCfg.PreShutdownHooks
-		}
-		if len(userCfg.ShutdownHooks) > 0 {
-			c.ShutdownHooks = userCfg.ShutdownHooks
-		}
-		if len(userCfg.PostShutdownHooks) > 0 {
-			c.PostShutdownHooks = userCfg.PostShutdownHooks
-		}
-		c.DisableDefaultMiddlewares = userCfg.DisableDefaultMiddlewares
-		if len(userCfg.DefaultMiddlewares) > 0 {
-			c.DefaultMiddlewares = userCfg.DefaultMiddlewares
-		}
-		c.Recover = mergeRecoverConfig(c.Recover, userCfg.Recover)
-		c.RequestBodySize = mergeRequestBodySizeConfig(c.RequestBodySize, userCfg.RequestBodySize)
-		c.RequestID = mergeRequestIDConfig(c.RequestID, userCfg.RequestID)
-		c.RequestLogger = mergeRequestLoggerConfig(c.RequestLogger, userCfg.RequestLogger)
-		c.SecurityHeaders = mergeSecurityHeadersConfig(c.SecurityHeaders, userCfg.SecurityHeaders)
-		if userCfg.AutocertManager != nil {
-			c.AutocertManager = userCfg.AutocertManager
-		}
-		if userCfg.HTTP3Server != nil {
-			c.HTTP3Server = userCfg.HTTP3Server
-		}
-		if userCfg.SSEProvider != nil {
-			c.SSEProvider = userCfg.SSEProvider
-		}
-		if userCfg.WebSocketUpgrader != nil {
-			c.WebSocketUpgrader = userCfg.WebSocketUpgrader
-		}
-		if userCfg.WebTransportServer != nil {
-			c.WebTransportServer = userCfg.WebTransportServer
-		}
-		if userCfg.Validator != nil {
-			c.Validator = userCfg.Validator
-		}
-		c.Metrics = mergeMetricsConfig(c.Metrics, userCfg.Metrics)
+		zconfig.Merge(&c, userCfg)
+		// Handle fields that must always be copied (even if zero value)
+		// ServerAddr can be set to empty string to disable separate metrics server
+		c.Metrics.ServerAddr = userCfg.Metrics.ServerAddr
 	}
 
 	router := NewRouter()
@@ -243,7 +184,6 @@ func New(cfg ...config.Config) *Server {
 		}
 	}
 
-	// Initialize metrics registry if enabled
 	var registry metrics.Registry
 	if c.Metrics.Enabled {
 		registry = metrics.NewRegistry()

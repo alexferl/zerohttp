@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
 
@@ -22,13 +23,7 @@ import (
 func HostValidation(cfg ...config.HostValidationConfig) func(http.Handler) http.Handler {
 	c := config.DefaultHostValidationConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-	if c.StatusCode == 0 {
-		c.StatusCode = config.DefaultHostValidationConfig.StatusCode
-	}
-	if c.Message == "" {
-		c.Message = config.DefaultHostValidationConfig.Message
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	if c.StrictPort {

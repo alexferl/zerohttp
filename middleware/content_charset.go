@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
 
@@ -13,11 +14,7 @@ import (
 func ContentCharset(cfg ...config.ContentCharsetConfig) func(http.Handler) http.Handler {
 	c := config.DefaultContentCharsetConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.Charsets == nil {
-		c.Charsets = config.DefaultContentCharsetConfig.Charsets
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	// Normalize charsets to lowercase

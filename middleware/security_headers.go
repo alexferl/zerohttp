@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	zconfig "github.com/alexferl/zerohttp/internal/config"
+
 	"github.com/alexferl/zerohttp/config"
 )
 
@@ -15,31 +17,7 @@ import (
 func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) http.Handler {
 	c := config.DefaultSecurityHeadersConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-	if c.ContentSecurityPolicy == "" {
-		c.ContentSecurityPolicy = config.DefaultSecurityHeadersConfig.ContentSecurityPolicy
-	}
-	if c.CrossOriginEmbedderPolicy == "" {
-		c.CrossOriginEmbedderPolicy = config.DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy
-	}
-	if c.CrossOriginOpenerPolicy == "" {
-		c.CrossOriginOpenerPolicy = config.DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy
-	}
-	if c.CrossOriginResourcePolicy == "" {
-		c.CrossOriginResourcePolicy = config.DefaultSecurityHeadersConfig.CrossOriginResourcePolicy
-	}
-	if c.PermissionsPolicy == "" {
-		c.PermissionsPolicy = config.DefaultSecurityHeadersConfig.PermissionsPolicy
-	}
-	if c.ReferrerPolicy == "" {
-		c.ReferrerPolicy = config.DefaultSecurityHeadersConfig.ReferrerPolicy
-	}
-	if c.XContentTypeOptions == "" {
-		c.XContentTypeOptions = config.DefaultSecurityHeadersConfig.XContentTypeOptions
-	}
-	if c.XFrameOptions == "" {
-		c.XFrameOptions = config.DefaultSecurityHeadersConfig.XFrameOptions
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return func(next http.Handler) http.Handler {

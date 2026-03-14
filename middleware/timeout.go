@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -26,17 +27,7 @@ var ErrTimeoutWrite = errors.New("zerohttp: timeout middleware write failed")
 func Timeout(cfg ...config.TimeoutConfig) func(http.Handler) http.Handler {
 	c := config.DefaultTimeoutConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.Timeout <= 0 {
-		c.Timeout = config.DefaultTimeoutConfig.Timeout
-	}
-	if c.StatusCode == 0 {
-		c.StatusCode = config.DefaultTimeoutConfig.StatusCode
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultTimeoutConfig.ExemptPaths
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return func(next http.Handler) http.Handler {

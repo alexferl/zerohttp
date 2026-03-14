@@ -5,13 +5,14 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
 // RealIP middleware sets r.RemoteAddr to the extracted real client IP.
 func RealIP(cfg ...config.RealIPConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRealIPConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	if c.IPExtractor == nil {

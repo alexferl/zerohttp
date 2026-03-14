@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -103,26 +104,11 @@ var (
 func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 	c := config.DefaultJWTAuthConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	if c.TokenExtractor == nil {
 		c.TokenExtractor = extractBearerToken
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultJWTAuthConfig.ExemptPaths
-	}
-	if c.ExemptMethods == nil {
-		c.ExemptMethods = config.DefaultJWTAuthConfig.ExemptMethods
-	}
-	if c.RequiredClaims == nil {
-		c.RequiredClaims = config.DefaultJWTAuthConfig.RequiredClaims
-	}
-	if c.AccessTokenTTL == 0 {
-		c.AccessTokenTTL = config.DefaultJWTAuthConfig.AccessTokenTTL
-	}
-	if c.RefreshTokenTTL == 0 {
-		c.RefreshTokenTTL = config.DefaultJWTAuthConfig.RefreshTokenTTL
 	}
 
 	errorHandler := c.ErrorHandler

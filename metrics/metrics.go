@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
 // Registry provides methods for creating and registering metrics.
@@ -185,7 +187,7 @@ func (nopHistogram) WithLabelValues(...string) Histogram { return nopHistogram{}
 func NewRegistry(cfg ...RegistryConfig) Registry {
 	c := DefaultRegistryConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 	return &registry{
 		counters:       make(map[string]*counterVec),

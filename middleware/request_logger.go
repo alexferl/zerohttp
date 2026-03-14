@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/log"
 )
@@ -17,22 +18,11 @@ import (
 func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(http.Handler) http.Handler {
 	c := config.DefaultRequestLoggerConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	if len(c.ExemptPaths) > 0 && len(c.AllowedPaths) > 0 {
 		logger.Panic("RequestLogger: cannot set both ExemptPaths and AllowedPaths")
-	}
-
-	if c.Fields == nil {
-		c.Fields = config.DefaultRequestLoggerConfig.Fields
-	}
-	if c.SensitiveFields == nil {
-		c.SensitiveFields = config.DefaultRequestLoggerConfig.SensitiveFields
-	}
-	// If max body size not set, use default (0 means use default)
-	if c.MaxBodySize == 0 {
-		c.MaxBodySize = config.DefaultRequestLoggerConfig.MaxBodySize
 	}
 
 	fieldMap := make(map[config.LogField]bool)

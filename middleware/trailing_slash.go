@@ -5,20 +5,14 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
 // TrailingSlash is a middleware that handles trailing slashes in URLs
 func TrailingSlash(cfg ...config.TrailingSlashConfig) func(http.Handler) http.Handler {
 	c := config.DefaultTrailingSlashConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.Action == "" {
-		c.Action = config.DefaultTrailingSlashConfig.Action
-	}
-	if c.RedirectCode == 0 {
-		c.RedirectCode = config.DefaultTrailingSlashConfig.RedirectCode
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return func(next http.Handler) http.Handler {

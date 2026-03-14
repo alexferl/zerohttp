@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
 
@@ -13,14 +14,7 @@ import (
 func ContentType(cfg ...config.ContentTypeConfig) func(http.Handler) http.Handler {
 	c := config.DefaultContentTypeConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.ContentTypes == nil {
-		c.ContentTypes = config.DefaultContentTypeConfig.ContentTypes
-	}
-	if c.ExemptPaths == nil {
-		c.ExemptPaths = config.DefaultContentTypeConfig.ExemptPaths
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	allowedContentTypes := make(map[string]struct{}, len(c.ContentTypes))

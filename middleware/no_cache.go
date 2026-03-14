@@ -4,20 +4,14 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
 // NoCache middleware sets headers on every response to prevent caching and deletes ETag headers.
 func NoCache(cfg ...config.NoCacheConfig) func(http.Handler) http.Handler {
 	c := config.DefaultNoCacheConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-
-	if c.NoCacheHeaders == nil {
-		c.NoCacheHeaders = config.DefaultNoCacheHeaders
-	}
-	if c.ETagHeaders == nil {
-		c.ETagHeaders = config.DefaultETagHeaders
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return func(next http.Handler) http.Handler {
