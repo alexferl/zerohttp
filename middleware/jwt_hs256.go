@@ -49,13 +49,13 @@ func (s *HS256TokenStore) Validate(_ context.Context, token string) (config.JWTC
 }
 
 // Generate creates a new HS256 JWT token for the given claims.
-func (s *HS256TokenStore) Generate(_ context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+func (s *HS256TokenStore) Generate(_ context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 	return generateHS256Token(claims, s.secret, s.opts)
 }
 
 // Revoke is a no-op for HS256TokenStore. In-memory revocation is not supported.
 // Use a database-backed TokenStore implementation for revocation support.
-func (s *HS256TokenStore) Revoke(_ context.Context, claims config.JWTClaims) error {
+func (s *HS256TokenStore) Revoke(_ context.Context, claims map[string]any) error {
 	// No-op: HS256TokenStore doesn't support revocation
 	// Users should implement their own TokenStore with Redis/DB for revocation
 	return nil
@@ -63,7 +63,7 @@ func (s *HS256TokenStore) Revoke(_ context.Context, claims config.JWTClaims) err
 
 // IsRevoked always returns (false, nil) for HS256TokenStore.
 // Use a database-backed TokenStore implementation for revocation support.
-func (s *HS256TokenStore) IsRevoked(_ context.Context, claims config.JWTClaims) (bool, error) {
+func (s *HS256TokenStore) IsRevoked(_ context.Context, claims map[string]any) (bool, error) {
 	// Always returns false: HS256TokenStore doesn't support revocation
 	// Users should implement their own TokenStore with Redis/DB for revocation
 	return false, nil

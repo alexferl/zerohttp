@@ -56,7 +56,7 @@ func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(ht
 				wrapped = &bodyCapturingResponseWriter{
 					ResponseWriter: rwutil.NewResponseWriter(w),
 				}
-				next.ServeHTTP(wrapped.ResponseWriter, r)
+				next.ServeHTTP(wrapped, r)
 			}
 
 			duration := time.Since(start)
@@ -171,17 +171,19 @@ func newBodyCapturingResponseWriter(w http.ResponseWriter, maxSize int) *bodyCap
 
 // Write captures the response body and forwards to the underlying ResponseWriter.
 func (rw *bodyCapturingResponseWriter) Write(data []byte) (int, error) {
-	// Capture body up to max size
-	if !rw.sizeLimit || rw.body.Len() < rw.maxSize {
-		rw.body.Write(data)
-		// If we exceeded the limit, truncate and mark as truncated
-		if rw.sizeLimit && rw.body.Len() > rw.maxSize {
-			rw.body.Truncate(rw.maxSize)
+	// Capture body up to max size (only if body buffer is initialized)
+	if rw.body != nil {
+		if !rw.sizeLimit || rw.body.Len() < rw.maxSize {
+			rw.body.Write(data)
+			// If we exceeded the limit, truncate and mark as truncated
+			if rw.sizeLimit && rw.body.Len() > rw.maxSize {
+				rw.body.Truncate(rw.maxSize)
+				rw.truncated = true
+			}
+		} else {
+			// Already exceeded limit, mark as truncated
 			rw.truncated = true
 		}
-	} else {
-		// Already exceeded limit, mark as truncated
-		rw.truncated = true
 	}
 	return rw.ResponseWriter.Write(data)
 }

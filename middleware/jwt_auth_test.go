@@ -31,10 +31,10 @@ func slicesEqual(a, b []string) bool {
 // mockTokenStore is a test implementation of config.TokenStore
 type mockTokenStore struct {
 	validateFunc  func(ctx context.Context, token string) (config.JWTClaims, error)
-	generateFunc  func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error)
-	revokeFunc    func(ctx context.Context, claims config.JWTClaims) error
+	generateFunc  func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error)
+	revokeFunc    func(ctx context.Context, claims map[string]any) error
 	isRevoked     bool
-	isRevokedFunc func(ctx context.Context, claims config.JWTClaims) (bool, error)
+	isRevokedFunc func(ctx context.Context, claims map[string]any) (bool, error)
 }
 
 func (m *mockTokenStore) Validate(ctx context.Context, token string) (config.JWTClaims, error) {
@@ -44,21 +44,21 @@ func (m *mockTokenStore) Validate(ctx context.Context, token string) (config.JWT
 	return nil, errors.New("validator not configured")
 }
 
-func (m *mockTokenStore) Generate(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+func (m *mockTokenStore) Generate(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 	if m.generateFunc != nil {
-		return m.generateFunc(ctx, claims, tokenType)
+		return m.generateFunc(ctx, claims, tokenType, ttl)
 	}
 	return "", errors.New("generator not configured")
 }
 
-func (m *mockTokenStore) Revoke(ctx context.Context, claims config.JWTClaims) error {
+func (m *mockTokenStore) Revoke(ctx context.Context, claims map[string]any) error {
 	if m.revokeFunc != nil {
 		return m.revokeFunc(ctx, claims)
 	}
 	return nil
 }
 
-func (m *mockTokenStore) IsRevoked(ctx context.Context, claims config.JWTClaims) (bool, error) {
+func (m *mockTokenStore) IsRevoked(ctx context.Context, claims map[string]any) (bool, error) {
 	if m.isRevokedFunc != nil {
 		return m.isRevokedFunc(ctx, claims)
 	}
@@ -712,7 +712,7 @@ func TestGenerateRefreshToken_NoStore(t *testing.T) {
 
 func TestGenerateAccessToken_Success(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "generated-access-token", nil
 		},
 	}
@@ -734,7 +734,7 @@ func TestGenerateAccessToken_Success(t *testing.T) {
 
 func TestGenerateRefreshToken_Success(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "generated-refresh-token", nil
 		},
 	}
@@ -756,7 +756,7 @@ func TestGenerateRefreshToken_Success(t *testing.T) {
 
 func TestGenerateAccessToken_StoreError(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "", errors.New("token generation failed")
 		},
 	}
@@ -778,7 +778,7 @@ func TestGenerateAccessToken_StoreError(t *testing.T) {
 
 func TestGenerateRefreshToken_StoreError(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "", errors.New("token generation failed")
 		},
 	}
@@ -809,7 +809,7 @@ func TestRefreshTokenHandler(t *testing.T) {
 			}
 			return nil, errors.New("invalid token")
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			if tokenType == config.AccessToken {
 				return "new-access-token", nil
 			}
@@ -883,7 +883,7 @@ func TestRefreshTokenHandler_MissingToken(t *testing.T) {
 		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return nil, errors.New("invalid token")
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "token", nil
 		},
 	}
@@ -909,7 +909,7 @@ func TestRefreshTokenHandler_InvalidToken(t *testing.T) {
 		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return nil, errors.New("invalid token")
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "token", nil
 		},
 	}
@@ -940,7 +940,7 @@ func TestRefreshTokenHandler_NotRefreshToken(t *testing.T) {
 				"type": "access",
 			}, nil
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "token", nil
 		},
 	}
@@ -972,7 +972,7 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 				"jti":  "token-id-123",
 			}, nil
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "token", nil
 		},
 		isRevoked: true,
@@ -1020,7 +1020,7 @@ func TestRefreshTokenHandler_TokenAllowed(t *testing.T) {
 				"jti":  "valid-token-id",
 			}, nil
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			if tokenType == config.AccessToken {
 				return "new-access-token", nil
 			}
@@ -1058,7 +1058,7 @@ func TestLogoutTokenHandler(t *testing.T) {
 				"jti":  "token-id-123",
 			}, nil
 		},
-		revokeFunc: func(ctx context.Context, claims config.JWTClaims) error {
+		revokeFunc: func(ctx context.Context, claims map[string]any) error {
 			revokeCalled = true
 			return nil
 		},
@@ -1223,7 +1223,7 @@ func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 				"jti":  "token-id-123",
 			}, nil
 		},
-		revokeFunc: func(ctx context.Context, claims config.JWTClaims) error {
+		revokeFunc: func(ctx context.Context, claims map[string]any) error {
 			return errors.New("database error")
 		},
 	}
@@ -1893,7 +1893,7 @@ func TestAddTypeToClaims_NonMap(t *testing.T) {
 
 func TestGenerateAccessToken_DefaultTTL(t *testing.T) {
 	store := &mockTokenStore{
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			return "token", nil
 		},
 	}
@@ -1921,7 +1921,7 @@ func TestRefreshTokenHandler_StoreError(t *testing.T) {
 				"type": config.TokenTypeRefresh,
 			}, nil
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			if tokenType == config.AccessToken {
 				return "", errors.New("generate failed")
 			}
@@ -2130,7 +2130,7 @@ func TestJWTAuth_IsRevokedCheckError(t *testing.T) {
 		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
 			return map[string]any{"sub": "user123"}, nil
 		},
-		isRevokedFunc: func(ctx context.Context, claims config.JWTClaims) (bool, error) {
+		isRevokedFunc: func(ctx context.Context, claims map[string]any) (bool, error) {
 			return false, errors.New("database connection failed")
 		},
 	}
@@ -2181,7 +2181,7 @@ func TestRefreshTokenHandler_IsRevokedCheckError(t *testing.T) {
 				"type": config.TokenTypeRefresh,
 			}, nil
 		},
-		isRevokedFunc: func(ctx context.Context, claims config.JWTClaims) (bool, error) {
+		isRevokedFunc: func(ctx context.Context, claims map[string]any) (bool, error) {
 			return false, errors.New("database connection failed")
 		},
 	}
@@ -2328,16 +2328,16 @@ func TestRefreshTokenHandler_GenerateRefreshTokenError(t *testing.T) {
 				"type": config.TokenTypeRefresh,
 			}, nil
 		},
-		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType) (string, error) {
+		generateFunc: func(ctx context.Context, claims config.JWTClaims, tokenType config.TokenType, ttl time.Duration) (string, error) {
 			if tokenType == config.RefreshToken {
 				return "", errors.New("refresh token generation failed")
 			}
 			return "access-token", nil
 		},
-		isRevokedFunc: func(ctx context.Context, claims config.JWTClaims) (bool, error) {
+		isRevokedFunc: func(ctx context.Context, claims map[string]any) (bool, error) {
 			return false, nil
 		},
-		revokeFunc: func(ctx context.Context, claims config.JWTClaims) error {
+		revokeFunc: func(ctx context.Context, claims map[string]any) error {
 			return nil
 		},
 	}

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebTransport with AutoTLS</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        h1 { color: #333; }
+        .container { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        button { background: #0066cc; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0052a3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        input[type="text"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 300px; margin-right: 10px; }
+        #log { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 13px; height: 300px; overflow-y: auto; white-space: pre-wrap; }
+        .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status.connected { background: #4caf50; color: white; }
+        .status.disconnected { background: #f44336; color: white; }
+        .status.connecting { background: #ff9800; color: white; }
+        .section { margin: 15px 0; padding: 15px; background: #f9f9f9; border-radius: 4px; }
+        .section h3 { margin-top: 0; color: #555; }
+    </style>
+</head>
+<body>
+    <h1>WebTransport with AutoTLS</h1>
+
+    <div class="container">
+        <h2>Connection</h2>
+        <p>Status: <span id="status" class="status disconnected">Disconnected</span></p>
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+    </div>
+
+    <div class="container">
+        <h2>Messaging</h2>
+        <div class="section">
+            <h3>Datagrams (Unreliable)</h3>
+            <input type="text" id="datagramInput" placeholder="Enter message..." disabled>
+            <button id="sendDatagramBtn" onclick="sendDatagram()" disabled>Send Datagram</button>
+        </div>
+        <div class="section">
+            <h3>Bidirectional Streams</h3>
+            <input type="text" id="streamInput" placeholder="Enter message..." disabled>
+            <button id="sendStreamBtn" onclick="sendStreamMessage()" disabled>Send on Stream</button>
+            <button id="createStreamBtn" onclick="createStream()" disabled>Create New Stream</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Log</h2>
+        <div id="log"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        let wt = null, currentStream = null;
+        const logEl = document.getElementById('log'), statusEl = document.getElementById('status');
+
+        function log(msg) {
+            logEl.textContent += '[' + new Date().toLocaleTimeString() + '] ' + msg + '\n';
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function setStatus(status) {
+            statusEl.className = 'status ' + status;
+            statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
+        function updateUI(connected) {
+            document.getElementById('connectBtn').disabled = connected;
+            document.getElementById('disconnectBtn').disabled = !connected;
+            document.getElementById('datagramInput').disabled = !connected;
+            document.getElementById('sendDatagramBtn').disabled = !connected;
+            document.getElementById('streamInput').disabled = !connected;
+            document.getElementById('sendStreamBtn').disabled = !connected;
+            document.getElementById('createStreamBtn').disabled = !connected;
+        }
+
+        async function connect() {
+            try {
+                setStatus('connecting');
+                log('Connecting to WebTransport server...');
+
+                if (typeof WebTransport === 'undefined') {
+                    throw new Error('WebTransport not supported');
+                }
+
+                wt = new WebTransport('https://' + window.location.host + '/wt');
+
+                wt.ready.then(() => {
+                    log('Connected!');
+                    setStatus('connected');
+                    updateUI(true);
+                    startReceiving();
+                });
+
+                wt.closed.then(() => {
+                    log('Connection closed');
+                    setStatus('disconnected');
+                    updateUI(false);
+                    wt = null; currentStream = null;
+                });
+
+                wt.ready.catch((error) => {
+                    log('Connection failed: ' + error.message);
+                    setStatus('disconnected');
+                    updateUI(false);
+                });
+            } catch (error) {
+                log('Error: ' + error.message);
+                setStatus('disconnected');
+                updateUI(false);
+            }
+        }
+
+        async function disconnect() { if (wt) { log('Closing...'); await wt.close(); } }
+
+        async function startReceiving() {
+            if (wt.datagrams) {
+                const reader = wt.datagrams.readable.getReader();
+                try { while (true) { const { value, done } = await reader.read(); if (done) break; log('Datagram: ' + new TextDecoder().decode(value)); } }
+                catch (e) { log('Datagram error: ' + e.message); }
+            }
+            try { for await (const stream of wt.incomingBidirectionalStreams) { log('New stream'); handleStream(stream); } }
+            catch (e) { log('Stream error: ' + e.message); }
+        }
+
+        async function handleStream(stream) {
+            const reader = stream.readable.getReader();
+            try { while (true) { const { value, done } = await reader.read(); if (done) break; log('Stream: ' + new TextDecoder().decode(value)); } }
+            catch (e) { log('Stream read error: ' + e.message); }
+        }
+
+        async function sendDatagram() {
+            if (!wt?.datagrams) { log('Datagrams not available'); return; }
+            const msg = document.getElementById('datagramInput').value.trim();
+            if (!msg) return;
+            try { const w = wt.datagrams.writable.getWriter(); await w.write(new TextEncoder().encode(msg)); w.releaseLock(); log('Sent datagram: ' + msg); document.getElementById('datagramInput').value = ''; }
+            catch (e) { log('Send error: ' + e.message); }
+        }
+
+        async function createStream() {
+            if (!wt) { log('Not connected'); return; }
+            try { currentStream = await wt.createBidirectionalStream(); log('Created stream'); handleStream(currentStream); }
+            catch (e) { log('Create stream error: ' + e.message); }
+        }
+
+        async function sendStreamMessage() {
+            if (!wt) { log('Not connected'); return; }
+            if (!currentStream) await createStream();
+            const msg = document.getElementById('streamInput').value.trim();
+            if (!msg) return;
+            try { const w = currentStream.writable.getWriter(); await w.write(new TextEncoder().encode(msg + '\n')); w.releaseLock(); log('Sent on stream: ' + msg); document.getElementById('streamInput').value = ''; }
+            catch (e) { log('Send error: ' + e.message); }
+        }
+
+        function clearLog() { logEl.textContent = ''; }
+        document.getElementById('datagramInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendDatagram(); });
+        document.getElementById('streamInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendStreamMessage(); });
+        log('Page loaded. Click Connect to start.');
+    </script>
+</body>
+</html>

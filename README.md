@@ -21,8 +21,11 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Automatic OPTIONS Responses](#automatic-options-responses)
 - [Middleware](#middleware)
   - [Available Middlewares](#available-middlewares)
-- [Graceful Shutdown](#graceful-shutdown)
+- [Server Lifecycle Hooks](#server-lifecycle-hooks)
+  - [Startup Hooks](#startup-hooks)
+  - [Shutdown Hooks](#shutdown-hooks)
   - [Hook Execution Order](#hook-execution-order)
+  - [Error Handling](#error-handling)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
 - [Metrics](docs/METRICS.md)
@@ -40,7 +43,6 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
   - [Server Configuration](#server-configuration)
   - [Middleware Configuration](#middleware-configuration)
   - [Disabling Default Security](#disabling-default-security)
-  - [Shutdown Hooks](#shutdown-hooks)
 
 
 ## Features
@@ -345,73 +347,134 @@ middleware.SecurityHeaders(config.SecurityHeadersConfig{
 })
 ```
 
-## Graceful Shutdown
+## Server Lifecycle Hooks
 
-zerohttp provides graceful shutdown hooks for cleanup tasks during server shutdown. Hooks are called during `Shutdown()` and allow you to perform cleanup like closing database connections, flushing logs, and notifying external systems.
+zerohttp provides lifecycle hooks for both startup and shutdown phases. Hooks allow you to perform initialization before the server starts and cleanup when it stops.
 
-**⚠️ Important:** Hooks **must** respect context cancellation by checking `ctx.Done()`. If a hook blocks without respecting the context, shutdown will hang.
+**⚠️ Important:** Hooks **must** respect context cancellation by checking `ctx.Done()`. If a hook blocks without respecting the context, startup/shutdown will hang.
+
+### Startup Hooks
 
 ```go
 app := zh.New(config.Config{
-    // Pre-shutdown: run before servers start shutting down (sequential)
-    PreShutdownHooks: []config.ShutdownHookConfig{
-        {
-            Name: "health",
-            Hook: func(ctx context.Context) error {
-                // Mark service as unhealthy to stop receiving traffic
-                health.SetUnhealthy()
-                return nil
+    Lifecycle: config.LifecycleConfig{
+        // Pre-startup: run before servers start (sequential)
+        PreStartupHooks: []config.StartupHookConfig{
+            {
+                Name: "validate-config",
+                Hook: func(ctx context.Context) error {
+                    return validateConfig()
+                },
             },
         },
-    },
 
-    // Shutdown: run concurrently with server shutdown
-    ShutdownHooks: []config.ShutdownHookConfig{
-        {
-            Name: "flush-logs",
-            Hook: func(ctx context.Context) error {
-                return logger.Flush()
-            },
-        },
-        {
-            Name: "close-db",
-            Hook: func(ctx context.Context) error {
-                // Always check context cancellation for long operations
-                select {
-                case <-ctx.Done():
-                    return ctx.Err()
-                default:
-                    return db.Close()
-                }
-            },
-        },
-    },
-
-    // Post-shutdown: run after all servers are stopped (sequential)
-    PostShutdownHooks: []config.ShutdownHookConfig{
-        {
-            Name: "cleanup",
-            Hook: func(ctx context.Context) error {
-                return os.RemoveAll("/tmp/app-*")
+        // Startup: run with servers starting up (sequential)
+        StartupHooks: []config.StartupHookConfig{
+            {
+                Name: "migrations",
+                Hook: func(ctx context.Context) error {
+                    return goose.Up(db.DB, "migrations")
+                },
             },
         },
     },
 })
 
-// Hooks can also be registered programmatically
-app.RegisterShutdownHook("metrics", func(ctx context.Context) error {
-    return metrics.Push(ctx, gateway)
+// Or register programmatically
+app.RegisterPreStartupHook("validate-config", func(ctx context.Context) error {
+    return validateConfig()
+})
+
+app.RegisterStartupHook("migrations", func(ctx context.Context) error {
+    return goose.Up(db.DB, "migrations")
+})
+
+app.RegisterPostStartupHook("announce-ready", func(ctx context.Context) error {
+    return notifyServiceDiscovery()
+})
+```
+
+### Shutdown Hooks
+
+```go
+app := zh.New(config.Config{
+    Lifecycle: config.LifecycleConfig{
+        // Pre-shutdown: run before servers start shutting down (sequential)
+        PreShutdownHooks: []config.ShutdownHookConfig{
+            {
+                Name: "health",
+                Hook: func(ctx context.Context) error {
+                    // Mark service as unhealthy to stop receiving traffic
+                    health.SetUnhealthy()
+                    return nil
+                },
+            },
+        },
+
+        // Shutdown: run concurrently with server shutdown
+        ShutdownHooks: []config.ShutdownHookConfig{
+            {
+                Name: "flush-logs",
+                Hook: func(ctx context.Context) error {
+                    return logger.Flush()
+                },
+            },
+            {
+                Name: "close-db",
+                Hook: func(ctx context.Context) error {
+                    return db.Close()
+                },
+            },
+        },
+
+        // Post-shutdown: run after all servers are stopped (sequential)
+        PostShutdownHooks: []config.ShutdownHookConfig{
+            {
+                Name: "cleanup",
+                Hook: func(ctx context.Context) error {
+                    return os.RemoveAll("/tmp/app-*")
+                },
+            },
+        },
+    },
+})
+
+// Or register programmatically
+app.RegisterPreShutdownHook("health", func(ctx context.Context) error {
+    health.SetUnhealthy()
+    return nil
+})
+
+app.RegisterShutdownHook("close-db", func(ctx context.Context) error {
+    return db.Close()
+})
+
+app.RegisterPostShutdownHook("cleanup", func(ctx context.Context) error {
+    return os.RemoveAll("/tmp/app-*")
 })
 ```
 
 ### Hook Execution Order
 
+**Startup Phase:**
+
+1. **Pre-startup hooks** - Execute sequentially in registration order
+2. **Server startup** - HTTP/HTTPS/HTTP3 servers start concurrently
+3. **Startup hooks** - Execute sequentially after pre-startup hooks complete
+4. **Post-startup hooks** - Execute sequentially after servers are accepting connections
+
+**Shutdown Phase:**
+
 1. **Pre-shutdown hooks** - Execute sequentially in registration order
 2. **Server shutdown** - HTTP/HTTPS/HTTP3 servers shut down concurrently
 3. **Shutdown hooks** - Execute concurrently alongside server shutdown
-4. **Post-shutdown hooks** - Execute sequentially in registration order
+4. **Post-shutdown hooks** - Execute sequentially after all servers are stopped
 
-Hook errors are logged but do not stop the shutdown process. Context errors (`context.Canceled` or `context.DeadlineExceeded`) from pre-shutdown hooks will abort shutdown early.
+### Error Handling
+
+- **Startup hooks:** Errors from pre-startup and startup hooks stop server startup
+- **Shutdown hooks:** Errors are logged but do not stop the shutdown process
+- **Context cancellation:** Context errors (`context.Canceled` or `context.DeadlineExceeded`) abort the current phase early
 
 
 ## Health Checks
@@ -709,35 +772,43 @@ zerohttp uses struct-based configuration. Pass a `config.Config` struct to `zh.N
 ```go
 app := zh.New(config.Config{
     // Server addresses
-    Addr:                   ":8080",                    // HTTP server address
-    TLSAddr:                ":8443",                    // HTTPS server address
+    Addr: ":8080", // HTTP server address
+
+    // TLS configuration
+    TLS: config.TLSConfig{
+        Addr:     ":8443",
+        CertFile: "cert.pem",
+        KeyFile:  "key.pem",
+    },
 
     // Custom server instances (optional)
-    Server:                 &http.Server{...},          // Custom HTTP server instance
-    TLSServer:              &http.Server{...},          // Custom HTTPS server instance
+    Server: &http.Server{...},     // Custom HTTP server instance
+    TLS: config.TLSConfig{
+        Server: &http.Server{...},  // Custom HTTPS server instance
+    },
 
     // Custom listeners (optional)
-    Listener:               myListener,                  // Custom HTTP listener
-    TLSListener:            myTLSListener,               // Custom HTTPS listener
-
-    // TLS certificates
-    CertFile:               "cert.pem",                  // TLS certificate file path
-    KeyFile:                "key.pem",                   // TLS key file path
+    Listener: &net.TCPListener{...}, // Custom HTTP listener
+    TLS: config.TLSConfig{
+        Listener: myTLSListener,     // Custom HTTPS listener
+    },
 
     // Logger and validator
-    Logger:                 myLogger,                    // Custom logger instance
-    Validator:              myValidator,                 // Custom struct validator
+    Logger:    myLogger,     // Custom logger instance
+    Validator: myValidator,  // Custom struct validator
 
-    // Pluggable features
-    AutocertManager:        myCertManager,               // Let's Encrypt integration
-    HTTP3Server:            myH3Server,                  // HTTP/3 server (e.g., quic-go)
-    SSEProvider:            mySSEProvider,               // SSE provider for server-sent events
-    WebSocketUpgrader:      myWSUpgrader,                // WebSocket upgrader
-    WebTransportServer:     myWTServer,                  // WebTransport server
+    // Pluggable features (in Extensions)
+    Extensions: config.ExtensionsConfig{
+        AutocertManager:    myCertManager,  // Let's Encrypt integration
+        HTTP3Server:        myH3Server,     // HTTP/3 server (e.g., quic-go)
+        SSEProvider:        mySSEProvider,  // SSE provider for server-sent events
+        WebSocketUpgrader:  myWSUpgrader,   // WebSocket upgrader
+        WebTransportServer: myWTServer,     // WebTransport server
+    },
 
     // Middleware options
-    DisableDefaultMiddlewares: false,                    // Disable built-in middlewares
-    DefaultMiddlewares:     []func(http.Handler) http.Handler{...}, // Custom middleware chain
+    DisableDefaultMiddlewares: false,                                    // Disable built-in middlewares
+    DefaultMiddlewares:        []func(http.Handler) http.Handler{...},  // Custom middleware chain
 })
 ```
 
@@ -783,22 +854,6 @@ app := zh.New(config.Config{
     DefaultMiddlewares: []func(http.Handler) http.Handler{
         middleware.RequestID(config.DefaultRequestIDConfig),
         middleware.CORS(config.DefaultCORSConfig),
-    },
-})
-```
-
-### Shutdown Hooks
-
-```go
-app := zh.New(config.Config{
-    PreShutdownHooks: []config.ShutdownHookConfig{
-        {Name: "health", Hook: func(ctx context.Context) error { ... }},
-    },
-    ShutdownHooks: []config.ShutdownHookConfig{
-        {Name: "flush-logs", Hook: func(ctx context.Context) error { ... }},
-    },
-    PostShutdownHooks: []config.ShutdownHookConfig{
-        {Name: "cleanup", Hook: func(ctx context.Context) error { ... }},
     },
 })
 ```

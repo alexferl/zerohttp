@@ -466,3 +466,28 @@ func TestServer_Shutdown_WithTLSServer(t *testing.T) {
 		t.Errorf("Expected no error, got %v", err)
 	}
 }
+
+func TestServer_NoTLSConfig_TLSServerNil(t *testing.T) {
+	// Create server without any TLS configuration
+	server := New()
+
+	// tlsServer should be nil when no TLS config provided
+	if server.tlsServer != nil {
+		t.Error("Expected tlsServer to be nil when no TLS configured")
+	}
+}
+
+func TestServer_WithCertFile_TLSServerCreated(t *testing.T) {
+	// Create server with TLS certificate configuration
+	server := New(config.Config{
+		TLS: config.TLSConfig{
+			CertFile: "testdata/cert.pem",
+			KeyFile:  "testdata/key.pem",
+		},
+	})
+
+	// tlsServer should be created when cert files are provided
+	if server.tlsServer == nil {
+		t.Error("Expected tlsServer to be created when cert files provided")
+	}
+}

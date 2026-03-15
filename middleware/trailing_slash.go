@@ -8,7 +8,14 @@ import (
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
-// TrailingSlash is a middleware that handles trailing slashes in URLs
+// TrailingSlash is a middleware that handles trailing slashes in URLs.
+//
+// IMPORTANT: Register routes WITHOUT trailing slashes to use this middleware.
+// If you register "/docs/", Go's ServeMux auto-redirects "/docs" before
+// middleware runs, bypassing this middleware entirely.
+//
+// Good:  router.GET("/docs", handler)  // middleware handles the redirect
+// Bad:   router.GET("/docs/", handler) // ServeMux handles the redirect
 func TrailingSlash(cfg ...config.TrailingSlashConfig) func(http.Handler) http.Handler {
 	c := config.DefaultTrailingSlashConfig
 	if len(cfg) > 0 {

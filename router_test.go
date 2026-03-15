@@ -169,6 +169,24 @@ func TestHandlerFunc(t *testing.T) {
 
 		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
+
+	t.Run("max bytes error returns 413", func(t *testing.T) {
+		router := NewRouter()
+		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+			// Simulate what happens when http.MaxBytesReader limit is exceeded
+			return &http.MaxBytesError{Limit: 100}
+		})
+		router.POST("/upload", handler)
+
+		req := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader("payload exceeding limit"))
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).
+			Status(http.StatusRequestEntityTooLarge).
+			BodyContains("Payload Too Large").
+			BodyContains("413")
+	})
 }
 
 func TestJSONEncodingErrorLogged(t *testing.T) {
@@ -512,6 +530,26 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			Body("Custom 404")
 	})
 
+	t.Run("custom 404 with JSON accept header", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/", testHandler("home"))
+
+		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("Custom 404"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+		req.Header.Set("Accept", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Custom handler should be used even when client accepts JSON
+		zhtest.AssertWith(t, w).
+			Status(http.StatusNotFound).
+			Body("Custom 404")
+	})
+
 	t.Run("method not allowed", func(t *testing.T) {
 		router := NewRouter()
 		router.GET("/test", testHandler("get"))
@@ -543,6 +581,27 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
+		zhtest.AssertWith(t, w).
+			Status(http.StatusMethodNotAllowed).
+			Body("Custom 405")
+	})
+
+	t.Run("custom 405 with JSON accept header", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/test", testHandler("get"))
+		router.POST("/test", testHandler("post"))
+
+		router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_, _ = w.Write([]byte("Custom 405"))
+		}))
+
+		req := httptest.NewRequest(http.MethodPut, "/test", nil)
+		req.Header.Set("Accept", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Custom handler should be used even when client accepts JSON
 		zhtest.AssertWith(t, w).
 			Status(http.StatusMethodNotAllowed).
 			Body("Custom 405")

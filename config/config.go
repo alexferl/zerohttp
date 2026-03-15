@@ -99,11 +99,21 @@ type TLSConfig struct {
 }
 
 type LifecycleConfig struct {
+	// PreStartupHooks are hooks that execute sequentially before any startup hooks.
+	// These run before the server begins initialization.
+	// Default: nil
+	PreStartupHooks []StartupHookConfig
+
 	// StartupHooks are hooks that execute sequentially before the server starts
 	// accepting connections. If any startup hook returns an error, the server
 	// will not start.
 	// Default: nil
 	StartupHooks []StartupHookConfig
+
+	// PostStartupHooks are hooks that execute sequentially after the server has
+	// started accepting connections.
+	// Default: nil
+	PostStartupHooks []StartupHookConfig
 
 	// PreShutdownHooks are hooks that execute sequentially before server shutdown begins.
 	// These run before any servers start shutting down.
