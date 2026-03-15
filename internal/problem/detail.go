@@ -3,6 +3,7 @@ package problem
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -122,15 +123,109 @@ func NewValidationDetail[T any](detail string, errors []T) *Detail {
 }
 
 // AcceptsJSON checks if the client accepts JSON responses based on the Accept header.
-// Returns true if the Accept header includes application/json or application/problem+json.
+// Returns true if the Accept header includes application/json or application/problem+json
+// with higher priority than text/html, or if */* is present without explicit HTML preference.
+// Explicit q=0 refusals (e.g., "application/json;q=0, */*") are respected per RFC 7231.
 func AcceptsJSON(r *http.Request) bool {
 	accept := r.Header.Get("Accept")
 	if accept == "" {
 		return false
 	}
-	if strings.Contains(accept, "application/json") ||
-		strings.Contains(accept, "application/problem+json") {
+
+	// Parse explicit types only (no wildcard expansion)
+	jsonQ, jsonExplicit := parseAcceptQualityExact(accept, "application/json", "application/problem+json")
+	htmlQ, _ := parseAcceptQualityExact(accept, "text/html")
+	// Parse wildcards separately
+	wildcardQ := parseWildcardQuality(accept)
+
+	// Explicit HTML preference wins over explicit JSON
+	if htmlQ > jsonQ {
+		return false
+	}
+	// Explicit JSON listed with positive quality and not outranked
+	if jsonQ > 0 {
 		return true
 	}
-	return strings.Contains(accept, "*/*")
+	// Only use wildcard if JSON was never explicitly mentioned (not even as q=0 refusal)
+	return !jsonExplicit && wildcardQ > 0 && htmlQ < wildcardQ
+}
+
+// parseAcceptQualityExact parses the Accept header and returns the highest quality value
+// for any of the specified media types, using exact matching only (no wildcards).
+// Returns the max quality and a boolean indicating if any of the types were explicitly present.
+func parseAcceptQualityExact(accept string, mediaTypes ...string) (q float64, found bool) {
+	maxQ := 0.0
+	wasFound := false
+
+	eachAcceptEntry(accept, func(mediaType string, quality float64) {
+		// Skip wildcards - type/* wildcards are silently dropped (intentional limitation)
+		if mediaType == "*/*" || strings.HasSuffix(mediaType, "/*") {
+			return
+		}
+
+		for _, mt := range mediaTypes {
+			if mediaType == mt {
+				wasFound = true
+				if quality > maxQ {
+					maxQ = quality
+				}
+			}
+		}
+	})
+
+	return maxQ, wasFound
+}
+
+// parseWildcardQuality parses the Accept header and returns the highest quality value
+// for */* wildcard entries only.
+func parseWildcardQuality(accept string) float64 {
+	maxQ := 0.0
+
+	eachAcceptEntry(accept, func(mediaType string, quality float64) {
+		// Only match */*
+		if mediaType == "*/*" && quality > maxQ {
+			maxQ = quality
+		}
+	})
+
+	return maxQ
+}
+
+// eachAcceptEntry iterates over each entry in an Accept header, yielding the media type
+// and quality value (default 1.0) for each.
+func eachAcceptEntry(accept string, fn func(mediaType string, q float64)) {
+	for _, r := range strings.Split(accept, ",") {
+		r = strings.TrimSpace(r)
+		if r == "" {
+			continue
+		}
+
+		parts := strings.Split(r, ";")
+		mediaType := strings.TrimSpace(parts[0])
+
+		q := 1.0
+		for _, p := range parts[1:] {
+			p = strings.TrimSpace(p)
+			if prefix, ok := strings.CutPrefix(p, "q="); ok {
+				if qv, err := parseQuality(prefix); err == nil {
+					q = qv
+				}
+				break
+			}
+		}
+
+		fn(mediaType, q)
+	}
+}
+
+// parseQuality parses a quality value string, returning an error if invalid.
+func parseQuality(s string) (float64, error) {
+	q, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		return 0, err
+	}
+	if q < 0 || q > 1 {
+		return 0, strconv.ErrRange
+	}
+	return q, nil
 }

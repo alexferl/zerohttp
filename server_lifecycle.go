@@ -9,8 +9,26 @@ import (
 	"github.com/alexferl/zerohttp/log"
 )
 
-// RegisterStartupHook registers a hook to run before the server starts accepting connections.
-// Startup hooks execute sequentially in registration order.
+// RegisterPreStartupHook registers a hook to run before servers start and before startup hooks.
+// Pre-startup hooks execute sequentially in registration order.
+// If any pre-startup hook returns an error, the server will not start.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, startup will hang.
+//
+// Example:
+//
+//	app.RegisterPreStartupHook("validate-config", func(ctx context.Context) error {
+//	    return validateConfig()
+//	})
+func (s *Server) RegisterPreStartupHook(name string, hook config.StartupHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.preStartupHooks = append(s.preStartupHooks, config.StartupHookConfig{Name: name, Hook: hook})
+}
+
+// RegisterStartupHook registers a hook to run concurrently with servers starting up.
+// Startup hooks execute sequentially in registration order, after PreStartupHooks.
 // If any startup hook returns an error, the server will not start.
 //
 // Hooks must respect context cancellation by checking ctx.Done().
@@ -25,6 +43,55 @@ func (s *Server) RegisterStartupHook(name string, hook config.StartupHook) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.startupHooks = append(s.startupHooks, config.StartupHookConfig{Name: name, Hook: hook})
+}
+
+// RegisterPostStartupHook registers a hook to run after servers have started accepting connections.
+// Post-startup hooks execute sequentially in registration order.
+// Errors from post-startup hooks are logged but do not stop the server.
+//
+// Hooks must respect context cancellation by checking ctx.Done().
+// If a hook blocks without respecting the context, startup will hang.
+//
+// Example:
+//
+//	app.RegisterPostStartupHook("announce-ready", func(ctx context.Context) error {
+//	    return notifyServiceDiscovery()
+//	})
+func (s *Server) RegisterPostStartupHook(name string, hook config.StartupHook) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.postStartupHooks = append(s.postStartupHooks, config.StartupHookConfig{Name: name, Hook: hook})
+}
+
+// runPreStartupHooks executes pre-startup hooks sequentially in registration order.
+func (s *Server) runPreStartupHooks(ctx context.Context) error {
+	s.mu.RLock()
+	hooks := s.preStartupHooks
+	s.mu.RUnlock()
+
+	if len(hooks) == 0 {
+		return nil
+	}
+
+	s.logger.Debug("Running pre-startup hooks", log.F("count", len(hooks)))
+
+	for _, hook := range hooks {
+		select {
+		case <-ctx.Done():
+			s.logger.Warn("Pre-startup hook aborted due to context cancellation", log.F("hook", hook.Name))
+			return ctx.Err()
+		default:
+		}
+
+		s.logger.Debug("Running pre-startup hook", log.F("hook", hook.Name))
+		if err := hook.Hook(ctx); err != nil {
+			s.logger.Error("Pre-startup hook failed", log.F("hook", hook.Name), log.E(err))
+			return fmt.Errorf("pre-startup hook %q failed: %w", hook.Name, err)
+		}
+	}
+
+	s.logger.Debug("All pre-startup hooks completed successfully")
+	return nil
 }
 
 // runStartupHooks executes startup hooks sequentially in registration order.
@@ -59,8 +126,40 @@ func (s *Server) runStartupHooks(ctx context.Context) error {
 	return nil
 }
 
+// runPostStartupHooks executes post-startup hooks sequentially in registration order.
+func (s *Server) runPostStartupHooks(ctx context.Context) error {
+	s.mu.RLock()
+	hooks := s.postStartupHooks
+	s.mu.RUnlock()
+
+	if len(hooks) == 0 {
+		return nil
+	}
+
+	s.logger.Debug("Running post-startup hooks", log.F("count", len(hooks)))
+
+	for _, hook := range hooks {
+		select {
+		case <-ctx.Done():
+			s.logger.Warn("Post-startup hook aborted due to context cancellation", log.F("hook", hook.Name))
+			return ctx.Err()
+		default:
+		}
+
+		s.logger.Debug("Running post-startup hook", log.F("hook", hook.Name))
+		if err := hook.Hook(ctx); err != nil {
+			s.logger.Error("Post-startup hook failed", log.F("hook", hook.Name), log.E(err))
+			// Continue with other hooks despite error
+		}
+	}
+
+	s.logger.Debug("All post-startup hooks completed successfully")
+	return nil
+}
+
 // RegisterPreShutdownHook registers a hook to run before server shutdown begins.
-// Pre-shutdown hooks execute sequentially in registration order.
+// Pre-shutdown hooks execute sequentially in registration order, before servers stop.
+// Errors from pre-shutdown hooks are logged but do not stop shutdown.
 //
 // Hooks must respect context cancellation by checking ctx.Done().
 // If a hook blocks without respecting the context, shutdown will hang.
@@ -79,6 +178,7 @@ func (s *Server) RegisterPreShutdownHook(name string, hook config.ShutdownHook) 
 
 // RegisterShutdownHook registers a hook to run concurrently with server shutdown.
 // Shutdown hooks execute concurrently alongside server shutdown.
+// Errors from shutdown hooks are logged but do not stop shutdown.
 //
 // Hooks must respect context cancellation by checking ctx.Done().
 // If a hook blocks without respecting the context, shutdown will hang.
@@ -94,8 +194,9 @@ func (s *Server) RegisterShutdownHook(name string, hook config.ShutdownHook) {
 	s.shutdownHooks = append(s.shutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
 }
 
-// RegisterPostShutdownHook registers a hook to run after servers are shut down.
+// RegisterPostShutdownHook registers a hook to run after servers have shut down.
 // Post-shutdown hooks execute sequentially in registration order.
+// Errors from post-shutdown hooks are logged but do not affect shutdown.
 //
 // Hooks must respect context cancellation by checking ctx.Done().
 // If a hook blocks without respecting the context, shutdown will hang.

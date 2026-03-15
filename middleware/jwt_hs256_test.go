@@ -385,7 +385,7 @@ func TestHS256TokenStore_Validate(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(context.Background(), claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestHS256TokenStore_Generate(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(context.Background(), claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -452,7 +452,7 @@ func TestHS256TokenStore_Generate_WithMapClaims(t *testing.T) {
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}
 
-	token, err := store.Generate(context.Background(), claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -470,7 +470,7 @@ func TestHS256TokenStore_Generate_UnsupportedClaimsType(t *testing.T) {
 	store := NewHS256TokenStore(secret, opts)
 
 	// Use unsupported claims type
-	_, err := store.Generate(context.Background(), "not a map", config.AccessToken)
+	_, err := store.Generate(context.Background(), "not a map", config.AccessToken, 15*time.Minute)
 	if err == nil {
 		t.Error("expected error for unsupported claims type")
 	}
@@ -517,7 +517,7 @@ func TestHS256TokenStore_RoundTrip(t *testing.T) {
 		"exp":   float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(context.Background(), claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -741,7 +741,7 @@ func TestGenerateHS256Token_NoIssuer(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(context.Background(), claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
@@ -771,7 +771,7 @@ func TestGenerateHS256Token_NoAudience(t *testing.T) {
 		"exp": float64(time.Now().Add(time.Hour).Unix()),
 	}
 
-	token, err := store.Generate(context.Background(), claims, config.AccessToken)
+	token, err := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/alexferl/zerohttp/config"
 )
@@ -26,7 +27,7 @@ func BenchmarkJWT_HS256_Generate(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		_, _ = store.Generate(context.Background(), claims, config.AccessToken)
+		_, _ = store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	}
 }
 
@@ -42,7 +43,7 @@ func BenchmarkJWT_HS256_Validate(b *testing.B) {
 		"email": "test@example.com",
 	}
 
-	token, _ := store.Generate(context.Background(), claims, config.AccessToken)
+	token, _ := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -106,11 +107,11 @@ func BenchmarkJWT_HS256_ClaimSizes(b *testing.B) {
 			b.ResetTimer()
 
 			for b.Loop() {
-				_, _ = store.Generate(context.Background(), s.claims, config.AccessToken)
+				_, _ = store.Generate(context.Background(), s.claims, config.AccessToken, 15*time.Minute)
 			}
 		})
 
-		token, _ := store.Generate(context.Background(), s.claims, config.AccessToken)
+		token, _ := store.Generate(context.Background(), s.claims, config.AccessToken, 15*time.Minute)
 
 		b.Run(s.name+"/Validate", func(b *testing.B) {
 			b.ReportAllocs()
@@ -135,7 +136,7 @@ func BenchmarkJWT_AuthMiddleware(b *testing.B) {
 	}))
 
 	claims := HS256Claims{"sub": "user123", "name": "Test User"}
-	token, _ := store.Generate(context.Background(), claims, config.AccessToken)
+	token, _ := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -154,7 +155,7 @@ func BenchmarkJWT_AuthMiddleware_Scenarios(b *testing.B) {
 	store := NewHS256TokenStore([]byte("this-is-a-32-byte-secret-key-for-tests!!"), HS256Options{})
 
 	validClaims := HS256Claims{"sub": "user123", "name": "Test User"}
-	validToken, _ := store.Generate(context.Background(), validClaims, config.AccessToken)
+	validToken, _ := store.Generate(context.Background(), validClaims, config.AccessToken, 15*time.Minute)
 
 	scenarios := []struct {
 		name  string
@@ -205,7 +206,7 @@ func BenchmarkJWT_ClaimsExtraction(b *testing.B) {
 		"scope": "read write delete",
 	}
 
-	token, _ := store.Generate(context.Background(), claims, config.AccessToken)
+	token, _ := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 	validatedClaims, _ := store.Validate(context.Background(), token)
 
 	jwtClaims := JWTClaims{claims: validatedClaims}
@@ -260,7 +261,7 @@ func BenchmarkJWT_RequiredClaims(b *testing.B) {
 		"name": "Test User",
 		"org":  "acme",
 	}
-	token, _ := store.Generate(context.Background(), claims, config.AccessToken)
+	token, _ := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 
 	requiredClaimsCounts := []int{1, 3, 5}
 

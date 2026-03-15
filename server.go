@@ -17,6 +17,14 @@ import (
 	"github.com/alexferl/zerohttp/middleware"
 )
 
+// Default server timeout constants
+const (
+	DefaultReadTimeout       = 10 * time.Second
+	DefaultReadHeaderTimeout = 5 * time.Second
+	DefaultWriteTimeout      = 15 * time.Second
+	DefaultIdleTimeout       = 60 * time.Second
+)
+
 // Server represents a zerohttp server instance that wraps Go's standard HTTP server
 // with additional functionality including middleware support, TLS configuration,
 // automatic certificate management, and structured logging.
@@ -67,9 +75,15 @@ type Server struct {
 	// for recording HTTP requests, errors, and server lifecycle events.
 	logger log.Logger
 
+	// preStartupHooks execute sequentially before any startup hooks.
+	preStartupHooks []config.StartupHookConfig
+
 	// startupHooks execute sequentially before the server starts accepting connections.
 	// If any startup hook returns an error, the server will not start.
 	startupHooks []config.StartupHookConfig
+
+	// postStartupHooks execute sequentially after the server has started.
+	postStartupHooks []config.StartupHookConfig
 
 	// preShutdownHooks execute sequentially before server shutdown begins.
 	preShutdownHooks []config.ShutdownHookConfig
@@ -165,22 +179,25 @@ func New(cfg ...config.Config) *Server {
 	server := c.Server
 	if server == nil {
 		server = &http.Server{
-			Addr:           c.Addr,
-			ReadTimeout:    10 * time.Second,
-			WriteTimeout:   10 * time.Second,
-			IdleTimeout:    60 * time.Second,
-			MaxHeaderBytes: 1 << 20, // 1 MB
+			Addr:              c.Addr,
+			ReadTimeout:       DefaultReadTimeout,
+			ReadHeaderTimeout: DefaultReadHeaderTimeout,
+			WriteTimeout:      DefaultWriteTimeout,
+			IdleTimeout:       DefaultIdleTimeout,
+			MaxHeaderBytes:    1 << 20, // 1 MB
 		}
 	}
 
+	// Only create TLS server if TLS is actually configured
 	tlsServer := c.TLS.Server
-	if tlsServer == nil {
+	if tlsServer == nil && needsTLSServer(c) {
 		tlsServer = &http.Server{
-			Addr:           c.TLS.Addr,
-			ReadTimeout:    10 * time.Second,
-			WriteTimeout:   10 * time.Second,
-			IdleTimeout:    60 * time.Second,
-			MaxHeaderBytes: 1 << 20, // 1 MB
+			Addr:              c.TLS.Addr,
+			ReadTimeout:       DefaultReadTimeout,
+			ReadHeaderTimeout: DefaultReadHeaderTimeout,
+			WriteTimeout:      DefaultWriteTimeout,
+			IdleTimeout:       DefaultIdleTimeout,
+			MaxHeaderBytes:    1 << 20, // 1 MB
 			TLSConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
 				NextProtos: []string{"h2", "http/1.1"},
@@ -213,7 +230,9 @@ func New(cfg ...config.Config) *Server {
 		metricsServerAddr:  c.Metrics.ServerAddr,
 		validator:          c.Validator,
 		logger:             logger,
+		preStartupHooks:    c.Lifecycle.PreStartupHooks,
 		startupHooks:       c.Lifecycle.StartupHooks,
+		postStartupHooks:   c.Lifecycle.PostStartupHooks,
 		preShutdownHooks:   c.Lifecycle.PreShutdownHooks,
 		shutdownHooks:      c.Lifecycle.ShutdownHooks,
 		postShutdownHooks:  c.Lifecycle.PostShutdownHooks,
@@ -224,11 +243,12 @@ func New(cfg ...config.Config) *Server {
 	// Configure separate metrics server if ServerAddr is set
 	if c.Metrics.Enabled && registry != nil && c.Metrics.ServerAddr != "" {
 		s.metricsServer = &http.Server{
-			Addr:         c.Metrics.ServerAddr,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
-			IdleTimeout:  60 * time.Second,
-			Handler:      metrics.Handler(registry),
+			Addr:              c.Metrics.ServerAddr,
+			ReadTimeout:       DefaultReadTimeout,
+			ReadHeaderTimeout: DefaultReadHeaderTimeout,
+			WriteTimeout:      DefaultWriteTimeout,
+			IdleTimeout:       DefaultIdleTimeout,
+			Handler:           metrics.Handler(registry),
 		}
 	}
 
@@ -329,10 +349,9 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
 
-	// Run startup hooks before starting any servers
-	// If any hook fails, the server will not start
-	if err := s.runStartupHooks(s.baseCtx); err != nil {
-		s.logger.Error("Startup hook failed, server not starting", log.E(err))
+	// Run pre-startup hooks first
+	if err := s.runPreStartupHooks(s.baseCtx); err != nil {
+		s.logger.Error("Pre-startup hook failed, server not starting", log.E(err))
 		return err
 	}
 
@@ -452,18 +471,57 @@ func (s *Server) Start() error {
 		return nil
 	}
 
+	// Run startup hooks concurrently with servers
+	startupHookErrCh := make(chan error, 1)
+	go func() {
+		if err := s.runStartupHooks(s.baseCtx); err != nil {
+			s.logger.Error("Startup hook failed, initiating shutdown", log.E(err))
+			startupHookErrCh <- err
+			// Trigger shutdown to stop the servers
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.Shutdown(shutdownCtx)
+			return
+		}
+		close(startupHookErrCh)
+
+		// Run post-startup hooks after startup hooks complete successfully
+		if err := s.runPostStartupHooks(s.baseCtx); err != nil {
+			s.logger.Error("Post-startup hook failed", log.E(err))
+			// Non-fatal - continue running
+		}
+	}()
+
 	// Close errCh when all goroutines complete, then range to collect any errors
 	go func() {
 		wg.Wait()
 		close(errCh)
 	}()
 
-	for err := range errCh {
-		if err != nil {
-			return err
+	// Check for server errors or startup hook errors
+	for {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				return err
+			}
+			// errCh closed without error, check startup hook
+			if hookErr := <-startupHookErrCh; hookErr != nil {
+				return hookErr
+			}
+			return nil
+		case hookErr := <-startupHookErrCh:
+			// Startup hook failed, wait for servers to shut down
+			if hookErr != nil {
+				// Drain errCh
+				go func() {
+					for range errCh {
+					}
+				}()
+				return hookErr
+			}
 		}
 	}
-	return nil
 }
 
 // ListenerAddr returns the network address that the HTTP server is listening on.
@@ -730,6 +788,15 @@ func (s *Server) Close() error {
 	}
 
 	return lastErr
+}
+
+// needsTLSServer returns true if the config requires a TLS server to be created.
+func needsTLSServer(c config.Config) bool {
+	return c.TLS.CertFile != "" ||
+		c.TLS.KeyFile != "" ||
+		c.Extensions.AutocertManager != nil ||
+		c.TLS.Listener != nil ||
+		c.Extensions.HTTP3Server != nil
 }
 
 func fmtHTTPAddr(addr string) string {

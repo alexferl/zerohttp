@@ -630,3 +630,33 @@ func TestServerWithValidator(t *testing.T) {
 		t.Error("Validator should be set via config option")
 	}
 }
+
+func TestDefaultTimeoutConstants(t *testing.T) {
+	if DefaultReadTimeout != 10*time.Second {
+		t.Errorf("Expected DefaultReadTimeout = 10s, got %v", DefaultReadTimeout)
+	}
+	if DefaultWriteTimeout != 15*time.Second {
+		t.Errorf("Expected DefaultWriteTimeout = 15s, got %v", DefaultWriteTimeout)
+	}
+	if DefaultIdleTimeout != 60*time.Second {
+		t.Errorf("Expected DefaultIdleTimeout = 60s, got %v", DefaultIdleTimeout)
+	}
+}
+
+func TestServer_DefaultTimeoutsApplied(t *testing.T) {
+	server := New()
+
+	if server.server == nil {
+		t.Fatal("Expected HTTP server to be created")
+	}
+
+	if server.server.ReadTimeout != DefaultReadTimeout {
+		t.Errorf("Expected ReadTimeout = %v, got %v", DefaultReadTimeout, server.server.ReadTimeout)
+	}
+	if server.server.WriteTimeout != DefaultWriteTimeout {
+		t.Errorf("Expected WriteTimeout = %v, got %v", DefaultWriteTimeout, server.server.WriteTimeout)
+	}
+	if server.server.IdleTimeout != DefaultIdleTimeout {
+		t.Errorf("Expected IdleTimeout = %v, got %v", DefaultIdleTimeout, server.server.IdleTimeout)
+	}
+}

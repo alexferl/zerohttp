@@ -22,25 +22,39 @@ const (
 // TokenStore is the interface for JWT token operations.
 // Users implement this interface to integrate their preferred JWT library
 // and handle token persistence (generation, validation, revocation).
+//
+// Best Practice: Validate() should return map[string]any for maximum compatibility
+// with the middleware. If you return a custom type, claims normalization will
+// convert it using reflection, but map[string]any is fastest and most reliable.
 type TokenStore interface {
 	// Validate parses and validates a JWT token, returning the claims.
 	// Returns (claims, nil) on valid token, (nil, error) on invalid.
+	//
+	// RECOMMENDED: Return map[string]any for best performance and compatibility.
+	// The middleware will normalize any returned type to map[string]any anyway.
 	Validate(ctx context.Context, token string) (JWTClaims, error)
 
 	// Generate creates a new signed JWT token for the given claims.
 	// Used for access tokens and refresh tokens.
-	Generate(ctx context.Context, claims JWTClaims, tokenType TokenType) (string, error)
+	//
+	// Note: The TTL is provided so you can set the exp claim correctly for your
+	// JWT library. Some libraries expect time.Time, others expect Unix timestamp.
+	Generate(ctx context.Context, claims JWTClaims, tokenType TokenType, ttl time.Duration) (string, error)
 
-	// Revoke invalidates a refresh token (called during logout).
+	// Revoke invalidates a refresh token (called during logout/refresh).
 	// Implement this to store revoked token identifiers (e.g., jti) in database/Redis.
 	// Return nil if revocation succeeds or if token doesn't need revocation.
-	Revoke(ctx context.Context, claims JWTClaims) error
+	//
+	// Note: claims is always passed as map[string]any for consistency.
+	Revoke(ctx context.Context, claims map[string]any) error
 
 	// IsRevoked checks if a refresh token has been revoked.
 	// Return (true, nil) if token was revoked, (false, nil) if not revoked.
 	// Return error if the check fails (e.g., database connection error).
 	// Called during token refresh to prevent use of revoked tokens.
-	IsRevoked(ctx context.Context, claims JWTClaims) (bool, error)
+	//
+	// Note: claims is always passed as map[string]any for consistency.
+	IsRevoked(ctx context.Context, claims map[string]any) (bool, error)
 }
 
 // JWTAuthConfig configures JWT authentication middleware

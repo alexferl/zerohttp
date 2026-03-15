@@ -162,7 +162,10 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			revoked, err := c.TokenStore.IsRevoked(r.Context(), claims)
+			// Normalize claims to map[string]any for consistent access
+			normalizedClaims := normalizeClaims(claims)
+
+			revoked, err := c.TokenStore.IsRevoked(r.Context(), normalizedClaims)
 			if err != nil {
 				reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("invalid").Inc()
 				handleJWTError(w, r, &JWTAuthError{
@@ -208,11 +211,11 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 			reg.Counter("jwt_auth_requests_total", "result").WithLabelValues("valid").Inc()
 
 			if onSuccess != nil {
-				onSuccess(r, claims)
+				onSuccess(r, normalizedClaims)
 			}
 
 			ctx := r.Context()
-			ctx = context.WithValue(ctx, JWTClaimsContextKey, claims)
+			ctx = context.WithValue(ctx, JWTClaimsContextKey, normalizedClaims)
 			ctx = context.WithValue(ctx, JWTTokenContextKey, tokenString)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -268,7 +271,8 @@ func GetJWTClaims(r *http.Request) JWTClaims {
 // asMap normalizes claims to map[string]any for consistent access.
 // Handles both map[string]any and HS256Claims types.
 func (j JWTClaims) asMap() (map[string]any, bool) {
-	return normalizeClaims(j.claims)
+	m := normalizeClaims(j.claims)
+	return m, m != nil
 }
 
 // Subject returns the 'sub' claim.
@@ -393,7 +397,7 @@ func GenerateAccessToken(r *http.Request, claims config.JWTClaims, cfg config.JW
 
 	claims = addExpirationToClaims(claims, ttl)
 
-	return cfg.TokenStore.Generate(r.Context(), claims, config.AccessToken)
+	return cfg.TokenStore.Generate(r.Context(), claims, config.AccessToken, ttl)
 }
 
 // GenerateRefreshToken generates a new refresh token for the given claims.
@@ -413,7 +417,7 @@ func GenerateRefreshToken(r *http.Request, claims config.JWTClaims, cfg config.J
 	claims = addExpirationToClaims(claims, ttl)
 	claims = addTypeToClaims(claims, config.TokenTypeRefresh)
 
-	return cfg.TokenStore.Generate(r.Context(), claims, config.RefreshToken)
+	return cfg.TokenStore.Generate(r.Context(), claims, config.RefreshToken, ttl)
 }
 
 // writeJWTError writes a JWTAuthError response
@@ -466,7 +470,10 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 
-	if tokenType := getStringClaim(claims, config.JWTClaimType); tokenType != config.TokenTypeRefresh {
+	// Normalize claims to map[string]any for consistent access
+	normalizedClaims := normalizeClaims(claims)
+
+	if tokenType := getStringClaim(normalizedClaims, config.JWTClaimType); tokenType != config.TokenTypeRefresh {
 		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Invalid Token Type",
 			Status: http.StatusUnprocessableEntity,
@@ -475,7 +482,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 
-	revoked, err := cfg.TokenStore.IsRevoked(r.Context(), claims)
+	revoked, err := cfg.TokenStore.IsRevoked(r.Context(), normalizedClaims)
 	if err != nil {
 		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Token Revocation Check Failed",
@@ -493,7 +500,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 
-	if err := cfg.TokenStore.Revoke(r.Context(), claims); err != nil {
+	if err := cfg.TokenStore.Revoke(r.Context(), normalizedClaims); err != nil {
 		writeJWTError(w, r, &JWTAuthError{
 			Title:  "Token Revocation Failed",
 			Status: http.StatusInternalServerError,
@@ -502,7 +509,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 		return nil, false
 	}
 
-	return claims, true
+	return normalizedClaims, true
 }
 
 // RefreshTokenHandler returns an http.HandlerFunc that handles token refresh.
@@ -622,24 +629,35 @@ func hasClaim(claims config.JWTClaims, key string) bool {
 
 // normalizeClaims converts claims to map[string]any for consistent access.
 // Handles map[string]any, HS256Claims, and other map types via reflection.
-func normalizeClaims(claims config.JWTClaims) (map[string]any, bool) {
+// Always returns a usable map (never nil) - converts non-map types to map with "_raw" key.
+func normalizeClaims(claims config.JWTClaims) map[string]any {
 	if claims == nil {
-		return nil, false
+		return nil
 	}
 	switch c := claims.(type) {
 	case map[string]any:
-		return c, true
+		return c
 	case HS256Claims:
-		return c, true
+		return map[string]any(c)
 	default:
-		// For other map types, use reflection
-		return nil, false
+		// Try reflection for other map types (e.g., jwt.MapClaims)
+		v := reflect.ValueOf(claims)
+		if v.Kind() == reflect.Map && v.Type().Key().Kind() == reflect.String {
+			m := make(map[string]any, v.Len())
+			for _, key := range v.MapKeys() {
+				m[key.String()] = v.MapIndex(key).Interface()
+			}
+			return m
+		}
+		// Last resort: wrap in a map
+		return map[string]any{"_raw": claims}
 	}
 }
 
 // getStringClaim extracts a string claim from claims
 func getStringClaim(claims config.JWTClaims, key string) string {
-	if m, ok := normalizeClaims(claims); ok {
+	m := normalizeClaims(claims)
+	if m != nil {
 		if v, ok := m[key]; ok {
 			switch s := v.(type) {
 			case string:

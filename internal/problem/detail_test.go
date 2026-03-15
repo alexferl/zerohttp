@@ -257,7 +257,8 @@ func TestDetail_RenderAuto(t *testing.T) {
 		{"accepts HTML only", "text/html", false},
 		{"empty accept header", "", false},
 		{"accepts JSON with quality", "application/json;q=0.9", true},
-		{"accepts HTML with wildcard", "text/html,*/*;q=0.8", true},
+		{"accepts HTML with wildcard", "text/html,*/*;q=0.8", false},
+		{"accepts browser header", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", false},
 	}
 
 	for _, tt := range tests {
@@ -324,7 +325,19 @@ func TestAcceptsJSON(t *testing.T) {
 		{"json with quality", "application/json;q=0.9", true},
 		{"problem+json with quality", "application/problem+json;q=0.8", true},
 		{"html only", "text/html,application/xhtml+xml,application/xml;q=0.9", false},
-		{"html with wildcard", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", true},
+		{"html with wildcard", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", false},
+		{"browser accept header", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8", false},
+		{"json higher priority than html", "application/json;q=0.9,text/html;q=0.8", true},
+		{"html higher priority than json", "text/html;q=0.9,application/json;q=0.8", false},
+		{"json explicit q=0 refusal", "application/json;q=0, */*", false},
+		{"json q=0 with html", "application/json;q=0, text/html", false},
+		{"json q=0 with wildcard and html", "application/json;q=0, text/html, */*;q=0.5", false},
+		{"empty entry in accept", "application/json,,text/html", true},
+		{"invalid quality value", "application/json;q=invalid, */*", true},
+		{"quality out of range high", "application/json;q=1.5", true},
+		{"quality out of range low", "application/json;q=-0.5", true},
+		{"quality exactly 0", "application/json;q=0, text/html", false},
+		{"quality exactly 1", "application/json;q=1", true},
 	}
 
 	for _, tt := range tests {

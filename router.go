@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware"
 )
@@ -95,6 +94,22 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 		}
 		if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
 			log.GetGlobalLogger().Error("Failed to encode binding error response", log.E(encErr))
+		}
+		return
+	}
+
+	// Check for request body too large errors (413)
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		response := map[string]any{
+			"title":  "Payload Too Large",
+			"status": http.StatusRequestEntityTooLarge,
+			"detail": "Request body exceeds maximum allowed size",
+		}
+		if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
+			log.GetGlobalLogger().Error("Failed to encode payload too large error response", log.E(encErr))
 		}
 		return
 	}
@@ -740,14 +755,10 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			if !methodAllowed {
 				w.Header().Set(HeaderAllow, allowHeader)
 
-				if problem.AcceptsJSON(req) {
-					jsonMethodNotAllowedHandler(w, req)
-				} else {
-					r.handlerMu.RLock()
-					methodNotAllowedHandler := r.methodNotAllowedHandler
-					r.handlerMu.RUnlock()
-					methodNotAllowedHandler.ServeHTTP(w, req)
-				}
+				r.handlerMu.RLock()
+				methodNotAllowedHandler := r.methodNotAllowedHandler
+				r.handlerMu.RUnlock()
+				methodNotAllowedHandler.ServeHTTP(w, req)
 
 				if shouldLog {
 					middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusMethodNotAllowed, time.Since(start), "", "")
@@ -765,14 +776,10 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			r.routesMu.RUnlock()
 		}
 
-		if problem.AcceptsJSON(req) {
-			jsonNotFoundHandler(w, req)
-		} else {
-			r.handlerMu.RLock()
-			notFoundHandler := r.notFoundHandler
-			r.handlerMu.RUnlock()
-			notFoundHandler.ServeHTTP(w, req)
-		}
+		r.handlerMu.RLock()
+		notFoundHandler := r.notFoundHandler
+		r.handlerMu.RUnlock()
+		notFoundHandler.ServeHTTP(w, req)
 
 		if shouldLog {
 			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
