@@ -19,17 +19,21 @@ Basic functionality that doesn't require external dependencies beyond the standa
 - [**`file_server/`**](core/file_server/) - Static file serving
 - [**`file_upload/`**](core/file_upload/) - Multipart file uploads
 - [**`graceful/`**](core/graceful/) - Graceful shutdown handling
+- [**`hsts/`**](core/hsts/) - HTTP Strict Transport Security
 - [**`healthcheck/`**](core/healthcheck/) - Health check endpoints
 - [**`hello_world/`**](core/hello_world/) - Simplest possible server
-- [**`hsts/`**](core/hsts/) - HTTP Strict Transport Security
 - [**`lifecycle/`**](core/lifecycle/) - Server lifecycle hooks
 - [**`metrics/`**](core/metrics/) - Prometheus metrics endpoint
 - [**`pprof/`**](core/pprof/) - Performance profiling endpoints
 - [**`problem_detail/`**](core/problem_detail/) - RFC 7807 Problem Detail responses
+- [**`rendering/`**](core/rendering/) - Response rendering methods (JSON, HTML, text, blob, stream)
+- [**`request_tracing/`**](core/request_tracing/) - Request ID propagation for tracing
+- [**`route_groups/`**](core/route_groups/) - Route groups with nested middleware
 - [**`static_spa/`**](core/static_spa/) - Single Page Application serving
 - [**`static_website/`**](core/static_website/) - Static website serving
 - [**`template/`**](core/template/) - HTML template rendering
 - [**`template_renderer/`**](core/template_renderer/) - Custom template renderer setup
+- [**`testing/`**](core/testing/) - Testing handlers with zhtest
 - [**`tls/`**](core/tls/) - HTTPS/TLS configuration
 - [**`validation_basic/`**](core/validation_basic/) - Basic struct validation
 - [**`validation_custom/`**](core/validation_custom/) - Custom validation rules
