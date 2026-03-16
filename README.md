@@ -1,49 +1,10 @@
-# zerohttp [![Go Report Card](https://goreportcard.com/badge/github.com/alexferl/zerohttp)](https://goreportcard.com/report/github.com/alexferl/zerohttp) [![Coverage Status](https://coveralls.io/repos/github.com/alexferl/zerohttp/badge.svg?branch=master)](https://coveralls.io/github.com/alexferl/zerohttp?branch=master)
-
-**⚠️ This is a pre-v1 release - APIs may change as we work toward a stable v1.0.**
+# zerohttp [![Go Report Card](https://goreportcard.com/badge/github.com/alexferl/zerohttp)](https://goreportcard.com/report/github.com/alexferl/zerohttp) [![Coverage Status](https://coveralls.io/repos/github/alexferl/zerohttp/badge.svg?branch=master)](https://coveralls.io/github/alexferl/zerohttp?branch=master)
 
 A lightweight, secure-by-default HTTP framework for Go. Built on `net/http` with zero external dependencies.
 
-## Quick Start
-
-```go
-package main
-
-import (
-    "log"
-    "net/http"
-
-    zh "github.com/alexferl/zerohttp"
-)
-
-func main() {
-    app := zh.New()
-
-    app.GET("/hello/{name}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-        name := zh.Param(r, "name")
-        return zh.Render.JSON(w, http.StatusOK, zh.M{"message": "Hello, " + name})
-    }))
-
-    log.Fatal(app.Start())
-}
-```
-
-```bash
-go run main.go
-curl http://localhost:8080/hello/world
-```
-
-## Installation
-
-```bash
-go get github.com/alexferl/zerohttp
-```
-
-Requires Go 1.25 or later.
-
 ## Why zerohttp?
 
-**Built on stdlib, not instead of it.** zerohttp builds on Go’s `net/http` rather than replacing it, so your handlers stay standard `http.HandlerFunc` and work with existing middleware and tooling.
+**Built on stdlib, not instead of it.** zerohttp builds on Go's `net/http` rather than replacing it, so your handlers stay standard `http.HandlerFunc` and work with existing middleware and tooling.
 
 **Secure by default.** Sensible security headers, request body limits, panic recovery, and request IDs are applied automatically for every request.
 
@@ -64,6 +25,44 @@ Requires Go 1.25 or later.
 - **Metrics** - Prometheus-compatible metrics at `/metrics`
 - **Lifecycle hooks** - Pre/post startup and shutdown hooks
 - **Pluggable** - Bring your own validator, tracer, HTTP/3, WebSocket, SSE
+
+## Installation
+
+```shell
+go get github.com/alexferl/zerohttp
+```
+
+Requires Go 1.25 or later.
+
+## Quick Start
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+
+    zh "github.com/alexferl/zerohttp"
+)
+
+func main() {
+    app := zh.New()
+
+    app.GET("/hello/{name}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+        name := zh.Param(r, "name")
+        return zh.Render.JSON(w, http.StatusOK, zh.M{"message": "Hello, " + name + "!"})
+    }))
+
+    log.Fatal(app.Start())
+}
+```
+
+```shell
+go run main.go
+curl http://localhost:8080/hello/world
+{"message":"Hello, world!"}
+```
 
 ## Documentation
 
