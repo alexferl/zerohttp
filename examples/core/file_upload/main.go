@@ -11,6 +11,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 const (
@@ -131,7 +132,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) error {
 
 	// Set Location header for single file upload
 	if len(uploadedFiles) == 1 {
-		w.Header().Set("Location", uploadedFiles[0]["download_url"].(string))
+		w.Header().Set(httpx.HeaderLocation, uploadedFiles[0]["download_url"].(string))
 	}
 
 	return zh.R.JSON(w, statusCode, response)

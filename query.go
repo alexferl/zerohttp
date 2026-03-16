@@ -1,3 +1,27 @@
+// Package zerohttp provides query parameter extraction with type conversion.
+//
+// The Query extractor provides type-safe access to URL query parameters:
+//
+//	// String value
+//	q := zh.QueryParam(r, "search")
+//
+//	// Typed extraction
+//	page, err := zh.QueryParamAs[int](r, "page")
+//	if err != nil {
+//	    return err
+//	}
+//
+//	// With default
+//	limit := zh.QueryParamAsOrDefault(r, "limit", 20)
+//
+//	// Struct binding
+//	var req struct {
+//	    Search string `query:"search"`
+//	    Page   int    `query:"page"`
+//	}
+//	if err := zh.Bind.Query(r, &req); err != nil {
+//	    return err
+//	}
 package zerohttp
 
 import (

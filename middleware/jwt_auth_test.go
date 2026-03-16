@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -82,7 +83,7 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 
 	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -99,8 +100,8 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
@@ -122,8 +123,8 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 	// Test JSON response
 	reg := metrics.NewRegistry()
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer invalid-token")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer invalid-token")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	req = req.WithContext(metrics.WithRegistry(req.Context(), reg))
 	rr := httptest.NewRecorder()
 
@@ -156,11 +157,11 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 
 	// Test plain text response
 	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer invalid-token")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer invalid-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
@@ -196,7 +197,7 @@ func TestJWTAuth_Success(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -288,8 +289,8 @@ func TestJWTAuth_RequiredClaims(t *testing.T) {
 
 	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -304,17 +305,17 @@ func TestJWTAuth_RequiredClaims(t *testing.T) {
 
 	// Test plain text response
 	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
 func TestJWTAuth_CustomErrorHandler(t *testing.T) {
 	customHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusTeapot)
 		_, _ = w.Write([]byte(`{"error":"custom error"}`))
 	}
@@ -360,7 +361,7 @@ func TestJWTAuth_OnSuccess(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -827,7 +828,7 @@ func TestRefreshTokenHandler(t *testing.T) {
 
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -866,7 +867,7 @@ func TestRefreshTokenHandler_InvalidMethod(t *testing.T) {
 	}
 
 	// Test JSON response
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	zhtest.AssertWith(t, rr).IsProblemDetail().ProblemDetailDetail("Method not allowed")
@@ -875,7 +876,7 @@ func TestRefreshTokenHandler_InvalidMethod(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/auth/refresh", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertWith(t, rr).Header("Content-Type", "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestRefreshTokenHandler_MissingToken(t *testing.T) {
@@ -894,7 +895,7 @@ func TestRefreshTokenHandler_MissingToken(t *testing.T) {
 
 	body := `{}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -922,7 +923,7 @@ func TestRefreshTokenHandler_InvalidToken(t *testing.T) {
 
 	body := `{"refresh_token":"invalid-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -953,7 +954,7 @@ func TestRefreshTokenHandler_NotRefreshToken(t *testing.T) {
 
 	body := `{"refresh_token":"access-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -987,8 +988,8 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 	// Test JSON response
 	body := `{"refresh_token":"revoked-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -1003,11 +1004,11 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 
 	// Test plain text response
 	req = httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
@@ -1038,7 +1039,7 @@ func TestRefreshTokenHandler_TokenAllowed(t *testing.T) {
 
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1072,7 +1073,7 @@ func TestLogoutTokenHandler(t *testing.T) {
 
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1109,7 +1110,7 @@ func TestLogoutTokenHandler_InvalidMethod(t *testing.T) {
 	}
 
 	// Test JSON response
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	zhtest.AssertWith(t, rr).IsProblemDetail().ProblemDetailDetail("Method not allowed")
@@ -1118,7 +1119,7 @@ func TestLogoutTokenHandler_InvalidMethod(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/auth/logout", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertWith(t, rr).Header("Content-Type", "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestLogoutTokenHandler_NoTokenStore(t *testing.T) {
@@ -1127,7 +1128,7 @@ func TestLogoutTokenHandler_NoTokenStore(t *testing.T) {
 
 	body := `{"refresh_token":"some-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1151,7 +1152,7 @@ func TestLogoutTokenHandler_MissingToken(t *testing.T) {
 
 	body := `{}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1176,7 +1177,7 @@ func TestLogoutTokenHandler_InvalidToken(t *testing.T) {
 
 	body := `{"refresh_token":"invalid-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1204,7 +1205,7 @@ func TestLogoutTokenHandler_NotRefreshToken(t *testing.T) {
 
 	body := `{"refresh_token":"access-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1237,8 +1238,8 @@ func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 	// Test JSON response
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -1253,11 +1254,11 @@ func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 
 	// Test plain text response
 	req = httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), httpx.MIMETextPlain) {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
@@ -1819,7 +1820,7 @@ func TestDefaultJWTErrorHandler_NoError(t *testing.T) {
 
 func TestExtractBearerToken_NoBearer(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Basic abc123")
+	req.Header.Set(httpx.HeaderAuthorization, "Basic abc123")
 
 	token := extractBearerToken(req)
 	if token != "" {
@@ -1935,7 +1936,7 @@ func TestRefreshTokenHandler_StoreError(t *testing.T) {
 
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1962,7 +1963,7 @@ func TestLogoutTokenHandler_AlreadyRevoked(t *testing.T) {
 
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -1990,8 +1991,8 @@ func TestJWTAuth_RevokedToken(t *testing.T) {
 
 	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer revoked-token")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer revoked-token")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -2006,11 +2007,11 @@ func TestJWTAuth_RevokedToken(t *testing.T) {
 
 	// Test plain text response
 	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer revoked-token")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer revoked-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
@@ -2034,8 +2035,8 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 
 	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer refresh-token")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer refresh-token")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -2050,11 +2051,11 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 
 	// Test plain text response
 	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer refresh-token")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer refresh-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
@@ -2091,7 +2092,7 @@ func TestJWTAuth_Metrics(t *testing.T) {
 
 	// Request with valid token
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("Authorization", "Bearer valid-token")
+	req2.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
 	rr2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr2, req2)
 	if rr2.Code != http.StatusOK {
@@ -2145,8 +2146,8 @@ func TestJWTAuth_IsRevokedCheckError(t *testing.T) {
 
 	// Test JSON response
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -2164,11 +2165,11 @@ func TestJWTAuth_IsRevokedCheckError(t *testing.T) {
 
 	// Test plain text response
 	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Header().Get("Content-Type"), "text/plain") {
-		t.Errorf("expected text/plain, got %s", rr.Header().Get("Content-Type"))
+	if !strings.Contains(rr.Header().Get(httpx.HeaderContentType), "text/plain") {
+		t.Errorf("expected text/plain, got %s", rr.Header().Get(httpx.HeaderContentType))
 	}
 }
 
@@ -2192,7 +2193,7 @@ func TestRefreshTokenHandler_IsRevokedCheckError(t *testing.T) {
 
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -2348,7 +2349,7 @@ func TestRefreshTokenHandler_GenerateRefreshTokenError(t *testing.T) {
 
 	body := `{"refresh_token":"valid-refresh-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)

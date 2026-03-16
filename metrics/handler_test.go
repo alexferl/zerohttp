@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestHandler_NilRegistry(t *testing.T) {
@@ -37,8 +39,8 @@ func TestHandler_EmptyRegistry(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	contentType := rec.Header().Get("Content-Type")
-	if contentType != "text/plain; charset=utf-8" {
+	contentType := rec.Header().Get(httpx.HeaderContentType)
+	if contentType != httpx.MIMETextPlainCharset {
 		t.Errorf("expected text/plain content type, got: %s", contentType)
 	}
 }

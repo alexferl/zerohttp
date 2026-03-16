@@ -3,6 +3,8 @@ package config
 import (
 	"context"
 	"time"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // CacheStore is the interface for cache storage backends.
@@ -84,7 +86,7 @@ var DefaultCacheConfig = CacheConfig{
 	MaxEntries:   10000,
 	ETag:         true,
 	LastModified: true,
-	Vary:         []string{"Accept", "Accept-Encoding", "Accept-Language"},
+	Vary:         []string{httpx.HeaderAccept, httpx.HeaderAcceptEncoding, httpx.HeaderAcceptLanguage},
 	ExemptPaths:  []string{},
 	StatusCodes:  []int{200, 201, 204, 301, 302, 304, 307, 308},
 }

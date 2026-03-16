@@ -1,3 +1,4 @@
+// Package zerohttp provides TLS and HTTPS server support. See [Server.ListenAndServeTLS] and [Server.StartAutoTLS].
 package zerohttp
 
 import (

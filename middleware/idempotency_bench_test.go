@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkIdempotency_CacheHit measures the overhead of a cache hit (store.Get + header replay).
@@ -35,7 +36,7 @@ func BenchmarkIdempotency_CacheHit(b *testing.B) {
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/test", bytes.NewReader([]byte(`{}`)))
-	req.Header.Set("Idempotency-Key", "test-key")
+	req.Header.Set(httpx.HeaderIdempotencyKey, "test-key")
 
 	b.ResetTimer()
 	b.ReportAllocs()

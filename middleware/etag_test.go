@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -53,7 +54,7 @@ func TestETag_NotModified(t *testing.T) {
 
 	// Second request with If-None-Match
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-None-Match", etag)
+	req2.Header.Set(httpx.HeaderIfNoneMatch, etag)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
@@ -75,7 +76,7 @@ func TestETag_NotModified_MultipleETags(t *testing.T) {
 
 	// Request with multiple ETags in If-None-Match
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-None-Match", `"other1", `+etag+`, "other2"`)
+	req2.Header.Set(httpx.HeaderIfNoneMatch, `"other1", `+etag+`, "other2"`)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
@@ -88,7 +89,7 @@ func TestETag_NotModified_Wildcard(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("If-None-Match", "*")
+	req.Header.Set(httpx.HeaderIfNoneMatch, "*")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -143,7 +144,7 @@ func TestETag_NoETagOnNoContent(t *testing.T) {
 
 func TestETag_NoETagOnStreamingContent(t *testing.T) {
 	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set(httpx.HeaderContentType, "text/event-stream")
 		_, _ = w.Write([]byte("data: hello\n\n"))
 	}))
 
@@ -175,7 +176,7 @@ func TestETag_NoETagOnNoStore(t *testing.T) {
 
 func TestETag_PreservesExistingETag(t *testing.T) {
 	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("ETag", `"custom-etag"`)
+		w.Header().Set(httpx.HeaderETag, `"custom-etag"`)
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -291,7 +292,7 @@ func TestETag_ExemptFunc(t *testing.T) {
 
 func TestETag_SkipContentTypes(t *testing.T) {
 	handler := ETag(config.ETagConfig{SkipContentTypes: map[string]struct{}{"application/pdf": {}}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set(httpx.HeaderContentType, "application/pdf")
 		_, _ = w.Write([]byte("pdf content"))
 	}))
 
@@ -380,7 +381,7 @@ func TestETag_ChangedContent(t *testing.T) {
 
 	// Request with old ETag should return new content
 	req3 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req3.Header.Set("If-None-Match", etag1)
+	req3.Header.Set(httpx.HeaderIfNoneMatch, etag1)
 	rec3 := httptest.NewRecorder()
 	handler.ServeHTTP(rec3, req3)
 
@@ -404,7 +405,7 @@ func TestETag_NotModified_StrongVsWeak(t *testing.T) {
 
 	// Request with strong ETag should still match weak ETag
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-None-Match", strongETag)
+	req2.Header.Set(httpx.HeaderIfNoneMatch, strongETag)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
@@ -430,7 +431,7 @@ func TestETag_DefaultConfig(t *testing.T) {
 func TestETag_ContentEncodingAware(t *testing.T) {
 	// Same content with different content-encoding should produce different ETags
 	handlerGzip := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set(httpx.HeaderContentEncoding, "gzip")
 		_, _ = w.Write([]byte("hello world"))
 	}))
 
@@ -455,7 +456,7 @@ func TestETag_ContentEncodingAware(t *testing.T) {
 
 func TestETag_ContentEncodingNotModified(t *testing.T) {
 	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set(httpx.HeaderContentEncoding, "gzip")
 		_, _ = w.Write([]byte("hello world"))
 	}))
 
@@ -467,7 +468,7 @@ func TestETag_ContentEncodingNotModified(t *testing.T) {
 
 	// Second request with matching If-None-Match
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-None-Match", etag)
+	req2.Header.Set(httpx.HeaderIfNoneMatch, etag)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
@@ -489,7 +490,7 @@ func TestETag_IfRange_MatchingETag(t *testing.T) {
 
 	// Range request with matching If-Range
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-Range", etag)
+	req2.Header.Set(httpx.HeaderIfRange, etag)
 	req2.Header.Set("Range", "bytes=0-4")
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
@@ -497,7 +498,7 @@ func TestETag_IfRange_MatchingETag(t *testing.T) {
 	zhtest.AssertWith(t, rec2).
 		Status(http.StatusPartialContent).
 		Body("01234").
-		Header("Content-Range", "bytes 0-4/10")
+		Header(httpx.HeaderContentRange, "bytes 0-4/10")
 }
 
 func TestETag_IfRange_NonMatchingETag(t *testing.T) {
@@ -507,8 +508,8 @@ func TestETag_IfRange_NonMatchingETag(t *testing.T) {
 
 	// Range request with non-matching If-Range should return full content
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("If-Range", `"old-etag"`)
-	req.Header.Set("Range", "bytes=0-4")
+	req.Header.Set(httpx.HeaderIfRange, `"old-etag"`)
+	req.Header.Set(httpx.HeaderRange, "bytes=0-4")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -526,8 +527,8 @@ func TestETag_IfRange_NoETagHeader(t *testing.T) {
 
 	// Range request with date-based If-Range should return full content
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("If-Range", "Wed, 21 Oct 2015 07:28:00 GMT")
-	req.Header.Set("Range", "bytes=0-4")
+	req.Header.Set(httpx.HeaderIfRange, "Wed, 21 Oct 2015 07:28:00 GMT")
+	req.Header.Set(httpx.HeaderRange, "bytes=0-4")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -633,7 +634,7 @@ func TestETag_Range_OpenEnded(t *testing.T) {
 
 	// Range request with open-ended range (bytes=5-)
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-Range", etag)
+	req2.Header.Set(httpx.HeaderIfRange, etag)
 	req2.Header.Set("Range", "bytes=5-")
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
@@ -656,7 +657,7 @@ func TestETag_Range_InvalidRange(t *testing.T) {
 
 	// Range request with invalid range (start > end)
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-Range", etag)
+	req2.Header.Set(httpx.HeaderIfRange, etag)
 	req2.Header.Set("Range", "bytes=20-30") // Beyond content length
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
@@ -696,7 +697,7 @@ func TestETag_IfMatch_DoesNotMatch(t *testing.T) {
 
 	// Request with non-matching If-Match should return 412
 	req := httptest.NewRequest(http.MethodPut, "/", nil)
-	req.Header.Set("If-Match", `"old-etag"`)
+	req.Header.Set(httpx.HeaderIfMatch, `"old-etag"`)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -710,7 +711,7 @@ func TestETag_IfMatch_Wildcard(t *testing.T) {
 
 	// Request with If-Match: * should succeed if resource exists
 	req := httptest.NewRequest(http.MethodPut, "/", nil)
-	req.Header.Set("If-Match", "*")
+	req.Header.Set(httpx.HeaderIfMatch, "*")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -806,7 +807,7 @@ func TestETag_Range_InvalidFormat(t *testing.T) {
 
 	// Range request with invalid format (missing dash)
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-Range", etag)
+	req2.Header.Set(httpx.HeaderIfRange, etag)
 	req2.Header.Set("Range", "bytes=0") // Invalid format
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
@@ -828,7 +829,7 @@ func TestETag_Range_NonNumericStart(t *testing.T) {
 
 	// Range request with non-numeric start
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-Range", etag)
+	req2.Header.Set(httpx.HeaderIfRange, etag)
 	req2.Header.Set("Range", "bytes=abc-5")
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
@@ -850,7 +851,7 @@ func TestETag_Range_NonNumericEnd(t *testing.T) {
 
 	// Range request with non-numeric end
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set("If-Range", etag)
+	req2.Header.Set(httpx.HeaderIfRange, etag)
 	req2.Header.Set("Range", "bytes=0-xyz")
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
@@ -915,7 +916,7 @@ func TestServeContentWithETag_NotModified(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	// Generate expected ETag
 	etag := GenerateFileETag(1709999999, 11, true)
-	req.Header.Set("If-None-Match", etag)
+	req.Header.Set(httpx.HeaderIfNoneMatch, etag)
 	rec := httptest.NewRecorder()
 
 	ServeContentWithETag(rec, req, 1709999999, content)
@@ -1055,7 +1056,7 @@ func TestETag_POSTWithIfMatch(t *testing.T) {
 
 	// POST with non-matching If-Match should fail with 412
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.Header.Set("If-Match", `"some-etag"`)
+	req.Header.Set(httpx.HeaderIfMatch, `"some-etag"`)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1168,7 +1169,7 @@ func TestETag_IfMatchWildcard(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodPut, "/", nil)
-	req.Header.Set("If-Match", "*")
+	req.Header.Set(httpx.HeaderIfMatch, "*")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1195,7 +1196,7 @@ func TestETag_NilSkipContentTypes(t *testing.T) {
 			ew.finalize()
 		})
 	}(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		_, _ = w.Write([]byte("test"))
 	}))
 
@@ -1264,7 +1265,7 @@ func TestETag_Metrics(t *testing.T) {
 
 	// Second request with matching ETag - should be a hit
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req2.Header.Set("If-None-Match", etag)
+	req2.Header.Set(httpx.HeaderIfNoneMatch, etag)
 	rr2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr2, req2)
 

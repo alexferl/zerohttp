@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -54,7 +55,7 @@ func BenchmarkRequestLogger_FieldConfiguration(b *testing.B) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("X-Request-Id", "test-123")
+			req.Header.Set(httpx.HeaderXRequestID, "test-123")
 
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -395,7 +396,7 @@ func BenchmarkRequestLogger_LogRequest(b *testing.B) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
-	req.Header.Set("X-Request-Id", "test-123")
+	req.Header.Set(httpx.HeaderXRequestID, "test-123")
 
 	logger := &noopLogger{}
 

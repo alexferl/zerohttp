@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
@@ -54,7 +55,7 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 				}
 			}
 
-			origin := r.Header.Get("Origin")
+			origin := r.Header.Get(httpx.HeaderOrigin)
 
 			// Only process CORS if Origin header is present
 			if origin == "" {
@@ -78,7 +79,7 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 				// Use custom origin validator
 				originAllowed = c.AllowOriginFunc(origin)
 				// Set Vary header when using dynamic origin validation
-				w.Header().Set("Vary", "Origin")
+				w.Header().Set(httpx.HeaderVary, httpx.HeaderOrigin)
 			} else if allowAllOrigins {
 				originAllowed = true
 			} else if allowedOriginMap[strings.ToLower(origin)] {
@@ -96,14 +97,14 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 
 			// Set CORS headers if origin is allowed
 			if allowedOrigin != "" {
-				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+				w.Header().Set(httpx.HeaderAccessControlAllowOrigin, allowedOrigin)
 
 				if c.AllowCredentials {
-					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set(httpx.HeaderAccessControlAllowCredentials, "true")
 				}
 
 				if len(c.ExposedHeaders) > 0 {
-					w.Header().Set("Access-Control-Expose-Headers", exposedHeadersHeader)
+					w.Header().Set(httpx.HeaderAccessControlExposeHeaders, exposedHeadersHeader)
 				}
 			}
 
@@ -124,16 +125,16 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 				}
 
 				// Check if requested method is allowed
-				requestMethod := r.Header.Get("Access-Control-Request-Method")
+				requestMethod := r.Header.Get(httpx.HeaderAccessControlRequestMethod)
 				if requestMethod != "" && !allowedMethodMap[strings.ToUpper(requestMethod)] {
 					detail := problem.NewDetail(http.StatusMethodNotAllowed, "Method not allowed")
-					w.Header().Set("Allow", allowedMethodsHeader)
+					w.Header().Set(httpx.HeaderAllow, allowedMethodsHeader)
 					_ = detail.RenderAuto(w, r)
 					return
 				}
 
 				// Check if requested headers are allowed
-				requestHeaders := r.Header.Get("Access-Control-Request-Headers")
+				requestHeaders := r.Header.Get(httpx.HeaderAccessControlRequestHeaders)
 				if requestHeaders != "" {
 					headers := strings.Split(requestHeaders, ",")
 					for _, header := range headers {
@@ -147,9 +148,9 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 				}
 
 				// Set preflight response headers
-				w.Header().Set("Access-Control-Allow-Methods", allowedMethodsHeader)
-				w.Header().Set("Access-Control-Allow-Headers", allowedHeadersHeader)
-				w.Header().Set("Access-Control-Max-Age", maxAgeHeader)
+				w.Header().Set(httpx.HeaderAccessControlAllowMethods, allowedMethodsHeader)
+				w.Header().Set(httpx.HeaderAccessControlAllowHeaders, allowedHeadersHeader)
+				w.Header().Set(httpx.HeaderAccessControlMaxAge, maxAgeHeader)
 
 				if c.OptionsPassthrough {
 					next.ServeHTTP(w, r)

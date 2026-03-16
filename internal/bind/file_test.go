@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestFileHeader_Open(t *testing.T) {
@@ -18,7 +20,7 @@ func TestFileHeader_Open(t *testing.T) {
 	_ = writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(httpx.HeaderContentType, writer.FormDataContentType())
 
 	if err := req.ParseMultipartForm(32 << 20); err != nil {
 		t.Fatalf("failed to parse multipart form: %v", err)

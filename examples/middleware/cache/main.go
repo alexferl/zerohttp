@@ -8,6 +8,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -48,7 +49,7 @@ func main() {
 			CacheControl: "private, max-age=60",
 			DefaultTTL:   time.Minute,
 			ETag:         true,
-			Vary:         []string{"Accept", "Accept-Encoding"},
+			Vary:         []string{httpx.HeaderAccept, httpx.HeaderAcceptEncoding},
 		}),
 	)
 

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // TokenType indicates the type of token being generated
@@ -128,7 +130,7 @@ const (
 
 // extractBearerToken extracts the JWT token from the Authorization header
 func extractBearerToken(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
+	auth := r.Header.Get(httpx.HeaderAuthorization)
 	if auth == "" {
 		return ""
 	}

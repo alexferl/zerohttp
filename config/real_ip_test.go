@@ -3,6 +3,8 @@ package config
 import (
 	"net/http"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestRealIPConfig_DefaultValues(t *testing.T) {
@@ -33,7 +35,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
 				if tt.xffHeader != "" {
-					req.Header.Set("X-Forwarded-For", tt.xffHeader)
+					req.Header.Set(httpx.HeaderXForwardedFor, tt.xffHeader)
 				}
 				result := DefaultIPExtractor(req)
 				if result != tt.expectedIP {
@@ -59,7 +61,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
 				if tt.xRealIP != "" {
-					req.Header.Set("X-Real-IP", tt.xRealIP)
+					req.Header.Set(httpx.HeaderXRealIP, tt.xRealIP)
 				}
 				result := DefaultIPExtractor(req)
 				if result != tt.expectedIP {
@@ -72,7 +74,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 	t.Run("X-Forwarded header", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:8080"
-		req.Header.Set("X-Forwarded", "203.0.113.3")
+		req.Header.Set(httpx.HeaderXForwarded, "203.0.113.3")
 		result := DefaultIPExtractor(req)
 		if result != "203.0.113.3" {
 			t.Errorf("expected IP = 203.0.113.3, got %s", result)
@@ -97,7 +99,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
-				req.Header.Set("Forwarded", tt.forwardedHeader)
+				req.Header.Set(httpx.HeaderForwarded, tt.forwardedHeader)
 				result := DefaultIPExtractor(req)
 				if result != tt.expectedIP {
 					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
@@ -109,10 +111,10 @@ func TestDefaultIPExtractor(t *testing.T) {
 	t.Run("header priority", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:8080"
-		req.Header.Set("X-Forwarded-For", "203.0.113.1")
-		req.Header.Set("X-Real-IP", "203.0.113.2")
-		req.Header.Set("X-Forwarded", "203.0.113.3")
-		req.Header.Set("Forwarded", "for=203.0.113.4")
+		req.Header.Set(httpx.HeaderXForwardedFor, "203.0.113.1")
+		req.Header.Set(httpx.HeaderXRealIP, "203.0.113.2")
+		req.Header.Set(httpx.HeaderXForwarded, "203.0.113.3")
+		req.Header.Set(httpx.HeaderForwarded, "for=203.0.113.4")
 		result := DefaultIPExtractor(req)
 		if result != "203.0.113.1" {
 			t.Errorf("expected X-Forwarded-For to take priority, got %s", result)
@@ -160,7 +162,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
 				if tt.xffHeader != "" {
-					req.Header.Set("X-Forwarded-For", tt.xffHeader)
+					req.Header.Set(httpx.HeaderXForwardedFor, tt.xffHeader)
 				}
 				result := DefaultIPExtractor(req)
 				if result != tt.expectedIP {
@@ -188,8 +190,8 @@ func TestSpecializedIPExtractors(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
-				req.Header.Set("X-Forwarded-For", "should-be-ignored")
-				req.Header.Set("X-Real-IP", "should-be-ignored")
+				req.Header.Set(httpx.HeaderXForwardedFor, "should-be-ignored")
+				req.Header.Set(httpx.HeaderXRealIP, "should-be-ignored")
 				result := RemoteAddrIPExtractor(req)
 				if result != tt.expectedIP {
 					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
@@ -215,9 +217,9 @@ func TestSpecializedIPExtractors(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
 				if tt.xffHeader != "" {
-					req.Header.Set("X-Forwarded-For", tt.xffHeader)
+					req.Header.Set(httpx.HeaderXForwardedFor, tt.xffHeader)
 				}
-				req.Header.Set("X-Real-IP", "should-be-ignored")
+				req.Header.Set(httpx.HeaderXRealIP, "should-be-ignored")
 				result := XForwardedForIPExtractor(req)
 				if result != tt.expectedIP {
 					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
@@ -242,9 +244,9 @@ func TestSpecializedIPExtractors(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
 				if tt.xRealIP != "" {
-					req.Header.Set("X-Real-IP", tt.xRealIP)
+					req.Header.Set(httpx.HeaderXRealIP, tt.xRealIP)
 				}
-				req.Header.Set("X-Forwarded-For", "should-be-ignored")
+				req.Header.Set(httpx.HeaderXForwardedFor, "should-be-ignored")
 				result := XRealIPExtractor(req)
 				if result != tt.expectedIP {
 					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
@@ -351,7 +353,7 @@ func TestRealIPConfig_CustomExtractors(t *testing.T) {
 		cfg := DefaultRealIPConfig
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:8080"
-		req.Header.Set("X-Forwarded-For", "203.0.113.200")
+		req.Header.Set(httpx.HeaderXForwardedFor, "203.0.113.200")
 		result := cfg.IPExtractor(req)
 		if result != "203.0.113.200" {
 			t.Errorf("expected IP from X-Forwarded-For = 203.0.113.200, got %s", result)
@@ -362,8 +364,8 @@ func TestRealIPConfig_CustomExtractors(t *testing.T) {
 func TestRealIPConfig_ExtractorComparison(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	req.RemoteAddr = "192.168.1.1:8080"
-	req.Header.Set("X-Forwarded-For", "203.0.113.1")
-	req.Header.Set("X-Real-IP", "203.0.113.2")
+	req.Header.Set(httpx.HeaderXForwardedFor, "203.0.113.1")
+	req.Header.Set(httpx.HeaderXRealIP, "203.0.113.2")
 
 	tests := []struct {
 		name      string

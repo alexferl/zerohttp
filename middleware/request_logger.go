@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/log"
@@ -124,7 +125,7 @@ func LogRequest(logger log.Logger, cfg config.RequestLoggerConfig, fieldMap map[
 		logFields = append(logFields, log.F("remote_addr", r.RemoteAddr))
 	}
 	if fieldMap[config.FieldRequestID] {
-		if requestID := r.Header.Get("X-Request-Id"); requestID != "" {
+		if requestID := r.Header.Get(httpx.HeaderXRequestID); requestID != "" {
 			logFields = append(logFields, log.F("request_id", requestID))
 		}
 	}

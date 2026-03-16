@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -623,7 +624,7 @@ func TestReverseProxy_PostBody(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("request body"))
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 	rec := httptest.NewRecorder()
 	mw(nil).ServeHTTP(rec, req)
 

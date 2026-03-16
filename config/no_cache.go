@@ -3,24 +3,26 @@ package config
 import (
 	"net/http"
 	"time"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 var Epoch = time.Unix(0, 0).UTC().Format(http.TimeFormat)
 
 var DefaultNoCacheHeaders = map[string]string{
-	"Expires":         Epoch,
-	"Cache-Control":   "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
-	"Pragma":          "no-cache",
-	"X-Accel-Expires": "0",
+	httpx.HeaderExpires:      Epoch,
+	httpx.HeaderCacheControl: "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
+	httpx.HeaderPragma:       httpx.CacheControlNoCache,
+	httpx.HeaderAccelExpires: "0",
 }
 
 var DefaultETagHeaders = []string{
-	"ETag",
-	"If-Modified-Since",
-	"If-Match",
-	"If-None-Match",
-	"If-Range",
-	"If-Unmodified-Since",
+	httpx.HeaderETag,
+	httpx.HeaderIfModifiedSince,
+	httpx.HeaderIfMatch,
+	httpx.HeaderIfNoneMatch,
+	httpx.HeaderIfRange,
+	httpx.HeaderIfUnmodifiedSince,
 }
 
 // NoCacheConfig allows customization of the set/deleted headers

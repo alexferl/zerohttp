@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -341,7 +342,7 @@ func TestRequestLogger_RequestBodyLogging(t *testing.T) {
 
 		req := zhtest.NewRequest(http.MethodPost, "/test").
 			WithBytes([]byte(`{"name":"test","value":123}`)).
-			WithHeader("Content-Type", "application/json").
+			WithHeader(httpx.HeaderContentType, "application/json").
 			Build()
 		zhtest.Serve(middleware, req)
 

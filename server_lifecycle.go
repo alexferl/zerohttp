@@ -1,3 +1,4 @@
+// Package zerohttp provides server lifecycle hooks. See [Server.RegisterPreStartupHook], [Server.RegisterStartupHook], and [Server.RegisterShutdownHook].
 package zerohttp
 
 import (

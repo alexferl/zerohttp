@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -382,7 +383,7 @@ func BenchmarkRouter_RouteGroups(b *testing.B) {
 // BenchmarkRouter_HEADRequest measures HEAD request handling overhead.
 func BenchmarkRouter_HEADRequest(b *testing.B) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("response body content"))
 	})
@@ -418,7 +419,7 @@ func BenchmarkRouter_HEADRequest(b *testing.B) {
 	b.Run("Zerohttp_HandlerFunc", func(b *testing.B) {
 		router := NewRouter()
 		router.GET("/test", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			return R.Text(w, http.StatusOK, "response body content")
 		}))
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
@@ -54,17 +55,17 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 			allowed, remaining, resetTime := store.CheckAndRecord(r.Context(), key, now)
 
 			if c.IncludeHeaders {
-				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(c.Rate))
-				w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
-				w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
-				w.Header().Set("X-RateLimit-Window", c.Window.String())
+				w.Header().Set(httpx.HeaderXRateLimitLimit, strconv.Itoa(c.Rate))
+				w.Header().Set(httpx.HeaderXRateLimitRemaining, strconv.Itoa(remaining))
+				w.Header().Set(httpx.HeaderXRateLimitReset, strconv.FormatInt(resetTime.Unix(), 10))
+				w.Header().Set(httpx.HeaderXRateLimitWindow, c.Window.String())
 			}
 
 			reg.Gauge("ratelimit_remaining", "key").WithLabelValues(key).Set(float64(remaining))
 
 			if !allowed {
 				reg.Counter("ratelimit_rejected_total", "key").WithLabelValues(key).Inc()
-				w.Header().Set("Retry-After", strconv.Itoa(int(time.Until(resetTime).Seconds())))
+				w.Header().Set(httpx.HeaderRetryAfter, strconv.Itoa(int(time.Until(resetTime).Seconds())))
 				detail := problem.NewDetail(c.StatusCode, c.Message)
 				_ = detail.RenderAuto(w, r)
 				return
@@ -88,7 +89,7 @@ func IPKeyExtractor() config.KeyExtractor {
 	return func(r *http.Request) string {
 		var ip string
 
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if xff := r.Header.Get(httpx.HeaderXForwardedFor); xff != "" {
 			// X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
 			// Use the first one (client IP)
 			ip, _, _ = strings.Cut(xff, ",")

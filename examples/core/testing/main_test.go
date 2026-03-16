@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -14,7 +15,7 @@ func TestHealthCheck(t *testing.T) {
 	app.GET("/health", zh.HandlerFunc(healthCheck))
 
 	req := zhtest.NewRequest(http.MethodGet, "/health").
-		WithHeader(zh.HeaderAccept, zh.MIMEApplicationJSON).
+		WithHeader(httpx.HeaderAccept, httpx.MIMEApplicationJSON).
 		Build()
 	w := zhtest.Serve(app, req)
 
@@ -28,14 +29,14 @@ func TestCreateUser(t *testing.T) {
 	app.POST("/users", zh.HandlerFunc(createUser))
 
 	req := zhtest.NewRequest(http.MethodPost, "/users").
-		WithHeader(zh.HeaderAccept, zh.MIMEApplicationJSON).
+		WithHeader(httpx.HeaderAccept, httpx.MIMEApplicationJSON).
 		WithJSON(map[string]string{"name": "Charlie", "email": "charlie@example.com"}).
 		Build()
 	w := zhtest.Serve(app, req)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusCreated).
-		HeaderContains("Content-Type", "application/json").
+		HeaderContains(httpx.HeaderContentType, "application/json").
 		JSONPathEqual("name", "Charlie")
 }
 
@@ -44,7 +45,7 @@ func TestCreateUserValidationError(t *testing.T) {
 	app.POST("/users", zh.HandlerFunc(createUser))
 
 	req := zhtest.NewRequest(http.MethodPost, "/users").
-		WithHeader(zh.HeaderAccept, zh.MIMEApplicationJSON).
+		WithHeader(httpx.HeaderAccept, httpx.MIMEApplicationJSON).
 		WithJSON(map[string]string{"name": "", "email": "invalid"}).
 		Build()
 	w := zhtest.Serve(app, req)
@@ -58,13 +59,13 @@ func TestGetUser(t *testing.T) {
 	app.GET("/users/{id}", zh.HandlerFunc(getUser))
 
 	req := zhtest.NewRequest(http.MethodGet, "/users/1").
-		WithHeader(zh.HeaderAccept, zh.MIMEApplicationJSON).
+		WithHeader(httpx.HeaderAccept, httpx.MIMEApplicationJSON).
 		Build()
 	w := zhtest.Serve(app, req)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusOK).
-		HeaderContains(zh.HeaderContentType, zh.MIMEApplicationJSON)
+		HeaderContains(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 
 	body := w.Body.String()
 	if !strings.Contains(body, "Alice") {
@@ -77,7 +78,7 @@ func TestGetUserNotFound(t *testing.T) {
 	app.GET("/users/{id}", zh.HandlerFunc(getUser))
 
 	req := zhtest.NewRequest(http.MethodGet, "/users/999").
-		WithHeader(zh.HeaderAccept, zh.MIMEApplicationJSON).
+		WithHeader(httpx.HeaderAccept, httpx.MIMEApplicationJSON).
 		Build()
 	w := zhtest.Serve(app, req)
 

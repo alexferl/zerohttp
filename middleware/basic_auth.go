@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
@@ -59,7 +60,7 @@ func BasicAuth(cfg ...config.BasicAuthConfig) func(http.Handler) http.Handler {
 }
 
 func basicAuthFailed(w http.ResponseWriter, r *http.Request, realm string) {
-	w.Header().Add("WWW-Authenticate", `Basic realm="`+realm+`"`)
+	w.Header().Add(httpx.HeaderWWWAuthenticate, `Basic realm="`+realm+`"`)
 	detail := problem.NewDetail(http.StatusUnauthorized, "Authentication required")
 	_ = detail.RenderAuto(w, r)
 }

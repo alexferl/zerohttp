@@ -1,3 +1,4 @@
+// Package zerohttp provides WebSocket upgrader configuration. See [Server.SetWebSocketUpgrader] and [Server.WebSocketUpgrader].
 package zerohttp
 
 import "github.com/alexferl/zerohttp/config"

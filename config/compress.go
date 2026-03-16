@@ -1,13 +1,17 @@
 package config
 
-import "io"
+import (
+	"io"
+
+	"github.com/alexferl/zerohttp/httpx"
+)
 
 // CompressionAlgorithm defines supported compression algorithms
 type CompressionAlgorithm string
 
 const (
-	Gzip    CompressionAlgorithm = "gzip"
-	Deflate CompressionAlgorithm = "deflate"
+	Gzip    = CompressionAlgorithm(httpx.ContentEncodingGzip)
+	Deflate = CompressionAlgorithm(httpx.ContentEncodingDeflate)
 )
 
 // CompressionEncoder is the interface for compression encoders.
@@ -20,14 +24,14 @@ const (
 //	func (e BrotliEncoder) Encode(w io.Writer, level int) io.Writer {
 //		return brotli.NewWriterLevel(w, level)
 //	}
-//	func (e BrotliEncoder) Encoding() string { return "br" }
+//	func (e BrotliEncoder) Encoding() string { return consts.ContentEncodingBrotli }
 type CompressionEncoder interface {
 	// Encode wraps the provided io.Writer with compression.
 	// The level parameter is algorithm-specific (e.g., 1-9 for gzip, 0-11 for brotli).
 	Encode(w io.Writer, level int) io.Writer
 
 	// Encoding returns the encoding name used in Accept-Encoding/Content-Encoding headers.
-	// Common values: "gzip", "deflate", "br" (brotli), "zstd".
+	// Common values: consts.ContentEncodingGzip, consts.ContentEncodingDeflate, consts.ContentEncodingBrotli (brotli), consts.ContentEncodingZstd.
 	Encoding() string
 }
 
@@ -39,9 +43,9 @@ type CompressionEncoder interface {
 //	type MyCompressorProvider struct{}
 //	func (p MyCompressorProvider) GetEncoder(encoding string) CompressionEncoder {
 //	    switch encoding {
-//	    case "br":
+//	    case consts.ContentEncodingBrotli:
 //	        return BrotliEncoder{}
-//	    case "zstd":
+//	    case consts.ContentEncodingZstd:
 //	        return ZstdEncoder{}
 //	    }
 //	    return nil
@@ -52,7 +56,7 @@ type CompressionEncoder interface {
 //	}
 type CompressionProvider interface {
 	// GetEncoder returns a CompressionEncoder for the given encoding, or nil if not supported.
-	// The encoding will be lowercase (e.g., "gzip", "br", "zstd").
+	// The encoding will be lowercase (e.g., consts.ContentEncodingGzip, consts.ContentEncodingBrotli, consts.ContentEncodingZstd).
 	GetEncoder(encoding string) CompressionEncoder
 }
 
@@ -81,12 +85,12 @@ type CompressConfig struct {
 var DefaultCompressConfig = CompressConfig{
 	Level: 6,
 	Types: []string{
-		"text/html",
+		httpx.MIMETextHTML,
 		"text/css",
-		"text/plain",
+		httpx.MIMETextPlain,
 		"text/javascript",
 		"application/javascript",
-		"application/json",
+		httpx.MIMEApplicationJSON,
 		"application/xml",
 		"text/xml",
 		"application/rss+xml",

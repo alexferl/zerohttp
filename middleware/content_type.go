@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
@@ -37,13 +38,13 @@ func ContentType(cfg ...config.ContentTypeConfig) func(http.Handler) http.Handle
 			}
 
 			// Extract content type without parameters (charset, boundary, etc.)
-			contentType, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";")
+			contentType, _, _ := strings.Cut(r.Header.Get(httpx.HeaderContentType), ";")
 			contentType = strings.ToLower(strings.TrimSpace(contentType))
 
 			if _, ok := allowedContentTypes[contentType]; !ok {
 				detail := problem.NewDetail(http.StatusUnsupportedMediaType, "Unsupported content type")
 				if len(c.ContentTypes) > 0 {
-					w.Header().Set("Accept-Post", c.ContentTypes[0])
+					w.Header().Set(httpx.HeaderAcceptPost, c.ContentTypes[0])
 				}
 				_ = detail.RenderAuto(w, r)
 				return

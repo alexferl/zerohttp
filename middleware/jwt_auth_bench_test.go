@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkJWT_HS256_Generate measures token generation performance
@@ -139,7 +140,7 @@ func BenchmarkJWT_AuthMiddleware(b *testing.B) {
 	token, _ := store.Generate(context.Background(), claims, config.AccessToken, 15*time.Minute)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer "+token)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -177,7 +178,7 @@ func BenchmarkJWT_AuthMiddleware_Scenarios(b *testing.B) {
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			if s.token != "" {
-				req.Header.Set("Authorization", "Bearer "+s.token)
+				req.Header.Set(httpx.HeaderAuthorization, "Bearer "+s.token)
 			}
 
 			b.ReportAllocs()
@@ -280,7 +281,7 @@ func BenchmarkJWT_RequiredClaims(b *testing.B) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set(httpx.HeaderAuthorization, "Bearer "+token)
 
 			b.ReportAllocs()
 			b.ResetTimer()

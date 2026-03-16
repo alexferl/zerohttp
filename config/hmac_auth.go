@@ -3,6 +3,8 @@ package config
 import (
 	"net/http"
 	"time"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // HMACHashAlgorithm represents the supported HMAC hash algorithms
@@ -100,8 +102,8 @@ var DefaultHMACAuthConfig = HMACAuthConfig{
 	OptionalHeaders:      []string{"content-type"},
 	ExemptPaths:          []string{},
 	ErrorHandler:         nil,
-	AuthHeaderName:       "Authorization",
-	TimestampHeader:      "X-Timestamp",
+	AuthHeaderName:       httpx.HeaderAuthorization,
+	TimestampHeader:      httpx.HeaderXTimestamp,
 	AllowUnsignedPayload: false,
 	MaxBodySize:          10 * 1024 * 1024, // 10MB default
 }

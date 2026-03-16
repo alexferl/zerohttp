@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -259,7 +260,7 @@ func authHandler(auth *AuthConfig, h http.Handler) zh.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		user, pass, ok := r.BasicAuth()
 		if !ok || user != auth.Username || pass != auth.Password {
-			w.Header().Set("WWW-Authenticate", `Basic realm="pprof"`)
+			w.Header().Set(httpx.HeaderWWWAuthenticate, `Basic realm="pprof"`)
 			w.WriteHeader(http.StatusUnauthorized)
 			return nil
 		}
@@ -273,7 +274,7 @@ func authHandlerFunc(auth *AuthConfig, fn http.HandlerFunc) zh.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		user, pass, ok := r.BasicAuth()
 		if !ok || user != auth.Username || pass != auth.Password {
-			w.Header().Set("WWW-Authenticate", `Basic realm="pprof"`)
+			w.Header().Set(httpx.HeaderWWWAuthenticate, `Basic realm="pprof"`)
 			w.WriteHeader(http.StatusUnauthorized)
 			return nil
 		}
@@ -357,7 +358,7 @@ func isIPAllowed(clientIP string, allowedNets []*net.IPNet) bool {
 func extractClientIP(r *http.Request, trustProxy bool) string {
 	if trustProxy {
 		// Check X-Forwarded-For header (may contain multiple IPs, use the first)
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if xff := r.Header.Get(httpx.HeaderXForwardedFor); xff != "" {
 			ips := strings.Split(xff, ",")
 			if len(ips) > 0 {
 				return strings.TrimSpace(ips[0])
@@ -365,7 +366,7 @@ func extractClientIP(r *http.Request, trustProxy bool) string {
 		}
 
 		// Check X-Real-IP header
-		if xri := r.Header.Get("X-Real-Ip"); xri != "" {
+		if xri := r.Header.Get(httpx.HeaderXRealIP); xri != "" {
 			return xri
 		}
 	}

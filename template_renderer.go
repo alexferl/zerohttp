@@ -1,3 +1,16 @@
+// Package zerohttp provides HTML template rendering support using Go's
+// standard html/template package.
+//
+// The TemplateManager simplifies template rendering from embedded filesystems:
+//
+//	//go:embed templates/*
+//	var templatesFS embed.FS
+//
+//	tmpl := zh.NewTemplateManager(templatesFS, "templates/*.html")
+//
+//	app.GET("/", func(w http.ResponseWriter, r *http.Request) error {
+//	    return tmpl.Render(w, http.StatusOK, "index.html", zh.M{"title": "Home"})
+//	})
 package zerohttp
 
 import (

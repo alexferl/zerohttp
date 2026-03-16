@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -15,7 +16,7 @@ func main() {
 	app.Use(middleware.Compress())
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		_, err := w.Write([]byte(`<!DOCTYPE html>
 <html>
 <head><title>Compression Demo</title></head>

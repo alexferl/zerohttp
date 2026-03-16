@@ -13,8 +13,8 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Response Rendering](#response-rendering)
-- [Request Binding & Parameters](docs/BINDING.md)
-- [Validation](docs/VALIDATION.md)
+- [Request Binding & Parameters](#request-binding--parameters)
+- [Validation](#validation)
 - [Error Handling](#error-handling)
   - [Validation Errors](#validation-errors)
 - [Route Groups](#route-groups)
@@ -28,8 +28,8 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
   - [Error Handling](#error-handling)
 - [Health Checks](#health-checks)
 - [Circuit Breaker](#circuit-breaker)
-- [Metrics](docs/METRICS.md)
-- [Distributed Tracing](docs/PLUGGABLE.md#distributed-tracing)
+- [Metrics](#metrics)
+- [Distributed Tracing](#distributed-tracing)
 - [Static File Serving](#static-file-serving)
   - [Static File Methods](#static-file-methods)
   - [Fallback Behavior](#fallback-behavior)
@@ -37,7 +37,7 @@ A lightweight HTTP framework for Go built on top of the standard `net/http` libr
 - [Extensibility](#extensibility)
   - [Extensible Interfaces](#extensible-interfaces)
   - [Pluggable Features](#pluggable-features)
-- [Testing Utilities](docs/TESTING.md)
+- [Testing Utilities](#testing-utilities)
 - [Profiling](#profiling)
 - [Configuration](#configuration)
   - [Server Configuration](#server-configuration)
@@ -112,7 +112,7 @@ func main() {
 
     // Using standard net/http - full control
     app.GET("/hello-std", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
+        w.Header().Set(consts.HeaderContentType, consts.MIMEApplicationJSON)
         w.WriteHeader(http.StatusOK)
         response := map[string]string{"message": "Hello from standard library!"}
         json.NewEncoder(w).Encode(response)
@@ -166,7 +166,7 @@ zh.Render.ProblemDetail(w, problem)
 
 ## Request Binding & Parameters
 
-Parse request bodies (JSON, forms, multipart) and extract path/query parameters. See [BINDING.md](docs/BINDING.md) for details.
+Parse request bodies (JSON, forms, multipart) and extract path/query parameters. Run `go doc` for details.
 
 ## Validation
 
@@ -194,7 +194,7 @@ app.POST("/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) e
 }))
 ```
 
-See [VALIDATION.md](docs/VALIDATION.md) for full documentation including all validators, custom validators, and advanced usage.
+Run `go doc github.com/alexferl/zerohttp/internal/validator` for full documentation including all validators.
 
 ## Error Handling
 
@@ -306,14 +306,14 @@ app.GET("/admin", adminHandler,
 
 ### Available Middlewares
 
-- **Authentication**: [Basic Auth](docs/MIDDLEWARES.md#basic-auth), [HMAC Request Signing](docs/MIDDLEWARES.md#hmac-request-signing)
+- **Authentication**: Basic Auth, HMAC Request Signing, JWT Auth
 - **Security**: CORS, Security Headers, Request Body Size Limits
 - **Rate Limiting**: Rate Limit with configurable algorithms
 - **Content Handling**: Compress, Content Charset, Content Encoding, Content Type
 - **Monitoring**: Request Logger, Circuit Breaker, Timeout, Recover
 - **Utilities**: Request ID, Real IP, Trailing Slash, Set Header, No Cache, With Value
 
-See [MIDDLEWARES.md](docs/MIDDLEWARES.md) for detailed documentation on each middleware.
+Run `go doc github.com/alexferl/zerohttp/middleware` for detailed documentation on each middleware.
 
 Each middleware accepts a config struct:
 
@@ -539,6 +539,25 @@ app.Use(middleware.CircuitBreaker(config.CircuitBreakerConfig{
 
 The circuit breaker operates in three states: **Closed** (normal), **Open** (blocked), and **Half-Open** (testing recovery). It prevents cascading failures when downstream services are unavailable.
 
+## Metrics
+
+zerohttp provides Prometheus-compatible metrics collection with zero external dependencies:
+
+```go
+// Metrics are enabled by default and exposed at /metrics
+app := zh.New()
+
+// Access metrics in handlers
+app.GET("/orders", func(w http.ResponseWriter, r *http.Request) error {
+    reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
+    counter := reg.Counter("orders_total", "status")
+    counter.WithLabelValues("completed").Inc()
+    return zh.Render.JSON(w, http.StatusOK, order)
+})
+```
+
+Run `go doc github.com/alexferl/zerohttp/metrics` for complete documentation.
+
 ## Distributed Tracing
 
 zerohttp includes a pluggable tracing interface for distributed tracing with zero dependencies:
@@ -572,7 +591,7 @@ app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 }))
 ```
 
-See [docs/PLUGGABLE.md](docs/PLUGGABLE.md#distributed-tracing) for complete examples including OpenTelemetry integration.
+Run `go doc github.com/alexferl/zerohttp/trace` for complete examples including OpenTelemetry integration.
 
 ## Static File Serving
 
@@ -660,7 +679,7 @@ type MyRenderer struct{}
 func (r *MyRenderer) JSON(w http.ResponseWriter, code int, data any) error {
     // Custom JSON rendering logic
     w.Header().Set("X-Custom-JSON", "true")
-    w.Header().Set("Content-Type", "application/json")
+    w.Header().Set(consts.HeaderContentType, consts.MIMEApplicationJSON)
     w.WriteHeader(code)
     return json.NewEncoder(w).Encode(data)
 }
@@ -702,7 +721,7 @@ zh.Validate = &MyValidator{}
 
 ### Pluggable Features
 
-Optional features that require external dependencies. See [PLUGGABLE.md](docs/PLUGGABLE.md) for full documentation and examples.
+Optional features that require external dependencies. Run `go doc` for full documentation and examples.
 
 - **Validator** - External validation libraries (e.g., go-playground/validator)
 - **Auto-TLS** - Let's Encrypt automatic certificates
@@ -713,7 +732,7 @@ Optional features that require external dependencies. See [PLUGGABLE.md](docs/PL
 
 ## Testing Utilities
 
-The `zhtest` package provides fluent, chainable helpers for testing HTTP handlers and middleware. See [TESTING.md](docs/TESTING.md) for details.
+The `zhtest` package provides fluent, chainable helpers for testing HTTP handlers and middleware. Run `go doc github.com/alexferl/zerohttp/zhtest` for details.
 
 ## Profiling
 

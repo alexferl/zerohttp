@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
 
@@ -22,7 +23,7 @@ func BenchmarkRenderer_JSON_Baseline(b *testing.B) {
 
 		for b.Loop() {
 			w := httptest.NewRecorder()
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set(httpx.HeaderContentType, "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(data)
 		}
@@ -44,7 +45,7 @@ func BenchmarkRenderer_JSON_Baseline(b *testing.B) {
 
 		for b.Loop() {
 			w := httptest.NewRecorder()
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set(httpx.HeaderContentType, "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
 			bytes, _ := json.Marshal(data)
 			_, _ = w.Write(bytes)

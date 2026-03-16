@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkHMACSigner_BuildCanonicalRequest measures canonical request building
@@ -45,7 +46,7 @@ func BenchmarkHMACSigner_BuildCanonicalRequest(b *testing.B) {
 		signer := NewHMACSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 		req := httptest.NewRequest(http.MethodPost, "/api/test", nil)
 		req.Host = "example.com"
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		signedHeaders := []string{"host", "x-timestamp", "content-type"}
 		bodyHash := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 

@@ -7,6 +7,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -54,9 +55,9 @@ func main() {
 	}),
 		middleware.NoCache(config.NoCacheConfig{
 			NoCacheHeaders: map[string]string{
-				"Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-				"Pragma":        "no-cache",
-				"Expires":       "0",
+				httpx.HeaderCacheControl: "no-cache, no-store, must-revalidate, max-age=0",
+				httpx.HeaderPragma:       httpx.CacheControlNoCache,
+				httpx.HeaderExpires:      "0",
 			},
 		}),
 	)

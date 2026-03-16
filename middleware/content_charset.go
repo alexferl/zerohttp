@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
@@ -25,10 +26,10 @@ func ContentCharset(cfg ...config.ContentCharsetConfig) func(http.Handler) http.
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !contentEncoding(r.Header.Get("Content-Type"), normalizedCharsets...) {
+			if !contentEncoding(r.Header.Get(httpx.HeaderContentType), normalizedCharsets...) {
 				detail := problem.NewDetail(http.StatusUnsupportedMediaType, "Unsupported charset")
 				if len(c.Charsets) > 0 {
-					w.Header().Set("Accept-Post", "application/json; charset="+c.Charsets[0])
+					w.Header().Set(httpx.HeaderAcceptPost, httpx.MIMEApplicationJSON+"; charset="+c.Charsets[0])
 				}
 				_ = detail.RenderAuto(w, r)
 				return

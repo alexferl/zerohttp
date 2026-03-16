@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestDefaultJWTAuthConfig(t *testing.T) {
@@ -60,7 +62,7 @@ func TestExtractBearerToken(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			if tt.header != "" {
-				req.Header.Set("Authorization", tt.header)
+				req.Header.Set(httpx.HeaderAuthorization, tt.header)
 			}
 
 			got := extractBearerToken(req)

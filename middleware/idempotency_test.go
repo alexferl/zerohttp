@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -30,7 +31,7 @@ func TestIdempotency_Basic(t *testing.T) {
 
 		// First request - should hit handler
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "key-123")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-123")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
@@ -44,7 +45,7 @@ func TestIdempotency_Basic(t *testing.T) {
 
 		// Second request with same key - should be cached
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "key-123")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-123")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -74,13 +75,13 @@ func TestIdempotency_Basic(t *testing.T) {
 
 		// First request
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "key-456")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-456")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Same key but different body - should hit handler again
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":200}`)))
-		req2.Header.Set("Idempotency-Key", "key-456")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-456")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -103,13 +104,13 @@ func TestIdempotency_Basic(t *testing.T) {
 
 		// First request - error
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "key-789")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-789")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Second request - should hit handler again (errors not cached)
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "key-789")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-789")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -133,12 +134,12 @@ func TestIdempotency_Methods(t *testing.T) {
 
 		// GET request should not be cached
 		req1 := httptest.NewRequest(http.MethodGet, "/api/data", nil)
-		req1.Header.Set("Idempotency-Key", "key-get")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-get")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		req2 := httptest.NewRequest(http.MethodGet, "/api/data", nil)
-		req2.Header.Set("Idempotency-Key", "key-get")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-get")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -163,13 +164,13 @@ func TestIdempotency_Methods(t *testing.T) {
 
 			// First request
 			req1 := httptest.NewRequest(method, "/api/resource", bytes.NewReader([]byte(`{}`)))
-			req1.Header.Set("Idempotency-Key", "key-"+method)
+			req1.Header.Set(httpx.HeaderIdempotencyKey, "key-"+method)
 			w1 := httptest.NewRecorder()
 			idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 			// Second request - should be cached
 			req2 := httptest.NewRequest(method, "/api/resource", bytes.NewReader([]byte(`{}`)))
-			req2.Header.Set("Idempotency-Key", "key-"+method)
+			req2.Header.Set(httpx.HeaderIdempotencyKey, "key-"+method)
 			w2 := httptest.NewRecorder()
 			idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -200,7 +201,7 @@ func TestIdempotency_Required(t *testing.T) {
 		}
 
 		// Test JSON response
-		req.Header.Set("Accept", "application/json")
+		req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 		w = httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 		zhtest.AssertWith(t, w).IsProblemDetail().ProblemDetailDetail("Idempotency-Key header is required")
@@ -209,7 +210,7 @@ func TestIdempotency_Required(t *testing.T) {
 		req = httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{}`)))
 		w = httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
-		zhtest.AssertWith(t, w).Header("Content-Type", "text/plain; charset=utf-8")
+		zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 	})
 
 	t.Run("allows request when key is provided and required", func(t *testing.T) {
@@ -223,7 +224,7 @@ func TestIdempotency_Required(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{}`)))
-		req.Header.Set("Idempotency-Key", "key-required")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-required")
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
@@ -248,13 +249,13 @@ func TestIdempotency_ExemptPaths(t *testing.T) {
 
 		// First request to exempt path
 		req1 := httptest.NewRequest(http.MethodPost, "/webhook/stripe", bytes.NewReader([]byte(`{}`)))
-		req1.Header.Set("Idempotency-Key", "key-webhook")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-webhook")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Second request to exempt path
 		req2 := httptest.NewRequest(http.MethodPost, "/webhook/stripe", bytes.NewReader([]byte(`{}`)))
-		req2.Header.Set("Idempotency-Key", "key-webhook")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-webhook")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -279,13 +280,13 @@ func TestIdempotency_MaxBodySize(t *testing.T) {
 
 		// First request with large body
 		req1 := httptest.NewRequest(http.MethodPost, "/api/upload", bytes.NewReader([]byte(`{"data":"this is a large body"}`)))
-		req1.Header.Set("Idempotency-Key", "key-large")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-large")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Second request - should hit handler again
 		req2 := httptest.NewRequest(http.MethodPost, "/api/upload", bytes.NewReader([]byte(`{"data":"this is a large body"}`)))
-		req2.Header.Set("Idempotency-Key", "key-large")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-large")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -343,7 +344,7 @@ func TestIdempotency_BodyPreservation(t *testing.T) {
 
 		body := []byte(`{"amount":100,"currency":"USD"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader(body))
-		req.Header.Set("Idempotency-Key", "key-body")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-body")
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
@@ -372,7 +373,7 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 
 		// Start first request (will acquire lock)
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "concurrent-key")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "concurrent-key")
 		w1 := httptest.NewRecorder()
 
 		done := make(chan struct{})
@@ -386,7 +387,7 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 
 		// Start second request (will wait for lock)
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "concurrent-key")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "concurrent-key")
 		w2 := httptest.NewRecorder()
 
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
@@ -424,7 +425,7 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 
 		// Start first request (will acquire lock)
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "slow-key")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "slow-key")
 		w1 := httptest.NewRecorder()
 
 		go idempotencyMiddleware(handler).ServeHTTP(w1, req1)
@@ -434,7 +435,7 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 
 		// Start second request (will exhaust retries)
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "slow-key")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "slow-key")
 		w2 := httptest.NewRecorder()
 
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
@@ -451,13 +452,13 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 
 		// Test plain text response
 		req2 = httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "slow-key")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "slow-key")
 		w2 = httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 		// Note: This may return 409 (still processing) or 201 (completed) depending on timing
 		// The important thing is that when it returns 409, the content type is plain text
 		if w2.Code == http.StatusConflict {
-			zhtest.AssertWith(t, w2).Header("Content-Type", "text/plain; charset=utf-8")
+			zhtest.AssertWith(t, w2).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 		}
 	})
 }
@@ -621,7 +622,7 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 
 		// First request - handler sets headers
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "dup-key")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "dup-key")
 		w1 := httptest.NewRecorder()
 
 		// Simulate middleware that sets headers before idempotency
@@ -632,7 +633,7 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 
 		// Second request - should replay cached response
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "dup-key")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "dup-key")
 		w2 := httptest.NewRecorder()
 
 		// Simulate same middleware setting headers before idempotency replay
@@ -683,13 +684,13 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 
 		// First request
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "multi-key")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "multi-key")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Second request - replay
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "multi-key")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "multi-key")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -715,13 +716,13 @@ func TestIdempotency_HandlerWritesNothing(t *testing.T) {
 
 		// First request - handler writes nothing
 		req1 := httptest.NewRequest(http.MethodPost, "/api/empty", bytes.NewReader([]byte(`{}`)))
-		req1.Header.Set("Idempotency-Key", "empty-key")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "empty-key")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Second request - should hit handler again (nothing cached)
 		req2 := httptest.NewRequest(http.MethodPost, "/api/empty", bytes.NewReader([]byte(`{}`)))
-		req2.Header.Set("Idempotency-Key", "empty-key")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "empty-key")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -744,13 +745,13 @@ func TestIdempotency_HandlerWritesNothing(t *testing.T) {
 
 		// First request
 		req1 := httptest.NewRequest(http.MethodPost, "/api/data", bytes.NewReader([]byte(`{}`)))
-		req1.Header.Set("Idempotency-Key", "data-key")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "data-key")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Second request - should be cached
 		req2 := httptest.NewRequest(http.MethodPost, "/api/data", bytes.NewReader([]byte(`{}`)))
-		req2.Header.Set("Idempotency-Key", "data-key")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "data-key")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -815,7 +816,7 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req.Header.Set("Idempotency-Key", "key-error")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-error")
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
@@ -843,7 +844,7 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req.Header.Set("Idempotency-Key", "key-lock-error")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-lock-error")
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
@@ -871,7 +872,7 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req.Header.Set("Idempotency-Key", "key-unlock-error")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-unlock-error")
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
@@ -899,7 +900,7 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req.Header.Set("Idempotency-Key", "key-set-error")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-set-error")
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
@@ -927,7 +928,7 @@ func TestIdempotency_PanicRecovery(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req.Header.Set("Idempotency-Key", "key-panic")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-panic")
 		w := httptest.NewRecorder()
 
 		// Use defer/recover to catch the panic
@@ -968,13 +969,13 @@ func TestIdempotency_WriteHeaderHopByHop(t *testing.T) {
 
 		// First request
 		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req1.Header.Set("Idempotency-Key", "key-hop")
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-hop")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		// Second request - replay
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req2.Header.Set("Idempotency-Key", "key-hop")
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-hop")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -1007,7 +1008,7 @@ func TestIdempotency_WriteHeaderIdempotent(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
-		req.Header.Set("Idempotency-Key", "key-idempotent")
+		req.Header.Set(httpx.HeaderIdempotencyKey, "key-idempotent")
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 

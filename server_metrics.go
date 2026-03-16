@@ -1,3 +1,4 @@
+// Package zerohttp provides metrics server support. See [Server.Metrics] and [Server.MetricsAddr].
 package zerohttp
 
 import (

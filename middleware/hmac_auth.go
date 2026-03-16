@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
@@ -397,22 +398,22 @@ func parseAuthorizationHeader(header, timestampHeader string) (*parsedAuth, erro
 func parsePresignedURLParams(r *http.Request) (*parsedAuth, error) {
 	q := r.URL.Query()
 
-	algo := q.Get("X-HMAC-Algorithm")
+	algo := q.Get(httpx.QueryXHMACAlgorithm)
 	if algo == "" {
 		return nil, errors.New("missing algorithm parameter")
 	}
 
-	credential := q.Get("X-HMAC-Credential")
+	credential := q.Get(httpx.QueryXHMACCredential)
 	if credential == "" {
 		return nil, errors.New("missing credential parameter")
 	}
 
-	signedHeaders := q.Get("X-HMAC-SignedHeaders")
+	signedHeaders := q.Get(httpx.QueryXHMACSignedHeaders)
 	if signedHeaders == "" {
 		return nil, errors.New("missing signed headers parameter")
 	}
 
-	signature := q.Get("X-HMAC-Signature")
+	signature := q.Get(httpx.QueryXHMACSignature)
 	if signature == "" {
 		return nil, errors.New("missing signature parameter")
 	}
@@ -551,10 +552,10 @@ func buildCanonicalRequest(
 	// For presigned URLs, exclude HMAC-related query params from canonical request
 	query := r.URL.Query()
 	if parsed.IsPresigned {
-		query.Del("X-HMAC-Algorithm")
-		query.Del("X-HMAC-Credential")
-		query.Del("X-HMAC-SignedHeaders")
-		query.Del("X-HMAC-Signature")
+		query.Del(httpx.QueryXHMACAlgorithm)
+		query.Del(httpx.QueryXHMACCredential)
+		query.Del(httpx.QueryXHMACSignedHeaders)
+		query.Del(httpx.QueryXHMACSignature)
 	}
 	queryString := buildCanonicalQueryString(query)
 	signedHeaders := buildSignedHeaders(r, parsed.Headers, timestampHeader, parsed.Timestamp)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -250,17 +251,17 @@ func TestTrailingSlash_PreserveRequestData(t *testing.T) {
 		PreferTrailingSlash: false,
 	})(handler)
 	req := zhtest.NewRequest(http.MethodPost, "/api/users/").
-		WithHeader("Content-Type", "application/json").
-		WithHeader("Authorization", "Bearer token123").
+		WithHeader(httpx.HeaderContentType, "application/json").
+		WithHeader(httpx.HeaderAuthorization, "Bearer token123").
 		Build()
 	zhtest.Serve(middleware, req)
 	if capturedMethod != http.MethodPost {
 		t.Errorf("Expected method POST to be preserved, got %s", capturedMethod)
 	}
-	if capturedHeaders.Get("Content-Type") != "application/json" {
+	if capturedHeaders.Get(httpx.HeaderContentType) != "application/json" {
 		t.Errorf("Expected Content-Type header to be preserved")
 	}
-	if capturedHeaders.Get("Authorization") != "Bearer token123" {
+	if capturedHeaders.Get(httpx.HeaderAuthorization) != "Bearer token123" {
 		t.Errorf("Expected Authorization header to be preserved")
 	}
 }

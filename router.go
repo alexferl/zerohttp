@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware"
 )
@@ -44,7 +45,29 @@ func init() {
 }
 
 // HandlerFunc is a handler function that returns an error.
-// Errors are handled directly without panic propagation.
+// It implements [http.Handler], allowing it to be used anywhere a standard
+// HTTP handler is expected.
+//
+// Errors are automatically converted to appropriate HTTP responses:
+//   - Validation errors return 422 Unprocessable Entity with field details
+//   - Binding errors return 400 Bad Request
+//   - Request too large returns 413 Payload Too Large
+//   - ProblemDetail errors return their specified status code
+//   - All other errors return 500 Internal Server Error
+//
+// Example:
+//
+//	app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+//	    id := zh.Param(r, "id")
+//	    user, err := db.GetUser(id)
+//	    if err != nil {
+//	        return err // Returns 500
+//	    }
+//	    if user == nil {
+//	        return zh.NewProblemDetail(http.StatusNotFound, "User not found")
+//	    }
+//	    return zh.Render.JSON(w, http.StatusOK, user)
+//	}))
 type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
 
 // ServeHTTP implements http.Handler interface.
@@ -69,7 +92,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	// Check for validation errors (422)
 	var verr ValidationErrorer
 	if errors.As(err, &verr) {
-		w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		response := map[string]any{
 			"title":  "Unprocessable Entity",
@@ -85,7 +108,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 
 	// Check for binding errors (400)
 	if IsBindError(err) {
-		w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 		w.WriteHeader(http.StatusBadRequest)
 		response := map[string]any{
 			"title":  "Bad Request",
@@ -101,7 +124,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	// Check for request body too large errors (413)
 	var maxBytesErr *http.MaxBytesError
 	if errors.As(err, &maxBytesErr) {
-		w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 		w.WriteHeader(http.StatusRequestEntityTooLarge)
 		response := map[string]any{
 			"title":  "Payload Too Large",
@@ -115,7 +138,7 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	}
 
 	// For all other errors, return 500 Internal Server Error
-	w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 	w.WriteHeader(http.StatusInternalServerError)
 	response := map[string]any{
 		"title":  "Internal Server Error",
@@ -428,7 +451,7 @@ func (r *defaultRouter) NotFound(h http.Handler) {
 // Example:
 //
 //	router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//	    allow := w.Header().Get("Allow")
+//	    allow := w.Header().Get(consts.HeaderAllow)
 //	    http.Error(w, fmt.Sprintf("Method not allowed. Allowed: %s", allow), http.StatusMethodNotAllowed)
 //	}))
 func (r *defaultRouter) MethodNotAllowed(h http.Handler) {
@@ -737,7 +760,7 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			if req.Method == http.MethodOptions {
 				allowHeader := allowedMethods(methods)
 				r.routesMu.RUnlock()
-				w.Header().Set(HeaderAllow, allowHeader)
+				w.Header().Set(httpx.HeaderAllow, allowHeader)
 				w.WriteHeader(http.StatusNoContent)
 				if shouldLog {
 					middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNoContent, time.Since(start), "", "")
@@ -753,7 +776,7 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 			r.routesMu.RUnlock()
 
 			if !methodAllowed {
-				w.Header().Set(HeaderAllow, allowHeader)
+				w.Header().Set(httpx.HeaderAllow, allowHeader)
 
 				r.handlerMu.RLock()
 				methodNotAllowedHandler := r.methodNotAllowedHandler
@@ -790,7 +813,7 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 // defaultNotFoundHandler is the default handler for 404 Not Found responses.
 // It returns a pre-encoded plain text response for optimal performance.
 var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set(HeaderContentType, MIMETextPlainCharset)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte("Requested resource was not found\n"))
 })
@@ -799,14 +822,14 @@ var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseW
 // It returns a pre-encoded plain text response for optimal performance.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
 var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set(HeaderContentType, MIMETextPlainCharset)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	_, _ = w.Write([]byte("HTTP method is not allowed\n"))
 })
 
 // jsonNotFoundHandler returns a JSON problem detail 404 response.
 func jsonNotFoundHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write(preEncodedNotFoundJSON)
 }
@@ -814,7 +837,7 @@ func jsonNotFoundHandler(w http.ResponseWriter, _ *http.Request) {
 // jsonMethodNotAllowedHandler returns a JSON problem detail 405 response.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
 func jsonMethodNotAllowedHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set(HeaderContentType, MIMEApplicationProblemJSON)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	_, _ = w.Write(preEncodedMethodNotAllowedJSON)
 }

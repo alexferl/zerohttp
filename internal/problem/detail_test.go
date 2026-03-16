@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -208,7 +209,7 @@ func TestDetail_Render(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusNotFound).
-		Header("Content-Type", "application/problem+json").
+		Header(httpx.HeaderContentType, "application/problem+json").
 		JSONPathEqual("title", "Not Found").
 		JSONPathEqual("status", float64(http.StatusNotFound)).
 		JSONPathEqual("detail", "Not found").
@@ -230,7 +231,7 @@ func TestDetail_Render_WithExtensions(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusUnprocessableEntity).
-		Header("Content-Type", "application/problem+json").
+		Header(httpx.HeaderContentType, "application/problem+json").
 		JSONPathEqual("code", "VALIDATION_ERROR")
 
 	var result map[string]any
@@ -267,7 +268,7 @@ func TestDetail_RenderAuto(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			if tt.acceptHeader != "" {
-				r.Header.Set("Accept", tt.acceptHeader)
+				r.Header.Set(httpx.HeaderAccept, tt.acceptHeader)
 			}
 
 			err := detail.RenderAuto(w, r)
@@ -278,13 +279,13 @@ func TestDetail_RenderAuto(t *testing.T) {
 			if tt.wantJSON {
 				zhtest.AssertWith(t, w).
 					Status(http.StatusBadRequest).
-					Header("Content-Type", "application/problem+json").
+					Header(httpx.HeaderContentType, "application/problem+json").
 					JSONPathEqual("title", "Bad Request").
 					JSONPathEqual("detail", "Invalid request")
 			} else {
 				zhtest.AssertWith(t, w).
 					Status(http.StatusBadRequest).
-					Header("Content-Type", "text/plain; charset=utf-8").
+					Header(httpx.HeaderContentType, "text/plain; charset=utf-8").
 					BodyContains("Invalid request")
 			}
 		})
@@ -295,7 +296,7 @@ func TestDetail_RenderAuto_FallbackToTitle(t *testing.T) {
 	detail := &Detail{Title: "Custom Error Title", Status: http.StatusInternalServerError}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Accept", "text/plain")
+	r.Header.Set(httpx.HeaderAccept, httpx.MIMETextPlain)
 
 	err := detail.RenderAuto(w, r)
 	if err != nil {
@@ -304,7 +305,7 @@ func TestDetail_RenderAuto_FallbackToTitle(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusInternalServerError).
-		Header("Content-Type", "text/plain; charset=utf-8").
+		Header(httpx.HeaderContentType, "text/plain; charset=utf-8").
 		BodyContains("Custom Error Title")
 }
 
@@ -344,7 +345,7 @@ func TestAcceptsJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			if tt.header != "" {
-				req.Header.Set("Accept", tt.header)
+				req.Header.Set(httpx.HeaderAccept, tt.header)
 			}
 			if got := AcceptsJSON(req); got != tt.want {
 				t.Errorf("AcceptsJSON() = %v, want %v", got, tt.want)

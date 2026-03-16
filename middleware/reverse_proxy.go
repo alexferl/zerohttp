@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 )
 
@@ -279,20 +280,20 @@ func (rp *reverseProxy) applyModifications(r *http.Request) {
 
 	if cfg.ForwardHeaders {
 		clientIP := r.RemoteAddr
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if xff := r.Header.Get(httpx.HeaderXForwardedFor); xff != "" {
 			clientIP = xff + ", " + clientIP
 		}
-		r.Header.Set("X-Forwarded-For", clientIP)
+		r.Header.Set(httpx.HeaderXForwardedFor, clientIP)
 
 		if r.TLS != nil {
-			r.Header.Set("X-Forwarded-Proto", "https")
+			r.Header.Set(httpx.HeaderXForwardedProto, "https")
 		} else {
-			r.Header.Set("X-Forwarded-Proto", "http")
+			r.Header.Set(httpx.HeaderXForwardedProto, "http")
 		}
 
 		// Only set X-Forwarded-Host if it's not already set (e.g., by SetXForwarded)
-		if r.Header.Get("X-Forwarded-Host") == "" && r.Host != "" {
-			r.Header.Set("X-Forwarded-Host", r.Host)
+		if r.Header.Get(httpx.HeaderXForwardedHost) == "" && r.Host != "" {
+			r.Header.Set(httpx.HeaderXForwardedHost, r.Host)
 		}
 	}
 

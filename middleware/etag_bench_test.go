@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 )
 
@@ -165,7 +166,7 @@ func BenchmarkETag_ConditionalRequests(b *testing.B) {
 
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Set("If-None-Match", etag)
+			req.Header.Set(httpx.HeaderIfNoneMatch, etag)
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 		}
@@ -181,7 +182,7 @@ func BenchmarkETag_ConditionalRequests(b *testing.B) {
 
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Set("If-None-Match", `"different-etag"`)
+			req.Header.Set(httpx.HeaderIfNoneMatch, `"different-etag"`)
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 		}

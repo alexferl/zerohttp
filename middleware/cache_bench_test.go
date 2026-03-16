@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkCache_CacheHit measures the full cache hit path including
@@ -20,7 +21,7 @@ func BenchmarkCache_CacheHit(b *testing.B) {
 	ctx := context.Background()
 	record := config.CacheRecord{
 		StatusCode: 200,
-		Headers:    map[string][]string{"Content-Type": {"application/json"}},
+		Headers:    map[string][]string{httpx.HeaderContentType: {httpx.MIMEApplicationJSON}},
 		Body:       []byte(`{"data":"cached response"}`),
 		ETag:       `"abc123"`,
 	}
@@ -55,10 +56,10 @@ func BenchmarkCache_CacheHit(b *testing.B) {
 // cheaper key format without hashing.
 func BenchmarkCache_GenerateCacheKey(b *testing.B) {
 	req := httptest.NewRequest(http.MethodGet, "/api/users?page=1&limit=100", nil)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Language", "en-US")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
+	req.Header.Set(httpx.HeaderAcceptLanguage, "en-US")
 
-	vary := []string{"Accept", "Accept-Language"}
+	vary := []string{httpx.HeaderAccept, httpx.HeaderAcceptLanguage}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -75,7 +76,7 @@ func BenchmarkCache_StoreGet(b *testing.B) {
 	ctx := context.Background()
 	record := config.CacheRecord{
 		StatusCode: 200,
-		Headers:    map[string][]string{"Content-Type": {"application/json"}},
+		Headers:    map[string][]string{httpx.HeaderContentType: {httpx.MIMEApplicationJSON}},
 		Body:       []byte(`{"data":"test"}`),
 	}
 	_ = store.Set(ctx, "test-key", record, time.Hour)
@@ -95,7 +96,7 @@ func BenchmarkCache_StoreGetConcurrent(b *testing.B) {
 	ctx := context.Background()
 	record := config.CacheRecord{
 		StatusCode: 200,
-		Headers:    map[string][]string{"Content-Type": {"application/json"}},
+		Headers:    map[string][]string{httpx.HeaderContentType: {httpx.MIMEApplicationJSON}},
 		Body:       []byte(`{"data":"test"}`),
 	}
 
@@ -122,7 +123,7 @@ func BenchmarkCache_StoreSet(b *testing.B) {
 	ctx := context.Background()
 	record := config.CacheRecord{
 		StatusCode: 200,
-		Headers:    map[string][]string{"Content-Type": {"application/json"}},
+		Headers:    map[string][]string{httpx.HeaderContentType: {httpx.MIMEApplicationJSON}},
 		Body:       []byte(`{"data":"test"}`),
 	}
 
@@ -142,7 +143,7 @@ func BenchmarkCache_ConcurrentReadWrite(b *testing.B) {
 	ctx := context.Background()
 	record := config.CacheRecord{
 		StatusCode: 200,
-		Headers:    map[string][]string{"Content-Type": {"application/json"}},
+		Headers:    map[string][]string{httpx.HeaderContentType: {httpx.MIMEApplicationJSON}},
 		Body:       []byte(`{"data":"test"}`),
 	}
 

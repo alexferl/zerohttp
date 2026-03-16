@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkCompress_Algorithms compares gzip vs deflate encoding speed
@@ -34,12 +35,12 @@ func BenchmarkCompress_Algorithms(b *testing.B) {
 			})
 
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, _ = w.Write(content)
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Accept-Encoding", alg.encoder)
+			req.Header.Set(httpx.HeaderAcceptEncoding, alg.encoder)
 
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -61,12 +62,12 @@ func BenchmarkCompress_PoolEfficiency(b *testing.B) {
 
 	b.Run("WithPooling", func(b *testing.B) {
 		handler := pooledCompressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write(content)
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -80,7 +81,7 @@ func BenchmarkCompress_PoolEfficiency(b *testing.B) {
 	// Simulate no pooling by creating a new compressor each time
 	b.Run("WithoutPooling", func(b *testing.B) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -89,7 +90,7 @@ func BenchmarkCompress_PoolEfficiency(b *testing.B) {
 			// Create new compressor each iteration (simulates no pooling)
 			compressor := NewCompressor(5, "text/plain")
 			handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, _ = w.Write(content)
 			}))
 
@@ -122,12 +123,12 @@ func BenchmarkCompress_ContentTypeMatching(b *testing.B) {
 			compressor := NewCompressor(5, tc.types...)
 
 			handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, _ = w.Write(content)
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -151,12 +152,12 @@ func BenchmarkCompress_CompressionLevels(b *testing.B) {
 			compressor := NewCompressor(level, "text/plain")
 
 			handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, _ = w.Write(content)
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -191,12 +192,12 @@ func BenchmarkCompress_PayloadSizes(b *testing.B) {
 			})
 
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, _ = w.Write(content)
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 			b.ReportAllocs()
 			b.SetBytes(int64(s.size))
@@ -223,12 +224,12 @@ func BenchmarkCompress_Concurrent(b *testing.B) {
 			})
 
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, _ = w.Write(content)
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -253,7 +254,7 @@ func BenchmarkCompress_NoCompressionFallback(b *testing.B) {
 
 	b.Run("NoAcceptEncoding", func(b *testing.B) {
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write(content)
 		}))
 
@@ -271,12 +272,12 @@ func BenchmarkCompress_NoCompressionFallback(b *testing.B) {
 
 	b.Run("NonCompressibleType", func(b *testing.B) {
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set(httpx.HeaderContentType, "image/png")
 			_, _ = w.Write(content)
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -289,12 +290,12 @@ func BenchmarkCompress_NoCompressionFallback(b *testing.B) {
 
 	b.Run("Baseline_NoMiddleware", func(b *testing.B) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write(content)
 		})
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -329,12 +330,12 @@ func BenchmarkCompress_ExemptPaths(b *testing.B) {
 			})
 
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, _ = w.Write(content)
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -355,12 +356,12 @@ func BenchmarkCompress_ResponseWriterWrapping(b *testing.B) {
 		compressor := NewCompressor(5, "text/plain")
 
 		handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write(content)
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -375,12 +376,12 @@ func BenchmarkCompress_ResponseWriterWrapping(b *testing.B) {
 		compressor := NewCompressor(5, "text/html") // Different type than response
 
 		handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write(content)
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -402,12 +403,12 @@ func BenchmarkCompress_Decompression(b *testing.B) {
 		// First, compress the content
 		compressed := httptest.NewRecorder()
 		handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write(content)
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 		handler.ServeHTTP(compressed, req)
 
 		compressedBody := compressed.Body.Bytes()
@@ -430,12 +431,12 @@ func BenchmarkCompress_Decompression(b *testing.B) {
 		// First, compress the content
 		compressed := httptest.NewRecorder()
 		handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write(content)
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "deflate")
+		req.Header.Set(httpx.HeaderAcceptEncoding, "deflate")
 		handler.ServeHTTP(compressed, req)
 
 		compressedBody := compressed.Body.Bytes()

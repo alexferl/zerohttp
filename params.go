@@ -1,3 +1,24 @@
+// Package zerohttp provides path parameter extraction with type conversion.
+//
+// Path parameters are extracted from URL patterns like /users/{id}:
+//
+//	app.GET("/users/{id}", func(w http.ResponseWriter, r *http.Request) error {
+//	    // String value
+//	    id := zh.Param(r, "id")
+//
+//	    // Typed extraction
+//	    userID, err := zh.ParamAs[int](r, "id")
+//	    if err != nil {
+//	        return zh.NewProblemDetail(http.StatusBadRequest, "Invalid ID")
+//	    }
+//
+//	    // With default
+//	    category := zh.ParamOrDefault(r, "category", "all")
+//
+//	    // ...
+//	})
+//
+// Supported types: string, all int/uint types, float32, float64, bool.
 package zerohttp
 
 import (

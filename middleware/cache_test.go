@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -158,7 +159,7 @@ func TestCache_ConditionalRequests(t *testing.T) {
 
 		// Second request with If-None-Match
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req2.Header.Set("If-None-Match", etag)
+		req2.Header.Set(httpx.HeaderIfNoneMatch, etag)
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -204,7 +205,7 @@ func TestCache_VaryHeaders(t *testing.T) {
 		callCount := 0
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			callCount++
-			w.Header().Set("Content-Type", r.Header.Get("Accept"))
+			w.Header().Set(httpx.HeaderContentType, r.Header.Get("Accept"))
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("response"))
 		})
@@ -376,7 +377,7 @@ func TestCache_NonCacheableResponseBody(t *testing.T) {
 func TestCache_NoDuplicateHeaders(t *testing.T) {
 	t.Run("does not duplicate handler-set headers", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			w.Header().Set("X-Custom", "value")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"test": true}`))
@@ -396,8 +397,8 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 		if len(contentTypeValues) != 1 {
 			t.Errorf("expected Content-Type to appear exactly once, got %d times: %v", len(contentTypeValues), contentTypeValues)
 		}
-		if w.Header().Get("Content-Type") != "application/json" {
-			t.Errorf("expected Content-Type to be application/json, got %s", w.Header().Get("Content-Type"))
+		if w.Header().Get(httpx.HeaderContentType) != "application/json" {
+			t.Errorf("expected Content-Type to be application/json, got %s", w.Header().Get(httpx.HeaderContentType))
 		}
 
 		xCustomValues := w.Header()["X-Custom"]
@@ -502,7 +503,7 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 func TestCache_Flush(t *testing.T) {
 	t.Run("flush switches to pass-through mode", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("before flush"))
 
@@ -526,8 +527,8 @@ func TestCache_Flush(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("before flushafter flush")
 
 		// Content-Type should be set
-		if w.Header().Get("Content-Type") != "text/plain" {
-			t.Errorf("expected Content-Type to be text/plain, got %s", w.Header().Get("Content-Type"))
+		if w.Header().Get(httpx.HeaderContentType) != "text/plain" {
+			t.Errorf("expected Content-Type to be text/plain, got %s", w.Header().Get(httpx.HeaderContentType))
 		}
 	})
 

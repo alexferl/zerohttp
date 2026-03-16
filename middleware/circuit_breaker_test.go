@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -66,7 +67,7 @@ func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
-		Header("Content-Type", "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 
 	if handler.getCallCount() != 3 {
 		t.Errorf("Expected handler to be called 3 times, got %d", handler.getCallCount())
@@ -215,7 +216,7 @@ func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusTooManyRequests).
-		Header("Content-Type", "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // TestValidationHTTPResponse tests that validation errors are returned as proper HTTP responses
@@ -68,8 +70,8 @@ func TestValidationHTTPResponse(t *testing.T) {
 
 			// Check content type for error responses
 			if tt.wantStatus >= 400 {
-				contentType := resp.Header.Get("Content-Type")
-				if contentType != "application/problem+json" {
+				contentType := resp.Header.Get(httpx.HeaderContentType)
+				if contentType != httpx.MIMEApplicationProblemJSON {
 					t.Errorf("expected application/problem+json, got %s", contentType)
 				}
 
@@ -313,9 +315,9 @@ func TestValidationWithAndWithoutRecoverMiddleware(t *testing.T) {
 	}
 
 	// Compare content types
-	if handlerResp.Header.Get("Content-Type") != appResp.Header.Get("Content-Type") {
+	if handlerResp.Header.Get(httpx.HeaderContentType) != appResp.Header.Get(httpx.HeaderContentType) {
 		t.Errorf("content types differ: handler=%s, app=%s",
-			handlerResp.Header.Get("Content-Type"), appResp.Header.Get("Content-Type"))
+			handlerResp.Header.Get(httpx.HeaderContentType), appResp.Header.Get(httpx.HeaderContentType))
 	}
 
 	// Compare response bodies

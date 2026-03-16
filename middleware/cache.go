@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/log"
@@ -55,15 +56,15 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 
 			// Note: Per RFC 9111, no-cache means revalidate, not bypass. We treat it as
 			// bypass for simplicity, which is a common implementation choice.
-			if r.Header.Get("Cache-Control") == "no-cache" || r.Header.Get("Cache-Control") == "no-store" {
+			if r.Header.Get(httpx.HeaderCacheControl) == httpx.CacheControlNoCache || r.Header.Get(httpx.HeaderCacheControl) == httpx.CacheControlNoStore {
 				next.ServeHTTP(w, r)
 				return
 			}
 
 			key := generateCacheKey(r, c.Vary)
 
-			ifNoneMatch := r.Header.Get("If-None-Match")
-			ifModifiedSince := r.Header.Get("If-Modified-Since")
+			ifNoneMatch := r.Header.Get(httpx.HeaderIfNoneMatch)
+			ifModifiedSince := r.Header.Get(httpx.HeaderIfModifiedSince)
 
 			record, found, err := store.Get(r.Context(), key)
 			if err != nil {
@@ -75,7 +76,7 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 				// Only return 304 if If-None-Match was actually provided
 				if ifNoneMatch != "" && etagMatches(ifNoneMatch, record.ETag) {
 					if record.ETag != "" {
-						w.Header().Set("ETag", record.ETag)
+						w.Header().Set(httpx.HeaderETag, record.ETag)
 					}
 					w.WriteHeader(http.StatusNotModified)
 					return
@@ -84,7 +85,7 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 				if ifModifiedSince != "" {
 					if parsedTime, err := http.ParseTime(ifModifiedSince); err == nil {
 						if !record.LastModified.IsZero() && !record.LastModified.After(parsedTime) {
-							w.Header().Set("Last-Modified", record.LastModified.UTC().Format(http.TimeFormat))
+							w.Header().Set(httpx.HeaderLastModified, record.LastModified.UTC().Format(http.TimeFormat))
 							w.WriteHeader(http.StatusNotModified)
 							return
 						}
@@ -102,9 +103,9 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 					}
 				}
 				if record.ETag != "" {
-					w.Header().Set("ETag", record.ETag)
+					w.Header().Set(httpx.HeaderETag, record.ETag)
 				}
-				w.Header().Set("Cache-Control", c.CacheControl)
+				w.Header().Set(httpx.HeaderCacheControl, c.CacheControl)
 				w.WriteHeader(record.StatusCode)
 				if r.Method != http.MethodHead {
 					_, _ = w.Write(record.Body)
@@ -175,9 +176,9 @@ func (c *cacheResponseRecorder) WriteHeader(statusCode int) {
 		for k, v := range c.Header() {
 			// Skip hop-by-hop and sensitive headers per RFC 9111
 			switch k {
-			case "Set-Cookie", "Connection", "Keep-Alive",
-				"Authorization", "Proxy-Authenticate", "Proxy-Authorization",
-				"TE", "Trailer", "Transfer-Encoding", "Upgrade":
+			case httpx.HeaderSetCookie, httpx.HeaderConnection, httpx.HeaderKeepAlive,
+				httpx.HeaderAuthorization, httpx.HeaderProxyAuthenticate, httpx.HeaderProxyAuthorization,
+				httpx.HeaderTE, httpx.HeaderTrailer, httpx.HeaderTransferEncoding, httpx.HeaderUpgrade:
 				continue
 			}
 			copied := make([]string, len(v))
@@ -227,13 +228,13 @@ func (c *cacheResponseRecorder) Finalize(etag, cacheControl string, enableETag, 
 
 	// Set cache headers before writing
 	if cacheControl != "" {
-		c.ResponseWriter.Header().Set("Cache-Control", cacheControl)
+		c.ResponseWriter.Header().Set(httpx.HeaderCacheControl, cacheControl)
 	}
 	if enableETag && etag != "" {
-		c.ResponseWriter.Header().Set("ETag", etag)
+		c.ResponseWriter.Header().Set(httpx.HeaderETag, etag)
 	}
 	if enableLastMod && !lastModified.IsZero() {
-		c.ResponseWriter.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
+		c.ResponseWriter.Header().Set(httpx.HeaderLastModified, lastModified.UTC().Format(http.TimeFormat))
 	}
 
 	c.Commit()

@@ -1,3 +1,4 @@
+// Package zerohttp provides WebTransport server support. See [Server.SetWebTransportServer].
 package zerohttp
 
 import "github.com/alexferl/zerohttp/config"

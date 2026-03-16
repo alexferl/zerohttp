@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
@@ -206,7 +207,7 @@ func compareTokens(cookieToken, requestToken string, key []byte) bool {
 func parseTokenLookup(lookup string) (source, name string) {
 	parts := strings.SplitN(lookup, ":", 2)
 	if len(parts) != 2 {
-		return "header", "X-CSRF-Token"
+		return "header", httpx.HeaderXCSRFToken
 	}
 	return strings.ToLower(parts[0]), parts[1]
 }
@@ -217,8 +218,8 @@ func extractToken(r *http.Request, source, name string) string {
 	case "header":
 		return r.Header.Get(name)
 	case "form":
-		contentType := r.Header.Get("Content-Type")
-		if strings.HasPrefix(contentType, "multipart/form-data") {
+		contentType := r.Header.Get(httpx.HeaderContentType)
+		if strings.HasPrefix(contentType, httpx.MIMEMultipartFormData) {
 			if err := r.ParseMultipartForm(defaultMaxMultipartMemory); err != nil {
 				return ""
 			}
