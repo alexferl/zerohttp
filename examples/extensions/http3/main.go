@@ -6,6 +6,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/quic-go/quic-go/http3"
 )
 
@@ -23,7 +24,7 @@ func main() {
 	// Add Alt-Svc header middleware to advertise HTTP/3
 	app.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Add("Alt-Svc", `h3=":8443"; ma=86400`)
+			w.Header().Add(httpx.HeaderAltSvc, `h3=":8443"; ma=86400`)
 			next.ServeHTTP(w, r)
 		})
 	})

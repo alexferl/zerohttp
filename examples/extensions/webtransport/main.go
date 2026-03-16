@@ -10,6 +10,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/quic-go/quic-go/http3"
 	webtransport "github.com/quic-go/webtransport-go"
 )
@@ -40,7 +41,7 @@ func main() {
 	app.SetWebTransportServer(wtServer)
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		w.Header().Add("Alt-Svc", `h3=":8443"; ma=86400`)
+		w.Header().Add(httpx.HeaderAltSvc, `h3=":8443"; ma=86400`)
 		return zh.R.File(w, r, "static/index.html")
 	}))
 
