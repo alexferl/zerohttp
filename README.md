@@ -51,8 +51,6 @@ Requires Go 1.25 or later.
 
 **Handler errors that make sense.** Handlers return `error`, and RFC 9457 Problem Details responses are generated for you automatically.
 
-
-
 ## Features
 
 - **Zero dependencies** - Single module, no external deps
