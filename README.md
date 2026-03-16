@@ -2,7 +2,7 @@
 
 **⚠️ This is a pre-v1 release - APIs may change as we work toward a stable v1.0.**
 
-A lightweight HTTP framework for Go built on top of the standard `net/http` library. Designed for simplicity, developer productivity, and security.
+A lightweight, secure-by-default HTTP framework for Go. Built on `net/http` with zero external dependencies.
 
 ## Table of Contents
 
