@@ -1,4 +1,4 @@
-# zerohttp [![Go Report Card](https://goreportcard.com/badge/github.com/alexferl/zerohttp)](https://goreportcard.com/report/github.com/alexferl/zerohttp) [![Coverage Status](https://coveralls.io/repos/github/alexferl/zerohttp/badge.svg?branch=master)](https://coveralls.io/github/alexferl/zerohttp?branch=master)
+# zerohttp [![Go Reference](https://pkg.go.dev/badge/github.com/alexferl/zerohttp.svg)](https://pkg.go.dev/github.com/alexferl/zerohttp) [![Go Report Card](https://goreportcard.com/badge/github.com/alexferl/zerohttp)](https://goreportcard.com/report/github.com/alexferl/zerohttp) [![Coverage Status](https://coveralls.io/repos/github/alexferl/zerohttp/badge.svg?branch=master)](https://coveralls.io/github/alexferl/zerohttp?branch=master)
 
 A lightweight, secure-by-default HTTP framework for Go. Built on `net/http` with zero external dependencies.
 
@@ -64,21 +64,9 @@ curl http://localhost:8080/hello/world
 {"message":"Hello, world!"}
 ```
 
-## Documentation
-
-- **API Reference**: [pkg.go.dev](https://pkg.go.dev/github.com/alexferl/zerohttp)
-- **Examples**: See the [`examples/`](examples/) directory
-
 ## Examples
 
-### Route Parameters
-
-```go
-app.GET("/users/{id}", func(w http.ResponseWriter, r *http.Request) error {
-    id := zh.Param(r, "id")
-    return zh.R.JSON(w, http.StatusOK, zh.M{"id": id})
-})
-```
+See the [`examples/`](examples/) directory for more complete examples.
 
 ### Request Binding & Validation
 
@@ -107,6 +95,48 @@ app.Group(func(api zh.Router) {
     }))
     api.GET("/admin/dashboard", dashboardHandler)
 })
+```
+
+### Query Parameters
+
+```go
+type SearchRequest struct {
+    Query string `query:"q" validate:"required"`
+    Limit int    `query:"limit" validate:"max=100"`
+}
+
+app.GET("/search", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    var req SearchRequest
+    if err := zh.BindAndValidate(r, &req); err != nil {
+        return err
+    }
+    return zh.R.JSON(w, http.StatusOK, zh.M{"results": []string{}})
+}))
+```
+
+### Error Handling
+
+```go
+app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    id := zh.Param(r, "id")
+    user, err := db.GetUser(id)
+    if err != nil {
+        return zh.NewProblemDetail(http.StatusNotFound, "user not found")
+    }
+    return zh.R.JSON(w, http.StatusOK, user)
+}))
+```
+
+### Response Helpers
+
+```go
+app.GET("/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    return zh.R.Text(w, http.StatusOK, "healthy")
+}))
+
+app.GET("/docs", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+    return zh.R.Redirect(w, r, "https://pkg.go.dev/github.com/alexferl/zerohttp", http.StatusFound)
+}))
 ```
 
 ## Configuration
