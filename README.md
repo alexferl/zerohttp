@@ -72,17 +72,17 @@ See the [`examples/`](examples/) directory for more complete examples.
 
 ```go
 type CreateUserRequest struct {
-Name  string `json:"name" validate:"required,min=2,max=50"`
-Email string `json:"email" validate:"required,email"`
+    Name  string `json:"name" validate:"required,min=2,max=50"`
+    Email string `json:"email" validate:"required,email"`
 }
 
 app.POST("/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-var req CreateUserRequest
-if err := zh.BindAndValidate(r, &req); err != nil {
-return err // Automatic Problem Details response
-}
-// Process valid request...
-return zh.R.JSON(w, http.StatusCreated, req)
+    var req CreateUserRequest
+    if err := zh.BindAndValidate(r, &req); err != nil {
+        return err // Automatic Problem Details response
+    }
+    // Process valid request...
+    return zh.R.JSON(w, http.StatusCreated, req)
 }))
 ```
 
@@ -90,10 +90,10 @@ return zh.R.JSON(w, http.StatusCreated, req)
 
 ```go
 app.Group(func(api zh.Router) {
-api.Use(middleware.BasicAuth(config.BasicAuthConfig{
-Credentials: map[string]string{"admin": "secret"},
-}))
-api.GET("/admin/dashboard", dashboardHandler)
+    api.Use(middleware.BasicAuth(config.BasicAuthConfig{
+        Credentials: map[string]string{"admin": "secret"},
+    }))
+    api.GET("/admin/dashboard", dashboardHandler)
 })
 ```
 
@@ -101,16 +101,16 @@ api.GET("/admin/dashboard", dashboardHandler)
 
 ```go
 type SearchRequest struct {
-Query string `query:"q" validate:"required"`
-Limit int    `query:"limit" validate:"max=100"`
+    Query string `query:"q" validate:"required"`
+    Limit int    `query:"limit" validate:"max=100"`
 }
 
 app.GET("/search", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-var req SearchRequest
-if err := zh.BindAndValidate(r, &req); err != nil {
-return err
-}
-return zh.R.JSON(w, http.StatusOK, zh.M{"results": []string{}})
+    var req SearchRequest
+    if err := zh.BindAndValidate(r, &req); err != nil {
+        return err
+    }
+    return zh.R.JSON(w, http.StatusOK, zh.M{"results": []string{}})
 }))
 ```
 
@@ -118,12 +118,12 @@ return zh.R.JSON(w, http.StatusOK, zh.M{"results": []string{}})
 
 ```go
 app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-id := zh.Param(r, "id")
-user, err := db.GetUser(id)
-if err != nil {
-return zh.NewProblemDetail(http.StatusNotFound, "user not found")
-}
-return zh.R.JSON(w, http.StatusOK, user)
+    id := zh.Param(r, "id")
+    user, err := db.GetUser(id)
+    if err != nil {
+        return zh.NewProblemDetail(http.StatusNotFound, "user not found")
+    }
+    return zh.R.JSON(w, http.StatusOK, user)
 }))
 ```
 
@@ -131,11 +131,11 @@ return zh.R.JSON(w, http.StatusOK, user)
 
 ```go
 app.GET("/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-return zh.R.Text(w, http.StatusOK, "healthy")
+    return zh.R.Text(w, http.StatusOK, "healthy")
 }))
 
 app.GET("/docs", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-return zh.R.Redirect(w, r, "https://pkg.go.dev/github.com/alexferl/zerohttp", http.StatusFound)
+    return zh.R.Redirect(w, r, "https://pkg.go.dev/github.com/alexferl/zerohttp", http.StatusFound)
 }))
 ```
 
@@ -145,15 +145,15 @@ zerohttp uses struct-based configuration:
 
 ```go
 app := zh.New(config.Config{
-Addr: ":8080",
-TLS: config.TLSConfig{
-Addr:     ":8443",
-CertFile: "cert.pem",
-KeyFile:  "key.pem",
-},
-RequestBodySize: config.RequestBodySizeConfig{
-MaxBytes: 5 * 1024 * 1024, // 5MB
-},
+    Addr: ":8080",
+    TLS: config.TLSConfig{
+        Addr:     ":8443",
+        CertFile: "cert.pem",
+        KeyFile:  "key.pem",
+    },
+    RequestBodySize: config.RequestBodySizeConfig{
+        MaxBytes: 5 * 1024 * 1024, // 5MB
+    },
 })
 ```
 
@@ -175,10 +175,10 @@ The `zhtest` package provides fluent test helpers:
 
 ```go
 func TestGetUser(t *testing.T) {
-app := setupRouter()
-req := zhtest.NewRequest(http.MethodGet, "/users/123").Build()
-w := zhtest.Serve(app, req)
-zhtest.AssertWith(t, w).Status(http.StatusOK).JSONPathEqual("name", "John")
+    app := setupRouter()
+    req := zhtest.NewRequest(http.MethodGet, "/users/123").Build()
+    w := zhtest.Serve(app, req)
+    zhtest.AssertWith(t, w).Status(http.StatusOK).JSONPathEqual("name", "John")
 }
 ```
 
