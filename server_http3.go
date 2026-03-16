@@ -1,3 +1,4 @@
+// Package zerohttp provides HTTP/3 server support. See [Server.ListenAndServeHTTP3].
 package zerohttp
 
 import (

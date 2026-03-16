@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkBinder_JSON_Baseline compares JSON binding vs stdlib json.Decoder
@@ -235,7 +237,7 @@ func BenchmarkBinder_Form(b *testing.B) {
 
 	b.Run("Simple", func(b *testing.B) {
 		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(formData.Encode()))
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -264,7 +266,7 @@ func BenchmarkBinder_Form(b *testing.B) {
 			"f5": []string{"val5"},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -309,7 +311,7 @@ func BenchmarkBinder_Form(b *testing.B) {
 			"f19": []string{"v19"}, "f20": []string{"v20"},
 		}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -331,7 +333,7 @@ func BenchmarkBinder_Form_DataTypes(b *testing.B) {
 		}
 		data := url.Values{"name": []string{"John"}, "email": []string{"john@example.com"}}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -351,7 +353,7 @@ func BenchmarkBinder_Form_DataTypes(b *testing.B) {
 		}
 		data := url.Values{"age": []string{"30"}, "count": []string{"100"}, "size": []string{"127"}}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -370,7 +372,7 @@ func BenchmarkBinder_Form_DataTypes(b *testing.B) {
 		}
 		data := url.Values{"price": []string{"99.99"}, "rating": []string{"4.5"}}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -390,7 +392,7 @@ func BenchmarkBinder_Form_DataTypes(b *testing.B) {
 		}
 		data := url.Values{"active": []string{"true"}, "verified": []string{"1"}, "subscribed": []string{"false"}}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -409,7 +411,7 @@ func BenchmarkBinder_Form_DataTypes(b *testing.B) {
 		}
 		data := url.Values{"tags": []string{"go", "web", "api"}, "ids": []string{"1", "2", "3"}}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -597,7 +599,7 @@ func BenchmarkBinder_MultipartForm(b *testing.B) {
 
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body.Bytes()))
-			req.Header.Set(HeaderContentType, contentType)
+			req.Header.Set(httpx.HeaderContentType, contentType)
 			var result MultipartData
 			_ = B.MultipartForm(req, &result, 32<<20)
 		}
@@ -624,7 +626,7 @@ func BenchmarkBinder_MultipartForm(b *testing.B) {
 
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body.Bytes()))
-			req.Header.Set(HeaderContentType, contentType)
+			req.Header.Set(httpx.HeaderContentType, contentType)
 			var result WithFile
 			_ = B.MultipartForm(req, &result, 32<<20)
 		}
@@ -653,7 +655,7 @@ func BenchmarkBinder_MultipartForm(b *testing.B) {
 
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body.Bytes()))
-			req.Header.Set(HeaderContentType, contentType)
+			req.Header.Set(httpx.HeaderContentType, contentType)
 			var result WithFiles
 			_ = B.MultipartForm(req, &result, 32<<20)
 		}
@@ -696,7 +698,7 @@ func BenchmarkBinder_MultipartForm_FileSizes(b *testing.B) {
 
 			for b.Loop() {
 				req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(bodyBytes))
-				req.Header.Set(HeaderContentType, contentType)
+				req.Header.Set(httpx.HeaderContentType, contentType)
 				var result WithFile
 				_ = B.MultipartForm(req, &result, 32<<20)
 			}
@@ -717,7 +719,7 @@ func BenchmarkBinder_NestedStruct(b *testing.B) {
 
 		data := url.Values{"name": []string{"John"}, "email": []string{"john@example.com"}}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -765,7 +767,7 @@ func BenchmarkBinder_NestedStruct(b *testing.B) {
 
 		data := url.Values{"value": []string{"deep"}, "middle": []string{"mid"}, "top": []string{"topval"}}
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set(HeaderContentType, MIMEApplicationFormURLEncoded)
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 
 		b.ReportAllocs()
 		b.ResetTimer()

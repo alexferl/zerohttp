@@ -6,6 +6,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -29,7 +30,7 @@ func main() {
 	// This endpoint returns the request ID from the response header
 	app.GET("/headers", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		// The middleware automatically sets the response header
-		requestID := w.Header().Get("X-Request-Id")
+		requestID := w.Header().Get(httpx.HeaderXRequestID)
 
 		return zh.R.JSON(w, http.StatusOK, map[string]string{
 			"message":    "Check response headers too!",
@@ -47,7 +48,7 @@ func main() {
 		})
 	}),
 		middleware.RequestID(config.RequestIDConfig{
-			Header: "X-Request-ID",
+			Header: httpx.HeaderXRequestID,
 			Generator: func() string {
 				// Simple UUID-like format for demo purposes
 				// In production, use github.com/google/uuid

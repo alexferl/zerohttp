@@ -11,6 +11,7 @@ import (
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // SecurityHeaders creates a security headers middleware that adds various security-related HTTP headers
@@ -46,32 +47,32 @@ func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) htt
 
 			if csp != "" {
 				if c.ContentSecurityPolicyReportOnly {
-					w.Header().Set("Content-Security-Policy-Report-Only", csp)
+					w.Header().Set(httpx.HeaderContentSecurityPolicyReportOnly, csp)
 				} else {
-					w.Header().Set("Content-Security-Policy", csp)
+					w.Header().Set(httpx.HeaderContentSecurityPolicy, csp)
 				}
 			}
 
 			if c.CrossOriginEmbedderPolicy != "" {
-				w.Header().Set("Cross-Origin-Embedder-Policy", c.CrossOriginEmbedderPolicy)
+				w.Header().Set(httpx.HeaderCrossOriginEmbedderPolicy, c.CrossOriginEmbedderPolicy)
 			}
 			if c.CrossOriginOpenerPolicy != "" {
-				w.Header().Set("Cross-Origin-Opener-Policy", c.CrossOriginOpenerPolicy)
+				w.Header().Set(httpx.HeaderCrossOriginOpenerPolicy, c.CrossOriginOpenerPolicy)
 			}
 			if c.CrossOriginResourcePolicy != "" {
-				w.Header().Set("Cross-Origin-Resource-Policy", c.CrossOriginResourcePolicy)
+				w.Header().Set(httpx.HeaderCrossOriginResourcePolicy, c.CrossOriginResourcePolicy)
 			}
 
 			if c.PermissionsPolicy != "" {
-				w.Header().Set("Permissions-Policy", c.PermissionsPolicy)
+				w.Header().Set(httpx.HeaderPermissionsPolicy, c.PermissionsPolicy)
 			}
 
 			if c.ReferrerPolicy != "" {
-				w.Header().Set("Referrer-Policy", c.ReferrerPolicy)
+				w.Header().Set(httpx.HeaderReferrerPolicy, c.ReferrerPolicy)
 			}
 
 			if c.Server != "" {
-				w.Header().Set("Server", c.Server)
+				w.Header().Set(httpx.HeaderServer, c.Server)
 			}
 
 			// HSTS (only for HTTPS requests)
@@ -83,15 +84,15 @@ func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) htt
 				if c.StrictTransportSecurity.PreloadEnabled {
 					hstsValue += "; preload"
 				}
-				w.Header().Set("Strict-Transport-Security", hstsValue)
+				w.Header().Set(httpx.HeaderStrictTransportSecurity, hstsValue)
 			}
 
 			if c.XContentTypeOptions != "" {
-				w.Header().Set("X-Content-Type-Options", c.XContentTypeOptions)
+				w.Header().Set(httpx.HeaderXContentTypeOptions, c.XContentTypeOptions)
 			}
 
 			if c.XFrameOptions != "" {
-				w.Header().Set("X-Frame-Options", c.XFrameOptions)
+				w.Header().Set(httpx.HeaderXFrameOptions, c.XFrameOptions)
 			}
 
 			next.ServeHTTP(w, r)
@@ -102,8 +103,8 @@ func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) htt
 // isHTTPS checks if the request is over HTTPS
 func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil ||
-		r.Header.Get("X-Forwarded-Proto") == "https" ||
-		r.Header.Get("X-Forwarded-Protocol") == "https"
+		r.Header.Get(httpx.HeaderXForwardedProto) == "https" ||
+		r.Header.Get(httpx.HeaderXForwardedProtocol) == "https"
 }
 
 // generateNonce creates a random base64-encoded nonce for CSP

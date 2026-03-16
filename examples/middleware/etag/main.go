@@ -7,6 +7,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -63,13 +64,13 @@ func main() {
 		etag := middleware.GenerateFileETag(stat.ModTime().Unix(), stat.Size(), true)
 
 		// Check If-None-Match
-		if r.Header.Get("If-None-Match") == etag {
+		if r.Header.Get(httpx.HeaderIfNoneMatch) == etag {
 			w.WriteHeader(http.StatusNotModified)
 			return nil
 		}
 
-		w.Header().Set("ETag", etag)
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(httpx.HeaderETag, etag)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		http.ServeContent(w, r, fileName, stat.ModTime(), file)
 		return nil
 	}))

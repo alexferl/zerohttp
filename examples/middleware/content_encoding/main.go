@@ -6,6 +6,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -14,7 +15,7 @@ func main() {
 
 	// Add content encoding middleware that allows gzip and deflate
 	app.Use(middleware.ContentEncoding(config.ContentEncodingConfig{
-		Encodings: []string{"gzip", "deflate"},
+		Encodings: []string{httpx.ContentEncodingGzip, httpx.ContentEncodingDeflate},
 	}))
 
 	app.POST("/api/data", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

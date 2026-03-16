@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/alexferl/zerohttp/httpx"
 	zerrors "github.com/alexferl/zerohttp/internal/errors"
 	"github.com/alexferl/zerohttp/internal/validator"
 )
@@ -19,10 +20,27 @@ var NewValidator = validator.NewValidator
 // This is an alias to internal/validator.ValidationErrors.
 type ValidationErrors = validator.ValidationErrors
 
-// Validate is the default validator instance used by the package
+// Validate is the default [Validator] instance used by the package.
+// Use it to validate structs using struct tags:
+//
+//	type CreateUserRequest struct {
+//	    Name  string `json:"name" validate:"required,min=2"`
+//	    Email string `json:"email" validate:"required,email"`
+//	}
+//
+//	if err := zh.Validate.Struct(&req); err != nil {
+//	    // Returns 422 Unprocessable Entity with field errors
+//	    return err
+//	}
+//
+// For convenience, use the [V] alias or [BindAndValidate] for combined binding and validation.
 var Validate = validator.NewValidator()
 
-// V is a short alias for Validate for convenience
+// V is a short alias for [Validate].
+//
+//	if err := zh.V.Struct(&req); err != nil {
+//	    return err
+//	}
 var V = Validate
 
 // ValidationErrorer is implemented by validation error types.
@@ -61,7 +79,7 @@ var DefaultMultipartMaxMemory int64 = 32 << 20
 //	    // ...
 //	}
 func BindAndValidate(r *http.Request, dst any) error {
-	contentType := r.Header.Get(HeaderContentType)
+	contentType := r.Header.Get(httpx.HeaderContentType)
 
 	// Strip charset suffix if present
 	if idx := strings.Index(contentType, ";"); idx > 0 {
@@ -70,11 +88,11 @@ func BindAndValidate(r *http.Request, dst any) error {
 
 	var bindErr error
 	switch contentType {
-	case MIMEApplicationJSON:
+	case httpx.MIMEApplicationJSON:
 		bindErr = Bind.JSON(r.Body, dst)
-	case MIMEApplicationFormURLEncoded:
+	case httpx.MIMEApplicationFormURLEncoded:
 		bindErr = Bind.Form(r, dst)
-	case MIMEMultipartFormData:
+	case httpx.MIMEMultipartFormData:
 		// Use default max memory for multipart forms
 		bindErr = Bind.MultipartForm(r, dst, DefaultMultipartMaxMemory)
 	default:

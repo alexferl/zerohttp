@@ -18,10 +18,22 @@ import (
 // This is an alias to internal/bind.FileHeader.
 type FileHeader = bind.FileHeader
 
-// Bind is the default binder instance used by the package
+// Bind is the default [Binder] instance used by the package.
+// Use it to decode request bodies into structs:
+//
+//	var req CreateUserRequest
+//	if err := zh.Bind.JSON(r.Body, &req); err != nil {
+//	    return err
+//	}
+//
+// For convenience, use the [B] alias.
 var Bind Binder = &defaultBinder{}
 
-// B is a short alias for Bind for convenience
+// B is a short alias for [Bind].
+//
+//	if err := zh.B.JSON(r.Body, &req); err != nil {
+//	    return err
+//	}
 var B = Bind
 
 // Binder handles request binding and parsing for various content types.

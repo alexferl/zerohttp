@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -46,7 +47,7 @@ func TestRateLimitStatusCodeAndMessageDefaults(t *testing.T) {
 	// Test plain text response
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header("Content-Type", "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestRateLimitMessageDefaults(t *testing.T) {
@@ -64,7 +65,7 @@ func TestRateLimitMessageDefaults(t *testing.T) {
 	// Test plain text response
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Header("Content-Type", "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestRateLimitTokenBucket(t *testing.T) {
@@ -97,7 +98,7 @@ func TestRateLimitTokenBucket(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header("Content-Type", "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 
 	if count != 2 {
 		t.Errorf("expected 2 successful requests, got %d", count)
@@ -297,7 +298,7 @@ func TestRateLimitCustomMessage(t *testing.T) {
 	w = zhtest.Serve(handler, req)
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
-		Header("Content-Type", "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestIPKeyExtractor(t *testing.T) {
@@ -632,7 +633,7 @@ func TestIPKeyExtractor_IPv6(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 			req.RemoteAddr = tt.remoteAddr
 			if tt.xForwardedFor != "" {
-				req.Header.Set("X-Forwarded-For", tt.xForwardedFor)
+				req.Header.Set(httpx.HeaderXForwardedFor, tt.xForwardedFor)
 			}
 
 			extractor := IPKeyExtractor()

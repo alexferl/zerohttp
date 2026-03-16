@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
 
@@ -52,13 +53,13 @@ func TestAssert_StatusBetween(t *testing.T) {
 
 func TestAssert_Header(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusOK)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
-	result := Assert(w).Header("Content-Type", "application/json")
+	result := Assert(w).Header(httpx.HeaderContentType, "application/json")
 	if result == nil {
 		t.Error("expected result to not be nil")
 	}
@@ -66,13 +67,13 @@ func TestAssert_Header(t *testing.T) {
 
 func TestAssert_HeaderContains(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set(httpx.HeaderContentType, "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
-	result := Assert(w).HeaderContains("Content-Type", "json")
+	result := Assert(w).HeaderContains(httpx.HeaderContentType, "json")
 	if result == nil {
 		t.Error("expected result to not be nil")
 	}
@@ -180,7 +181,7 @@ func TestAssert_BodyNotEmpty(t *testing.T) {
 
 func TestAssert_JSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		if _, err := w.Write([]byte(`{"name": "John", "age": 30}`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -207,7 +208,7 @@ func TestAssert_JSON(t *testing.T) {
 
 func TestAssert_JSONEq(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		if _, err := w.Write([]byte(`{"name": "John"}`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -224,7 +225,7 @@ func TestAssert_JSONEq(t *testing.T) {
 func TestAssert_JSONPathEqual(t *testing.T) {
 	t.Run("works with nested object", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -240,7 +241,7 @@ func TestAssert_JSONPathEqual(t *testing.T) {
 
 	t.Run("works with array index", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`{"items": [{"id": 1}, {"id": 2}]}`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -350,7 +351,7 @@ func TestAssert_IsServerError(t *testing.T) {
 
 func TestAssert_Chaining(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusCreated)
 		if _, err := w.Write([]byte(`{"message": "created"}`)); err != nil {
 			t.Errorf("failed to write: %v", err)
@@ -362,7 +363,7 @@ func TestAssert_Chaining(t *testing.T) {
 	// Test chaining multiple assertions
 	result := Assert(w).
 		Status(http.StatusCreated).
-		Header("Content-Type", "application/json").
+		Header(httpx.HeaderContentType, "application/json").
 		BodyContains("created")
 
 	if result == nil {
@@ -421,9 +422,9 @@ func TestAssert_FailurePaths(t *testing.T) {
 
 	t.Run("Header failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 
-		result := Assert(w).Header("Content-Type", "application/json")
+		result := Assert(w).Header(httpx.HeaderContentType, "application/json")
 		if result == nil {
 			t.Error("expected chain to continue after failure")
 		}
@@ -431,9 +432,9 @@ func TestAssert_FailurePaths(t *testing.T) {
 
 	t.Run("HeaderContains failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 
-		result := Assert(w).HeaderContains("Content-Type", "json")
+		result := Assert(w).HeaderContains(httpx.HeaderContentType, "json")
 		if result == nil {
 			t.Error("expected chain to continue after failure")
 		}
@@ -692,7 +693,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 func TestJSONValuesEqual(t *testing.T) {
 	t.Run("different length maps", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`{"x": 1}`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -709,7 +710,7 @@ func TestJSONValuesEqual(t *testing.T) {
 
 	t.Run("different values in maps", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`{"x": 1}`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -725,7 +726,7 @@ func TestJSONValuesEqual(t *testing.T) {
 
 	t.Run("different length arrays", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`[1, 2]`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -741,7 +742,7 @@ func TestJSONValuesEqual(t *testing.T) {
 
 	t.Run("nested map with missing key", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -757,7 +758,7 @@ func TestJSONValuesEqual(t *testing.T) {
 
 	t.Run("array element mismatch", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`[1, 2, 4]`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -827,7 +828,7 @@ func TestJSONPathEqual_EdgeCases(t *testing.T) {
 func TestProblemDetail_FailurePaths(t *testing.T) {
 	t.Run("IsProblemDetail failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		if _, err := w.Write([]byte(`{}`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -840,7 +841,7 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailStatus invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
 		if _, err := w.Write([]byte("not json")); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -869,7 +870,7 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailTitle invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
 		if _, err := w.Write([]byte("not json")); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -898,7 +899,7 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailDetail invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
 		if _, err := w.Write([]byte("not json")); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -927,7 +928,7 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailType invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
 		if _, err := w.Write([]byte("not json")); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -957,7 +958,7 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetailExtension invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
 		if _, err := w.Write([]byte("not json")); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -1003,7 +1004,7 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 
 	t.Run("ProblemDetail invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
 		if _, err := w.Write([]byte("not json")); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}

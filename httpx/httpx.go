@@ -1,4 +1,25 @@
-package zerohttp
+// Package httpx provides HTTP header names, content types, and other
+// constants for use throughout the framework.
+//
+// Content-Type constants include (among others):
+//
+//	[MIMETextHTML], [MIMETextPlain], [MIMEApplicationJSON]
+//	[MIMEApplicationProblemJSON], [MIMEApplicationFormURLEncoded]
+//
+// Header name constants include (among others):
+//
+//	[HeaderContentType], [HeaderAuthorization], [HeaderXRequestID]
+//	[HeaderCacheControl], [HeaderETag], [HeaderLocation]
+//
+// CORS and Security headers include (among others):
+//
+//	[HeaderAccessControlAllowOrigin]
+//	[HeaderContentSecurityPolicy]
+//	[HeaderStrictTransportSecurity]
+//
+// See the full list of constants below for complete coverage of headers,
+// content types, authentication schemes, and common header values.
+package httpx
 
 const (
 	MIMETextHTML                  = "text/html"
@@ -52,6 +73,7 @@ const (
 // Response Headers
 const (
 	HeaderAcceptPatch        = "Accept-Patch"
+	HeaderAcceptPost         = "Accept-Post"
 	HeaderAge                = "Age"
 	HeaderAllow              = "Allow"
 	HeaderContentDisposition = "Content-Disposition"
@@ -61,10 +83,13 @@ const (
 	HeaderContentRange       = "Content-Range"
 	HeaderETag               = "ETag"
 	HeaderExpires            = "Expires"
+	HeaderIdempotencyKey     = "Idempotency-Key"
+	HeaderKeepAlive          = "Keep-Alive"
 	HeaderLastModified       = "Last-Modified"
 	HeaderLink               = "Link"
 	HeaderLocation           = "Location"
 	HeaderProxyAuthenticate  = "Proxy-Authenticate"
+	HeaderProxyAuthorization = "Proxy-Authorization"
 	HeaderRetryAfter         = "Retry-After"
 	HeaderServer             = "Server"
 	HeaderSetCookie          = "Set-Cookie"
@@ -106,24 +131,29 @@ const (
 // Custom/Extension Headers
 const (
 	HeaderXAPIKey             = "X-API-Key"
+	HeaderAccelExpires        = "X-Accel-Expires"
 	HeaderXCSRFToken          = "X-CSRF-Token"
+	HeaderXForwarded          = "X-Forwarded"
 	HeaderXForwardedFor       = "X-Forwarded-For"
 	HeaderXForwardedHost      = "X-Forwarded-Host"
 	HeaderXForwardedProto     = "X-Forwarded-Proto"
 	HeaderXForwardedProtocol  = "X-Forwarded-Protocol"
 	HeaderXForwardedSsl       = "X-Forwarded-Ssl"
-	HeaderXRealIP             = "X-Real-IP"
-	HeaderXRequestID          = "X-Request-ID"
-	HeaderXRequestedWith      = "X-Requested-With"
+	HeaderXIdempotencyReplay  = "X-Idempotency-Replay"
 	HeaderXPoweredBy          = "X-Powered-By"
 	HeaderXRateLimitLimit     = "X-RateLimit-Limit"
 	HeaderXRateLimitRemaining = "X-RateLimit-Remaining"
 	HeaderXRateLimitReset     = "X-RateLimit-Reset"
+	HeaderXRateLimitWindow    = "X-RateLimit-Window"
+	HeaderXRealIP             = "X-Real-IP"
+	HeaderXRequestID          = "X-Request-ID"
+	HeaderXRequestedWith      = "X-Requested-With"
+	HeaderXTimestamp          = "X-Timestamp"
 )
 
 // WebSocket Headers
 const (
-	HeaderUpgradeWebSocket       = "websocket"
+	UpgradeWebSocket             = "websocket"
 	HeaderSecWebSocketKey        = "Sec-WebSocket-Key"
 	HeaderSecWebSocketAccept     = "Sec-WebSocket-Accept"
 	HeaderSecWebSocketVersion    = "Sec-WebSocket-Version"
@@ -155,6 +185,14 @@ const (
 	ContentEncodingGzip    = "gzip"
 	ContentEncodingDeflate = "deflate"
 	ContentEncodingBrotli  = "br"
+	ContentEncodingZstd    = "zstd"
 
 	TransferEncodingChunked = "chunked"
+)
+
+const (
+	QueryXHMACAlgorithm     = "X-HMAC-Algorithm"
+	QueryXHMACCredential    = "X-HMAC-Credential"
+	QueryXHMACSignedHeaders = "X-HMAC-SignedHeaders"
+	QueryXHMACSignature     = "X-HMAC-Signature"
 )

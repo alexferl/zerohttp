@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/flosch/pongo2/v6"
 )
 
@@ -29,7 +30,7 @@ func (pr *Pongo2Renderer) Render(w http.ResponseWriter, status int, name string,
 		return err
 	}
 
-	w.Header().Set(zh.HeaderContentType, zh.MIMETextHTML)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 	w.WriteHeader(status)
 
 	return tpl.ExecuteWriter(ctx, w)

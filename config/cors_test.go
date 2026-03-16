@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestCORSConfig_DefaultValues(t *testing.T) {
@@ -43,7 +45,7 @@ func TestCORSConfig_DefaultValues(t *testing.T) {
 	}
 
 	// Test default header values
-	expectedHeaders := []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Request-Id"}
+	expectedHeaders := []string{httpx.HeaderAccept, httpx.HeaderAuthorization, httpx.HeaderContentType, httpx.HeaderXCSRFToken, httpx.HeaderXRequestID}
 	if !reflect.DeepEqual(cfg.AllowedHeaders, expectedHeaders) {
 		t.Errorf("expected default headers = %v, got %v", expectedHeaders, cfg.AllowedHeaders)
 	}

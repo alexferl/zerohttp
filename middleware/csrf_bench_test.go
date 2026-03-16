@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkCSRF_TokenGeneration measures token generation performance
@@ -79,7 +80,7 @@ func BenchmarkCSRF_TokenComparisonScenarios(b *testing.B) {
 func BenchmarkCSRF_ExtractToken(b *testing.B) {
 	b.Run("Header", func(b *testing.B) {
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set("X-CSRF-Token", "test-token-value")
+		req.Header.Set(httpx.HeaderXCSRFToken, "test-token-value")
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -104,7 +105,7 @@ func BenchmarkCSRF_ExtractToken(b *testing.B) {
 		formData := url.Values{"csrf_token": []string{"test-token-value"}}
 		body := strings.NewReader(formData.Encode())
 		req := httptest.NewRequest(http.MethodPost, "/", body)
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set(httpx.HeaderContentType, "application/x-www-form-urlencoded")
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -168,7 +169,7 @@ func BenchmarkCSRF_Middleware(b *testing.B) {
 
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodPost, "/", nil)
-			req.Header.Set("X-CSRF-Token", token)
+			req.Header.Set(httpx.HeaderXCSRFToken, token)
 			req.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
@@ -188,7 +189,7 @@ func BenchmarkCSRF_Middleware(b *testing.B) {
 
 		for b.Loop() {
 			req := httptest.NewRequest(http.MethodPost, "/", nil)
-			req.Header.Set("X-CSRF-Token", invalidToken)
+			req.Header.Set(httpx.HeaderXCSRFToken, invalidToken)
 			req.AddCookie(&http.Cookie{Name: "csrf_token", Value: validToken})
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
@@ -377,7 +378,7 @@ func BenchmarkCSRF_Concurrent(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
 				req := httptest.NewRequest(http.MethodPost, "/", nil)
-				req.Header.Set("X-CSRF-Token", token)
+				req.Header.Set(httpx.HeaderXCSRFToken, token)
 				req.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 				w := httptest.NewRecorder()
 				handler.ServeHTTP(w, req)

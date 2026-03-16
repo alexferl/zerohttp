@@ -1,5 +1,7 @@
 package config
 
+import "github.com/alexferl/zerohttp/httpx"
+
 // ContentEncodingConfig allows customization of allowed content encodings
 type ContentEncodingConfig struct {
 	// Encodings is a list of allowed content encodings (gzip, deflate, br, etc.)
@@ -11,6 +13,6 @@ type ContentEncodingConfig struct {
 
 // DefaultContentEncodingConfig contains the default values for content encoding configuration.
 var DefaultContentEncodingConfig = ContentEncodingConfig{
-	Encodings:   []string{"gzip", "deflate"},
+	Encodings:   []string{httpx.ContentEncodingGzip, httpx.ContentEncodingDeflate},
 	ExemptPaths: []string{},
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/trace"
@@ -75,7 +76,7 @@ func scheme(r *http.Request) string {
 	if r.TLS != nil {
 		return "https"
 	}
-	if scheme := r.Header.Get("X-Forwarded-Proto"); scheme != "" {
+	if scheme := r.Header.Get(httpx.HeaderXForwardedProto); scheme != "" {
 		return scheme
 	}
 	return "http"

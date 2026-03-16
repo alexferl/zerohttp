@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkSSE_Send measures the throughput of the Send() method
@@ -725,7 +726,7 @@ func BenchmarkSSE_Baseline(b *testing.B) {
 		for b.Loop() {
 			w := httptest.NewRecorder()
 			handler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-				rw.Header().Set("Content-Type", "text/event-stream")
+				rw.Header().Set(httpx.HeaderContentType, "text/event-stream")
 				rw.WriteHeader(http.StatusOK)
 				_, _ = rw.Write(data)
 				if f, ok := rw.(http.Flusher); ok {

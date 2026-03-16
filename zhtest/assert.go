@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // Assert creates a new Assertions instance for the given ResponseRecorder.
@@ -86,7 +88,7 @@ func (a *Assertions) StatusBetween(min, max int) *Assertions {
 //
 // Example:
 //
-//	zhtest.AssertWith(t, w).Header("Content-Type", "application/json")
+//	zhtest.AssertWith(t, w).consts.HeaderContentType, "application/json")
 func (a *Assertions) Header(key, expected string) *Assertions {
 	actual := a.resp.Header().Get(key)
 	if actual != expected {
@@ -99,7 +101,7 @@ func (a *Assertions) Header(key, expected string) *Assertions {
 //
 // Example:
 //
-//	zhtest.AssertWith(t, w).HeaderContains("Content-Type", "json")
+//	zhtest.AssertWith(t, w).HeaderContains(consts.HeaderContentType, "json")
 func (a *Assertions) HeaderContains(key, substring string) *Assertions {
 	actual := a.resp.Header().Get(key)
 	if !strings.Contains(actual, substring) {
@@ -376,7 +378,7 @@ func (a *Assertions) Redirect(location string) *Assertions {
 		a.fail("expected redirect status (3xx), got %d", a.resp.Code)
 		return a
 	}
-	actual := a.resp.Header().Get("Location")
+	actual := a.resp.Header().Get(httpx.HeaderLocation)
 	if actual != location {
 		a.fail("expected redirect to %q, got %q", location, actual)
 	}
@@ -413,8 +415,8 @@ func (a *Assertions) IsServerError() *Assertions {
 //
 //	zhtest.AssertWith(t, w).IsProblemDetail()
 func (a *Assertions) IsProblemDetail() *Assertions {
-	contentType := a.resp.Header().Get("Content-Type")
-	if contentType != "application/problem+json" {
+	contentType := a.resp.Header().Get(httpx.HeaderContentType)
+	if contentType != httpx.MIMEApplicationProblemJSON {
 		a.fail("expected Content-Type application/problem+json, got %s", contentType)
 	}
 	return a

@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/metrics"
 )
@@ -67,8 +68,8 @@ func NewCompressor(level int, types ...string) *Compressor {
 	c.algorithms[config.Gzip] = true
 	c.algorithms[config.Deflate] = true
 
-	c.SetEncoder("deflate", encoderDeflate)
-	c.SetEncoder("gzip", encoderGzip)
+	c.SetEncoder(httpx.ContentEncodingDeflate, encoderDeflate)
+	c.SetEncoder(httpx.ContentEncodingGzip, encoderGzip)
 	return c
 }
 
@@ -158,7 +159,7 @@ func (c *Compressor) Handler(next http.Handler) http.Handler {
 
 // selectEncoder returns the encoder, the name of the encoder, and a closer function.
 func (c *Compressor) selectEncoder(h http.Header, w io.Writer) (io.Writer, string, func()) {
-	header := h.Get("Accept-Encoding")
+	header := h.Get(httpx.HeaderAcceptEncoding)
 	accepted := strings.Split(strings.ToLower(header), ",")
 
 	for _, name := range c.encodingPrecedence {
@@ -166,9 +167,9 @@ func (c *Compressor) selectEncoder(h http.Header, w io.Writer) (io.Writer, strin
 			// Check if algorithm is allowed
 			var allowed bool
 			switch name {
-			case "gzip":
+			case httpx.ContentEncodingGzip:
 				allowed = c.algorithms[config.Gzip]
-			case "deflate":
+			case httpx.ContentEncodingDeflate:
 				allowed = c.algorithms[config.Deflate]
 			default:
 				allowed = true // Custom encoders are always allowed if added
@@ -236,7 +237,7 @@ type compressResponseWriter struct {
 }
 
 func (cw *compressResponseWriter) isCompressible() bool {
-	contentType := cw.Header().Get("Content-Type")
+	contentType := cw.Header().Get(httpx.HeaderContentType)
 	contentType, _, _ = strings.Cut(contentType, ";")
 
 	if _, ok := cw.contentTypes[contentType]; ok {
@@ -257,7 +258,7 @@ func (cw *compressResponseWriter) WriteHeader(code int) {
 	cw.wroteHeader = true
 	defer cw.ResponseWriter.WriteHeader(code)
 
-	if cw.Header().Get("Content-Encoding") != "" {
+	if cw.Header().Get(httpx.HeaderContentEncoding) != "" {
 		return
 	}
 
@@ -268,9 +269,9 @@ func (cw *compressResponseWriter) WriteHeader(code int) {
 
 	if cw.encoding != "" {
 		cw.compressible = true
-		cw.Header().Set("Content-Encoding", cw.encoding)
-		cw.Header().Add("Vary", "Accept-Encoding")
-		cw.Header().Del("Content-Length")
+		cw.Header().Set(httpx.HeaderContentEncoding, cw.encoding)
+		cw.Header().Add(httpx.HeaderVary, httpx.HeaderAcceptEncoding)
+		cw.Header().Del(httpx.HeaderContentLength)
 	}
 }
 

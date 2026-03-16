@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // IPExtractor defines a function to extract the real client IP.
@@ -23,7 +25,7 @@ var DefaultRealIPConfig = RealIPConfig{
 // DefaultIPExtractor extracts the real client IP from various headers
 func DefaultIPExtractor(r *http.Request) string {
 	// Check X-Forwarded-For header first (most common)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+	if xff := r.Header.Get(httpx.HeaderXForwardedFor); xff != "" {
 		// X-Forwarded-For can contain multiple IPs, take the first one
 		ips := strings.Split(xff, ",")
 		if len(ips) > 0 {
@@ -32,17 +34,17 @@ func DefaultIPExtractor(r *http.Request) string {
 	}
 
 	// Check X-Real-IP header (used by Nginx and some proxies)
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+	if xri := r.Header.Get(httpx.HeaderXRealIP); xri != "" {
 		return xri
 	}
 
 	// Check X-Forwarded header (less common)
-	if xf := r.Header.Get("X-Forwarded"); xf != "" {
+	if xf := r.Header.Get(httpx.HeaderXForwarded); xf != "" {
 		return xf
 	}
 
 	// Check Forwarded header (RFC 7239 standard)
-	if forwarded := r.Header.Get("Forwarded"); forwarded != "" {
+	if forwarded := r.Header.Get(httpx.HeaderForwarded); forwarded != "" {
 		// Parse "for=" part from Forwarded header
 		parts := strings.Split(forwarded, ";")
 		for _, part := range parts {

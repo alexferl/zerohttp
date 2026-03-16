@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // Detail represents an RFC 9457 Problem Details response.
@@ -77,7 +79,7 @@ func (p *Detail) Set(key string, value any) *Detail {
 
 // Render writes the Detail as an HTTP response
 func (p *Detail) Render(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 	w.WriteHeader(p.Status)
 	return json.NewEncoder(w).Encode(p)
 }
@@ -87,7 +89,7 @@ func (p *Detail) Render(w http.ResponseWriter) error {
 // application/json or application/problem+json; otherwise returns plain text.
 func (p *Detail) RenderAuto(w http.ResponseWriter, r *http.Request) error {
 	if !AcceptsJSON(r) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 		w.WriteHeader(p.Status)
 		text := p.Detail
 		if text == "" {
@@ -127,14 +129,14 @@ func NewValidationDetail[T any](detail string, errors []T) *Detail {
 // with higher priority than text/html, or if */* is present without explicit HTML preference.
 // Explicit q=0 refusals (e.g., "application/json;q=0, */*") are respected per RFC 7231.
 func AcceptsJSON(r *http.Request) bool {
-	accept := r.Header.Get("Accept")
+	accept := r.Header.Get(httpx.HeaderAccept)
 	if accept == "" {
 		return false
 	}
 
 	// Parse explicit types only (no wildcard expansion)
-	jsonQ, jsonExplicit := parseAcceptQualityExact(accept, "application/json", "application/problem+json")
-	htmlQ, _ := parseAcceptQualityExact(accept, "text/html")
+	jsonQ, jsonExplicit := parseAcceptQualityExact(accept, httpx.MIMEApplicationJSON, httpx.MIMEApplicationProblemJSON)
+	htmlQ, _ := parseAcceptQualityExact(accept, httpx.MIMETextHTML)
 	// Parse wildcards separately
 	wildcardQ := parseWildcardQuality(accept)
 

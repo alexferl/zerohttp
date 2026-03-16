@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/trace"
 )
@@ -250,7 +251,7 @@ func TestScheme(t *testing.T) {
 				req.TLS = &tls.ConnectionState{}
 			}
 			if tt.header != "" {
-				req.Header.Set("X-Forwarded-Proto", tt.header)
+				req.Header.Set(httpx.HeaderXForwardedProto, tt.header)
 			}
 
 			got := scheme(req)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -200,7 +201,7 @@ func TestHostValidation_CustomStatusCodeAndMessage(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.Host = "evil.com"
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusForbidden).Header("Content-Type", "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusForbidden).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestHostValidation_DefaultsFallback(t *testing.T) {
@@ -223,7 +224,7 @@ func TestHostValidation_DefaultsFallback(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.Host = "evil.com"
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusBadRequest).Header("Content-Type", "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusBadRequest).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestHostValidation_StrictPort(t *testing.T) {

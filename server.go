@@ -142,19 +142,38 @@ type Server struct {
 }
 
 // New creates and configures a new Server instance with the provided config.
-// It initializes the server with default configurations that can be overridden
-// using the provided config. The server includes HTTP and HTTPS support,
-// middleware integration, and structured logging.
+// It initializes the server with sensible defaults that can be overridden
+// using the provided config.
 //
-// Example usage:
+// The server includes:
+//   - HTTP and HTTPS support
+//   - Middleware integration
+//   - Structured logging
+//   - Automatic metrics collection (enabled by default)
+//   - Request binding and validation
 //
-//	// Use defaults
-//	server := zerohttp.New()
+// Example - Basic usage with defaults:
 //
-//	// With custom config
-//	server := zerohttp.New(config.Merge{
-//	    Addr: ":8080",
-//	    Logger: myLogger,
+//	app := zh.New()
+//	app.GET("/", handler)
+//	log.Fatal(app.Start())
+//
+// Example - With custom configuration:
+//
+//	app := zh.New(config.Config{
+//	    Addr:         ":8080",
+//	    ReadTimeout:  10 * time.Second,
+//	    WriteTimeout: 15 * time.Second,
+//	    Logger:       myLogger,
+//	    Metrics: config.MetricsConfig{
+//	        Enabled: false, // Disable metrics
+//	    },
+//	})
+//
+// Example - With pluggable validator:
+//
+//	app := zh.New(config.Config{
+//	    Validator: myCustomValidator,
 //	})
 func New(cfg ...config.Config) *Server {
 	c := config.DefaultConfig

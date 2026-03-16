@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -44,7 +45,7 @@ func TestContentTypeValidation(t *testing.T) {
 				req = httptest.NewRequest(http.MethodPost, "/test", nil)
 			}
 			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
+				req.Header.Set(httpx.HeaderContentType, tt.contentType)
 			}
 
 			rr := httptest.NewRecorder()
@@ -79,7 +80,7 @@ func TestContentTypeCustomConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test data"))
-			req.Header.Set("Content-Type", tt.contentType)
+			req.Header.Set(httpx.HeaderContentType, tt.contentType)
 			rr := httptest.NewRecorder()
 			nextCalled := false
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +119,7 @@ func TestContentTypeExemptPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader("test data"))
-			req.Header.Set("Content-Type", "text/plain")
+			req.Header.Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			rr := httptest.NewRecorder()
 			nextCalled := false
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +142,7 @@ func TestContentTypeHTTPMethods(t *testing.T) {
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			req := httptest.NewRequest(method, "/test", strings.NewReader(`{"test": "data"}`))
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			rr := httptest.NewRecorder()
 			nextCalled := false
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +162,7 @@ func TestContentTypeHTTPMethods(t *testing.T) {
 func TestContentTypeGETRequests(t *testing.T) {
 	middleware := ContentType()
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 	rr := httptest.NewRecorder()
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +181,7 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 	t.Run("empty config", func(t *testing.T) {
 		middleware := ContentType(config.ContentTypeConfig{ContentTypes: []string{}})
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		rr := httptest.NewRecorder()
 		nextCalled := false
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +198,7 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 	t.Run("nil config", func(t *testing.T) {
 		middleware := ContentType(config.ContentTypeConfig{ContentTypes: nil})
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"test": "data"}`))
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		rr := httptest.NewRecorder()
 		nextCalled := false
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -214,11 +215,11 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 
 	t.Run("nil exempt paths fallback", func(t *testing.T) {
 		middleware := ContentType(config.ContentTypeConfig{
-			ContentTypes: []string{"application/json"},
+			ContentTypes: []string{httpx.MIMEApplicationJSON},
 			ExemptPaths:  nil,
 		})
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
-		req.Header.Set("Content-Type", "text/plain")
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		rr := httptest.NewRecorder()
 		called := false
 		middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

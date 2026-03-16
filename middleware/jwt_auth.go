@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/metrics"
@@ -514,7 +515,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 // RefreshTokenHandler returns an http.HandlerFunc that handles token refresh.
 // Accepts: { "refresh_token": "..." }
-// Returns: { "access_token": "...", "refresh_token": "...", "token_type": "Bearer", "expires_in": 900 }
+// Returns: { "access_token": "...", "refresh_token": "...", "token_type": consts.AuthSchemeBearer, "expires_in": 900 }
 // Users mount this at their chosen path: app.Post("/auth/refresh", middleware.RefreshTokenHandler(cfg))
 func RefreshTokenHandler(cfg config.JWTAuthConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -540,12 +541,12 @@ func RefreshTokenHandler(cfg config.JWTAuthConfig) http.HandlerFunc {
 			expiresIn = config.DefaultJWTAuthConfig.AccessTokenTTL
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  accessToken,
 			"refresh_token": refreshToken,
-			"token_type":    "Bearer",
+			"token_type":    httpx.AuthSchemeBearer,
 			"expires_in":    int(expiresIn.Seconds()),
 		})
 	}
@@ -563,7 +564,7 @@ func LogoutTokenHandler(cfg config.JWTAuthConfig) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"message": "logged out successfully",
@@ -573,12 +574,12 @@ func LogoutTokenHandler(cfg config.JWTAuthConfig) http.HandlerFunc {
 
 // extractBearerToken extracts the JWT token from the Authorization header
 func extractBearerToken(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
+	auth := r.Header.Get(httpx.HeaderAuthorization)
 	if auth == "" {
 		return ""
 	}
 
-	const prefix = "Bearer "
+	const prefix = httpx.AuthSchemeBearer + " "
 	if !strings.HasPrefix(auth, prefix) {
 		return ""
 	}
@@ -638,7 +639,7 @@ func normalizeClaims(claims config.JWTClaims) map[string]any {
 	case map[string]any:
 		return c
 	case HS256Claims:
-		return map[string]any(c)
+		return c
 	default:
 		// Try reflection for other map types (e.g., jwt.MapClaims)
 		v := reflect.ValueOf(claims)

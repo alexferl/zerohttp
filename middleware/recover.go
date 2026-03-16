@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
@@ -53,7 +54,7 @@ func Recover(logger log.Logger, cfg ...config.RecoverConfig) func(http.Handler) 
 
 					logger.Error("Recovered from panic", fields...)
 
-					if r.Header.Get("Connection") != "Upgrade" {
+					if r.Header.Get(httpx.HeaderConnection) != httpx.ConnectionUpgrade {
 						detail := problem.NewDetail(http.StatusInternalServerError, "Internal server error")
 						_ = detail.RenderAuto(w, r)
 					}

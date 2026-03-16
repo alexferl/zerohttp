@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -27,7 +28,7 @@ func TestCORSSimpleRequest(t *testing.T) {
 		t.Run(tt.origin+"-"+tt.method, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, "/test", nil)
 			if tt.origin != "" {
-				req.Header.Set("Origin", tt.origin)
+				req.Header.Set(httpx.HeaderOrigin, tt.origin)
 			}
 			rr := httptest.NewRecorder()
 			called := false
@@ -39,7 +40,7 @@ func TestCORSSimpleRequest(t *testing.T) {
 			if called != tt.expectNext {
 				t.Errorf("expected called=%v, got %v", tt.expectNext, called)
 			}
-			zhtest.AssertWith(t, rr).Header("Access-Control-Allow-Origin", tt.expectOrigin)
+			zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlAllowOrigin, tt.expectOrigin)
 		})
 	}
 }
@@ -63,13 +64,13 @@ func TestCORSPreflightRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 			if tt.origin != "" {
-				req.Header.Set("Origin", tt.origin)
+				req.Header.Set(httpx.HeaderOrigin, tt.origin)
 			}
 			if tt.method != "" {
-				req.Header.Set("Access-Control-Request-Method", tt.method)
+				req.Header.Set(httpx.HeaderAccessControlRequestMethod, tt.method)
 			}
 			if tt.headers != "" {
-				req.Header.Set("Access-Control-Request-Headers", tt.headers)
+				req.Header.Set(httpx.HeaderAccessControlRequestHeaders, tt.headers)
 			}
 			rr := httptest.NewRecorder()
 			called := false
@@ -84,7 +85,7 @@ func TestCORSPreflightRequest(t *testing.T) {
 
 			if tt.checkProblemDetail {
 				// Test JSON response with Accept header
-				req.Header.Set("Accept", "application/json")
+				req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 				rr = httptest.NewRecorder()
 				mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 				zhtest.AssertWith(t, rr).IsProblemDetail()
@@ -92,17 +93,17 @@ func TestCORSPreflightRequest(t *testing.T) {
 				// Test plain text response without Accept header
 				req = httptest.NewRequest(http.MethodOptions, "/test", nil)
 				if tt.origin != "" {
-					req.Header.Set("Origin", tt.origin)
+					req.Header.Set(httpx.HeaderOrigin, tt.origin)
 				}
 				if tt.method != "" {
-					req.Header.Set("Access-Control-Request-Method", tt.method)
+					req.Header.Set(httpx.HeaderAccessControlRequestMethod, tt.method)
 				}
 				if tt.headers != "" {
-					req.Header.Set("Access-Control-Request-Headers", tt.headers)
+					req.Header.Set(httpx.HeaderAccessControlRequestHeaders, tt.headers)
 				}
 				rr = httptest.NewRecorder()
 				mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
-				zhtest.AssertWith(t, rr).Header("Content-Type", "text/plain; charset=utf-8")
+				zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 			}
 			if tt.checkAllowHeader {
 				zhtest.AssertWith(t, rr).HeaderExists("Allow")
@@ -124,13 +125,13 @@ func TestCORSCustomOrigins(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.origin, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Origin", tt.origin)
+			req.Header.Set(httpx.HeaderOrigin, tt.origin)
 			rr := httptest.NewRecorder()
 			mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})).ServeHTTP(rr, req)
 
-			zhtest.AssertWith(t, rr).Header("Access-Control-Allow-Origin", tt.expectOrigin)
+			zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlAllowOrigin, tt.expectOrigin)
 		})
 	}
 }
@@ -141,15 +142,15 @@ func TestCORSCredentials(t *testing.T) {
 		AllowCredentials: true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
 	rr := httptest.NewRecorder()
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
 	zhtest.AssertWith(t, rr).
-		Header("Access-Control-Allow-Origin", "https://example.com").
-		Header("Access-Control-Allow-Credentials", "true")
+		Header(httpx.HeaderAccessControlAllowOrigin, "https://example.com").
+		Header(httpx.HeaderAccessControlAllowCredentials, "true")
 }
 
 func TestCORSCredentialsWithWildcard(t *testing.T) {
@@ -158,34 +159,34 @@ func TestCORSCredentialsWithWildcard(t *testing.T) {
 		AllowCredentials: true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
 	rr := httptest.NewRecorder()
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
 	zhtest.AssertWith(t, rr).
-		Header("Access-Control-Allow-Origin", "https://example.com").
-		Header("Access-Control-Allow-Credentials", "true")
+		Header(httpx.HeaderAccessControlAllowOrigin, "https://example.com").
+		Header(httpx.HeaderAccessControlAllowCredentials, "true")
 }
 
 func TestCORSExposedHeaders(t *testing.T) {
 	mw := CORS(config.CORSConfig{ExposedHeaders: []string{"X-Total-Count", "X-Page-Count"}})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
 	rr := httptest.NewRecorder()
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
-	zhtest.AssertWith(t, rr).Header("Access-Control-Expose-Headers", "X-Total-Count, X-Page-Count")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlExposeHeaders, "X-Total-Count, X-Page-Count")
 }
 
 func TestCORSOptionsPassthrough(t *testing.T) {
 	mw := CORS(config.CORSConfig{OptionsPassthrough: true})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
-	req.Header.Set("Origin", "https://example.com")
-	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
+	req.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodPost)
 	rr := httptest.NewRecorder()
 	called := false
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -212,13 +213,13 @@ func TestCORSExemptPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			req.Header.Set("Origin", "https://example.com")
+			req.Header.Set(httpx.HeaderOrigin, "https://example.com")
 			rr := httptest.NewRecorder()
 			mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})).ServeHTTP(rr, req)
 
-			corsOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+			corsOrigin := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin)
 			if tt.expectCORS && corsOrigin == "" {
 				t.Error("expected CORS headers")
 			} else if !tt.expectCORS && corsOrigin != "" {
@@ -236,17 +237,17 @@ func TestCORSCustomConfig(t *testing.T) {
 		MaxAge:         3600,
 	})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
-	req.Header.Set("Origin", "https://myapp.com")
-	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
+	req.Header.Set(httpx.HeaderOrigin, "https://myapp.com")
+	req.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodPost)
+	req.Header.Set(httpx.HeaderAccessControlRequestHeaders, "Content-Type")
 	rr := httptest.NewRecorder()
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 
 	zhtest.AssertWith(t, rr).
 		Status(http.StatusNoContent).
-		Header("Access-Control-Allow-Origin", "https://myapp.com").
-		Header("Access-Control-Allow-Methods", "GET, POST").
-		Header("Access-Control-Max-Age", "3600")
+		Header(httpx.HeaderAccessControlAllowOrigin, "https://myapp.com").
+		Header(httpx.HeaderAccessControlAllowMethods, "GET, POST").
+		Header(httpx.HeaderAccessControlMaxAge, "3600")
 }
 
 func TestCORSNilConfig(t *testing.T) {
@@ -256,16 +257,16 @@ func TestCORSNilConfig(t *testing.T) {
 		AllowedHeaders: nil,
 	})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
-	req.Header.Set("Origin", "https://example.com")
-	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
+	req.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodGet)
 	rr := httptest.NewRecorder()
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 
 	zhtest.AssertWith(t, rr).
 		Status(http.StatusNoContent).
-		Header("Access-Control-Allow-Origin", "*")
+		Header(httpx.HeaderAccessControlAllowOrigin, "*")
 
-	if methods := rr.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(methods, http.MethodGet) {
+	if methods := rr.Header().Get(httpx.HeaderAccessControlAllowMethods); !strings.Contains(methods, http.MethodGet) {
 		t.Errorf("expected methods to contain 'GET', got '%s'", methods)
 	}
 }
@@ -273,7 +274,7 @@ func TestCORSNilConfig(t *testing.T) {
 func TestCORSNilExemptPathsFallback(t *testing.T) {
 	mw := CORS(config.CORSConfig{ExemptPaths: nil})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
 	rr := httptest.NewRecorder()
 	called := false
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -284,18 +285,18 @@ func TestCORSNilExemptPathsFallback(t *testing.T) {
 	if !called {
 		t.Error("should fallback to default exempt paths and process CORS")
 	}
-	zhtest.AssertWith(t, rr).Header("Access-Control-Allow-Origin", "*")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlAllowOrigin, "*")
 }
 
 func TestCORSZeroMaxAgeFallback(t *testing.T) {
 	mw := CORS(config.CORSConfig{MaxAge: 0})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
-	req.Header.Set("Origin", "https://example.com")
-	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
+	req.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodGet)
 	rr := httptest.NewRecorder()
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 
-	zhtest.AssertWith(t, rr).Header("Access-Control-Max-Age", "86400")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlMaxAge, "86400")
 }
 
 func TestCORSNoOriginOptionsPassthrough(t *testing.T) {
@@ -320,8 +321,8 @@ func TestCORSDisallowedOriginOptionsPassthrough(t *testing.T) {
 		OptionsPassthrough: true,
 	})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
-	req.Header.Set("Origin", "https://notallowed.com")
-	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set(httpx.HeaderOrigin, "https://notallowed.com")
+	req.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodPost)
 	rr := httptest.NewRecorder()
 	called := false
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -338,8 +339,8 @@ func TestCORSDisallowedOriginOptionsPassthrough(t *testing.T) {
 func TestCORSDisallowedOriginNoPassthrough(t *testing.T) {
 	mw := CORS(config.CORSConfig{AllowedOrigins: []string{"https://allowed.com"}})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
-	req.Header.Set("Origin", "https://notallowed.com")
-	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req.Header.Set(httpx.HeaderOrigin, "https://notallowed.com")
+	req.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodPost)
 	rr := httptest.NewRecorder()
 	called := false
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +372,7 @@ func TestCORS_Metrics(t *testing.T) {
 	// Test preflight request
 	req1 := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req1.Header.Set("Origin", "https://allowed.com")
-	req1.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	req1.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodPost)
 	rr1 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr1, req1)
 
@@ -492,7 +493,7 @@ func TestCORSAllowOriginFunc(t *testing.T) {
 			})
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Origin", tt.origin)
+			req.Header.Set(httpx.HeaderOrigin, tt.origin)
 			rr := httptest.NewRecorder()
 
 			mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -507,7 +508,7 @@ func TestCORSAllowOriginFunc(t *testing.T) {
 				t.Errorf("unexpected Vary: Origin header")
 			}
 
-			allowOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+			allowOrigin := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin)
 			if tt.expectAllowed && allowOrigin == "" {
 				t.Errorf("expected Access-Control-Allow-Origin header, got none")
 			}
@@ -527,7 +528,7 @@ func TestCORSCustomOriginFuncWithCredentials(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Origin", "https://app.example.com")
+	req.Header.Set(httpx.HeaderOrigin, "https://app.example.com")
 	rr := httptest.NewRecorder()
 
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -535,11 +536,11 @@ func TestCORSCustomOriginFuncWithCredentials(t *testing.T) {
 	})).ServeHTTP(rr, req)
 
 	// When credentials are allowed and using custom validator, should echo origin
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+	if got := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin); got != "https://app.example.com" {
 		t.Errorf("expected origin echo with credentials, got %s", got)
 	}
 
-	if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+	if got := rr.Header().Get(httpx.HeaderAccessControlAllowCredentials); got != "true" {
 		t.Errorf("expected credentials header, got %s", got)
 	}
 

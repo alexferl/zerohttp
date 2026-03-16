@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestHMACAuth_MissingAuthorization(t *testing.T) {
@@ -55,7 +56,7 @@ func TestHMACAuth_InvalidFormat(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	req.Header.Set("Authorization", "invalid-format")
+	req.Header.Set(httpx.HeaderAuthorization, "invalid-format")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -153,7 +154,7 @@ func TestHMACAuth_WithBody(t *testing.T) {
 	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	body := bytes.NewReader([]byte(`{"test":"data"}`))
 	req := httptest.NewRequest("POST", "/api/test", body)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	err := signer.SignRequest(req)
 	if err != nil {
 		t.Fatalf("failed to sign request: %v", err)
@@ -1344,13 +1345,13 @@ func TestHMACAuth_HeaderTampering_Detected(t *testing.T) {
 
 	// Sign a request with specific headers
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	req.Header.Set("X-Request-Id", "original-request-id")
+	req.Header.Set(httpx.HeaderXRequestID, "original-request-id")
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
 	}
 
 	// Tamper with the header after signing
-	req.Header.Set("X-Request-Id", "tampered-request-id")
+	req.Header.Set(httpx.HeaderXRequestID, "tampered-request-id")
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -1381,7 +1382,7 @@ func TestHMACAuth_BodyTampering_Detected(t *testing.T) {
 	// Sign a request with specific body
 	originalBody := []byte(`{"amount": 100, "to": "alice"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/transfer", bytes.NewReader(originalBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
 	}
@@ -1585,8 +1586,8 @@ func TestHMACAuth_InvalidBase64Signature(t *testing.T) {
 
 	// Create a request with invalid base64 in signature
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	req.Header.Set("Authorization", "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, SignedHeaders=host;x-timestamp, Signature=!!!invalid!!!")
-	req.Header.Set("X-Timestamp", time.Now().UTC().Format(time.RFC3339))
+	req.Header.Set(httpx.HeaderAuthorization, "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, SignedHeaders=host;x-timestamp, Signature=!!!invalid!!!")
+	req.Header.Set(httpx.HeaderXTimestamp, time.Now().UTC().Format(time.RFC3339))
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -1615,7 +1616,7 @@ func TestHMACAuth_MaxBodySize(t *testing.T) {
 	// Create a request with body larger than MaxBodySize
 	largeBody := strings.Repeat("a", 200)
 	req := httptest.NewRequest(http.MethodPost, "/api/test", strings.NewReader(largeBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 
 	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	err := signer.SignRequest(req)
@@ -1658,7 +1659,7 @@ func TestHMACAuth_MaxBodySize_AllowedWithUnsignedPayload(t *testing.T) {
 	// Create a request with body larger than MaxBodySize but with unsigned payload
 	largeBody := strings.Repeat("a", 200)
 	req := httptest.NewRequest(http.MethodPost, "/api/test", strings.NewReader(largeBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 
 	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	signer.SetAllowUnsignedPayload(true)

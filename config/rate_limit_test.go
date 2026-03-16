@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestRateLimitConfig_DefaultValues(t *testing.T) {
@@ -112,7 +114,7 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 
 func TestRateLimitConfig_MultipleFields(t *testing.T) {
 	customExtractor := func(r *http.Request) string {
-		return r.Header.Get("Authorization")
+		return r.Header.Get(httpx.HeaderAuthorization)
 	}
 	exemptPaths := []string{"/public", "/health"}
 	cfg := RateLimitConfig{
@@ -152,7 +154,7 @@ func TestRateLimitConfig_MultipleFields(t *testing.T) {
 	}
 
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Authorization", "Bearer token123")
+	req.Header.Set(httpx.HeaderAuthorization, "Bearer token123")
 	if cfg.KeyExtractor(req) != "Bearer token123" {
 		t.Error("expected custom key extractor to work")
 	}

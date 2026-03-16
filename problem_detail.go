@@ -5,7 +5,16 @@ import (
 )
 
 // ProblemDetail is an alias to problem.Detail.
-// It represents an RFC 9457 Problem Details response.
+// It represents an RFC 9457 Problem Details response, a standardized format
+// for returning error details from HTTP APIs.
+//
+// Example usage:
+//
+//	return zh.NewProblemDetail(http.StatusNotFound, "User not found")
+//
+// Or return validation errors:
+//
+//	return zh.Validate.Struct(&req) // Returns 422 with field errors
 type ProblemDetail = problem.Detail
 
 // ValidationError is an alias to problem.ValidationError.

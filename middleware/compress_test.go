@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -74,7 +75,7 @@ func TestCompress(t *testing.T) {
 	})
 
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, "text/html")
 		_, err := w.Write([]byte("test content for compression"))
 		if err != nil {
 			t.Fatalf("failed to write response: %v", err)
@@ -82,12 +83,12 @@ func TestCompress(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
 
 	// Test decompression
 	reader, err := gzip.NewReader(rr.Body)
@@ -130,7 +131,7 @@ func TestCompressExemptPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
 			handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, err := w.Write([]byte(strings.Repeat("test content ", 10)))
 				if err != nil {
 					t.Fatalf("failed to write response: %v", err)
@@ -138,12 +139,12 @@ func TestCompressExemptPaths(t *testing.T) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			hasCompression := rr.Header().Get("Content-Encoding") != ""
+			hasCompression := rr.Header().Get(httpx.HeaderContentEncoding) != ""
 			if hasCompression != tt.shouldCompress {
 				t.Errorf("path %s: expected compression=%v, got compression=%v", tt.path, tt.shouldCompress, hasCompression)
 			}
@@ -191,7 +192,7 @@ func TestCompressAlgorithms(t *testing.T) {
 			})
 
 			handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, err := w.Write([]byte(strings.Repeat("test content ", 10)))
 				if err != nil {
 					t.Fatalf("failed to write response: %v", err)
@@ -199,12 +200,12 @@ func TestCompressAlgorithms(t *testing.T) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			req.Header.Set(httpx.HeaderAcceptEncoding, tt.acceptEncoding)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			zhtest.AssertWith(t, rr).Header("Content-Encoding", tt.expectedEncoding)
+			zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, tt.expectedEncoding)
 		})
 	}
 }
@@ -255,7 +256,7 @@ func TestCompressAllOptions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", tt.contentType)
+				w.Header().Set(httpx.HeaderContentType, tt.contentType)
 				_, err := w.Write([]byte(tt.content))
 				if err != nil {
 					t.Fatalf("failed to write response: %v", err)
@@ -263,12 +264,12 @@ func TestCompressAllOptions(t *testing.T) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			req.Header.Set(httpx.HeaderAcceptEncoding, tt.acceptEncoding)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			zhtest.AssertWith(t, rr).Header("Content-Encoding", tt.expectedEncoding)
+			zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, tt.expectedEncoding)
 		})
 	}
 }
@@ -291,7 +292,7 @@ func TestCompressor(t *testing.T) {
 
 	// Use the compressor middleware with HTTP handlers
 	mux.Handle("/gethtml", compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, "text/html")
 		_, err := w.Write([]byte("textstring"))
 		if err != nil {
 			t.Fatalf("failed to write response: %v", err)
@@ -299,7 +300,7 @@ func TestCompressor(t *testing.T) {
 	})))
 
 	mux.Handle("/getcss", compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/css")
+		w.Header().Set(httpx.HeaderContentType, "text/css")
 		_, err := w.Write([]byte("textstring"))
 		if err != nil {
 			t.Fatalf("failed to write response: %v", err)
@@ -307,7 +308,7 @@ func TestCompressor(t *testing.T) {
 	})))
 
 	mux.Handle("/getplain", compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		_, err := w.Write([]byte("textstring"))
 		if err != nil {
 			t.Fatalf("failed to write response: %v", err)
@@ -368,7 +369,7 @@ func TestCompressor(t *testing.T) {
 			if respString != "textstring" {
 				t.Errorf("response text doesn't match; expected:%q, got:%q", "textstring", respString)
 			}
-			if got := resp.Header.Get("Content-Encoding"); got != tc.expectedEncoding {
+			if got := resp.Header.Get(httpx.HeaderContentEncoding); got != tc.expectedEncoding {
 				t.Errorf("expected encoding %q but got %q", tc.expectedEncoding, got)
 			}
 		})
@@ -450,7 +451,7 @@ func TestCompressorLevels(t *testing.T) {
 			compressor := NewCompressor(tt.level, "text/plain")
 
 			handler := compressor.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 				_, err := w.Write([]byte(strings.Repeat("test data ", 100)))
 				if err != nil {
 					t.Fatalf("failed to write response: %v", err)
@@ -458,12 +459,12 @@ func TestCompressorLevels(t *testing.T) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
+			zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
 
 			// Verify the data can be decompressed
 			reader, err := gzip.NewReader(rr.Body)
@@ -533,7 +534,7 @@ func TestCompressConfigDefaults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mw := Compress(tt.config)
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/html")
+				w.Header().Set(httpx.HeaderContentType, "text/html")
 				_, err := w.Write([]byte(strings.Repeat("test content ", 50)))
 				if err != nil {
 					t.Fatalf("failed to write response: %v", err)
@@ -541,11 +542,11 @@ func TestCompressConfigDefaults(t *testing.T) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
-			hasCompression := rr.Header().Get("Content-Encoding") != ""
+			hasCompression := rr.Header().Get(httpx.HeaderContentEncoding) != ""
 			if hasCompression != tt.shouldCompress {
 				t.Errorf("%s: expected compression=%v, got compression=%v",
 					tt.description, tt.shouldCompress, hasCompression)
@@ -579,7 +580,7 @@ func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mw := Compress(tt.config)
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/html")
+				w.Header().Set(httpx.HeaderContentType, "text/html")
 				_, err := w.Write([]byte(strings.Repeat("test content ", 50)))
 				if err != nil {
 					t.Fatalf("failed to write response: %v", err)
@@ -587,11 +588,11 @@ func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
-			hasCompression := rr.Header().Get("Content-Encoding") != ""
+			hasCompression := rr.Header().Get(httpx.HeaderContentEncoding) != ""
 			if hasCompression != tt.expectCompression {
 				t.Errorf("%s: expected compression=%v, got compression=%v",
 					tt.description, tt.expectCompression, hasCompression)
@@ -610,7 +611,7 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json") // Default compressible type
+			w.Header().Set(httpx.HeaderContentType, "application/json") // Default compressible type
 			_, err := w.Write([]byte(strings.Repeat("json data ", 50)))
 			if err != nil {
 				t.Fatalf("failed to write response: %v", err)
@@ -618,11 +619,11 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
+		zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
 	})
 
 	t.Run("overrides work when explicitly set", func(t *testing.T) {
@@ -634,7 +635,7 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 
 		// Test with non-matching type
 		handler1 := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json") // Not in custom types
+			w.Header().Set(httpx.HeaderContentType, "application/json") // Not in custom types
 			_, err := w.Write([]byte(strings.Repeat("json data ", 50)))
 			if err != nil {
 				t.Fatalf("failed to write response: %v", err)
@@ -642,15 +643,15 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 		}))
 
 		req1 := httptest.NewRequest(http.MethodGet, "/", nil)
-		req1.Header.Set("Accept-Encoding", "gzip")
+		req1.Header.Set(httpx.HeaderAcceptEncoding, "gzip")
 		rr1 := httptest.NewRecorder()
 		handler1.ServeHTTP(rr1, req1)
 
-		zhtest.AssertWith(t, rr1).HeaderNotExists("Content-Encoding")
+		zhtest.AssertWith(t, rr1).HeaderNotExists(httpx.HeaderContentEncoding)
 
 		// Test with matching custom type
 		handler2 := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/custom") // Matches custom types
+			w.Header().Set(httpx.HeaderContentType, "text/custom") // Matches custom types
 			_, err := w.Write([]byte(strings.Repeat("custom data ", 50)))
 			if err != nil {
 				t.Fatalf("failed to write response: %v", err)
@@ -658,11 +659,11 @@ func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 		}))
 
 		req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-		req2.Header.Set("Accept-Encoding", "gzip")
+		req2.Header.Set(httpx.HeaderAcceptEncoding, "gzip")
 		rr2 := httptest.NewRecorder()
 		handler2.ServeHTTP(rr2, req2)
 
-		zhtest.AssertWith(t, rr2).Header("Content-Encoding", "gzip")
+		zhtest.AssertWith(t, rr2).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
 	})
 }
 
@@ -674,7 +675,7 @@ func testRequestWithAcceptedEncodings(t *testing.T, ts *httptest.Server, method,
 	}
 	if len(encodings) > 0 {
 		encodingsString := strings.Join(encodings, ",")
-		req.Header.Set("Accept-Encoding", encodingsString)
+		req.Header.Set(httpx.HeaderAcceptEncoding, encodingsString)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -695,7 +696,7 @@ func testRequestWithAcceptedEncodings(t *testing.T, ts *httptest.Server, method,
 
 func decodeResponseBody(t *testing.T, resp *http.Response) string {
 	var reader io.ReadCloser
-	switch resp.Header.Get("Content-Encoding") {
+	switch resp.Header.Get(httpx.HeaderContentEncoding) {
 	case "gzip":
 		var err error
 		reader, err = gzip.NewReader(resp.Body)
@@ -734,18 +735,18 @@ func TestCompress_Metrics(t *testing.T) {
 	})
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		_, _ = w.Write([]byte(strings.Repeat("test content ", 100)))
 	}))
 	wrapped := metricsMw(handler)
 
 	// Test gzip compression
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	if rr.Header().Get("Content-Encoding") != "gzip" {
+	if rr.Header().Get(httpx.HeaderContentEncoding) != "gzip" {
 		t.Fatal("expected gzip encoding")
 	}
 
@@ -780,7 +781,7 @@ func TestCompress_WriteHeader_MultipleCalls(t *testing.T) {
 	})
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, "text/html")
 		w.WriteHeader(http.StatusOK)
 		// Subsequent WriteHeader calls should be ignored (standard library behavior)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -789,7 +790,7 @@ func TestCompress_WriteHeader_MultipleCalls(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -815,17 +816,17 @@ func TestCompressionProvider(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write([]byte("test content"))
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "nop")
+		req.Header.Set(httpx.HeaderAcceptEncoding, "nop")
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
 
-		zhtest.AssertWith(t, rr).Header("Content-Encoding", "nop")
+		zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, "nop")
 		if !nopEncoder.used {
 			t.Error("expected custom encoder to be used")
 		}
@@ -841,18 +842,18 @@ func TestCompressionProvider(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write([]byte("test content"))
 		}))
 
 		// Request gzip which is built-in, not from provider
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
 
-		zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
+		zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
 	})
 
 	t.Run("custom encoder with level parameter", func(t *testing.T) {
@@ -869,12 +870,12 @@ func TestCompressionProvider(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write([]byte("test content"))
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "testlevel")
+		req.Header.Set(httpx.HeaderAcceptEncoding, "testlevel")
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
@@ -899,23 +900,23 @@ func TestCompressionProvider(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write([]byte("test content"))
 		}))
 
 		// Test first custom encoder
 		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req1.Header.Set("Accept-Encoding", "custom1")
+		req1.Header.Set(httpx.HeaderAcceptEncoding, "custom1")
 		rr1 := httptest.NewRecorder()
 		handler.ServeHTTP(rr1, req1)
-		zhtest.AssertWith(t, rr1).Header("Content-Encoding", "custom1")
+		zhtest.AssertWith(t, rr1).Header(httpx.HeaderContentEncoding, "custom1")
 
 		// Test second custom encoder
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req2.Header.Set("Accept-Encoding", "custom2")
+		req2.Header.Set(httpx.HeaderAcceptEncoding, "custom2")
 		rr2 := httptest.NewRecorder()
 		handler.ServeHTTP(rr2, req2)
-		zhtest.AssertWith(t, rr2).Header("Content-Encoding", "custom2")
+		zhtest.AssertWith(t, rr2).Header(httpx.HeaderContentEncoding, "custom2")
 	})
 
 	t.Run("custom encoder alongside built-in", func(t *testing.T) {
@@ -931,23 +932,23 @@ func TestCompressionProvider(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write([]byte("test content"))
 		}))
 
 		// Test built-in gzip still works
 		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req1.Header.Set("Accept-Encoding", "gzip")
+		req1.Header.Set(httpx.HeaderAcceptEncoding, "gzip")
 		rr1 := httptest.NewRecorder()
 		handler.ServeHTTP(rr1, req1)
-		zhtest.AssertWith(t, rr1).Header("Content-Encoding", "gzip")
+		zhtest.AssertWith(t, rr1).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
 
 		// Test custom encoder
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req2.Header.Set("Accept-Encoding", "custom")
+		req2.Header.Set(httpx.HeaderAcceptEncoding, "custom")
 		rr2 := httptest.NewRecorder()
 		handler.ServeHTTP(rr2, req2)
-		zhtest.AssertWith(t, rr2).Header("Content-Encoding", "custom")
+		zhtest.AssertWith(t, rr2).Header(httpx.HeaderContentEncoding, "custom")
 	})
 
 	t.Run("nil provider uses defaults only", func(t *testing.T) {
@@ -958,17 +959,17 @@ func TestCompressionProvider(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write([]byte("test content"))
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
 
-		zhtest.AssertWith(t, rr).Header("Content-Encoding", "gzip")
+		zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
 	})
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // HMACSigner provides client-side request signing for HMAC authentication
@@ -91,7 +92,7 @@ func (s *HMACSigner) SignRequestWithTime(req *http.Request, timestamp time.Time)
 		req.Host = req.URL.Host
 	}
 
-	req.Header.Set("X-Timestamp", timestamp.Format(time.RFC3339))
+	req.Header.Set(httpx.HeaderXTimestamp, timestamp.Format(time.RFC3339))
 
 	bodyHash := s.computeBodyHash(req)
 
@@ -102,7 +103,7 @@ func (s *HMACSigner) SignRequestWithTime(req *http.Request, timestamp time.Time)
 	signature := s.computeSignature(canonicalRequest)
 
 	authHeader := s.buildAuthorizationHeader(timestamp, signedHeaders, signature)
-	req.Header.Set("Authorization", authHeader)
+	req.Header.Set(httpx.HeaderAuthorization, authHeader)
 
 	return nil
 }
@@ -116,10 +117,10 @@ func (s *HMACSigner) GenerateSignature(req *http.Request, timestamp time.Time) (
 	}
 
 	// Set the X-Timestamp header for signing
-	req.Header.Set("X-Timestamp", timestamp.Format(time.RFC3339))
+	req.Header.Set(httpx.HeaderXTimestamp, timestamp.Format(time.RFC3339))
 
 	signedHeaders := []string{"host", "x-timestamp"}
-	if req.Header.Get("Content-Type") != "" {
+	if req.Header.Get(httpx.HeaderContentType) != "" {
 		signedHeaders = append(signedHeaders, "content-type")
 	}
 
@@ -178,10 +179,10 @@ func (s *HMACSigner) PresignURLWithTime(req *http.Request, expiresAt time.Time) 
 
 	u := req.URL
 	q := u.Query()
-	q.Set("X-HMAC-Algorithm", "HMAC-"+string(s.algorithm))
-	q.Set("X-HMAC-Credential", s.accessKeyID+"/"+expiresAt.Format(time.RFC3339))
-	q.Set("X-HMAC-SignedHeaders", "host;x-timestamp")
-	q.Set("X-HMAC-Signature", sig)
+	q.Set(httpx.QueryXHMACAlgorithm, "HMAC-"+string(s.algorithm))
+	q.Set(httpx.QueryXHMACCredential, s.accessKeyID+"/"+expiresAt.Format(time.RFC3339))
+	q.Set(httpx.QueryXHMACSignedHeaders, "host;x-timestamp")
+	q.Set(httpx.QueryXHMACSignature, sig)
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
@@ -236,7 +237,7 @@ func (s *HMACSigner) buildSignedHeadersList(req *http.Request) []string {
 
 	headers := []string{"host", "x-timestamp"}
 
-	if req.Header.Get("Content-Type") != "" {
+	if req.Header.Get(httpx.HeaderContentType) != "" {
 		headers = append(headers, "content-type")
 	}
 

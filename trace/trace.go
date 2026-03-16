@@ -1,22 +1,3 @@
-// Package trace provides interfaces for distributed tracing.
-//
-// This package defines a pluggable tracing interface that allows users to integrate
-// their preferred tracing implementation (e.g., OpenTelemetry, Jaeger, Zipkin) without
-// forcing dependencies on the core framework.
-//
-// Usage:
-//
-//	// No tracing (default)
-//	app := zerohttp.New()
-//
-//	// With custom tracer
-//	app := zerohttp.New(config.Config{
-//	    Tracer: myTracer,
-//	})
-//
-//	// In handlers, access the current span:
-//	span := trace.SpanFromContext(r.Context())
-//	span.SetAttributes(trace.Attribute{Key: "user.id", Value: userID})
 package trace
 
 import "context"

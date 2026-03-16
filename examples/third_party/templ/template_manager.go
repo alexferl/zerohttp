@@ -5,6 +5,7 @@ import (
 
 	"github.com/a-h/templ"
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // TemplTemplateManager wraps Templ components for cleaner usage
@@ -32,7 +33,7 @@ func (tm *TemplTemplateManager) Render(w http.ResponseWriter, r *http.Request, s
 
 	component := factory(data)
 
-	w.Header().Set(zh.HeaderContentType, zh.MIMETextHTML)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 	w.WriteHeader(status)
 
 	return component.Render(r.Context(), w)

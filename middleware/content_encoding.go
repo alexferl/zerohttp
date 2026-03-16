@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 )
@@ -38,7 +39,7 @@ func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) htt
 			}
 
 			// Validate all Content-Encoding headers
-			for _, headerValue := range r.Header["Content-Encoding"] {
+			for _, headerValue := range r.Header[httpx.HeaderContentEncoding] {
 				encodings := strings.Split(headerValue, ",")
 				for _, encoding := range encodings {
 					encoding = strings.TrimSpace(strings.ToLower(encoding))
@@ -46,7 +47,7 @@ func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) htt
 						if _, ok := allowedEncodings[encoding]; !ok {
 							detail := problem.NewDetail(http.StatusUnsupportedMediaType, "Unsupported content encoding")
 							if len(c.Encodings) > 0 {
-								w.Header().Set("Accept-Encoding", strings.Join(c.Encodings, ", "))
+								w.Header().Set(httpx.HeaderAcceptEncoding, strings.Join(c.Encodings, ", "))
 							}
 							_ = detail.RenderAuto(w, r)
 							return

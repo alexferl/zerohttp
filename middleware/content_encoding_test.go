@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -38,7 +39,7 @@ func TestContentEncodingValidation(t *testing.T) {
 				req = httptest.NewRequest(http.MethodPost, "/test", nil)
 			}
 			if tt.contentEncoding != "" {
-				req.Header.Set("Content-Encoding", tt.contentEncoding)
+				req.Header.Set(httpx.HeaderContentEncoding, tt.contentEncoding)
 			}
 
 			rr := httptest.NewRecorder()
@@ -76,7 +77,7 @@ func TestContentEncodingMultipleValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 			for _, encoding := range tt.encodings {
-				req.Header.Add("Content-Encoding", encoding)
+				req.Header.Add(httpx.HeaderContentEncoding, encoding)
 			}
 			rr := httptest.NewRecorder()
 			nextCalled := false
@@ -110,7 +111,7 @@ func TestContentEncodingCustomConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
-			req.Header.Set("Content-Encoding", tt.encoding)
+			req.Header.Set(httpx.HeaderContentEncoding, tt.encoding)
 			rr := httptest.NewRecorder()
 			nextCalled := false
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +149,7 @@ func TestContentEncodingExemptPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader("test"))
-			req.Header.Set("Content-Encoding", tt.encoding)
+			req.Header.Set(httpx.HeaderContentEncoding, tt.encoding)
 			rr := httptest.NewRecorder()
 			nextCalled := false
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +172,7 @@ func TestContentEncodingHTTPMethods(t *testing.T) {
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			req := httptest.NewRequest(method, "/test", strings.NewReader("test"))
-			req.Header.Set("Content-Encoding", "gzip")
+			req.Header.Set(httpx.HeaderContentEncoding, "gzip")
 			rr := httptest.NewRecorder()
 			nextCalled := false
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +192,7 @@ func TestContentEncodingHTTPMethods(t *testing.T) {
 func TestContentEncodingNilEncodingsFallback(t *testing.T) {
 	middleware := ContentEncoding(config.ContentEncodingConfig{Encodings: nil}) // Explicitly set to nil
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
-	req.Header.Set("Content-Encoding", "gzip") // Should be allowed by default config
+	req.Header.Set(httpx.HeaderContentEncoding, "gzip") // Should be allowed by default config
 	rr := httptest.NewRecorder()
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +213,7 @@ func TestContentEncodingNilExemptPathsFallback(t *testing.T) {
 		ExemptPaths: nil,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
-	req.Header.Set("Content-Encoding", "br")
+	req.Header.Set(httpx.HeaderContentEncoding, "br")
 	rr := httptest.NewRecorder()
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

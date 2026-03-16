@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -63,7 +64,7 @@ func TestTimeout_Scenarios(t *testing.T) {
 				// Test plain text response
 				req = zhtest.NewRequest(http.MethodGet, "/").Build()
 				w = zhtest.Serve(middleware, req)
-				zhtest.AssertWith(t, w).Status(tt.wantStatus).Header("Content-Type", "text/plain; charset=utf-8")
+				zhtest.AssertWith(t, w).Status(tt.wantStatus).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 			}
 		})
 	}

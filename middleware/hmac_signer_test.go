@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestNewHMACSigner(t *testing.T) {
@@ -125,7 +126,7 @@ func TestHMACSigner_SignRequest(t *testing.T) {
 	}
 
 	// Check that Authorization header was added
-	authHeader := req.Header.Get("Authorization")
+	authHeader := req.Header.Get(httpx.HeaderAuthorization)
 	if authHeader == "" {
 		t.Error("expected Authorization header to be set")
 	}
@@ -165,7 +166,7 @@ func TestHMACSigner_SignRequestWithBody(t *testing.T) {
 
 	body := `{"test":"data"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/test", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 
 	err := signer.SignRequest(req)
 	if err != nil {
@@ -280,7 +281,7 @@ func TestHMACSigner_CustomHeadersRoundTrip(t *testing.T) {
 	signer.SetHeadersToSign([]string{"host", "x-timestamp", "x-request-id"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	req.Header.Set("X-Request-Id", "test-request-123")
+	req.Header.Set(httpx.HeaderXRequestID, "test-request-123")
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
 	}

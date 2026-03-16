@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -166,7 +167,7 @@ func TestBasicAuth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			if tt.authHeader != "" {
-				req.Header.Set("Authorization", tt.authHeader)
+				req.Header.Set(httpx.HeaderAuthorization, tt.authHeader)
 			}
 			w := httptest.NewRecorder()
 			called := false
@@ -180,7 +181,7 @@ func TestBasicAuth(t *testing.T) {
 			}
 			zhtest.AssertWith(t, w).Status(tt.expectedStatus)
 			if tt.checkWWWAuth {
-				zhtest.AssertWith(t, w).Header("WWW-Authenticate", tt.expectedRealm)
+				zhtest.AssertWith(t, w).Header(httpx.HeaderWWWAuthenticate, tt.expectedRealm)
 			}
 		})
 	}
@@ -196,7 +197,7 @@ func TestBasicAuthMalformedHeaders(t *testing.T) {
 		t.Run("malformed_"+header, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			if header != "" {
-				req.Header.Set("Authorization", header)
+				req.Header.Set(httpx.HeaderAuthorization, header)
 			}
 			testMiddleware(t, middleware, req, false, http.StatusUnauthorized)
 		})
@@ -240,7 +241,7 @@ func TestBasicAuthNoAuthConfigured(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	auth := base64.StdEncoding.EncodeToString([]byte("user:password"))
-	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set(httpx.HeaderAuthorization, "Basic "+auth)
 	w := httptest.NewRecorder()
 	called := false
 	middleware(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
@@ -279,7 +280,7 @@ func TestBasicAuthFailedFunction(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusUnauthorized).
-		Header("WWW-Authenticate", `Basic realm="Test Realm"`)
+		Header(httpx.HeaderWWWAuthenticate, `Basic realm="Test Realm"`)
 }
 
 func TestBasicAuth_Metrics(t *testing.T) {
@@ -308,7 +309,7 @@ func TestBasicAuth_Metrics(t *testing.T) {
 	// Test valid auth
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
 	auth := base64.StdEncoding.EncodeToString([]byte("admin:secret"))
-	req2.Header.Set("Authorization", "Basic "+auth)
+	req2.Header.Set(httpx.HeaderAuthorization, "Basic "+auth)
 	w2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusOK {

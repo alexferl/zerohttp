@@ -1,6 +1,3 @@
-// Package zhtest provides testing utilities for zerohttp applications.
-// It uses only Go's standard library (net/http/httptest) to maintain
-// the zero external dependencies constraint.
 package zhtest
 
 import (
@@ -11,6 +8,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // RequestBuilder provides a fluent interface for building HTTP test requests.
@@ -43,7 +42,7 @@ func NewRequest(method, path string) *RequestBuilder {
 // Example:
 //
 //	req := zhtest.NewRequest(http.MethodGet, "/").
-//	    WithHeader("Authorization", "Bearer token").
+//	    WithHeader(consts.HeaderAuthorization, "Bearer token").
 //	    Build()
 func (rb *RequestBuilder) WithHeader(key, value string) *RequestBuilder {
 	rb.headers.Add(key, value)
@@ -149,7 +148,7 @@ func (rb *RequestBuilder) WithJSON(v any) *RequestBuilder {
 		return rb
 	}
 	rb.body = bytes.NewReader(data)
-	rb.headers.Set("Content-Type", "application/json")
+	rb.headers.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	return rb
 }
 
@@ -163,7 +162,7 @@ func (rb *RequestBuilder) WithJSON(v any) *RequestBuilder {
 //	    Build()
 func (rb *RequestBuilder) WithForm(values url.Values) *RequestBuilder {
 	rb.body = strings.NewReader(values.Encode())
-	rb.headers.Set("Content-Type", "application/x-www-form-urlencoded")
+	rb.headers.Set(httpx.HeaderContentType, httpx.MIMEApplicationFormURLEncoded)
 	return rb
 }
 

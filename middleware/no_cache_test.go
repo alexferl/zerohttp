@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -191,18 +192,18 @@ func TestNoCacheResponseAndRequest(t *testing.T) {
 		if ifNoneMatch := r.Header.Get("If-None-Match"); ifNoneMatch != "" {
 			t.Errorf("expected If-None-Match to be removed, got %s", ifNoneMatch)
 		}
-		if auth := r.Header.Get("Authorization"); auth != "Bearer token123" {
+		if auth := r.Header.Get(httpx.HeaderAuthorization); auth != "Bearer token123" {
 			t.Errorf("expected Authorization to remain, got %s", auth)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"data": "test"}`))
 	})
 
 	req := zhtest.NewRequest(http.MethodGet, "/api/data").
 		WithHeader("If-None-Match", `"cached-etag"`).
-		WithHeader("Authorization", "Bearer token123").
+		WithHeader(httpx.HeaderAuthorization, "Bearer token123").
 		Build()
 	w := zhtest.Serve(middleware(next), req)
 
@@ -210,6 +211,6 @@ func TestNoCacheResponseAndRequest(t *testing.T) {
 		t.Errorf("expected Cache-Control to contain no-cache, got %s", cacheControl)
 	}
 	zhtest.AssertWith(t, w).
-		Header("Content-Type", "application/json").
+		Header(httpx.HeaderContentType, "application/json").
 		Body(`{"data": "test"}`)
 }

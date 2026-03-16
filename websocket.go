@@ -1,3 +1,21 @@
+// Package zerohttp provides WebSocket type aliases and utilities for working with
+// WebSocket connections. Users bring their own WebSocket library (e.g., gorilla/websocket).
+//
+// WebSocketUpgrader and WebSocketConn are pluggable interfaces. Configure via:
+//
+//	app := zh.New(config.Config{
+//	    WebSocketUpgrader: myUpgrader,  // Your implementation
+//	})
+//
+//	app.GET("/ws", func(w http.ResponseWriter, r *http.Request) error {
+//	    conn, err := app.WebSocketUpgrader().Upgrade(w, r)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    defer conn.Close()
+//	    // Handle connection...
+//	    return nil
+//	})
 package zerohttp
 
 import (

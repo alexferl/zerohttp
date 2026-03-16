@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -33,7 +34,7 @@ func TestTemplateManager_Render(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusOK).
-			Header(HeaderContentType, "text/html; charset=utf-8").
+			Header(httpx.HeaderContentType, httpx.MIMETextHTMLCharset).
 			BodyContains("Test Page")
 	})
 

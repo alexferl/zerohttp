@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -90,7 +91,7 @@ func TestSetHeader_NilHeaders(t *testing.T) {
 
 func TestSetHeader_OverrideExistingHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		w.Header().Set("Server", "Default-Server")
 		w.WriteHeader(http.StatusOK)
 	})
@@ -107,7 +108,7 @@ func TestSetHeader_OverrideExistingHeaders(t *testing.T) {
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	// Handler sets headers before middleware, so middleware values should be set
 	// but handler writes them first. The SetHeader middleware runs before handler.
-	if contentType := w.Header().Get("Content-Type"); contentType != "text/html" {
+	if contentType := w.Header().Get(httpx.HeaderContentType); contentType != "text/html" {
 		t.Errorf("Expected Content-Type to be overridden to 'text/html', got '%s'", contentType)
 	}
 	if server := w.Header().Get("Server"); server != "Default-Server" {
@@ -149,7 +150,7 @@ func TestSetHeader_CaseInsensitiveHeaders(t *testing.T) {
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	zhtest.AssertWith(t, w).
-		Header("Content-Type", "application/json").
+		Header(httpx.HeaderContentType, "application/json").
 		Header("X-Custom-Header", "lowercase-key")
 }
 

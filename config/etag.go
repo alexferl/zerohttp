@@ -1,6 +1,10 @@
 package config
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/alexferl/zerohttp/httpx"
+)
 
 // ETagAlgorithm defines the hashing algorithm for ETag generation
 type ETagAlgorithm string
@@ -60,7 +64,7 @@ var DefaultETagConfig = ETagConfig{
 		http.StatusServiceUnavailable:  {},
 	},
 	SkipContentTypes: map[string]struct{}{
-		"text/event-stream": {}, // SSE streaming
+		httpx.MIMETextEventStream: {}, // SSE streaming
 	},
 	ExemptPaths: []string{},
 	ExemptFunc:  nil,

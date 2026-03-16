@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/metrics"
@@ -99,16 +100,16 @@ func (ew *etagResponseWriter) writeHeaderLocked(status int) {
 		ew.skipETag = true
 	}
 
-	if ew.ResponseWriter.Header().Get("ETag") != "" {
+	if ew.ResponseWriter.Header().Get(httpx.HeaderETag) != "" {
 		ew.skipETag = true
 	}
 
-	cacheControl := ew.ResponseWriter.Header().Get("Cache-Control")
-	if strings.Contains(cacheControl, "no-store") {
+	cacheControl := ew.ResponseWriter.Header().Get(httpx.HeaderCacheControl)
+	if strings.Contains(cacheControl, httpx.CacheControlNoStore) {
 		ew.skipETag = true
 	}
 
-	contentType := ew.ResponseWriter.Header().Get("Content-Type")
+	contentType := ew.ResponseWriter.Header().Get(httpx.HeaderContentType)
 	if contentType != "" {
 		// Strip charset suffix
 		if idx := strings.Index(contentType, ";"); idx != -1 {
@@ -119,11 +120,11 @@ func (ew *etagResponseWriter) writeHeaderLocked(status int) {
 		}
 	}
 
-	if strings.Contains(ew.ResponseWriter.Header().Get("Transfer-Encoding"), "chunked") {
+	if strings.Contains(ew.ResponseWriter.Header().Get(httpx.HeaderTransferEncoding), httpx.TransferEncodingChunked) {
 		ew.skipETag = true
 	}
 
-	ew.contentEncoding = ew.ResponseWriter.Header().Get("Content-Encoding")
+	ew.contentEncoding = ew.ResponseWriter.Header().Get(httpx.HeaderContentEncoding)
 
 	if ew.skipETag && !ew.HeaderWritten {
 		ew.ResponseWriter.WriteHeader(status)
@@ -297,7 +298,7 @@ func (ew *etagResponseWriter) finalizeLocked() {
 		ew.etagGenerated = true
 
 		if ew.ifMatch != "" && ew.shouldReturn412(etag) {
-			ew.ResponseWriter.Header().Set("ETag", etag)
+			ew.ResponseWriter.Header().Set(httpx.HeaderETag, etag)
 			if !ew.HeaderWritten {
 				ew.ResponseWriter.WriteHeader(http.StatusPreconditionFailed)
 				ew.HeaderWritten = true
@@ -307,7 +308,7 @@ func (ew *etagResponseWriter) finalizeLocked() {
 		}
 
 		if ew.shouldReturn304(etag) {
-			ew.ResponseWriter.Header().Set("ETag", etag)
+			ew.ResponseWriter.Header().Set(httpx.HeaderETag, etag)
 			if !ew.HeaderWritten {
 				ew.ResponseWriter.WriteHeader(http.StatusNotModified)
 				ew.HeaderWritten = true
@@ -316,7 +317,7 @@ func (ew *etagResponseWriter) finalizeLocked() {
 			return
 		}
 
-		ew.ResponseWriter.Header().Set("ETag", etag)
+		ew.ResponseWriter.Header().Set(httpx.HeaderETag, etag)
 
 		// Check If-Range for range request handling
 		// Note: Range requests with If-Range require special handling
@@ -401,8 +402,8 @@ func (ew *etagResponseWriter) serveRange() {
 		return
 	}
 
-	ew.ResponseWriter.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, contentLength))
-	ew.ResponseWriter.Header().Set("Content-Length", strconv.Itoa(end-start+1))
+	ew.ResponseWriter.Header().Set(httpx.HeaderContentRange, fmt.Sprintf("bytes %d-%d/%d", start, end, contentLength))
+	ew.ResponseWriter.Header().Set(httpx.HeaderContentLength, strconv.Itoa(end-start+1))
 	ew.ResponseWriter.WriteHeader(http.StatusPartialContent)
 	_, _ = ew.ResponseWriter.Write(content[start : end+1])
 }
@@ -434,10 +435,10 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			ifNoneMatch := r.Header.Get("If-None-Match")
-			ifMatch := r.Header.Get("If-Match")
-			ifRange := r.Header.Get("If-Range")
-			rangeHeader := r.Header.Get("Range")
+			ifNoneMatch := r.Header.Get(httpx.HeaderIfNoneMatch)
+			ifMatch := r.Header.Get(httpx.HeaderIfMatch)
+			ifRange := r.Header.Get(httpx.HeaderIfRange)
+			rangeHeader := r.Header.Get(httpx.HeaderRange)
 
 			// Only generate ETags for GET and HEAD requests (for caching)
 			// But still check If-Match for state-changing methods
@@ -475,7 +476,7 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 //	file, _ := os.Open("largefile.zip")
 //	stat, _ := file.Stat()
 //	etag := middleware.GenerateFileETag(stat, true) // weak ETag
-//	w.Header().Set("ETag", etag)
+//	w.Header().Set(consts.HeaderETag, etag)
 func GenerateFileETag(modTime int64, size int64, weak bool) string {
 	tag := strconv.FormatInt(modTime, 10) + "-" + strconv.FormatInt(size, 10)
 	if weak {
@@ -492,7 +493,7 @@ func GenerateFileETag(modTime int64, size int64, weak bool) string {
 //	file, _ := os.Open("largefile.zip")
 //	stat, _ := file.Stat()
 //	etag := middleware.GenerateFileETagFromInfo(stat, true)
-//	w.Header().Set("ETag", etag)
+//	w.Header().Set(consts.HeaderETag, etag)
 func GenerateFileETagFromInfo(info interface {
 	ModTime() time.Time
 	Size() int64
@@ -535,15 +536,15 @@ func ServeContentWithETag(w http.ResponseWriter, r *http.Request, modTime int64,
 
 	etag := GenerateFileETag(modTime, size, true)
 
-	if ifNoneMatch := r.Header.Get("If-None-Match"); ifNoneMatch != "" {
+	if ifNoneMatch := r.Header.Get(httpx.HeaderIfNoneMatch); ifNoneMatch != "" {
 		if etagMatches(ifNoneMatch, etag) {
-			w.Header().Set("ETag", etag)
+			w.Header().Set(httpx.HeaderETag, etag)
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
 	}
 
-	w.Header().Set("ETag", etag)
+	w.Header().Set(httpx.HeaderETag, etag)
 
 	// Serve content using http.ServeContent which handles Range requests
 	// We need to convert int64 modTime to time.Time

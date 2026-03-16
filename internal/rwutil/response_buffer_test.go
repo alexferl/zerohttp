@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestResponseBuffer_BasicWrite(t *testing.T) {
@@ -391,11 +393,11 @@ func TestResponseBuffer_HeaderManipulation(t *testing.T) {
 		rec := httptest.NewRecorder()
 		buf := NewResponseBuffer(rec, 1024)
 
-		buf.ResponseWriter.Header().Set("Content-Type", "application/json")
+		buf.ResponseWriter.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		_, _ = buf.Write([]byte("{}"))
 		buf.Commit()
 
-		if rec.Header().Get("Content-Type") != "application/json" {
+		if rec.Header().Get(httpx.HeaderContentType) != "application/json" {
 			t.Error("expected Content-Type header to be set")
 		}
 	})

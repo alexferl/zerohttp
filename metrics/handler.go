@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // Handler returns an http.Handler that exposes metrics in Prometheus format.
@@ -18,7 +20,7 @@ func Handler(reg Registry) http.Handler {
 
 		families := reg.Gather()
 
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set(httpx.HeaderContentType, "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 
 		for _, family := range families {

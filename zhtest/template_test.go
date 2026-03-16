@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestTemplateRenderer_Render(t *testing.T) {
@@ -83,7 +85,7 @@ func TestTestTemplateToString(t *testing.T) {
 
 func TestAssertTemplate_Contains(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		if _, err := w.Write([]byte(`<html><body><h1>Welcome</h1><p>Hello, World!</p></body></html>`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -99,7 +101,7 @@ func TestAssertTemplate_Contains(t *testing.T) {
 
 func TestAssertTemplate_NotContains(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		if _, err := w.Write([]byte(`<html><body><h1>Welcome</h1></body></html>`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -115,7 +117,7 @@ func TestAssertTemplate_NotContains(t *testing.T) {
 
 func TestAssertTemplate_HasTitle(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		if _, err := w.Write([]byte(`<html><head><title>My Page</title></head><body><h1>Welcome</h1></body></html>`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -131,7 +133,7 @@ func TestAssertTemplate_HasTitle(t *testing.T) {
 
 func TestAssertTemplate_Equals(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		if _, err := w.Write([]byte(`<h1>Hello</h1>`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}
@@ -147,7 +149,7 @@ func TestAssertTemplate_Equals(t *testing.T) {
 
 func TestAssertTemplate_Status(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`<h1>Hello</h1>`)); err != nil {
 			t.Errorf("failed to write: %v", err)
@@ -164,7 +166,7 @@ func TestAssertTemplate_Status(t *testing.T) {
 
 func TestAssertTemplate_Chaining(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`<html><head><title>My Page</title></head><body><h1>Welcome</h1></body></html>`)); err != nil {
 			t.Errorf("failed to write: %v", err)
@@ -186,7 +188,7 @@ func TestAssertTemplate_Chaining(t *testing.T) {
 
 func TestAssertTemplateWith(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		if _, err := w.Write([]byte(`<h1>Hello</h1>`)); err != nil {
 			t.Errorf("failed to write: %v", err)
 		}

@@ -6,6 +6,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 )
 
@@ -16,8 +17,8 @@ func main() {
 	app.Use(middleware.CORS(config.CORSConfig{
 		AllowedOrigins:   []string{"http://localhost:3000", "https://example.com"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"X-Request-Id"},
+		AllowedHeaders:   []string{httpx.HeaderAccept, httpx.HeaderAuthorization, httpx.HeaderContentType, httpx.HeaderXCSRFToken},
+		ExposedHeaders:   []string{httpx.HeaderXRequestID},
 		AllowCredentials: true,
 		MaxAge:           86400,
 	}))

@@ -1,6 +1,10 @@
 package config
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/alexferl/zerohttp/httpx"
+)
 
 // OriginValidator is a function that validates if an origin is allowed.
 // Returns true if the origin is allowed, false otherwise.
@@ -50,11 +54,11 @@ var DefaultCORSConfig = CORSConfig{
 		http.MethodOptions,
 	},
 	AllowedHeaders: []string{
-		"Accept",
-		"Authorization",
-		"Content-Type",
-		"X-CSRF-Token",
-		"X-Request-Id",
+		httpx.HeaderAccept,
+		httpx.HeaderAuthorization,
+		httpx.HeaderContentType,
+		httpx.HeaderXCSRFToken,
+		httpx.HeaderXRequestID,
 	},
 	ExposedHeaders:     []string{},
 	AllowCredentials:   false,

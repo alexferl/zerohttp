@@ -87,7 +87,7 @@ func renderHTML(w http.ResponseWriter, title string, content template.HTML, r *h
 		Content: content,
 	}
 
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set(consts.HeaderContentType, consts.MIMETextHTML)
 	return templates.ExecuteTemplate(w, "", data)
 }
 

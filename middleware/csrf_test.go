@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -200,7 +201,7 @@ func TestCSRF_ValidToken(t *testing.T) {
 
 	// Now make POST request with token
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
-	req2.Header.Set("X-CSRF-Token", token)
+	req2.Header.Set(httpx.HeaderXCSRFToken, token)
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 
 	rr2 := httptest.NewRecorder()
@@ -220,8 +221,8 @@ func TestCSRF_InvalidToken(t *testing.T) {
 
 	// Make POST request with invalid token - test JSON response
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.Header.Set("X-CSRF-Token", "invalid-token")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(httpx.HeaderXCSRFToken, "invalid-token")
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "invalid-token"})
 
 	rr := httptest.NewRecorder()
@@ -234,7 +235,7 @@ func TestCSRF_InvalidToken(t *testing.T) {
 
 	// Test plain text response without Accept header
 	req = httptest.NewRequest(http.MethodPost, "/", nil)
-	req.Header.Set("X-CSRF-Token", "invalid-token")
+	req.Header.Set(httpx.HeaderXCSRFToken, "invalid-token")
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "invalid-token"})
 
 	rr = httptest.NewRecorder()
@@ -242,7 +243,7 @@ func TestCSRF_InvalidToken(t *testing.T) {
 
 	zhtest.AssertWith(t, rr).
 		Status(http.StatusForbidden).
-		Header("Content-Type", "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 }
 
 func TestCSRF_MissingToken(t *testing.T) {
@@ -284,7 +285,7 @@ func TestCSRF_MismatchedTokens(t *testing.T) {
 
 	// Make POST request with different token in header vs cookie
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
-	req2.Header.Set("X-CSRF-Token", validToken)
+	req2.Header.Set(httpx.HeaderXCSRFToken, validToken)
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: "different-token"})
 
 	rr2 := httptest.NewRecorder()
@@ -346,7 +347,7 @@ func TestCSRF_ExemptPaths(t *testing.T) {
 
 func TestCSRF_CustomErrorHandler(t *testing.T) {
 	customHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"error":"custom csrf error"}`))
 	}
@@ -366,7 +367,7 @@ func TestCSRF_CustomErrorHandler(t *testing.T) {
 
 	zhtest.AssertWith(t, rr).
 		Status(http.StatusForbidden).
-		Header("Content-Type", "application/json").
+		Header(httpx.HeaderContentType, "application/json").
 		BodyContains("custom csrf error")
 }
 
@@ -399,7 +400,7 @@ func TestCSRF_FormTokenLookup(t *testing.T) {
 	formData.Set("csrf_token", token)
 
 	req2 := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(formData.Encode()))
-	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req2.Header.Set(httpx.HeaderContentType, "application/x-www-form-urlencoded")
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 
 	rr2 := httptest.NewRecorder()
@@ -440,7 +441,7 @@ func TestCSRF_MultipartFormTokenLookup(t *testing.T) {
 	_ = writer.Close()
 
 	req2 := httptest.NewRequest(http.MethodPost, "/", &body)
-	req2.Header.Set("Content-Type", writer.FormDataContentType())
+	req2.Header.Set(httpx.HeaderContentType, writer.FormDataContentType())
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 
 	rr2 := httptest.NewRecorder()
@@ -560,7 +561,7 @@ func TestCSRF_TokenRotation(t *testing.T) {
 
 	// POST with token should get new token
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
-	req2.Header.Set("X-CSRF-Token", token1)
+	req2.Header.Set(httpx.HeaderXCSRFToken, token1)
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token1})
 
 	rr2 := httptest.NewRecorder()
@@ -636,7 +637,7 @@ func TestCSRF_InvalidBase64Token(t *testing.T) {
 
 	// Make POST request with invalid base64 token
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.Header.Set("X-CSRF-Token", "!!!invalid-base64!!!")
+	req.Header.Set(httpx.HeaderXCSRFToken, "!!!invalid-base64!!!")
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "!!!invalid-base64!!!"})
 
 	rr := httptest.NewRecorder()
@@ -674,7 +675,7 @@ func TestCSRF_TokenWithWrongSignature(t *testing.T) {
 
 	// Try to use token from first middleware with second middleware
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
-	req2.Header.Set("X-CSRF-Token", validToken)
+	req2.Header.Set(httpx.HeaderXCSRFToken, validToken)
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: validToken})
 
 	rr2 := httptest.NewRecorder()
@@ -719,7 +720,7 @@ func TestCSRF_EmptyCookieValue(t *testing.T) {
 
 	// POST with empty cookie value
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.Header.Set("X-CSRF-Token", "some-token")
+	req.Header.Set(httpx.HeaderXCSRFToken, "some-token")
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: ""})
 
 	rr := httptest.NewRecorder()
@@ -786,7 +787,7 @@ func TestCSRF_DefaultTokenLookup(t *testing.T) {
 
 	// POST with token in X-CSRF-Token header (default lookup)
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
-	req2.Header.Set("X-CSRF-Token", token)
+	req2.Header.Set(httpx.HeaderXCSRFToken, token)
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 
 	rr2 := httptest.NewRecorder()
@@ -859,7 +860,7 @@ func TestCSRF_FormParseError(t *testing.T) {
 
 	// POST with invalid form body (will cause ParseForm to fail)
 	req2 := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("invalid%form"))
-	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req2.Header.Set(httpx.HeaderContentType, "application/x-www-form-urlencoded")
 	req2.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 
 	rr2 := httptest.NewRecorder()
@@ -1008,7 +1009,7 @@ func TestCSRF_TokenGenerationFailsClosed_POST(t *testing.T) {
 
 	// Test POST request with valid token but failing token generation for new token
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	req.Header.Set("X-CSRF-Token", validToken)
+	req.Header.Set(httpx.HeaderXCSRFToken, validToken)
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: validToken})
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)

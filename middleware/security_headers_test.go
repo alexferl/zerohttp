@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -129,7 +130,7 @@ func TestSecurityHeaders_ExemptPaths(t *testing.T) {
 	)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	zhtest.AssertWith(t, w).HeaderNotExists("Content-Security-Policy")
+	zhtest.AssertWith(t, w).HeaderNotExists(httpx.HeaderContentSecurityPolicy)
 }
 
 func TestSecurityHeaders_DefaultValuesFill(t *testing.T) {
@@ -138,7 +139,7 @@ func TestSecurityHeaders_DefaultValuesFill(t *testing.T) {
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	zhtest.AssertWith(t, w).
-		HeaderExists("Content-Security-Policy").
+		HeaderExists(httpx.HeaderContentSecurityPolicy).
 		HeaderExists("Cross-Origin-Embedder-Policy").
 		HeaderExists("Cross-Origin-Opener-Policy").
 		HeaderExists("Cross-Origin-Resource-Policy").
@@ -167,7 +168,7 @@ func TestSecurityHeaders_ContentSecurityPolicyNotSet(t *testing.T) {
 	)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	zhtest.AssertWith(t, w).Header("Content-Security-Policy", config.DefaultSecurityHeadersConfig.ContentSecurityPolicy)
+	zhtest.AssertWith(t, w).Header(httpx.HeaderContentSecurityPolicy, config.DefaultSecurityHeadersConfig.ContentSecurityPolicy)
 }
 
 func TestSecurityHeaders_DefaultValueFill_All(t *testing.T) {
@@ -310,7 +311,7 @@ func TestSecurityHeaders_CSPNonce(t *testing.T) {
 
 			zhtest.AssertWith(t, w).Status(http.StatusOK)
 
-			csp := w.Header().Get("Content-Security-Policy")
+			csp := w.Header().Get(httpx.HeaderContentSecurityPolicy)
 			if !strings.Contains(csp, tt.wantCSPContains) {
 				t.Errorf("CSP header = %q, want containing %q", csp, tt.wantCSPContains)
 			}
@@ -345,7 +346,7 @@ func TestSecurityHeaders_CSPNonceReportOnly(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(mw, handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	zhtest.AssertWith(t, w).HeaderNotExists("Content-Security-Policy")
+	zhtest.AssertWith(t, w).HeaderNotExists(httpx.HeaderContentSecurityPolicy)
 
 	csp := w.Header().Get("Content-Security-Policy-Report-Only")
 	if !strings.Contains(csp, "'nonce-") {

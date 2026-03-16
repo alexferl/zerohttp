@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/internal/rwutil"
@@ -93,7 +94,7 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 			} else if found {
 				// Replay headers from cached record, avoiding duplicates from other middleware
 				replayHeaders(w, record.Headers)
-				w.Header().Set("X-Idempotency-Replay", "true")
+				w.Header().Set(httpx.HeaderXIdempotencyReplay, "true")
 				w.WriteHeader(record.StatusCode)
 				_, _ = w.Write(record.Body)
 				return
@@ -133,7 +134,7 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 					if found {
 						// Replay headers from cached record, avoiding duplicates from other middleware
 						replayHeaders(w, record.Headers)
-						w.Header().Set("X-Idempotency-Replay", "true")
+						w.Header().Set(httpx.HeaderXIdempotencyReplay, "true")
 						w.WriteHeader(record.StatusCode)
 						_, _ = w.Write(record.Body)
 						return
@@ -189,7 +190,7 @@ func (i *idempotencyResponseRecorder) WriteHeader(statusCode int) {
 	// Build flat header slice for efficient storage and replay
 	for k, v := range i.Header() {
 		// Skip hop-by-hop headers
-		if k == "Connection" || k == "Keep-Alive" {
+		if k == httpx.HeaderConnection || k == httpx.HeaderKeepAlive {
 			continue
 		}
 		for _, val := range v {

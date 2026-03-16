@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // Test structs
@@ -537,7 +539,7 @@ func TestBindAndValidate(t *testing.T) {
 			}
 			req := httptest.NewRequest(method, "/test", bytes.NewBufferString(tt.body))
 			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
+				req.Header.Set(httpx.HeaderContentType, tt.contentType)
 			}
 
 			var dst TestRequest
@@ -641,7 +643,7 @@ func TestValidationErrors_ValidationErrors(t *testing.T) {
 func TestBindError_Unwrap(t *testing.T) {
 	inner := errors.New("inner error")
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("{invalid"))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	var dst struct{ Name string }
 	err := BindAndValidate(req, &dst)
 	if err == nil {
@@ -674,7 +676,7 @@ func TestBindAndValidate_MultipartForm(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/test", &buf)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(httpx.HeaderContentType, writer.FormDataContentType())
 
 	type TestRequest struct {
 		Name  string `form:"name" validate:"required"`
@@ -731,7 +733,7 @@ func TestBindAndValidate_HeadMethod(t *testing.T) {
 func TestBindAndValidate_DefaultToJSON(t *testing.T) {
 	// Unknown content-type on POST should default to JSON
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"name":"John"}`))
-	req.Header.Set("Content-Type", "application/xml")
+	req.Header.Set(httpx.HeaderContentType, "application/xml")
 
 	type TestRequest struct {
 		Name string `json:"name" validate:"required"`
@@ -768,7 +770,7 @@ func TestBindAndValidate_NoContentType(t *testing.T) {
 func TestBindAndValidate_ContentTypeWithCharset(t *testing.T) {
 	// Content-Type with charset suffix
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"name":"John"}`))
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set(httpx.HeaderContentType, "application/json; charset=utf-8")
 
 	type TestRequest struct {
 		Name string `json:"name" validate:"required"`

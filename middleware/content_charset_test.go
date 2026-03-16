@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -118,7 +119,7 @@ func TestContentCharset(t *testing.T) {
 			middleware := tt.config()
 			req := httptest.NewRequest(http.MethodPost, "/test", nil)
 			if tt.contentType != "" {
-				req.Header.Set("Content-Type", tt.contentType)
+				req.Header.Set(httpx.HeaderContentType, tt.contentType)
 			}
 			rr := httptest.NewRecorder()
 			nextCalled := false
@@ -143,7 +144,7 @@ func TestContentCharsetHTTPMethods(t *testing.T) {
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			req := httptest.NewRequest(method, "/test", nil)
-			req.Header.Set("Content-Type", "application/json; charset=utf-8")
+			req.Header.Set(httpx.HeaderContentType, "application/json; charset=utf-8")
 			rr := httptest.NewRecorder()
 			nextCalled := false
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

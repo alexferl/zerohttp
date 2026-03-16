@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -51,7 +52,7 @@ func TestServer_CreateHTTPSRedirectHandler(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusMovedPermanently).
-		Header(HeaderLocation, "https://example.com/path?query=value")
+		Header(httpx.HeaderLocation, "https://example.com/path?query=value")
 }
 
 func TestServer_StartAutoTLS_NoManager(t *testing.T) {

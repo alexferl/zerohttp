@@ -1,3 +1,34 @@
+// Package zerohttp provides Server-Sent Events (SSE) support for real-time
+// server-to-client streaming using Go's standard library.
+//
+// The SSE implementation supports:
+//   - Event replay with configurable history
+//   - Broadcast hubs for multi-client streaming
+//   - Automatic connection management and cleanup
+//   - Spec-compliant line ending normalization
+//
+// Basic usage:
+//
+//	app := zh.New(config.Config{
+//	    SSEProvider: zh.NewDefaultProvider(),
+//	})
+//
+//	app.GET("/events", func(w http.ResponseWriter, r *http.Request) error {
+//	    stream, err := zh.NewSSE(w, r)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    defer stream.Close()
+//
+//	    for {
+//	        select {
+//	        case <-r.Context().Done():
+//	            return nil
+//	        case msg := <-messages:
+//	            stream.Send(zh.SSEEvent{Name: "message", Data: msg})
+//	        }
+//	    }
+//	})
 package zerohttp
 
 import (
@@ -11,6 +42,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // SSEConnection is an alias for config.SSEConnection.
@@ -49,7 +81,7 @@ func normalizeLineEndings(s string) string {
 // middleware sets Content-Type before the SSE handler runs. Consider avoiding
 // Content-Type middleware on SSE routes.
 func setupSSEResponse(w http.ResponseWriter) (http.Flusher, error) {
-	if w.Header().Get(HeaderContentType) != "" {
+	if w.Header().Get(httpx.HeaderContentType) != "" {
 		return nil, fmt.Errorf("sse: response headers already sent")
 	}
 
@@ -58,9 +90,9 @@ func setupSSEResponse(w http.ResponseWriter) (http.Flusher, error) {
 		return nil, fmt.Errorf("sse: streaming not supported")
 	}
 
-	w.Header().Set(HeaderContentType, MIMETextEventStream)
-	w.Header().Set(HeaderCacheControl, CacheControlNoCache)
-	w.Header().Set(HeaderConnection, ConnectionKeepAlive)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)
+	w.Header().Set(httpx.HeaderCacheControl, httpx.CacheControlNoCache)
+	w.Header().Set(httpx.HeaderConnection, httpx.ConnectionKeepAlive)
 
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
@@ -487,7 +519,7 @@ func SSEWithReplay(w http.ResponseWriter, r *http.Request, replayer SSEReplayer)
 	}
 
 	// Check for Last-Event-ID header for replay
-	lastEventID := r.Header.Get(HeaderLastEventID)
+	lastEventID := r.Header.Get(httpx.HeaderLastEventID)
 	if lastEventID != "" {
 		if replayer == nil {
 			_ = stream.Close()

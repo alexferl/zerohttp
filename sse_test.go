@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -27,8 +28,8 @@ func TestNewEventStream(t *testing.T) {
 
 		// Check headers
 		zhtest.AssertWith(t, w).
-			Header(HeaderContentType, MIMETextEventStream).
-			Header(HeaderCacheControl, "no-cache")
+			Header(httpx.HeaderContentType, httpx.MIMETextEventStream).
+			Header(httpx.HeaderCacheControl, "no-cache")
 	})
 
 	t.Run("returns error if headers already sent", func(t *testing.T) {
@@ -36,7 +37,7 @@ func TestNewEventStream(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		// Set Content-Type header to simulate headers already sent
-		w.Header().Set(HeaderContentType, MIMETextPlainCharset)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 		w.WriteHeader(http.StatusOK)
 
 		_, err := NewSSE(w, r)
@@ -432,7 +433,7 @@ func TestNewSSEWriter(t *testing.T) {
 		}
 
 		// Check headers
-		zhtest.AssertWith(t, w).Header(HeaderContentType, MIMETextEventStream)
+		zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, httpx.MIMETextEventStream)
 
 		_ = writer
 	})
@@ -441,7 +442,7 @@ func TestNewSSEWriter(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
-		w.Header().Set(HeaderContentType, MIMETextPlainCharset)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 		w.WriteHeader(http.StatusOK)
 
 		_, err := NewSSEWriter(w, r)
@@ -676,7 +677,7 @@ func TestSSEWithReplay(t *testing.T) {
 	t.Run("replays events when Last-Event-ID present", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set(HeaderLastEventID, "0")
+		r.Header.Set(httpx.HeaderLastEventID, "0")
 		replay := NewInMemoryReplayer(100, 0)
 
 		replay.Store(SSEEvent{Data: []byte("event1")})
@@ -696,7 +697,7 @@ func TestSSEWithReplay(t *testing.T) {
 	t.Run("returns error for invalid Last-Event-ID", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set(HeaderLastEventID, "not-a-number")
+		r.Header.Set(httpx.HeaderLastEventID, "not-a-number")
 		replay := NewInMemoryReplayer(100, 0)
 
 		_, err := SSEWithReplay(w, r, replay)
@@ -708,7 +709,7 @@ func TestSSEWithReplay(t *testing.T) {
 	t.Run("returns error when Last-Event-ID present but replayer is nil", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set(HeaderLastEventID, "1")
+		r.Header.Set(httpx.HeaderLastEventID, "1")
 
 		_, err := SSEWithReplay(w, r, nil)
 		if err == nil {

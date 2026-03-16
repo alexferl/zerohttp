@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
 	"github.com/alexferl/zerohttp/zhtest"
@@ -322,7 +323,7 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	}
 
 	// Should return problem detail response body
-	contentType := w.Header().Get("Content-Type")
+	contentType := w.Header().Get(httpx.HeaderContentType)
 	if !strings.Contains(contentType, "application/problem+json") {
 		t.Errorf("Expected Content-Type to contain application/problem+json, got %s", contentType)
 	}
@@ -340,7 +341,7 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/").Build()
 	w = zhtest.Serve(handler, req)
 
-	contentType = w.Header().Get("Content-Type")
+	contentType = w.Header().Get(httpx.HeaderContentType)
 	if !strings.Contains(contentType, "text/plain") {
 		t.Errorf("Expected Content-Type to contain text/plain, got %s", contentType)
 	}

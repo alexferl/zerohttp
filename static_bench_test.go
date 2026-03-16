@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 //go:embed testdata/static
@@ -251,7 +252,7 @@ func BenchmarkStatic_ETagGeneration(b *testing.B) {
 
 		// Now benchmark conditional requests with If-None-Match
 		req = httptest.NewRequest(http.MethodGet, "/app.js", nil)
-		req.Header.Set("If-None-Match", etag)
+		req.Header.Set(httpx.HeaderIfNoneMatch, etag)
 
 		b.ReportAllocs()
 		b.ResetTimer()

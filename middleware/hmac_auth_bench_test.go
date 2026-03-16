@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // BenchmarkHMAC_SignRequest measures HMAC request signing performance
@@ -56,7 +57,7 @@ func BenchmarkHMAC_VerifySignature(b *testing.B) {
 			req.Host = "example.com"
 			_ = signer.SignRequest(req)
 
-			authHeader := req.Header.Get("Authorization")
+			authHeader := req.Header.Get(httpx.HeaderAuthorization)
 			timestamp := req.Header.Get("X-Timestamp")
 
 			b.ReportAllocs()
@@ -139,14 +140,14 @@ func BenchmarkHMAC_AuthMiddleware_Scenarios(b *testing.B) {
 				signer := NewHMACSigner("test-key", secret)
 				req.Host = "example.com"
 				_ = signer.SignRequest(req)
-				req.Header.Set("Authorization", req.Header.Get("Authorization")+"tampered")
+				req.Header.Set(httpx.HeaderAuthorization, req.Header.Get(httpx.HeaderAuthorization)+"tampered")
 			},
 		},
 		{
 			name: "ExpiredTimestamp",
 			setupRequest: func(req *http.Request) {
-				req.Header.Set("Authorization", "HMAC-SHA256 Credential=test-key/2020-01-01T00:00:00Z, SignedHeaders=host;x-timestamp, Signature=aW52YWxpZA==")
-				req.Header.Set("X-Timestamp", "2020-01-01T00:00:00Z")
+				req.Header.Set(httpx.HeaderAuthorization, "HMAC-SHA256 Credential=test-key/2020-01-01T00:00:00Z, SignedHeaders=host;x-timestamp, Signature=aW52YWxpZA==")
+				req.Header.Set(httpx.HeaderXTimestamp, "2020-01-01T00:00:00Z")
 			},
 		},
 	}
@@ -276,7 +277,7 @@ func BenchmarkHMAC_CanonicalRequest(b *testing.B) {
 			body := strings.NewReader(`{"key":"value"}`)
 			r := httptest.NewRequest(http.MethodPost, "/api/test", body)
 			r.Host = "example.com"
-			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			_ = buildCanonicalRequest(r, parsed, nil, nil, bodyHash, "X-Timestamp")
 		}
 	})

@@ -1,3 +1,4 @@
+// Package zerohttp provides SSE provider configuration. See [Server.SetSSEProvider] and [Server.SSEProvider].
 package zerohttp
 
 import "github.com/alexferl/zerohttp/config"

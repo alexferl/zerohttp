@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 func TestNewRequest(t *testing.T) {
@@ -24,12 +26,12 @@ func TestNewRequest(t *testing.T) {
 
 	t.Run("with headers", func(t *testing.T) {
 		req := NewRequest(http.MethodGet, "/").
-			WithHeader("Authorization", "Bearer token").
+			WithHeader(httpx.HeaderAuthorization, "Bearer token").
 			WithHeader("X-Custom", "value1").
 			WithHeader("X-Custom", "value2").
 			Build()
 
-		if req.Header.Get("Authorization") != "Bearer token" {
+		if req.Header.Get(httpx.HeaderAuthorization) != "Bearer token" {
 			t.Error("expected Authorization header")
 		}
 
@@ -47,7 +49,7 @@ func TestNewRequest(t *testing.T) {
 			}).
 			Build()
 
-		if req.Header.Get("Authorization") != "Bearer token" {
+		if req.Header.Get(httpx.HeaderAuthorization) != "Bearer token" {
 			t.Error("expected Authorization header")
 		}
 		if req.Header.Get("X-Request-ID") != "abc123" {
@@ -125,7 +127,7 @@ func TestNewRequest(t *testing.T) {
 			WithJSON(map[string]string{"name": "John"}).
 			Build()
 
-		if req.Header.Get("Content-Type") != "application/json" {
+		if req.Header.Get(httpx.HeaderContentType) != "application/json" {
 			t.Error("expected Content-Type application/json")
 		}
 
@@ -141,7 +143,7 @@ func TestNewRequest(t *testing.T) {
 			WithForm(url.Values{"username": []string{"john"}}).
 			Build()
 
-		if req.Header.Get("Content-Type") != "application/x-www-form-urlencoded" {
+		if req.Header.Get(httpx.HeaderContentType) != "application/x-www-form-urlencoded" {
 			t.Error("expected Content-Type application/x-www-form-urlencoded")
 		}
 
@@ -155,7 +157,7 @@ func TestNewRequest(t *testing.T) {
 
 func TestResponse(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.Header().Set("X-Custom", "value")
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: "abc123"})
 		w.WriteHeader(http.StatusOK)
@@ -359,7 +361,7 @@ func TestServeWithRecorder_ErrorCases(t *testing.T) {
 func TestJSON_VariousTypes(t *testing.T) {
 	t.Run("array", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`[1, 2, 3]`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
@@ -378,7 +380,7 @@ func TestJSON_VariousTypes(t *testing.T) {
 
 	t.Run("invalid JSON", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 			if _, err := w.Write([]byte(`{invalid`)); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}

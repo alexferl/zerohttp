@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -134,7 +135,7 @@ func TestHandlerFunc(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusOK).
-			Header(HeaderContentType, MIMETextPlainCharset).
+			Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset).
 			BodyEmpty()
 	})
 
@@ -511,7 +512,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(HeaderContentType, MIMETextPlainCharset)
+			Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 
 		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
@@ -540,7 +541,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
-		req.Header.Set("Accept", "application/json")
+		req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -561,7 +562,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
 
-		allowHeader := w.Header().Get("Allow")
+		allowHeader := w.Header().Get(httpx.HeaderAllow)
 		if allowHeader == "" {
 			t.Error("Expected Allow header to be set")
 		}
@@ -597,7 +598,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		}))
 
 		req := httptest.NewRequest(http.MethodPut, "/test", nil)
-		req.Header.Set("Accept", "application/json")
+		req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -618,7 +619,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
 
-		allowHeader := w.Header().Get("Allow")
+		allowHeader := w.Header().Get(httpx.HeaderAllow)
 		if allowHeader == "" {
 			t.Error("Expected Allow header to be set")
 		}
@@ -665,8 +666,8 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			Status(http.StatusOK).
 			Body("custom options")
 
-		if w.Header().Get("Allow") != "CUSTOM" {
-			t.Errorf("Expected Allow header to be 'CUSTOM', got '%s'", w.Header().Get("Allow"))
+		if w.Header().Get(httpx.HeaderAllow) != "CUSTOM" {
+			t.Errorf("Expected Allow header to be 'CUSTOM', got '%s'", w.Header().Get(httpx.HeaderAllow))
 		}
 	})
 
@@ -680,9 +681,9 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		defaultNotFoundHandler.ServeHTTP(w, req)
 
 		// Content-Type should be text/plain; charset=utf-8
-		contentType := w.Header().Get("Content-Type")
-		if contentType != MIMETextPlainCharset {
-			t.Errorf("expected Content-Type %q, got %q", MIMETextPlainCharset, contentType)
+		contentType := w.Header().Get(httpx.HeaderContentType)
+		if contentType != httpx.MIMETextPlainCharset {
+			t.Errorf("expected Content-Type %q, got %q", httpx.MIMETextPlainCharset, contentType)
 		}
 	})
 
@@ -692,9 +693,9 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		defaultMethodNotAllowedHandler.ServeHTTP(w, req)
 
-		contentType := w.Header().Get("Content-Type")
-		if contentType != MIMETextPlainCharset {
-			t.Errorf("expected Content-Type %q, got %q", MIMETextPlainCharset, contentType)
+		contentType := w.Header().Get(httpx.HeaderContentType)
+		if contentType != httpx.MIMETextPlainCharset {
+			t.Errorf("expected Content-Type %q, got %q", httpx.MIMETextPlainCharset, contentType)
 		}
 	})
 }
@@ -813,7 +814,7 @@ func TestUtilityFunctions(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(HeaderContentType, MIMETextPlainCharset)
+			Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	})
 
 	t.Run("defaultMethodNotAllowedHandler", func(t *testing.T) {
@@ -823,7 +824,7 @@ func TestUtilityFunctions(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusMethodNotAllowed).
-			Header(HeaderContentType, MIMETextPlainCharset)
+			Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	})
 
 	t.Run("defaultNotFoundHandler body", func(t *testing.T) {
@@ -1324,7 +1325,7 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 		router.CONNECT("/wt", handler)
 
 		req := httptest.NewRequest(http.MethodConnect, "/wt", nil)
-		req.Header.Set("Upgrade", "webtransport")
+		req.Header.Set(httpx.HeaderUpgrade, "webtransport")
 		w := httptest.NewRecorder()
 
 		router.ServeHTTP(w, req)
@@ -1412,7 +1413,7 @@ func TestJSONNotFoundHandler(t *testing.T) {
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusNotFound).
-		Header(HeaderContentType, MIMEApplicationProblemJSON).
+		Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON).
 		BodyContains(`"title":"Not Found"`).
 		BodyContains(`"status":404`)
 }
@@ -1422,14 +1423,14 @@ func TestJSONMethodNotAllowedHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/test", nil)
 
 	// The Allow header should be set by the caller
-	w.Header().Set(HeaderAllow, "GET, HEAD")
+	w.Header().Set(httpx.HeaderAllow, "GET, HEAD")
 
 	jsonMethodNotAllowedHandler(w, req)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusMethodNotAllowed).
-		Header(HeaderContentType, MIMEApplicationProblemJSON).
-		Header(HeaderAllow, "GET, HEAD").
+		Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON).
+		Header(httpx.HeaderAllow, "GET, HEAD").
 		BodyContains(`"title":"Method Not Allowed"`).
 		BodyContains(`"status":405`)
 }
