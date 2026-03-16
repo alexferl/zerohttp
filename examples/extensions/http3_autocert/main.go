@@ -9,6 +9,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -98,7 +99,7 @@ func main() {
 	// Add Alt-Svc header to advertise HTTP/3 support
 	app.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Add("Alt-Svc", `h3=":443"; ma=86400`)
+			w.Header().Add(httpx.HeaderAltSvc, `h3=":443"; ma=86400`)
 			next.ServeHTTP(w, r)
 		})
 	})

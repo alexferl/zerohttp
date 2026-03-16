@@ -76,6 +76,7 @@ const (
 	HeaderAcceptPost         = "Accept-Post"
 	HeaderAge                = "Age"
 	HeaderAllow              = "Allow"
+	HeaderAltSvc             = "Alt-Svc"
 	HeaderContentDisposition = "Content-Disposition"
 	HeaderContentEncoding    = "Content-Encoding"
 	HeaderContentLanguage    = "Content-Language"
