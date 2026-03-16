@@ -176,60 +176,18 @@ type Server struct {
 //	    Validator: myCustomValidator,
 //	})
 func New(cfg ...config.Config) *Server {
-	c := config.DefaultConfig
-	if len(cfg) > 0 {
-		userCfg := cfg[0]
-		zconfig.Merge(&c, userCfg)
-		// Handle fields that must always be copied (even if zero value)
-		// ServerAddr can be set to empty string to disable separate metrics server
-		c.Metrics.ServerAddr = userCfg.Metrics.ServerAddr
-	}
-
+	c := mergeConfig(cfg...)
 	router := NewRouter()
-
-	logger := c.Logger
-	if logger == nil {
-		logger = log.NewDefaultLogger()
-	}
+	logger := createLogger(c)
 
 	router.SetLogger(logger)
 	router.SetConfig(c)
 
-	server := c.Server
-	if server == nil {
-		server = &http.Server{
-			Addr:              c.Addr,
-			ReadTimeout:       DefaultReadTimeout,
-			ReadHeaderTimeout: DefaultReadHeaderTimeout,
-			WriteTimeout:      DefaultWriteTimeout,
-			IdleTimeout:       DefaultIdleTimeout,
-			MaxHeaderBytes:    1 << 20, // 1 MB
-		}
-	}
+	server := createHTTPServer(c)
+	tlsServer := createTLSServer(c)
+	registry := createMetricsRegistry(c)
+	metricsServer := createMetricsServer(c, registry)
 
-	// Only create TLS server if TLS is actually configured
-	tlsServer := c.TLS.Server
-	if tlsServer == nil && needsTLSServer(c) {
-		tlsServer = &http.Server{
-			Addr:              c.TLS.Addr,
-			ReadTimeout:       DefaultReadTimeout,
-			ReadHeaderTimeout: DefaultReadHeaderTimeout,
-			WriteTimeout:      DefaultWriteTimeout,
-			IdleTimeout:       DefaultIdleTimeout,
-			MaxHeaderBytes:    1 << 20, // 1 MB
-			TLSConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-				NextProtos: []string{"h2", "http/1.1"},
-			},
-		}
-	}
-
-	var registry metrics.Registry
-	if c.Metrics.Enabled {
-		registry = metrics.NewRegistry()
-	}
-
-	// Create base context for request cancellation during shutdown
 	baseCtx, cancelBaseCtx := context.WithCancel(context.Background())
 
 	s := &Server{
@@ -246,6 +204,7 @@ func New(cfg ...config.Config) *Server {
 		webSocketUpgrader:  c.Extensions.WebSocketUpgrader,
 		sseProvider:        c.Extensions.SSEProvider,
 		metricsRegistry:    registry,
+		metricsServer:      metricsServer,
 		metricsServerAddr:  c.Metrics.ServerAddr,
 		validator:          c.Validator,
 		logger:             logger,
@@ -259,59 +218,9 @@ func New(cfg ...config.Config) *Server {
 		cancelBaseCtx:      cancelBaseCtx,
 	}
 
-	// Configure separate metrics server if ServerAddr is set
-	if c.Metrics.Enabled && registry != nil && c.Metrics.ServerAddr != "" {
-		s.metricsServer = &http.Server{
-			Addr:              c.Metrics.ServerAddr,
-			ReadTimeout:       DefaultReadTimeout,
-			ReadHeaderTimeout: DefaultReadHeaderTimeout,
-			WriteTimeout:      DefaultWriteTimeout,
-			IdleTimeout:       DefaultIdleTimeout,
-			Handler:           metrics.Handler(registry),
-		}
-	}
-
-	var middlewares []func(http.Handler) http.Handler
-
-	// Add metrics middleware first so it will be innermost after reverse,
-	// running inside Recover and able to capture status codes written by other middleware
-	if c.Metrics.Enabled && registry != nil {
-		middlewares = append(middlewares, metrics.NewMiddleware(registry, c.Metrics))
-	}
-
-	if c.DisableDefaultMiddlewares {
-		middlewares = append(middlewares, c.DefaultMiddlewares...)
-	} else if c.DefaultMiddlewares == nil {
-		middlewares = append(middlewares, middleware.DefaultMiddlewares(c, s.logger)...)
-	} else {
-		defaults := middleware.DefaultMiddlewares(c, s.logger)
-		middlewares = append(middlewares, defaults...)
-		middlewares = append(middlewares, c.DefaultMiddlewares...)
-	}
-
-	if len(middlewares) > 0 {
-		s.Use(middlewares...)
-	}
-
-	if s.server != nil {
-		s.server.Handler = router
-		s.server.BaseContext = func(net.Listener) context.Context {
-			return s.baseCtx
-		}
-	}
-
-	if s.tlsServer != nil {
-		s.tlsServer.Handler = router
-		s.tlsServer.BaseContext = func(net.Listener) context.Context {
-			return s.baseCtx
-		}
-	}
-
-	// Register metrics endpoint on main router only if no separate metrics server
-	if c.Metrics.Enabled && registry != nil && c.Metrics.ServerAddr == "" {
-		s.logger.Warn("Metrics endpoint registered on main server (set Metrics.ServerAddr to isolate)", log.F("endpoint", c.Metrics.Endpoint))
-		s.GET(c.Metrics.Endpoint, metrics.Handler(registry))
-	}
+	setupMiddleware(s, c, registry)
+	setupServerHandlers(s, router)
+	registerMetricsEndpoint(s, c, registry)
 
 	// Finalize router to register catch-all handler with middleware
 	if r, ok := router.(interface{ finalize() }); ok {
@@ -405,7 +314,26 @@ func (s *Server) Start() error {
 	}
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 4)
+
+	// Calculate actual number of servers that will start for error channel capacity
+	serverCount := 0
+	if s.metricsServer != nil {
+		serverCount++
+	}
+	if s.server != nil {
+		serverCount++
+	}
+	if shouldStartTLS {
+		serverCount++ // HTTPS server
+	}
+	if s.http3Server != nil && shouldStartTLS {
+		serverCount++
+	}
+	if s.webTransportServer != nil && shouldStartTLS {
+		serverCount++
+	}
+
+	errCh := make(chan error, serverCount)
 
 	// Start metrics server if configured
 	if s.metricsServer != nil {
@@ -809,6 +737,64 @@ func (s *Server) Close() error {
 	return lastErr
 }
 
+// mergeConfig merges user config with defaults.
+func mergeConfig(cfg ...config.Config) config.Config {
+	c := config.DefaultConfig
+	if len(cfg) > 0 {
+		userCfg := cfg[0]
+		zconfig.Merge(&c, userCfg)
+		// Handle fields that must always be copied (even if zero value)
+		// ServerAddr can be set to empty string to disable separate metrics server
+		c.Metrics.ServerAddr = userCfg.Metrics.ServerAddr
+	}
+	return c
+}
+
+// createLogger creates a logger instance from config or returns default.
+func createLogger(c config.Config) log.Logger {
+	if c.Logger != nil {
+		return c.Logger
+	}
+	return log.NewDefaultLogger()
+}
+
+// createHTTPServer creates the HTTP server from config.
+func createHTTPServer(c config.Config) *http.Server {
+	if c.Server != nil {
+		return c.Server
+	}
+	return &http.Server{
+		Addr:              c.Addr,
+		ReadTimeout:       DefaultReadTimeout,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
+		MaxHeaderBytes:    1 << 20, // 1 MB
+	}
+}
+
+// createTLSServer creates the TLS server from config if TLS is configured.
+func createTLSServer(c config.Config) *http.Server {
+	if c.TLS.Server != nil {
+		return c.TLS.Server
+	}
+	if !needsTLSServer(c) {
+		return nil
+	}
+	return &http.Server{
+		Addr:              c.TLS.Addr,
+		ReadTimeout:       DefaultReadTimeout,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
+		MaxHeaderBytes:    1 << 20, // 1 MB
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{"h2", "http/1.1"},
+		},
+	}
+}
+
 // needsTLSServer returns true if the config requires a TLS server to be created.
 func needsTLSServer(c config.Config) bool {
 	return c.TLS.CertFile != "" ||
@@ -816,6 +802,79 @@ func needsTLSServer(c config.Config) bool {
 		c.Extensions.AutocertManager != nil ||
 		c.TLS.Listener != nil ||
 		c.Extensions.HTTP3Server != nil
+}
+
+// createMetricsRegistry creates metrics registry if enabled.
+func createMetricsRegistry(c config.Config) metrics.Registry {
+	if c.Metrics.Enabled {
+		return metrics.NewRegistry()
+	}
+	return nil
+}
+
+// createMetricsServer creates a separate metrics server if ServerAddr is set.
+func createMetricsServer(c config.Config, registry metrics.Registry) *http.Server {
+	if !c.Metrics.Enabled || registry == nil || c.Metrics.ServerAddr == "" {
+		return nil
+	}
+	return &http.Server{
+		Addr:              c.Metrics.ServerAddr,
+		ReadTimeout:       DefaultReadTimeout,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
+		Handler:           metrics.Handler(registry),
+	}
+}
+
+// setupMiddleware configures the middleware chain on the server.
+func setupMiddleware(s *Server, c config.Config, registry metrics.Registry) {
+	var middlewares []func(http.Handler) http.Handler
+
+	// Add metrics middleware first so it will be innermost after reverse,
+	// running inside Recover and able to capture status codes written by other middleware
+	if c.Metrics.Enabled && registry != nil {
+		middlewares = append(middlewares, metrics.NewMiddleware(registry, c.Metrics))
+	}
+
+	if c.DisableDefaultMiddlewares {
+		middlewares = append(middlewares, c.DefaultMiddlewares...)
+	} else if c.DefaultMiddlewares == nil {
+		middlewares = append(middlewares, middleware.DefaultMiddlewares(c, s.logger)...)
+	} else {
+		defaults := middleware.DefaultMiddlewares(c, s.logger)
+		middlewares = append(middlewares, defaults...)
+		middlewares = append(middlewares, c.DefaultMiddlewares...)
+	}
+
+	if len(middlewares) > 0 {
+		s.Use(middlewares...)
+	}
+}
+
+// setupServerHandlers sets the router and base context on server instances.
+func setupServerHandlers(s *Server, router Router) {
+	if s.server != nil {
+		s.server.Handler = router
+		s.server.BaseContext = func(net.Listener) context.Context {
+			return s.baseCtx
+		}
+	}
+
+	if s.tlsServer != nil {
+		s.tlsServer.Handler = router
+		s.tlsServer.BaseContext = func(net.Listener) context.Context {
+			return s.baseCtx
+		}
+	}
+}
+
+// registerMetricsEndpoint registers the metrics endpoint on the main router if needed.
+func registerMetricsEndpoint(s *Server, c config.Config, registry metrics.Registry) {
+	if c.Metrics.Enabled && registry != nil && c.Metrics.ServerAddr == "" {
+		s.logger.Warn("Metrics endpoint registered on main server (set Metrics.ServerAddr to isolate)", log.F("endpoint", c.Metrics.Endpoint))
+		s.GET(c.Metrics.Endpoint, metrics.Handler(registry))
+	}
 }
 
 func fmtHTTPAddr(addr string) string {
