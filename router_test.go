@@ -897,6 +897,11 @@ func TestMatchPattern(t *testing.T) {
 		{"static prefix mismatch", "/hello/{name}", "/world/test", false},
 		{"multiple params", "/users/{id}/posts/{slug}", "/users/123/posts/hello", true},
 		{"multiple params mismatch", "/users/{id}/posts/{slug}", "/users/123/comments/hello", false},
+		{"wildcard not enough segments", "/files/...", "/", false},
+		{"param with wildcard - root only", "/api/{version}/...", "/api/v1", true},
+		{"empty path", "/hello", "", false},
+		{"root only", "/", "/", true},
+		{"root mismatch", "/", "/hello", false},
 	}
 
 	for _, tt := range tests {
