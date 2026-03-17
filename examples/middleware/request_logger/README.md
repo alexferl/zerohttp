@@ -10,7 +10,7 @@ This example demonstrates zerohttp's request logging middleware with body loggin
 - Automatic masking of sensitive fields (password, token, etc.)
 - Configurable log fields
 - Body size limits
-- **Custom fields from headers and context**
+- Custom fields
 
 ## Running the Example
 
@@ -47,63 +47,6 @@ curl http://localhost:8080/admin/users \
 ### Health check
 ```bash
 curl http://localhost:8080/health
-```
-
-## Configuration
-
-### Basic Configuration
-
-```go
-app := zh.New(config.Config{
-    RequestLogger: config.RequestLoggerConfig{
-        LogRequestBody:  true,
-        LogResponseBody: true,
-        MaxBodySize:     1024,
-        Fields: []config.LogField{
-            config.FieldMethod,
-            config.FieldPath,
-            config.FieldStatus,
-            config.FieldDurationHuman,
-            config.FieldRequestBody,
-            config.FieldResponseBody,
-        },
-    },
-})
-```
-
-### Custom Fields
-
-The `CustomFields` callback allows you to add arbitrary fields to request logs:
-
-```go
-// Simulate a database lookup of tenant ID from API key
-var apiKeyToTenant = map[string]string{
-    "sk-1234567890abcdef": "tenant-acme",
-    "sk-abcdef1234567890": "tenant-cyberdyne",
-}
-
-app := zh.New(config.Config{
-    RequestLogger: config.RequestLoggerConfig{
-        // ... other config ...
-        CustomFields: func(r *http.Request) []log.Field {
-            var fields []log.Field
-
-            // Look up tenant ID from API key (don't log the key itself!)
-            if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
-                if tenantID, ok := apiKeyToTenant[apiKey]; ok {
-                    fields = append(fields, log.F("tenant_id", tenantID))
-                }
-            }
-
-            // Conditional fields based on path
-            if strings.HasPrefix(r.URL.Path, "/admin/") {
-                fields = append(fields, log.F("access_level", "admin"))
-            }
-
-            return fields
-        },
-    },
-})
 ```
 
 ## Features
