@@ -37,6 +37,13 @@ func (rec *proxyResponseRecorder) WriteHeader(code int) {
 	rec.ResponseWriter.WriteHeader(code)
 }
 
+// Flush implements http.Flusher to support streaming responses like SSE.
+func (rec *proxyResponseRecorder) Flush() {
+	if f, ok := rec.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // backend represents a single upstream with health tracking
 type backend struct {
 	config.Backend

@@ -66,3 +66,11 @@ func (lrw *limitResponseWriter) Write(p []byte) (int, error) {
 	}
 	return lrw.ResponseWriter.Write(p)
 }
+
+// Flush implements http.Flusher to support streaming responses like SSE.
+// It passes the flush through to the underlying ResponseWriter if it supports Flusher.
+func (lrw *limitResponseWriter) Flush() {
+	if f, ok := lrw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}

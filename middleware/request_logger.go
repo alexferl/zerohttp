@@ -201,6 +201,14 @@ func (rw *bodyCapturingResponseWriter) bodyString() string {
 	return body
 }
 
+// Flush implements http.Flusher to support streaming responses like SSE.
+// It passes the flush through to the underlying ResponseWriter if it supports Flusher.
+func (rw *bodyCapturingResponseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // captureRequestBody reads and restores the request body.
 func captureRequestBody(r *http.Request, maxSize int) string {
 	if r.Body == nil || r.Body == http.NoBody {

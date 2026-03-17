@@ -143,3 +143,27 @@ func (tw *timeoutWriter) writeHeaderLocked(code int) {
 	tw.wroteHeader = true
 	tw.code = code
 }
+
+// Flush implements http.Flusher. Flushes buffered content to the underlying writer.
+func (tw *timeoutWriter) Flush() {
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+
+	if tw.err != nil {
+		return
+	}
+
+	if !tw.wroteHeader {
+		tw.writeHeaderLocked(http.StatusOK)
+	}
+
+	// Flush buffered content to underlying writer
+	if tw.wbuf.Len() > 0 {
+		_, _ = tw.w.Write(tw.wbuf.Bytes())
+		tw.wbuf.Reset()
+	}
+
+	if f, ok := tw.w.(http.Flusher); ok {
+		f.Flush()
+	}
+}

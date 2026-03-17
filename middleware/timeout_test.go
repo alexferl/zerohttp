@@ -260,3 +260,80 @@ func TestTimeout_Metrics(t *testing.T) {
 		t.Errorf("expected 1 timeout metric, got %d", len(timeoutCounter.Metrics))
 	}
 }
+
+func TestTimeout_Flush(t *testing.T) {
+	tests := []struct {
+		name              string
+		underlyingFlusher bool
+		expectFlushCalled bool
+	}{
+		{
+			name:              "flush passes through to underlying Flusher",
+			underlyingFlusher: true,
+			expectFlushCalled: true,
+		},
+		{
+			name:              "flush no-op when underlying doesn't implement Flusher",
+			underlyingFlusher: false,
+			expectFlushCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var base http.ResponseWriter
+			var flushCalled *bool
+
+			if tt.underlyingFlusher {
+				rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+				base = rec
+				flushCalled = &rec.flushed
+			} else {
+				rec := httptest.NewRecorder()
+				base = rec
+				flushCalled = new(bool)
+			}
+
+			// Create timeoutWriter
+			tw := &timeoutWriter{
+				w:   base,
+				req: httptest.NewRequest(http.MethodGet, "/", nil),
+				h:   make(http.Header),
+			}
+
+			// Call Flush
+			tw.Flush()
+
+			if *flushCalled != tt.expectFlushCalled {
+				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
+			}
+		})
+	}
+}
+
+func TestTimeout_Flush_WritesBufferedData(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	// Create timeoutWriter
+	tw := &timeoutWriter{
+		w:   rec,
+		req: httptest.NewRequest(http.MethodGet, "/", nil),
+		h:   make(http.Header),
+	}
+
+	// Write some data (buffered)
+	_, _ = tw.Write([]byte("hello"))
+
+	// Buffered data should not be written yet
+	if rec.Body.String() != "" {
+		t.Error("expected data to be buffered, not written yet")
+	}
+
+	// Flush should write buffered data
+	tw.Flush()
+
+	// Now data should be written
+	if rec.Body.String() != "hello" {
+		t.Errorf("expected body 'hello', got '%s'", rec.Body.String())
+	}
+}

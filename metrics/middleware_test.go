@@ -10,6 +10,16 @@ import (
 	"github.com/alexferl/zerohttp/config"
 )
 
+// flusherRecorder is a test ResponseWriter that implements http.Flusher
+type flusherRecorder struct {
+	*httptest.ResponseRecorder
+	flushed bool
+}
+
+func (f *flusherRecorder) Flush() {
+	f.flushed = true
+}
+
 func TestNewMiddleware_NoConfig(t *testing.T) {
 	// Test calling NewMiddleware with no config (uses defaults)
 	// When a registry is passed, metrics should be recorded
@@ -861,5 +871,89 @@ func TestMiddleware_RegistryInContext(t *testing.T) {
 
 	if ctxRegistry != reg {
 		t.Error("expected context registry to be the same as the one passed to middleware")
+	}
+}
+
+func TestMiddleware_responseWriter_Flush(t *testing.T) {
+	tests := []struct {
+		name              string
+		underlyingFlusher bool
+		expectFlushCalled bool
+	}{
+		{
+			name:              "flush passes through to underlying Flusher",
+			underlyingFlusher: true,
+			expectFlushCalled: true,
+		},
+		{
+			name:              "flush no-op when underlying doesn't implement Flusher",
+			underlyingFlusher: false,
+			expectFlushCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var base http.ResponseWriter
+			var flushCalled *bool
+
+			if tt.underlyingFlusher {
+				rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+				base = rec
+				flushCalled = &rec.flushed
+			} else {
+				rec := httptest.NewRecorder()
+				base = rec
+				flushCalled = new(bool)
+			}
+
+			// Wrap with responseWriter
+			rw := &responseWriter{
+				ResponseWriter: base,
+			}
+
+			// Call Flush
+			rw.Flush()
+
+			if *flushCalled != tt.expectFlushCalled {
+				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
+			}
+		})
+	}
+}
+
+func TestMiddleware_responseWriter_Flush_SupportsSSE(t *testing.T) {
+	rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	reg := NewRegistry()
+	middleware := NewMiddleware(reg, config.MetricsConfig{
+		Enabled:       config.Bool(true),
+		PathLabelFunc: func(p string) string { return p },
+	})
+
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to get a Flusher from the writer
+		f, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("expected ResponseWriter to implement http.Flusher")
+			return
+		}
+
+		// Write and flush like SSE would
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: hello\n\n"))
+		f.Flush()
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	handler.ServeHTTP(rec, req)
+
+	if !rec.flushed {
+		t.Error("expected Flush to be called on underlying ResponseWriter")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }

@@ -34,6 +34,13 @@ func (w *responseWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// Flush implements http.Flusher to support streaming responses like SSE.
+func (w *responseWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // labelSet holds pre-allocated label slices to avoid allocations per request.
 type labelSet struct {
 	inFlight  []string

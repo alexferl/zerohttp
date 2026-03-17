@@ -807,8 +807,9 @@ func needsTLSServer(c config.Config) bool {
 }
 
 // createMetricsRegistry creates metrics registry if enabled.
+// Metrics are only enabled when explicitly set to true (not nil).
 func createMetricsRegistry(c config.Config) metrics.Registry {
-	if c.Metrics.Enabled != nil && !*c.Metrics.Enabled {
+	if c.Metrics.Enabled == nil || !*c.Metrics.Enabled {
 		return nil
 	}
 	return metrics.NewRegistry()

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -258,5 +259,85 @@ func TestRequestBodySize_Metrics(t *testing.T) {
 	}
 	if rejected != 1 {
 		t.Errorf("expected 1 rejected request, got %d", rejected)
+	}
+}
+
+func TestRequestBodySize_Flush(t *testing.T) {
+	tests := []struct {
+		name              string
+		underlyingFlusher bool
+		expectFlushCalled bool
+	}{
+		{
+			name:              "flush passes through to underlying Flusher",
+			underlyingFlusher: true,
+			expectFlushCalled: true,
+		},
+		{
+			name:              "flush no-op when underlying doesn't implement Flusher",
+			underlyingFlusher: false,
+			expectFlushCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var base http.ResponseWriter
+			var flushCalled *bool
+
+			if tt.underlyingFlusher {
+				rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+				base = rec
+				flushCalled = &rec.flushed
+			} else {
+				rec := httptest.NewRecorder()
+				base = rec
+				flushCalled = new(bool) // always false
+			}
+
+			// Wrap with limitResponseWriter
+			lrw := &limitResponseWriter{
+				ResponseWriter: base,
+			}
+
+			// Call Flush
+			lrw.Flush()
+
+			if *flushCalled != tt.expectFlushCalled {
+				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
+			}
+		})
+	}
+}
+
+func TestRequestBodySize_Flush_SupportsSSE(t *testing.T) {
+	// This test verifies that SSE streaming works through the middleware
+	rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	mw := RequestBodySize(config.RequestBodySizeConfig{MaxBytes: 1024})
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to get a Flusher from the writer
+		f, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("expected ResponseWriter to implement http.Flusher")
+			return
+		}
+
+		// Write and flush like SSE would
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: hello\n\n"))
+		f.Flush()
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/events", nil)
+	handler.ServeHTTP(rec, req)
+
+	if !rec.flushed {
+		t.Error("expected Flush to be called on underlying ResponseWriter")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }

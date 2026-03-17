@@ -52,6 +52,14 @@ func (rw *ResponseWriter) HeaderWritten() bool {
 	return rw.headerWritten
 }
 
+// Flush implements http.Flusher to support streaming responses like SSE.
+// If the underlying ResponseWriter does not support flushing, this is a no-op.
+func (rw *ResponseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // FlusherResponseWriter wraps ResponseWriter and implements http.Flusher.
 // Use this when the underlying ResponseWriter may support flushing.
 type FlusherResponseWriter struct {
@@ -84,5 +92,6 @@ func (frw *FlusherResponseWriter) Flush() {
 // Ensure interface compliance at compile time.
 var (
 	_ http.ResponseWriter = (*ResponseWriter)(nil)
+	_ http.Flusher        = (*ResponseWriter)(nil)
 	_ http.Flusher        = (*FlusherResponseWriter)(nil)
 )
