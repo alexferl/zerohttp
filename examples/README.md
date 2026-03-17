@@ -29,6 +29,7 @@ Basic functionality that doesn't require external dependencies beyond the standa
 - [**`rendering/`**](core/rendering/) - Response rendering methods (JSON, HTML, text, blob, stream)
 - [**`request_tracing/`**](core/request_tracing/) - Request ID propagation for tracing
 - [**`route_groups/`**](core/route_groups/) - Route groups with nested middleware
+- [**`sse/`**](extensions/sse/) - Server-Sent Events
 - [**`static_spa/`**](core/static_spa/) - Single Page Application serving
 - [**`static_website/`**](core/static_website/) - Static website serving
 - [**`template/`**](core/template/) - HTML template rendering
@@ -89,7 +90,6 @@ Examples showing how to integrate with external protocols and features via confi
 - [**`autocert/`**](extensions/autocert/) - Automatic TLS via Let's Encrypt (has go.mod)
 - [**`http3/`**](extensions/http3/) - HTTP/3 and QUIC support (has go.mod)
 - [**`http3_autocert/`**](extensions/http3_autocert/) - HTTP/3 with AutoTLS (has go.mod)
-- [**`sse/`**](extensions/sse/) - Server-Sent Events
 - [**`websocket/`**](extensions/websocket/) - WebSocket support (has go.mod)
 - [**`webtransport/`**](extensions/webtransport/) - WebTransport protocol (has go.mod)
 - [**`webstransport_autocert/`**](extensions/webstransport_autocert/) - WebTransport with AutoTLS (has go.mod)

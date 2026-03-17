@@ -971,3 +971,216 @@ func TestRequestLogger_Flush_SupportsSSE(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }
+
+func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
+	t.Run("custom fields from header", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields: []config.LogField{config.FieldMethod, config.FieldPath},
+			CustomFields: func(r *http.Request) []log.Field {
+				return []log.Field{
+					log.F("api_key", r.Header.Get("X-API-Key")),
+				}
+			},
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/api/users").
+			WithHeader("X-API-Key", "secret-key-123").
+			Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		entry := logger.infoLogs[0]
+		if value, found := findFieldValue(entry.fields, "api_key"); !found {
+			t.Error("Expected api_key field to be present")
+		} else if value != "secret-key-123" {
+			t.Errorf("Expected api_key to be 'secret-key-123', got %v", value)
+		}
+	})
+
+	t.Run("custom fields from context", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields: []config.LogField{config.FieldMethod, config.FieldPath},
+			CustomFields: func(r *http.Request) []log.Field {
+				if userID := r.Context().Value("user_id"); userID != nil {
+					return []log.Field{log.F("user_id", userID)}
+				}
+				return nil
+			},
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
+		req = req.WithContext(context.WithValue(req.Context(), "user_id", "user-456"))
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		entry := logger.infoLogs[0]
+		if value, found := findFieldValue(entry.fields, "user_id"); !found {
+			t.Error("Expected user_id field to be present")
+		} else if value != "user-456" {
+			t.Errorf("Expected user_id to be 'user-456', got %v", value)
+		}
+	})
+
+	t.Run("nil custom fields callback", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields:       []config.LogField{config.FieldMethod, config.FieldPath},
+			CustomFields: nil,
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		// Should only have the built-in fields
+		entry := logger.infoLogs[0]
+		if _, found := findFieldValue(entry.fields, "method"); !found {
+			t.Error("Expected method field to be present")
+		}
+		if _, found := findFieldValue(entry.fields, "path"); !found {
+			t.Error("Expected path field to be present")
+		}
+	})
+
+	t.Run("empty custom fields returned", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields: []config.LogField{config.FieldMethod, config.FieldPath},
+			CustomFields: func(r *http.Request) []log.Field {
+				return []log.Field{} // Empty slice
+			},
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		// Should only have the built-in fields
+		entry := logger.infoLogs[0]
+		if _, found := findFieldValue(entry.fields, "method"); !found {
+			t.Error("Expected method field to be present")
+		}
+	})
+
+	t.Run("multiple custom fields", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields: []config.LogField{config.FieldMethod},
+			CustomFields: func(r *http.Request) []log.Field {
+				return []log.Field{
+					log.F("tenant_id", "tenant-123"),
+					log.F("request_source", "internal"),
+					log.F("api_version", "v2"),
+				}
+			},
+		})(handler)
+
+		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
+		zhtest.Serve(middleware, req)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		entry := logger.infoLogs[0]
+		expectedFields := map[string]any{
+			"tenant_id":      "tenant-123",
+			"request_source": "internal",
+			"api_version":    "v2",
+		}
+
+		for key, expectedValue := range expectedFields {
+			if value, found := findFieldValue(entry.fields, key); !found {
+				t.Errorf("Expected %s field to be present", key)
+			} else if value != expectedValue {
+				t.Errorf("Expected %s to be '%v', got %v", key, expectedValue, value)
+			}
+		}
+	})
+
+	t.Run("conditional custom fields", func(t *testing.T) {
+		logger := &requestLoggerMockLogger{}
+		handler := &statusTestHandler{statusCode: http.StatusOK}
+		middleware := RequestLogger(logger, config.RequestLoggerConfig{
+			Fields: []config.LogField{config.FieldPath},
+			CustomFields: func(r *http.Request) []log.Field {
+				var fields []log.Field
+				if strings.HasPrefix(r.URL.Path, "/admin/") {
+					fields = append(fields, log.F("access_level", "admin"))
+				}
+				if r.Header.Get("X-Internal") == "true" {
+					fields = append(fields, log.F("request_source", "internal"))
+				}
+				return fields
+			},
+		})(handler)
+
+		// Request to admin path with internal header
+		req1 := zhtest.NewRequest(http.MethodGet, "/admin/users").
+			WithHeader("X-Internal", "true").
+			Build()
+		zhtest.Serve(middleware, req1)
+
+		if len(logger.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
+		}
+
+		entry := logger.infoLogs[0]
+		if _, found := findFieldValue(entry.fields, "access_level"); !found {
+			t.Error("Expected access_level field to be present for admin path")
+		}
+		if _, found := findFieldValue(entry.fields, "request_source"); !found {
+			t.Error("Expected request_source field to be present")
+		}
+
+		// Request to non-admin path without internal header
+		logger2 := &requestLoggerMockLogger{}
+		middleware2 := RequestLogger(logger2, config.RequestLoggerConfig{
+			Fields: []config.LogField{config.FieldPath},
+			CustomFields: func(r *http.Request) []log.Field {
+				var fields []log.Field
+				if strings.HasPrefix(r.URL.Path, "/admin/") {
+					fields = append(fields, log.F("access_level", "admin"))
+				}
+				if r.Header.Get("X-Internal") == "true" {
+					fields = append(fields, log.F("request_source", "internal"))
+				}
+				return fields
+			},
+		})(handler)
+
+		req2 := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
+		zhtest.Serve(middleware2, req2)
+
+		if len(logger2.infoLogs) != 1 {
+			t.Fatalf("Expected 1 info log, got %d", len(logger2.infoLogs))
+		}
+
+		entry2 := logger2.infoLogs[0]
+		if _, found := findFieldValue(entry2.fields, "access_level"); found {
+			t.Error("Expected access_level field NOT to be present for non-admin path")
+		}
+		if _, found := findFieldValue(entry2.fields, "request_source"); found {
+			t.Error("Expected request_source field NOT to be present")
+		}
+	})
+}
