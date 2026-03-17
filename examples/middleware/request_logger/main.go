@@ -3,10 +3,17 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	zhlog "github.com/alexferl/zerohttp/log"
 )
+
+var apiKeyToTenant = map[string]string{
+	"sk-1234567890abcdef": "tenant-acme",
+	"sk-abcdef1234567890": "tenant-cyberdyne",
+}
 
 func main() {
 	app := zh.New(config.Config{
@@ -22,6 +29,21 @@ func main() {
 				config.FieldRequestBody,
 				config.FieldResponseBody,
 			},
+			CustomFields: func(r *http.Request) []zhlog.Field {
+				var fields []zhlog.Field
+
+				if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
+					if tenantID, ok := apiKeyToTenant[apiKey]; ok {
+						fields = append(fields, zhlog.F("tenant_id", tenantID))
+					}
+				}
+
+				if strings.HasPrefix(r.URL.Path, "/admin/") {
+					fields = append(fields, zhlog.F("access_level", "admin"))
+				}
+
+				return fields
+			},
 		},
 	})
 
@@ -30,6 +52,12 @@ func main() {
 			"status":  "success",
 			"message": "Login successful",
 			"token":   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+		})
+	}))
+
+	app.GET("/admin/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		return zh.R.JSON(w, http.StatusOK, zh.M{
+			"users": []string{"user1", "user2", "user3"},
 		})
 	}))
 

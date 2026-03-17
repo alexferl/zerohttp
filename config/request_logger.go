@@ -1,5 +1,11 @@
 package config
 
+import (
+	"net/http"
+
+	"github.com/alexferl/zerohttp/log"
+)
+
 // LogField represents a field to log.
 type LogField string
 
@@ -61,6 +67,11 @@ type RequestLoggerConfig struct {
 	// masked in request/response body logs (e.g., "password", "token", "secret").
 	// Defaults to common sensitive field names if nil.
 	SensitiveFields []string
+
+	// CustomFields allows adding arbitrary fields to request logs.
+	// Called once per request after the handler completes.
+	// Return nil or empty slice if no custom fields needed.
+	CustomFields func(r *http.Request) []log.Field
 }
 
 // DefaultSensitiveFields contains common sensitive field names that should be masked.

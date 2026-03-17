@@ -136,6 +136,12 @@ func LogRequest(logger log.Logger, cfg config.RequestLoggerConfig, fieldMap map[
 		logFields = append(logFields, log.F("response_body", responseBody))
 	}
 
+	// Add custom fields from user-defined callback
+	if cfg.CustomFields != nil {
+		customFields := cfg.CustomFields(r)
+		logFields = append(logFields, customFields...)
+	}
+
 	msg := "Request completed"
 
 	if cfg.LogErrors {

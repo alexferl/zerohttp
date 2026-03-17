@@ -1,8 +1,12 @@
 package config
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
+
+	"github.com/alexferl/zerohttp/log"
 )
 
 func TestRequestLoggerConfig_DefaultValues(t *testing.T) {
@@ -376,6 +380,46 @@ func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 					t.Errorf("expected exempt paths = %v, got %v", tt.exemptPaths, cfg.ExemptPaths)
 				}
 			})
+		}
+	})
+}
+
+func TestRequestLoggerConfig_CustomFields(t *testing.T) {
+	t.Run("custom fields can be set", func(t *testing.T) {
+		customFunc := func(r *http.Request) []log.Field {
+			return []log.Field{log.F("api_key", r.Header.Get("X-API-Key"))}
+		}
+		cfg := RequestLoggerConfig{
+			CustomFields: customFunc,
+		}
+
+		if cfg.CustomFields == nil {
+			t.Error("expected CustomFields to be set")
+		}
+
+		// Verify it works
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("X-API-Key", "test-key")
+		fields := cfg.CustomFields(req)
+
+		if len(fields) != 1 {
+			t.Fatalf("expected 1 field, got %d", len(fields))
+		}
+		if fields[0].Key != "api_key" {
+			t.Errorf("expected key 'api_key', got %s", fields[0].Key)
+		}
+		if fields[0].Value != "test-key" {
+			t.Errorf("expected value 'test-key', got %v", fields[0].Value)
+		}
+	})
+
+	t.Run("custom fields can be nil", func(t *testing.T) {
+		cfg := RequestLoggerConfig{
+			CustomFields: nil,
+		}
+
+		if cfg.CustomFields != nil {
+			t.Error("expected CustomFields to be nil")
 		}
 	})
 }
