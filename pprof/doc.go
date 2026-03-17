@@ -8,7 +8,7 @@
 // Use the default configuration:
 //
 //	app := zh.New()
-//	pp := pprof.New(app, pprof.DefaultConfig)
+//	pp := pprof.New(app)
 //	log.Printf("pprof credentials: %s / %s", pp.Auth.Username, pp.Auth.Password)
 //
 // Access profiles at http://localhost:8080/debug/pprof/
@@ -17,6 +17,12 @@
 //
 // Customize endpoints or provide explicit credentials:
 //
+//	// Override specific fields (uses defaults for rest)
+//	pprof.New(app, pprof.Config{
+//	    Prefix: "/admin/pprof",
+//	})
+//
+//	// Full custom config
 //	pprof.New(app, pprof.Config{
 //	    Prefix: "/debug/pprof",
 //	    Auth: &pprof.AuthConfig{

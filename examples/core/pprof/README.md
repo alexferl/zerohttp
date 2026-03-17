@@ -67,28 +67,28 @@ go tool pprof -http=:8081 heap.prof
 
 ### Custom prefix and credentials
 ```go
-cfg := pprof.DefaultConfig
-cfg.Prefix = "/admin/pprof"
-cfg.Auth = &pprof.AuthConfig{
-    Username: "admin",
-    Password: "secret",
-}
-pp := pprof.New(app, cfg)
+pp := pprof.New(app, pprof.Config{
+    Prefix: "/admin/pprof",
+    Auth: &pprof.AuthConfig{
+        Username: "admin",
+        Password: "secret",
+    },
+})
 ```
 
 ### Allow specific IP ranges
 ```go
-cfg := pprof.DefaultConfig
-cfg.AllowedIPs = []string{"10.0.0.0/8", "192.168.1.100"}
-pp := pprof.New(app, cfg)
+pp := pprof.New(app, pprof.Config{
+    AllowedIPs: []string{"10.0.0.0/8", "192.168.1.100"},
+})
 ```
 
 ### Disable specific profiles
 ```go
-cfg := pprof.DefaultConfig
-cfg.EnableBlock = false
-cfg.EnableMutex = false
-pp := pprof.New(app, cfg)
+pp := pprof.New(app, pprof.Config{
+    EnableBlock: config.Bool(false),
+    EnableMutex: config.Bool(false),
+})
 ```
 
 ## Security Notes

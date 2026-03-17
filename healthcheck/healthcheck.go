@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/internal/config"
 )
 
 // Config holds the healthcheck configuration
@@ -52,18 +53,33 @@ var DefaultConfig = Config{
 }
 
 // New creates and registers all healthcheck endpoints with the provided configuration.
-// Use DefaultConfig for default values:
+// Uses DefaultConfig if no config is provided, or merges user config with defaults.
 //
-//	healthcheck.New(app, healthcheck.DefaultConfig)
+// Examples:
 //
-// Or customize specific fields:
+//	// Use defaults
+//	healthcheck.New(app)
 //
-//	cfg := healthcheck.DefaultConfig
-//	cfg.LivenessEndpoint = "/health/live"
-//	cfg.ReadinessHandler = myCustomHandler
-//	healthcheck.New(app, cfg)
-func New(app *zh.Server, cfg Config) {
-	app.GET(cfg.LivenessEndpoint, cfg.LivenessHandler)
-	app.GET(cfg.ReadinessEndpoint, cfg.ReadinessHandler)
-	app.GET(cfg.StartupEndpoint, cfg.StartupHandler)
+//	// Override specific fields
+//	healthcheck.New(app, healthcheck.Config{
+//	    LivenessEndpoint: "/health/live",
+//	})
+//
+//	// Full custom config
+//	healthcheck.New(app, healthcheck.Config{
+//	    LivenessEndpoint:  "/livez",
+//	    LivenessHandler:   myCustomHandler,
+//	    ReadinessEndpoint: "/readyz",
+//	    ReadinessHandler:  myCustomHandler,
+//	    StartupEndpoint:   "/startupz",
+//	    StartupHandler:    myCustomHandler,
+//	})
+func New(app *zh.Server, cfg ...Config) {
+	c := DefaultConfig
+	if len(cfg) > 0 {
+		config.Merge(&c, cfg[0])
+	}
+	app.GET(c.LivenessEndpoint, c.LivenessHandler)
+	app.GET(c.ReadinessEndpoint, c.ReadinessHandler)
+	app.GET(c.StartupEndpoint, c.StartupHandler)
 }

@@ -354,7 +354,7 @@ func TestRecover_Metrics(t *testing.T) {
 
 	// Wrap with metrics middleware to provide registry in context
 	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
-		Enabled:       true,
+		Enabled:       config.Bool(true),
 		PathLabelFunc: func(p string) string { return p },
 	})
 	wrapped := metricsMw(mw(panicHandler("test panic")))

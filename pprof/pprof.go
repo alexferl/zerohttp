@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -29,44 +31,54 @@ type Config struct {
 	Prefix string
 
 	// EnableIndex enables the index page listing all profiles
-	// Default: true
-	EnableIndex bool
+	// nil = use default (true)
+	// Default: nil
+	EnableIndex *bool
 
 	// EnableCmdline enables the cmdline endpoint
-	// Default: true
-	EnableCmdline bool
+	// nil = use default (true)
+	// Default: nil
+	EnableCmdline *bool
 
 	// EnableProfile enables the CPU profile endpoint
-	// Default: true
-	EnableProfile bool
+	// nil = use default (true)
+	// Default: nil
+	EnableProfile *bool
 
 	// EnableSymbol enables the symbol endpoint
-	// Default: true
-	EnableSymbol bool
+	// nil = use default (true)
+	// Default: nil
+	EnableSymbol *bool
 
 	// EnableTrace enables the trace endpoint
-	// Default: true
-	EnableTrace bool
+	// nil = use default (true)
+	// Default: nil
+	EnableTrace *bool
 
 	// EnableHeap enables the heap profile endpoint
-	// Default: true
-	EnableHeap bool
+	// nil = use default (true)
+	// Default: nil
+	EnableHeap *bool
 
 	// EnableGoroutine enables the goroutine profile endpoint
-	// Default: true
-	EnableGoroutine bool
+	// nil = use default (true)
+	// Default: nil
+	EnableGoroutine *bool
 
 	// EnableThreadCreate enables the threadcreate profile endpoint
-	// Default: true
-	EnableThreadCreate bool
+	// nil = use default (true)
+	// Default: nil
+	EnableThreadCreate *bool
 
 	// EnableBlock enables the block profile endpoint
-	// Default: true
-	EnableBlock bool
+	// nil = use default (true)
+	// Default: nil
+	EnableBlock *bool
 
 	// EnableMutex enables the mutex profile endpoint
-	// Default: true
-	EnableMutex bool
+	// nil = use default (true)
+	// Default: nil
+	EnableMutex *bool
 
 	// Auth is the basic auth configuration.
 	// If nil, a random password will be generated.
@@ -96,43 +108,57 @@ type AuthConfig struct {
 // Modify this to change system-wide defaults.
 var DefaultConfig = Config{
 	Prefix:             "/debug/pprof",
-	EnableIndex:        true,
-	EnableCmdline:      true,
-	EnableProfile:      true,
-	EnableSymbol:       true,
-	EnableTrace:        true,
-	EnableHeap:         true,
-	EnableGoroutine:    true,
-	EnableThreadCreate: true,
-	EnableBlock:        true,
-	EnableMutex:        true,
+	EnableIndex:        config.Bool(true),
+	EnableCmdline:      config.Bool(true),
+	EnableProfile:      config.Bool(true),
+	EnableSymbol:       config.Bool(true),
+	EnableTrace:        config.Bool(true),
+	EnableHeap:         config.Bool(true),
+	EnableGoroutine:    config.Bool(true),
+	EnableThreadCreate: config.Bool(true),
+	EnableBlock:        config.Bool(true),
+	EnableMutex:        config.Bool(true),
 	Auth:               nil,
 	AllowedIPs:         []string{"127.0.0.1/8", "::1/128"}, // localhost only by default
 }
 
 // New creates and registers all pprof endpoints with the provided configuration.
+// Uses DefaultConfig if no config is provided, or merges user config with defaults.
 // Returns a PProf struct containing the configuration and actual auth credentials used.
 //
-// Use DefaultConfig for default values:
+// Examples:
 //
-//	pp := pprof.New(app, pprof.DefaultConfig)
+//	// Use defaults
+//	pp := pprof.New(app)
 //	// Access auto-generated credentials:
 //	// pp.Auth.Username, pp.Auth.Password
 //
-// Or customize specific fields:
+//	// Override specific fields
+//	pp := pprof.New(app, pprof.Config{
+//	    Prefix: "/admin/pprof",
+//	})
 //
-//	cfg := pprof.DefaultConfig
-//	cfg.Prefix = "/admin/pprof"
-//	pp := pprof.New(app, cfg)
+//	// Full custom config
+//	pp := pprof.New(app, pprof.Config{
+//	    Prefix:             "/debug/pprof",
+//	    EnableIndex:        true,
+//	    EnableCmdline:      true,
+//	    Auth:               &pprof.AuthConfig{Username: "admin", Password: "secret"},
+//	    AllowedIPs:         []string{"127.0.0.1/8", "::1/128"},
+//	})
 //
-// To disable authentication:
-//
-//	cfg := pprof.DefaultConfig
-//	cfg.Auth = &pprof.AuthConfig{}  // empty = no auth
-//	pp := pprof.New(app, cfg)
-func New(app *zh.Server, cfg Config) *PProf {
-	prefix := cfg.Prefix
-	auth := cfg.Auth
+//	// Disable authentication
+//	pp := pprof.New(app, pprof.Config{
+//	    Auth: &pprof.AuthConfig{},  // empty = no auth
+//	})
+func New(app *zh.Server, cfg ...Config) *PProf {
+	c := DefaultConfig
+	if len(cfg) > 0 {
+		zconfig.Merge(&c, cfg[0])
+	}
+
+	prefix := c.Prefix
+	auth := c.Auth
 	logger := app.Logger()
 
 	if auth == nil {
@@ -149,7 +175,7 @@ func New(app *zh.Server, cfg Config) *PProf {
 	}
 
 	// Parse allowed IPs (nil means use default localhost-only)
-	allowedIPs := cfg.AllowedIPs
+	allowedIPs := c.AllowedIPs
 	if allowedIPs == nil {
 		allowedIPs = []string{"127.0.0.1/8", "::1/128"}
 	}
@@ -167,7 +193,7 @@ func New(app *zh.Server, cfg Config) *PProf {
 	}
 
 	pp := &PProf{
-		Config: cfg,
+		Config: c,
 		Auth:   auth,
 	}
 
@@ -194,35 +220,35 @@ func New(app *zh.Server, cfg Config) *PProf {
 		return handler
 	}
 
-	if cfg.EnableIndex {
+	if config.BoolOrDefault(c.EnableIndex, true) {
 		app.GET(prefix+"/", wrapFunc(stdpprof.Index))
 	}
-	if cfg.EnableCmdline {
+	if config.BoolOrDefault(c.EnableCmdline, true) {
 		app.GET(prefix+"/cmdline", wrapFunc(stdpprof.Cmdline))
 	}
-	if cfg.EnableProfile {
+	if config.BoolOrDefault(c.EnableProfile, true) {
 		app.GET(prefix+"/profile", wrapFunc(stdpprof.Profile))
 	}
-	if cfg.EnableSymbol {
+	if config.BoolOrDefault(c.EnableSymbol, true) {
 		app.GET(prefix+"/symbol", wrapFunc(stdpprof.Symbol))
 		app.POST(prefix+"/symbol", wrapFunc(stdpprof.Symbol))
 	}
-	if cfg.EnableTrace {
+	if config.BoolOrDefault(c.EnableTrace, true) {
 		app.GET(prefix+"/trace", wrapFunc(stdpprof.Trace))
 	}
-	if cfg.EnableHeap {
+	if config.BoolOrDefault(c.EnableHeap, true) {
 		app.GET(prefix+"/heap", wrapHandler(stdpprof.Handler("heap")))
 	}
-	if cfg.EnableGoroutine {
+	if config.BoolOrDefault(c.EnableGoroutine, true) {
 		app.GET(prefix+"/goroutine", wrapHandler(stdpprof.Handler("goroutine")))
 	}
-	if cfg.EnableThreadCreate {
+	if config.BoolOrDefault(c.EnableThreadCreate, true) {
 		app.GET(prefix+"/threadcreate", wrapHandler(stdpprof.Handler("threadcreate")))
 	}
-	if cfg.EnableBlock {
+	if config.BoolOrDefault(c.EnableBlock, true) {
 		app.GET(prefix+"/block", wrapHandler(stdpprof.Handler("block")))
 	}
-	if cfg.EnableMutex {
+	if config.BoolOrDefault(c.EnableMutex, true) {
 		app.GET(prefix+"/mutex", wrapHandler(stdpprof.Handler("mutex")))
 	}
 

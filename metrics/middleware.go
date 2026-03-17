@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status and size.
@@ -60,30 +61,36 @@ type Middleware struct {
 }
 
 // NewMiddleware creates a new metrics middleware.
-func NewMiddleware(reg Registry, cfg config.MetricsConfig) func(http.Handler) http.Handler {
-	if !cfg.Enabled || reg == nil {
+// Uses default config if none provided, or merges user config with defaults.
+func NewMiddleware(reg Registry, cfg ...config.MetricsConfig) func(http.Handler) http.Handler {
+	if reg == nil {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
 	}
 
+	c := config.DefaultMetricsConfig
+	if len(cfg) > 0 {
+		zconfig.Merge(&c, cfg[0])
+	}
+
 	excludePaths := make(map[string]struct{})
-	for _, p := range cfg.ExcludePaths {
+	for _, p := range c.ExcludePaths {
 		excludePaths[p] = struct{}{}
 	}
 
 	mm := &Middleware{
 		reg:             reg,
-		DurationBuckets: cfg.DurationBuckets,
-		SizeBuckets:     cfg.SizeBuckets,
+		DurationBuckets: c.DurationBuckets,
+		SizeBuckets:     c.SizeBuckets,
 		ExcludePaths:    excludePaths,
-		PathLabelFunc:   cfg.PathLabelFunc,
-		CustomLabels:    cfg.CustomLabels,
+		PathLabelFunc:   c.PathLabelFunc,
+		CustomLabels:    c.CustomLabels,
 	}
 
 	// Only initialize metrics immediately if CustomLabels is not set
 	// If CustomLabels is set, we'll initialize on first request when we know the label keys
-	if cfg.CustomLabels == nil {
+	if c.CustomLabels == nil {
 		mm.initMetrics(reg, nil)
 		mm.initialized = true
 	}
