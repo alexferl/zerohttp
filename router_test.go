@@ -813,6 +813,100 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			t.Errorf("expected Content-Type %q, got %q", httpx.MIMEApplicationProblemJSON, contentType)
 		}
 	})
+
+	// Test wildcard patterns like /files/...
+	t.Run("405 for wildcard routes", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/files/...", testHandler("get"))
+
+		// POST to a path that matches the wildcard pattern
+		req := httptest.NewRequest(http.MethodPost, "/files/docs/readme.txt", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
+
+		// Allow header should contain GET
+		allowHeader := w.Header().Get(httpx.HeaderAllow)
+		if !strings.Contains(allowHeader, http.MethodGet) {
+			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
+		}
+	})
+
+	t.Run("OPTIONS for wildcard routes", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/static/...", testHandler("get"))
+
+		// OPTIONS should return allowed methods
+		req := httptest.NewRequest(http.MethodOptions, "/static/css/main.css", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
+
+		allowHeader := w.Header().Get(httpx.HeaderAllow)
+		if !strings.Contains(allowHeader, http.MethodGet) {
+			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
+		}
+	})
+
+	// Test wildcard with parameter like /api/{version}/...
+	t.Run("405 for parameter with wildcard", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/api/{version}/...", testHandler("get"))
+
+		// POST to a path that matches the pattern
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/users", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
+	})
+
+	t.Run("OPTIONS for parameter with wildcard", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/api/{version}/...", testHandler("get"))
+
+		// OPTIONS should work
+		req := httptest.NewRequest(http.MethodOptions, "/api/v2/items", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
+	})
+}
+
+func TestMatchPattern(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		path    string
+		want    bool
+	}{
+		{"exact match", "/hello", "/hello", true},
+		{"exact mismatch", "/hello", "/world", false},
+		{"param match", "/hello/{name}", "/hello/as", true},
+		{"param different value", "/hello/{name}", "/hello/world", true},
+		{"param no match - extra segments", "/hello/{name}", "/hello/foo/bar", false},
+		{"param no match - missing segments", "/hello/{name}", "/hello", false},
+		{"wildcard match single", "/files/...", "/files/readme.txt", true},
+		{"wildcard match deep", "/files/...", "/files/a/b/c/d.txt", true},
+		{"wildcard no match - less segments", "/files/...", "/other", false},
+		{"param with wildcard", "/api/{version}/...", "/api/v1/users", true},
+		{"param with wildcard deep", "/api/{version}/...", "/api/v2/a/b/c", true},
+		{"static prefix mismatch", "/hello/{name}", "/world/test", false},
+		{"multiple params", "/users/{id}/posts/{slug}", "/users/123/posts/hello", true},
+		{"multiple params mismatch", "/users/{id}/posts/{slug}", "/users/123/comments/hello", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchPattern(tt.pattern, tt.path)
+			if got != tt.want {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.pattern, tt.path, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestRouter_Configuration(t *testing.T) {
