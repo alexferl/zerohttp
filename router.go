@@ -458,7 +458,7 @@ func (r *defaultRouter) NotFound(h http.Handler) {
 // Example:
 //
 //	router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//	    allow := w.Header().Get(consts.HeaderAllow)
+//	    allow := w.Header().Get(httpx.HeaderAllow)
 //	    http.Error(w, fmt.Sprintf("Method not allowed. Allowed: %s", allow), http.StatusMethodNotAllowed)
 //	}))
 func (r *defaultRouter) MethodNotAllowed(h http.Handler) {

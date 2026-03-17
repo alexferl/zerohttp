@@ -88,7 +88,7 @@ func (a *Assertions) StatusBetween(min, max int) *Assertions {
 //
 // Example:
 //
-//	zhtest.AssertWith(t, w).consts.HeaderContentType, "application/json")
+//	zhtest.AssertWith(t, w).httpx.HeaderContentType, "application/json")
 func (a *Assertions) Header(key, expected string) *Assertions {
 	actual := a.resp.Header().Get(key)
 	if actual != expected {
@@ -101,7 +101,7 @@ func (a *Assertions) Header(key, expected string) *Assertions {
 //
 // Example:
 //
-//	zhtest.AssertWith(t, w).HeaderContains(consts.HeaderContentType, "json")
+//	zhtest.AssertWith(t, w).HeaderContains(httpx.HeaderContentType, "json")
 func (a *Assertions) HeaderContains(key, substring string) *Assertions {
 	actual := a.resp.Header().Get(key)
 	if !strings.Contains(actual, substring) {

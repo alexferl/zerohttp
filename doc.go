@@ -556,7 +556,7 @@
 //
 //	    zhtest.AssertWith(t, w).
 //	        Status(http.StatusOK).
-//	        consts.HeaderContentType, "application/json").
+//	        httpx.HeaderContentType, "application/json").
 //	        JSONPathEqual("name", "John Doe")
 //	}
 //

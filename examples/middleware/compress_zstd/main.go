@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/klauspost/compress/zstd"
 
 	"github.com/alexferl/zerohttp"
@@ -62,7 +63,7 @@ func main() {
 	}))
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		w.Header().Set(consts.HeaderContentType, consts.MIMETextHTML)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		_, err := w.Write([]byte(`<!DOCTYPE html>
 <html>
 <head><title>Zstd Compression Demo</title></head>
