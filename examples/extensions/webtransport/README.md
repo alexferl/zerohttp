@@ -1,6 +1,12 @@
 # WebTransport Example
 
-WebTransport server with HTTP/3 using quic-go.
+This example demonstrates a WebTransport server with HTTP/3 using quic-go.
+
+## Features
+
+- HTTP/3 with WebTransport on same port
+- Datagram and bidirectional stream support
+- Echo server for messages
 
 ## Prerequisites
 
@@ -12,22 +18,22 @@ mkcert localhost
 
 Or use any other tool to generate `localhost+2.pem` and `localhost+2-key.pem`.
 
-## Running
+## Running the Example
 
 ```bash
 go mod tidy
 go run .
 ```
 
-Open https://localhost:8443 in your browser.
+The server starts on `https://localhost:8443`.
 
 ## Endpoints
 
-- `GET /` - Web UI
-- `CONNECT /wt` - WebTransport endpoint
+| Endpoint      | Description            |
+|---------------|------------------------|
+| `GET /`       | Web UI                 |
+| `CONNECT /wt` | WebTransport endpoint  |
 
-## Features
+## Test Commands
 
-- HTTP/3 with WebTransport on same port
-- Datagram and bidirectional stream support
-- Echo server for messages
+Open `https://localhost:8443` in your browser to use the Web UI.

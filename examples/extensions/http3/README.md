@@ -2,41 +2,37 @@
 
 This example demonstrates how to add HTTP/3 support to zerohttp using the pluggable HTTP/3 interface.
 
-## How it works
+## Features
 
-zerohttp provides a `config.HTTP3Server` interface that any HTTP/3 implementation can satisfy:
+- HTTP/3 support via quic-go
+- Pluggable HTTP/3 server interface
+- Graceful shutdown support
 
-```go
-type HTTP3Server interface {
-    ListenAndServeTLS(certFile, keyFile string) error
-    Shutdown(ctx context.Context) error
-    Close() error
-}
-```
-
-This allows you to inject [quic-go/http3](https://github.com/quic-go/quic-go) or any other HTTP/3 implementation.
-
-## Setup
+## Prerequisites
 
 1. Install quic-go:
-```bash
-go get github.com/quic-go/quic-go
-```
+   ```bash
+   go get github.com/quic-go/quic-go
+   ```
 
 2. Install mkcert and generate certificates:
-```bash
-brew install mkcert
-mkcert -install
-mkcert localhost 127.0.0.1 ::1
-```
-This creates: `localhost+2.pem` and `localhost+2-key.pem`
+   ```bash
+   brew install mkcert
+   mkcert -install
+   mkcert localhost 127.0.0.1 ::1
+   ```
+   This creates: `localhost+2.pem` and `localhost+2-key.pem`
 
-3. Run the server:
+## Running the Example
+
 ```bash
-go run main.go
+go mod tidy
+go run .
 ```
 
-## Testing HTTP/3
+The server starts on `https://localhost:8443`.
+
+## Test Commands
 
 ### Using curl (with HTTP/3 support):
 ```bash
@@ -53,7 +49,21 @@ curl -i --http3 https://localhost:8443
 go run github.com/quic-go/quic-go/example/client@latest https://localhost:8443
 ```
 
-## Key Points
+## How It Works
+
+zerohttp provides a `config.HTTP3Server` interface that any HTTP/3 implementation can satisfy:
+
+```go
+type HTTP3Server interface {
+    ListenAndServeTLS(certFile, keyFile string) error
+    Shutdown(ctx context.Context) error
+    Close() error
+}
+```
+
+This allows you to inject [quic-go/http3](https://github.com/quic-go/quic-go) or any other HTTP/3 implementation.
+
+## Notes
 
 - HTTP/3 requires TLS (QUIC uses TLS 1.3)
 - You can run HTTP/3 alongside HTTP/1 and HTTP/2 on the same port (QUIC handles this)
