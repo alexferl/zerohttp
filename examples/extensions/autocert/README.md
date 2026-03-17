@@ -10,12 +10,12 @@ This example demonstrates automatic TLS certificate provisioning using Let's Enc
 
 ## Prerequisites
 
-1. A publicly accessible server with a domain name
-2. Ports 80 and 443 open
-3. The `golang.org/x/crypto` package:
-   ```bash
-   go get golang.org/x/crypto/acme/autocert
-   ```
+- A publicly accessible server with a domain name
+- Ports 80 and 443 open
+- The `golang.org/x/crypto` package:
+  ```bash
+  go get golang.org/x/crypto/acme/autocert
+  ```
 
 ## Configuration
 
@@ -35,11 +35,9 @@ go mod tidy
 go run .
 ```
 
-## How It Works
-
-1. **HTTP on port 80**: Handles ACME challenges and redirects to HTTPS
-2. **HTTPS on port 443**: Serves your application with auto-provisioned certificates
-3. **Certificate cache**: Stores certs in `/var/cache/certs` to avoid re-issuance
+The server starts:
+- HTTP on port 80 (ACME challenges and redirects to HTTPS)
+- HTTPS on port 443 (auto-provisioned certificates)
 
 ## Test Commands
 

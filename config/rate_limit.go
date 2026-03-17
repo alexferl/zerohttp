@@ -8,6 +8,8 @@ import (
 
 // RateLimitStore defines the interface for rate limit storage backends.
 type RateLimitStore interface {
+	// CheckAndRecord checks if the request is allowed and records the attempt.
+	// Returns (allowed, remainingRequests, resetTime).
 	CheckAndRecord(ctx context.Context, key string, now time.Time) (bool, int, time.Time)
 }
 
