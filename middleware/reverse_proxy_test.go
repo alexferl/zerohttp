@@ -693,3 +693,51 @@ func TestReverseProxy_HealthCheckCleanup(t *testing.T) {
 		t.Fatalf("expected status 200 after cleanup, got %d", rec2.Code)
 	}
 }
+
+func TestReverseProxy_proxyResponseRecorder_Flush(t *testing.T) {
+	tests := []struct {
+		name              string
+		underlyingFlusher bool
+		expectFlushCalled bool
+	}{
+		{
+			name:              "flush passes through to underlying Flusher",
+			underlyingFlusher: true,
+			expectFlushCalled: true,
+		},
+		{
+			name:              "flush no-op when underlying doesn't implement Flusher",
+			underlyingFlusher: false,
+			expectFlushCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var base http.ResponseWriter
+			var flushCalled *bool
+
+			if tt.underlyingFlusher {
+				rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+				base = rec
+				flushCalled = &rec.flushed
+			} else {
+				rec := httptest.NewRecorder()
+				base = rec
+				flushCalled = new(bool)
+			}
+
+			// Wrap with proxyResponseRecorder
+			prr := &proxyResponseRecorder{
+				ResponseWriter: base,
+			}
+
+			// Call Flush
+			prr.Flush()
+
+			if *flushCalled != tt.expectFlushCalled {
+				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
+			}
+		})
+	}
+}

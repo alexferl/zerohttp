@@ -54,7 +54,10 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 			now := time.Now()
 			allowed, remaining, resetTime := store.CheckAndRecord(r.Context(), key, now)
 
-			if c.IncludeHeaders {
+			// Skip headers for SSE connections to avoid interfering with streaming responses
+			isSSE := r.Header.Get(httpx.HeaderAccept) == httpx.MIMETextEventStream
+
+			if c.IncludeHeaders && !isSSE {
 				w.Header().Set(httpx.HeaderXRateLimitLimit, strconv.Itoa(c.Rate))
 				w.Header().Set(httpx.HeaderXRateLimitRemaining, strconv.Itoa(remaining))
 				w.Header().Set(httpx.HeaderXRateLimitReset, strconv.FormatInt(resetTime.Unix(), 10))

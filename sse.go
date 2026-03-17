@@ -82,12 +82,12 @@ func normalizeLineEndings(s string) string {
 // Content-Type middleware on SSE routes.
 func setupSSEResponse(w http.ResponseWriter) (http.Flusher, error) {
 	if w.Header().Get(httpx.HeaderContentType) != "" {
-		return nil, fmt.Errorf("sse: response headers already sent")
+		return nil, fmt.Errorf("sse: response headers already sent (Content-Type: %s)", w.Header().Get(httpx.HeaderContentType))
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		return nil, fmt.Errorf("sse: streaming not supported")
+		return nil, fmt.Errorf("sse: streaming not supported (ResponseWriter type: %T)", w)
 	}
 
 	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)

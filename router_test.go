@@ -15,6 +15,16 @@ import (
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
+// flusherRecorder is a test ResponseWriter that implements http.Flusher
+type flusherRecorder struct {
+	*httptest.ResponseRecorder
+	flushed bool
+}
+
+func (f *flusherRecorder) Flush() {
+	f.flushed = true
+}
+
 func testMiddleware(name string, calls *[]string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -696,6 +706,111 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		contentType := w.Header().Get(httpx.HeaderContentType)
 		if contentType != httpx.MIMETextPlainCharset {
 			t.Errorf("expected Content-Type %q, got %q", httpx.MIMETextPlainCharset, contentType)
+		}
+	})
+
+	// Test for parameterized routes returning 405 instead of 404
+	t.Run("405 for parameterized routes", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/hello/{name}", testHandler("get"))
+
+		// POST to a path that matches the parameterized route pattern
+		// should return 405 (method not allowed), not 404 (not found)
+		req := httptest.NewRequest(http.MethodPost, "/hello/as", nil)
+		req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
+
+		// Should be JSON problem detail response
+		contentType := w.Header().Get(httpx.HeaderContentType)
+		if contentType != httpx.MIMEApplicationProblemJSON {
+			t.Errorf("expected Content-Type %q, got %q", httpx.MIMEApplicationProblemJSON, contentType)
+		}
+
+		// Allow header should contain GET (and implicit HEAD)
+		allowHeader := w.Header().Get(httpx.HeaderAllow)
+		if allowHeader == "" {
+			t.Error("expected Allow header to be set for 405 response")
+		}
+		if !strings.Contains(allowHeader, http.MethodGet) {
+			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
+		}
+	})
+
+	t.Run("405 for parameterized routes with multiple methods", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/users/{id}", testHandler("get"))
+		router.PUT("/users/{id}", testHandler("put"))
+		router.DELETE("/users/{id}", testHandler("delete"))
+
+		// POST should not be allowed
+		req := httptest.NewRequest(http.MethodPost, "/users/123", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
+
+		// Allow header should contain all registered methods
+		allowHeader := w.Header().Get(httpx.HeaderAllow)
+		if !strings.Contains(allowHeader, http.MethodGet) {
+			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodPut) {
+			t.Errorf("expected Allow header to contain PUT, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodDelete) {
+			t.Errorf("expected Allow header to contain DELETE, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodHead) {
+			t.Errorf("expected Allow header to contain implicit HEAD, got '%s'", allowHeader)
+		}
+	})
+
+	t.Run("OPTIONS for parameterized routes", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/items/{id}", testHandler("get"))
+		router.POST("/items/{id}", testHandler("post"))
+
+		// OPTIONS should return allowed methods
+		req := httptest.NewRequest(http.MethodOptions, "/items/abc", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
+
+		allowHeader := w.Header().Get(httpx.HeaderAllow)
+		if !strings.Contains(allowHeader, http.MethodGet) {
+			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodPost) {
+			t.Errorf("expected Allow header to contain POST, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodHead) {
+			t.Errorf("expected Allow header to contain implicit HEAD, got '%s'", allowHeader)
+		}
+		if !strings.Contains(allowHeader, http.MethodOptions) {
+			t.Errorf("expected Allow header to contain OPTIONS, got '%s'", allowHeader)
+		}
+	})
+
+	t.Run("404 for non-matching parameterized paths", func(t *testing.T) {
+		router := NewRouter()
+		router.GET("/hello/{name}", testHandler("get"))
+
+		// Different number of path segments should 404
+		req := httptest.NewRequest(http.MethodGet, "/hello/foo/bar", nil)
+		req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
+
+		// Content-Type should be JSON problem detail
+		contentType := w.Header().Get(httpx.HeaderContentType)
+		if contentType != httpx.MIMEApplicationProblemJSON {
+			t.Errorf("expected Content-Type %q, got %q", httpx.MIMEApplicationProblemJSON, contentType)
 		}
 	})
 }
@@ -1831,4 +1946,150 @@ func TestRouter_ConcurrentMixedOperations(t *testing.T) {
 
 		wg.Wait()
 	})
+}
+
+func TestHeadResponseWriter_Flush(t *testing.T) {
+	tests := []struct {
+		name              string
+		underlyingFlusher bool
+		expectFlushCalled bool
+	}{
+		{
+			name:              "flush passes through to underlying Flusher",
+			underlyingFlusher: true,
+			expectFlushCalled: true,
+		},
+		{
+			name:              "flush no-op when underlying doesn't implement Flusher",
+			underlyingFlusher: false,
+			expectFlushCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var base http.ResponseWriter
+			var flushCalled *bool
+
+			if tt.underlyingFlusher {
+				rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+				base = rec
+				flushCalled = &rec.flushed
+			} else {
+				rec := httptest.NewRecorder()
+				base = rec
+				flushCalled = new(bool)
+			}
+
+			// Wrap with headResponseWriter
+			hrw := &headResponseWriter{
+				ResponseWriter: base,
+			}
+
+			// Call Flush
+			hrw.Flush()
+
+			if *flushCalled != tt.expectFlushCalled {
+				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
+			}
+		})
+	}
+}
+
+// TestDefaultNotFoundHandler_AcceptJSON verifies that the default NotFound handler
+// returns Problem Detail when Accept header contains application/json.
+func TestDefaultNotFoundHandler_AcceptJSON(t *testing.T) {
+	router := NewRouter()
+
+	// Make a request with Accept: application/json
+	req := httptest.NewRequest(http.MethodGet, "/not-found", nil)
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should return JSON Problem Detail
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotFound).
+		Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON).
+		BodyContains(`"title":"Not Found"`).
+		BodyContains(`"status":404`)
+}
+
+// TestDefaultNotFoundHandler_AcceptProblemJSON verifies that the default NotFound handler
+// returns Problem Detail when Accept header contains application/problem+json.
+func TestDefaultNotFoundHandler_AcceptProblemJSON(t *testing.T) {
+	router := NewRouter()
+
+	// Make a request with Accept: application/problem+json
+	req := httptest.NewRequest(http.MethodGet, "/not-found", nil)
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationProblemJSON)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should return JSON Problem Detail
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotFound).
+		Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON).
+		BodyContains(`"title":"Not Found"`).
+		BodyContains(`"status":404`)
+}
+
+// TestDefaultNotFoundHandler_NoAcceptHeader verifies that the default NotFound handler
+// returns plain text when no Accept header is set.
+func TestDefaultNotFoundHandler_NoAcceptHeader(t *testing.T) {
+	router := NewRouter()
+
+	// Make a request without Accept header
+	req := httptest.NewRequest(http.MethodGet, "/not-found", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should return plain text
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotFound).
+		Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset).
+		BodyContains("Requested resource was not found")
+}
+
+// TestDefaultMethodNotAllowedHandler_AcceptJSON verifies that the default MethodNotAllowed handler
+// returns Problem Detail when Accept header contains application/json.
+func TestDefaultMethodNotAllowedHandler_AcceptJSON(t *testing.T) {
+	router := NewRouter()
+	router.GET("/test", testHandler("GET handler"))
+
+	// Make a POST request with Accept: application/json
+	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should return JSON Problem Detail
+	zhtest.AssertWith(t, w).
+		Status(http.StatusMethodNotAllowed).
+		Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON).
+		BodyContains(`"title":"Method Not Allowed"`).
+		BodyContains(`"status":405`)
+}
+
+// TestDefaultMethodNotAllowedHandler_NoAcceptHeader verifies that the default MethodNotAllowed handler
+// returns plain text when no Accept header is set.
+func TestDefaultMethodNotAllowedHandler_NoAcceptHeader(t *testing.T) {
+	router := NewRouter()
+	router.GET("/test", testHandler("GET handler"))
+
+	// Make a POST request without Accept header
+	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should return plain text
+	zhtest.AssertWith(t, w).
+		Status(http.StatusMethodNotAllowed).
+		Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset).
+		BodyContains("HTTP method is not allowed")
 }

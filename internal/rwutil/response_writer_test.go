@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+// flusherRecorder is a test ResponseWriter that implements http.Flusher
+type flusherRecorder struct {
+	*httptest.ResponseRecorder
+	flushed bool
+}
+
+func (f *flusherRecorder) Flush() {
+	f.flushed = true
+}
+
 func TestNewResponseWriter(t *testing.T) {
 	rec := httptest.NewRecorder()
 	rw := NewResponseWriter(rec)
@@ -134,5 +144,79 @@ func TestFlusherResponseWriter_Flush(t *testing.T) {
 	// The recorder should have the data
 	if rec.Body.String() != "data" {
 		t.Errorf("expected body %q, got %q", "data", rec.Body.String())
+	}
+}
+
+func TestResponseWriter_Flush(t *testing.T) {
+	tests := []struct {
+		name              string
+		underlyingFlusher bool
+		expectFlushCalled bool
+	}{
+		{
+			name:              "flush passes through to underlying Flusher",
+			underlyingFlusher: true,
+			expectFlushCalled: true,
+		},
+		{
+			name:              "flush no-op when underlying doesn't implement Flusher",
+			underlyingFlusher: false,
+			expectFlushCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var base http.ResponseWriter
+			var flushCalled *bool
+
+			if tt.underlyingFlusher {
+				rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+				base = rec
+				flushCalled = &rec.flushed
+			} else {
+				rec := httptest.NewRecorder()
+				base = rec
+				flushCalled = new(bool)
+			}
+
+			// Wrap with ResponseWriter
+			rw := NewResponseWriter(base)
+
+			// Call Flush
+			rw.Flush()
+
+			if *flushCalled != tt.expectFlushCalled {
+				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
+			}
+		})
+	}
+}
+
+func TestResponseWriter_Flush_SupportsSSE(t *testing.T) {
+	rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	// Wrap with ResponseWriter
+	rw := NewResponseWriter(rec)
+
+	// Verify it implements Flusher
+	var f http.Flusher
+	f, ok := interface{}(rw).(http.Flusher)
+	if !ok {
+		t.Fatal("expected ResponseWriter to implement http.Flusher")
+	}
+
+	// Write and flush like SSE would
+	rw.Header().Set("Content-Type", "text/event-stream")
+	rw.WriteHeader(http.StatusOK)
+	_, _ = rw.Write([]byte("data: hello\n\n"))
+	f.Flush()
+
+	if !rec.flushed {
+		t.Error("expected Flush to be called on underlying ResponseWriter")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }

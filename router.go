@@ -163,6 +163,13 @@ func (h *headResponseWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// Flush implements http.Flusher to support streaming responses like SSE.
+func (h *headResponseWriter) Flush() {
+	if f, ok := h.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Unwrap allows middleware to access the underlying ResponseWriter
 func (h *headResponseWriter) Unwrap() http.ResponseWriter {
 	return h.ResponseWriter
@@ -754,7 +761,11 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 		// Must hold lock while reading from the inner map to avoid races
 		// with handle() which writes to the same inner map.
 		r.routesMu.RLock()
-		methods, exists := r.registeredRoutes[req.URL.Path]
+
+		// Check if this path matches any registered route pattern
+		// For parameterized routes, we need to match the pattern, not exact path
+		methods, exists := r.findMatchingRoute(req.URL.Path)
+
 		if exists {
 			// Auto-generate OPTIONS response
 			if req.Method == http.MethodOptions {
@@ -810,18 +821,108 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 	}
 }
 
+// findMatchingRoute checks if the request path matches any registered route pattern.
+// It returns the methods map and true if a match is found.
+// This handles parameterized routes like /hello/{name} matching /hello/as.
+func (r *defaultRouter) findMatchingRoute(path string) (map[string]bool, bool) {
+	// First try exact match (fast path for static routes)
+	if methods, exists := r.registeredRoutes[path]; exists {
+		return methods, true
+	}
+
+	// For parameterized routes, we need to check each pattern
+	// Go's ServeMux uses patterns like /hello/{name}
+	// We need to check if our path matches any registered pattern
+	for pattern, methods := range r.registeredRoutes {
+		if matchPattern(pattern, path) {
+			return methods, true
+		}
+	}
+
+	return nil, false
+}
+
+// matchPattern checks if a path matches a route pattern.
+// It handles parameterized segments like {name} and wildcards like {...}
+func matchPattern(pattern, path string) bool {
+	// Split pattern and path into segments
+	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
+	pathParts := strings.Split(strings.Trim(path, "/"), "/")
+
+	// Different number of segments means no match (unless pattern ends with wildcard)
+	if len(patternParts) != len(pathParts) {
+		// Check for wildcard at end
+		if len(patternParts) > 0 && patternParts[len(patternParts)-1] == "..." {
+			// Wildcard matches everything, check prefix
+			if len(pathParts) >= len(patternParts)-1 {
+				patternParts = patternParts[:len(patternParts)-1]
+				pathParts = pathParts[:len(patternParts)]
+			} else {
+				return false
+			}
+		} else {
+			return false
+		}
+	}
+
+	// Compare each segment
+	for i, p := range patternParts {
+		if i >= len(pathParts) {
+			return false
+		}
+
+		// Parameterized segment like {name} or {name...}
+		if strings.HasPrefix(p, "{") && strings.HasSuffix(p, "}") {
+			// This is a parameter, it matches any value
+			continue
+		}
+
+		// Parameterized segment with wildcard like {name...}
+		if strings.HasPrefix(p, "{") && strings.HasSuffix(p, "...}") {
+			// This matches the rest of the path
+			return true
+		}
+
+		// Wildcard segment
+		if p == "..." {
+			return true
+		}
+
+		// Exact match required
+		if p != pathParts[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
 // defaultNotFoundHandler is the default handler for 404 Not Found responses.
-// It returns a pre-encoded plain text response for optimal performance.
+// It checks the Accept header and returns JSON problem detail when requested.
 var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Check if client accepts JSON/problem detail
+	accept := r.Header.Get(httpx.HeaderAccept)
+	if strings.Contains(accept, httpx.MIMEApplicationJSON) || strings.Contains(accept, httpx.MIMEApplicationProblemJSON) {
+		jsonNotFoundHandler(w, r)
+		return
+	}
+	// Default to plain text
 	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte("Requested resource was not found\n"))
 })
 
 // defaultMethodNotAllowedHandler is the default handler for 405 Method Not Allowed responses.
-// It returns a pre-encoded plain text response for optimal performance.
+// It checks the Accept header and returns JSON problem detail when requested.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
 var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Check if client accepts JSON/problem detail
+	accept := r.Header.Get(httpx.HeaderAccept)
+	if strings.Contains(accept, httpx.MIMEApplicationJSON) || strings.Contains(accept, httpx.MIMEApplicationProblemJSON) {
+		jsonMethodNotAllowedHandler(w, r)
+		return
+	}
+	// Default to plain text
 	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	_, _ = w.Write([]byte("HTTP method is not allowed\n"))

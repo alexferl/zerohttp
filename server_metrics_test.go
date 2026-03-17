@@ -13,8 +13,27 @@ import (
 	"github.com/alexferl/zerohttp/config"
 )
 
+// TestServer_MetricsDisabledByDefault verifies that metrics server does NOT start
+// when Enabled is nil (the default).
+func TestServer_MetricsDisabledByDefault(t *testing.T) {
+	srv := New(config.Config{
+		// Enabled is nil by default - metrics should be disabled
+	})
+
+	// Verify metrics addr is empty when disabled
+	addr := srv.MetricsAddr()
+	if addr != "" {
+		t.Errorf("expected metrics to be disabled (empty addr), got %s", addr)
+	}
+
+	// Verify metrics registry is nil
+	if srv.Metrics() != nil {
+		t.Error("expected metrics registry to be nil when disabled")
+	}
+}
+
 // TestServer_MetricsServerAddrDefault verifies that ServerAddr defaults to localhost:9090
-// when metrics are enabled but ServerAddr is not explicitly set (nil).
+// when metrics are explicitly enabled but ServerAddr is not explicitly set (nil).
 func TestServer_MetricsServerAddrDefault(t *testing.T) {
 	// Get available port for main server
 	mainListener, err := net.Listen("tcp", "localhost:0")
@@ -27,8 +46,9 @@ func TestServer_MetricsServerAddrDefault(t *testing.T) {
 	}
 
 	srv := New(config.Config{
-		Addr:    mainAddr,
+		Addr: mainAddr,
 		Metrics: config.MetricsConfig{
+			Enabled: config.Bool(true), // Explicitly enable metrics
 			// ServerAddr not set (nil) - should default to localhost:9090
 		},
 	})
@@ -45,6 +65,7 @@ func TestServer_MetricsServerAddrDefault(t *testing.T) {
 func TestServer_MetricsExplicitEmptyServerAddr(t *testing.T) {
 	srv := New(config.Config{
 		Metrics: config.MetricsConfig{
+			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(""), // Explicitly empty - use main server
 		},
 	})
@@ -107,6 +128,7 @@ func TestServer_MetricsDedicatedServer(t *testing.T) {
 	srv := New(config.Config{
 		Addr: mainAddr,
 		Metrics: config.MetricsConfig{
+			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(metricsAddr),
 			Endpoint:   "/metrics",
 		},
@@ -201,6 +223,7 @@ func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
 	srv := New(config.Config{
 		Addr: mainAddr,
 		Metrics: config.MetricsConfig{
+			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(metricsAddr),
 			Endpoint:   "/metrics",
 		},
@@ -328,6 +351,7 @@ func TestServer_RequestContextCancellation(t *testing.T) {
 func TestServer_MetricsRecordsErrors(t *testing.T) {
 	app := New(config.Config{
 		Metrics: config.MetricsConfig{
+			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(""), // Empty to use main server for metrics
 		},
 	})
@@ -421,6 +445,7 @@ func TestServer_MetricsRecordsErrors(t *testing.T) {
 func TestServer_MetricsRecordsPanic(t *testing.T) {
 	app := New(config.Config{
 		Metrics: config.MetricsConfig{
+			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(""), // Empty to use main server for metrics
 		},
 	})
