@@ -1002,13 +1002,16 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		}
 	})
 
+	type contextKey string
+
+	const userIDKey contextKey = "user_id"
 	t.Run("custom fields from context", func(t *testing.T) {
 		logger := &requestLoggerMockLogger{}
 		handler := &statusTestHandler{statusCode: http.StatusOK}
 		middleware := RequestLogger(logger, config.RequestLoggerConfig{
 			Fields: []config.LogField{config.FieldMethod, config.FieldPath},
 			CustomFields: func(r *http.Request) []log.Field {
-				if userID := r.Context().Value("user_id"); userID != nil {
+				if userID := r.Context().Value(userIDKey); userID != nil {
 					return []log.Field{log.F("user_id", userID)}
 				}
 				return nil
@@ -1016,7 +1019,7 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		})(handler)
 
 		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
-		req = req.WithContext(context.WithValue(req.Context(), "user_id", "user-456"))
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-456"))
 		zhtest.Serve(middleware, req)
 
 		if len(logger.infoLogs) != 1 {
