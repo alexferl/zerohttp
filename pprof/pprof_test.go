@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 )
 
 // setupPProf creates a test server with pprof endpoints and returns the server and pprof instance.
@@ -80,38 +81,92 @@ func makeRequestFromIP(t *testing.T, app *zh.Server, method, path, clientIP, use
 	return rec
 }
 
+func TestNewWithNoConfig(t *testing.T) {
+	// Test calling New without any config (uses defaults)
+	app := zh.New()
+	pp := New(app)
+
+	if pp == nil {
+		t.Fatal("expected PProf instance, got nil")
+	}
+
+	if pp.Config.Prefix != "/debug/pprof" {
+		t.Errorf("expected prefix '/debug/pprof', got '%s'", pp.Config.Prefix)
+	}
+
+	if pp.Auth == nil {
+		t.Fatal("expected Auth to be auto-generated")
+	}
+
+	if pp.Auth.Username != "pprof" {
+		t.Errorf("expected default username 'pprof', got '%s'", pp.Auth.Username)
+	}
+}
+
+func TestNewWithPartialConfig(t *testing.T) {
+	// Test partial config merging with defaults
+	app := zh.New()
+
+	// Only override prefix, rest should use defaults
+	pp := New(app, Config{
+		Prefix: "/custom/pprof",
+	})
+
+	if pp.Config.Prefix != "/custom/pprof" {
+		t.Errorf("expected prefix '/custom/pprof', got '%s'", pp.Config.Prefix)
+	}
+
+	// Auth should still be auto-generated (nil in partial config = use default behavior)
+	if pp.Auth == nil {
+		t.Fatal("expected Auth to be auto-generated")
+	}
+
+	// Other fields should use defaults
+	if !*pp.Config.EnableIndex {
+		t.Error("expected EnableIndex to be true from defaults")
+	}
+
+	if !*pp.Config.EnableHeap {
+		t.Error("expected EnableHeap to be true from defaults")
+	}
+
+	if len(pp.Config.AllowedIPs) != 2 {
+		t.Errorf("expected 2 allowed IPs from defaults, got %d", len(pp.Config.AllowedIPs))
+	}
+}
+
 func TestDefaultConfig(t *testing.T) {
 	if DefaultConfig.Prefix != "/debug/pprof" {
 		t.Errorf("expected prefix '/debug/pprof', got '%s'", DefaultConfig.Prefix)
 	}
-	if !DefaultConfig.EnableIndex {
+	if !config.BoolOrDefault(DefaultConfig.EnableIndex, false) {
 		t.Error("expected EnableIndex to be true")
 	}
-	if !DefaultConfig.EnableCmdline {
+	if !config.BoolOrDefault(DefaultConfig.EnableCmdline, false) {
 		t.Error("expected EnableCmdline to be true")
 	}
-	if !DefaultConfig.EnableProfile {
+	if !config.BoolOrDefault(DefaultConfig.EnableProfile, false) {
 		t.Error("expected EnableProfile to be true")
 	}
-	if !DefaultConfig.EnableSymbol {
+	if !config.BoolOrDefault(DefaultConfig.EnableSymbol, false) {
 		t.Error("expected EnableSymbol to be true")
 	}
-	if !DefaultConfig.EnableTrace {
+	if !config.BoolOrDefault(DefaultConfig.EnableTrace, false) {
 		t.Error("expected EnableTrace to be true")
 	}
-	if !DefaultConfig.EnableHeap {
+	if !config.BoolOrDefault(DefaultConfig.EnableHeap, false) {
 		t.Error("expected EnableHeap to be true")
 	}
-	if !DefaultConfig.EnableGoroutine {
+	if !config.BoolOrDefault(DefaultConfig.EnableGoroutine, false) {
 		t.Error("expected EnableGoroutine to be true")
 	}
-	if !DefaultConfig.EnableThreadCreate {
+	if !config.BoolOrDefault(DefaultConfig.EnableThreadCreate, false) {
 		t.Error("expected EnableThreadCreate to be true")
 	}
-	if !DefaultConfig.EnableBlock {
+	if !config.BoolOrDefault(DefaultConfig.EnableBlock, false) {
 		t.Error("expected EnableBlock to be true")
 	}
-	if !DefaultConfig.EnableMutex {
+	if !config.BoolOrDefault(DefaultConfig.EnableMutex, false) {
 		t.Error("expected EnableMutex to be true")
 	}
 	if DefaultConfig.Auth != nil {
@@ -174,8 +229,8 @@ func TestNewWithAuth(t *testing.T) {
 
 func TestNewWithDisabledEndpoints(t *testing.T) {
 	cfg := DefaultConfig
-	cfg.EnableIndex = false
-	cfg.EnableCmdline = false
+	cfg.EnableIndex = config.Bool(false)
+	cfg.EnableCmdline = config.Bool(false)
 	app, _ := setupPProf(t, &cfg)
 
 	// Test disabled index endpoint

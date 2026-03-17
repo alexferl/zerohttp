@@ -9,16 +9,12 @@ import (
 func TestDefaultMetricsConfig(t *testing.T) {
 	defaults := DefaultMetricsConfig
 
-	if defaults.Enabled != false {
-		t.Errorf("expected Enabled to be false, got %v", defaults.Enabled)
-	}
-
 	if defaults.Endpoint != "/metrics" {
 		t.Errorf("expected Endpoint to be /metrics, got %s", defaults.Endpoint)
 	}
 
-	if defaults.ServerAddr != "localhost:9090" {
-		t.Errorf("expected ServerAddr to be localhost:9090, got %s", defaults.ServerAddr)
+	if defaults.ServerAddr == nil || *defaults.ServerAddr != "localhost:9090" {
+		t.Errorf("expected ServerAddr to be localhost:9090, got %v", defaults.ServerAddr)
 	}
 
 	expectedDurationBuckets := []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
@@ -59,9 +55,8 @@ func TestMetricsConfig_CustomLabels(t *testing.T) {
 	}
 
 	cfg := MetricsConfig{
-		Enabled:         true,
 		Endpoint:        "/custom-metrics",
-		ServerAddr:      "localhost:9091",
+		ServerAddr:      String("localhost:9091"),
 		DurationBuckets: []float64{0.1, 0.5, 1.0},
 		SizeBuckets:     []float64{1000, 10000},
 		ExcludePaths:    []string{"/health", "/readyz"},
@@ -69,16 +64,12 @@ func TestMetricsConfig_CustomLabels(t *testing.T) {
 		CustomLabels:    customLabels,
 	}
 
-	if !cfg.Enabled {
-		t.Error("expected Enabled to be true")
-	}
-
 	if cfg.Endpoint != "/custom-metrics" {
 		t.Errorf("expected Endpoint to be /custom-metrics, got %s", cfg.Endpoint)
 	}
 
-	if cfg.ServerAddr != "localhost:9091" {
-		t.Errorf("expected ServerAddr to be localhost:9091, got %s", cfg.ServerAddr)
+	if cfg.ServerAddr == nil || *cfg.ServerAddr != "localhost:9091" {
+		t.Errorf("expected ServerAddr to be localhost:9091, got %v", cfg.ServerAddr)
 	}
 
 	if len(cfg.DurationBuckets) != 3 {
@@ -111,12 +102,11 @@ func TestMetricsConfig_CustomLabels(t *testing.T) {
 func TestMetricsConfig_EmptyServerAddr(t *testing.T) {
 	// Empty ServerAddr means metrics are served on the main server
 	cfg := MetricsConfig{
-		Enabled:    true,
-		ServerAddr: "",
+		ServerAddr: String(""),
 		Endpoint:   "/metrics",
 	}
 
-	if cfg.ServerAddr != "" {
-		t.Errorf("expected ServerAddr to be empty, got %s", cfg.ServerAddr)
+	if cfg.ServerAddr == nil || *cfg.ServerAddr != "" {
+		t.Errorf("expected ServerAddr to be empty, got %v", cfg.ServerAddr)
 	}
 }

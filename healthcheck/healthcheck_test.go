@@ -165,3 +165,48 @@ func TestDefaultConfig(t *testing.T) {
 		t.Error("Expected StartupHandler to be set")
 	}
 }
+
+func TestNoConfig(t *testing.T) {
+	// Test calling New without any config (uses defaults)
+	app := zh.New()
+	New(app)
+
+	endpoints := []string{"/livez", "/readyz", "/startupz"}
+	for _, endpoint := range endpoints {
+		t.Run(endpoint, func(t *testing.T) {
+			req := zhtest.NewRequest(http.MethodGet, endpoint).Build()
+			w := zhtest.Serve(app, req)
+			zhtest.AssertWith(t, w).Status(http.StatusOK).Body("ok")
+		})
+	}
+}
+
+func TestPartialConfig(t *testing.T) {
+	// Test partial config merging with defaults
+	app := zh.New()
+
+	// Only override liveness endpoint, rest should use defaults
+	New(app, Config{
+		LivenessEndpoint: "/health/live",
+	})
+
+	// Custom endpoint should work
+	t.Run("custom liveness", func(t *testing.T) {
+		req := zhtest.NewRequest(http.MethodGet, "/health/live").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("ok")
+	})
+
+	// Default endpoints should still work
+	t.Run("default readiness", func(t *testing.T) {
+		req := zhtest.NewRequest(http.MethodGet, "/readyz").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("ok")
+	})
+
+	t.Run("default startup", func(t *testing.T) {
+		req := zhtest.NewRequest(http.MethodGet, "/startupz").Build()
+		w := zhtest.Serve(app, req)
+		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("ok")
+	})
+}

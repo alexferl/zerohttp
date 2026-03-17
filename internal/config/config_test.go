@@ -6,7 +6,6 @@ import (
 )
 
 type TestMetricsConfig struct {
-	Enabled    bool
 	Endpoint   string
 	ServerAddr string
 }
@@ -19,7 +18,6 @@ type TestConfig struct {
 var defaultConfig = TestConfig{
 	Addr: "localhost:8080",
 	Metrics: TestMetricsConfig{
-		Enabled:    false,
 		Endpoint:   "/metrics",
 		ServerAddr: "localhost:9090",
 	},
@@ -35,9 +33,6 @@ func TestConfigMerging(t *testing.T) {
 		if c.Addr != "localhost:8080" {
 			t.Errorf("expected Addr localhost:8080, got %s", c.Addr)
 		}
-		if c.Metrics.Enabled != false {
-			t.Errorf("expected Metrics.Enabled false, got %v", c.Metrics.Enabled)
-		}
 		if c.Metrics.Endpoint != "/metrics" {
 			t.Errorf("expected Metrics.Endpoint /metrics, got %s", c.Metrics.Endpoint)
 		}
@@ -48,7 +43,6 @@ func TestConfigMerging(t *testing.T) {
 		userCfg := TestConfig{
 			Addr: ":9090",
 			Metrics: TestMetricsConfig{
-				Enabled:  true,
 				Endpoint: "/custom-metrics",
 			},
 		}
@@ -57,9 +51,6 @@ func TestConfigMerging(t *testing.T) {
 
 		if c.Addr != ":9090" {
 			t.Errorf("expected Addr :9090, got %s", c.Addr)
-		}
-		if c.Metrics.Enabled != true {
-			t.Errorf("expected Metrics.Enabled true, got %v", c.Metrics.Enabled)
 		}
 		if c.Metrics.Endpoint != "/custom-metrics" {
 			t.Errorf("expected Metrics.Endpoint /custom-metrics, got %s", c.Metrics.Endpoint)
@@ -74,14 +65,14 @@ func TestConfigMerging(t *testing.T) {
 		c := defaultConfig
 		userCfg := TestConfig{
 			Metrics: TestMetricsConfig{
-				Enabled: true,
+				ServerAddr: "custom:9090",
 			},
 		}
 
 		Merge(&c, userCfg)
 
-		if !c.Metrics.Enabled {
-			t.Error("expected Metrics.Enabled to be true")
+		if c.Metrics.ServerAddr != "custom:9090" {
+			t.Errorf("expected ServerAddr to be custom:9090, got %s", c.Metrics.ServerAddr)
 		}
 		if c.Metrics.Endpoint != "/metrics" {
 			t.Errorf("expected Endpoint to keep default, got %s", c.Metrics.Endpoint)

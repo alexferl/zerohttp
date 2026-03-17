@@ -166,7 +166,7 @@ type Server struct {
 //	    WriteTimeout: 15 * time.Second,
 //	    Logger:       myLogger,
 //	    Metrics: config.MetricsConfig{
-//	        Enabled: false, // Disable metrics
+//	        Enabled: config.Bool(false), // Disable metrics
 //	    },
 //	})
 //
@@ -205,7 +205,7 @@ func New(cfg ...config.Config) *Server {
 		sseProvider:        c.Extensions.SSEProvider,
 		metricsRegistry:    registry,
 		metricsServer:      metricsServer,
-		metricsServerAddr:  c.Metrics.ServerAddr,
+		metricsServerAddr:  config.StringOrDefault(c.Metrics.ServerAddr, ""),
 		validator:          c.Validator,
 		logger:             logger,
 		preStartupHooks:    c.Lifecycle.PreStartupHooks,
@@ -745,7 +745,9 @@ func mergeConfig(cfg ...config.Config) config.Config {
 		zconfig.Merge(&c, userCfg)
 		// Handle fields that must always be copied (even if zero value)
 		// ServerAddr can be set to empty string to disable separate metrics server
-		c.Metrics.ServerAddr = userCfg.Metrics.ServerAddr
+		if userCfg.Metrics.ServerAddr != nil {
+			c.Metrics.ServerAddr = userCfg.Metrics.ServerAddr
+		}
 	}
 	return c
 }
@@ -806,24 +808,40 @@ func needsTLSServer(c config.Config) bool {
 
 // createMetricsRegistry creates metrics registry if enabled.
 func createMetricsRegistry(c config.Config) metrics.Registry {
-	if c.Metrics.Enabled {
-		return metrics.NewRegistry()
-	}
-	return nil
-}
-
-// createMetricsServer creates a separate metrics server if ServerAddr is set.
-func createMetricsServer(c config.Config, registry metrics.Registry) *http.Server {
-	if !c.Metrics.Enabled || registry == nil || c.Metrics.ServerAddr == "" {
+	if c.Metrics.Enabled != nil && !*c.Metrics.Enabled {
 		return nil
 	}
+	return metrics.NewRegistry()
+}
+
+// createMetricsServer creates a separate metrics server if ServerAddr indicates a separate server.
+// Returns nil if ServerAddr is empty (metrics on main server) or metrics disabled.
+func createMetricsServer(c config.Config, registry metrics.Registry) *http.Server {
+	if registry == nil {
+		return nil
+	}
+	serverAddr := config.StringOrDefault(c.Metrics.ServerAddr, "localhost:9090")
+	if serverAddr == "" {
+		return nil // Metrics on main server, not a separate server
+	}
+
+	metricsHandler := metrics.Handler(registry)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only serve metrics on the configured endpoint
+		if r.URL.Path != c.Metrics.Endpoint {
+			http.NotFound(w, r)
+			return
+		}
+		metricsHandler.ServeHTTP(w, r)
+	})
+
 	return &http.Server{
-		Addr:              c.Metrics.ServerAddr,
+		Addr:              serverAddr,
 		ReadTimeout:       DefaultReadTimeout,
 		ReadHeaderTimeout: DefaultReadHeaderTimeout,
 		WriteTimeout:      DefaultWriteTimeout,
 		IdleTimeout:       DefaultIdleTimeout,
-		Handler:           metrics.Handler(registry),
+		Handler:           handler,
 	}
 }
 
@@ -833,7 +851,7 @@ func setupMiddleware(s *Server, c config.Config, registry metrics.Registry) {
 
 	// Add metrics middleware first so it will be innermost after reverse,
 	// running inside Recover and able to capture status codes written by other middleware
-	if c.Metrics.Enabled && registry != nil {
+	if registry != nil {
 		middlewares = append(middlewares, metrics.NewMiddleware(registry, c.Metrics))
 	}
 
@@ -871,7 +889,12 @@ func setupServerHandlers(s *Server, router Router) {
 
 // registerMetricsEndpoint registers the metrics endpoint on the main router if needed.
 func registerMetricsEndpoint(s *Server, c config.Config, registry metrics.Registry) {
-	if c.Metrics.Enabled && registry != nil && c.Metrics.ServerAddr == "" {
+	// Register on main server only if ServerAddr is explicitly set to empty string
+	serverAddr := ""
+	if c.Metrics.ServerAddr != nil {
+		serverAddr = *c.Metrics.ServerAddr
+	}
+	if registry != nil && c.Metrics.ServerAddr != nil && serverAddr == "" {
 		s.logger.Warn("Metrics endpoint registered on main server (set Metrics.ServerAddr to isolate)", log.F("endpoint", c.Metrics.Endpoint))
 		s.GET(c.Metrics.Endpoint, metrics.Handler(registry))
 	}

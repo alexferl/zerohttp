@@ -215,7 +215,7 @@ func TestRequestBodySize_Metrics(t *testing.T) {
 	mw := RequestBodySize(config.RequestBodySizeConfig{MaxBytes: 10})
 
 	metricsMw := metrics.NewMiddleware(reg, config.MetricsConfig{
-		Enabled:       true,
+		Enabled:       config.Bool(true),
 		PathLabelFunc: func(p string) string { return p },
 	})
 

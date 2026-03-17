@@ -13,6 +13,75 @@ import (
 	"github.com/alexferl/zerohttp/config"
 )
 
+// TestServer_MetricsServerAddrDefault verifies that ServerAddr defaults to localhost:9090
+// when metrics are enabled but ServerAddr is not explicitly set (nil).
+func TestServer_MetricsServerAddrDefault(t *testing.T) {
+	// Get available port for main server
+	mainListener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to create main listener: %v", err)
+	}
+	mainAddr := mainListener.Addr().String()
+	if err := mainListener.Close(); err != nil {
+		t.Fatalf("failed to close main listener: %v", err)
+	}
+
+	srv := New(config.Config{
+		Addr:    mainAddr,
+		Metrics: config.MetricsConfig{
+			// ServerAddr not set (nil) - should default to localhost:9090
+		},
+	})
+
+	// Verify metrics addr is the default
+	addr := srv.MetricsAddr()
+	if addr != "localhost:9090" {
+		t.Errorf("expected metrics addr to default to localhost:9090, got %s", addr)
+	}
+}
+
+// TestServer_MetricsExplicitEmptyServerAddr verifies that explicitly setting ServerAddr to empty
+// string (via config.String("")) serves metrics on the main server.
+func TestServer_MetricsExplicitEmptyServerAddr(t *testing.T) {
+	srv := New(config.Config{
+		Metrics: config.MetricsConfig{
+			ServerAddr: config.String(""), // Explicitly empty - use main server
+		},
+	})
+
+	// Register a test route
+	srv.GET("/test", HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		return R.JSON(w, http.StatusOK, M{"ok": true})
+	}))
+
+	// Create test server
+	server := httptest.NewServer(srv)
+	defer server.Close()
+
+	// Make a request
+	resp, err := http.Get(server.URL + "/test")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	// Metrics should be on main server
+	resp, err = http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("failed to get metrics: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != 200 {
+		t.Errorf("expected metrics on main server to return 200, got %d", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "http_requests_total") {
+		t.Error("metrics should contain http_requests_total")
+	}
+}
+
 // TestServer_MetricsDedicatedServer verifies that a dedicated metrics server starts
 // on the configured address when ServerAddr is set.
 func TestServer_MetricsDedicatedServer(t *testing.T) {
@@ -38,8 +107,7 @@ func TestServer_MetricsDedicatedServer(t *testing.T) {
 	srv := New(config.Config{
 		Addr: mainAddr,
 		Metrics: config.MetricsConfig{
-			Enabled:    true,
-			ServerAddr: metricsAddr,
+			ServerAddr: config.String(metricsAddr),
 			Endpoint:   "/metrics",
 		},
 	})
@@ -98,7 +166,7 @@ func TestServer_MetricsDedicatedServer(t *testing.T) {
 func TestServer_MetricsAddr_NoServer(t *testing.T) {
 	srv := New(config.Config{
 		Metrics: config.MetricsConfig{
-			Enabled: false,
+			Enabled: config.Bool(false),
 		},
 	})
 
@@ -133,8 +201,7 @@ func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
 	srv := New(config.Config{
 		Addr: mainAddr,
 		Metrics: config.MetricsConfig{
-			Enabled:    true,
-			ServerAddr: metricsAddr,
+			ServerAddr: config.String(metricsAddr),
 			Endpoint:   "/metrics",
 		},
 	})
@@ -261,7 +328,7 @@ func TestServer_RequestContextCancellation(t *testing.T) {
 func TestServer_MetricsRecordsErrors(t *testing.T) {
 	app := New(config.Config{
 		Metrics: config.MetricsConfig{
-			Enabled: true,
+			ServerAddr: config.String(""), // Empty to use main server for metrics
 		},
 	})
 
@@ -354,7 +421,7 @@ func TestServer_MetricsRecordsErrors(t *testing.T) {
 func TestServer_MetricsRecordsPanic(t *testing.T) {
 	app := New(config.Config{
 		Metrics: config.MetricsConfig{
-			Enabled: true,
+			ServerAddr: config.String(""), // Empty to use main server for metrics
 		},
 	})
 
