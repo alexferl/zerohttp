@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/andybalholm/brotli"
 
 	"github.com/alexferl/zerohttp"
@@ -49,7 +50,7 @@ func main() {
 	}))
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		w.Header().Set(consts.HeaderContentType, consts.MIMETextHTML)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 		_, err := w.Write([]byte(`<!DOCTYPE html>
 <html>
 <head><title>Brotli Compression Demo</title></head>

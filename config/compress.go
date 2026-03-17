@@ -24,14 +24,14 @@ const (
 //	func (e BrotliEncoder) Encode(w io.Writer, level int) io.Writer {
 //		return brotli.NewWriterLevel(w, level)
 //	}
-//	func (e BrotliEncoder) Encoding() string { return consts.ContentEncodingBrotli }
+//	func (e BrotliEncoder) Encoding() string { return httpx.ContentEncodingBrotli }
 type CompressionEncoder interface {
 	// Encode wraps the provided io.Writer with compression.
 	// The level parameter is algorithm-specific (e.g., 1-9 for gzip, 0-11 for brotli).
 	Encode(w io.Writer, level int) io.Writer
 
 	// Encoding returns the encoding name used in Accept-Encoding/Content-Encoding headers.
-	// Common values: consts.ContentEncodingGzip, consts.ContentEncodingDeflate, consts.ContentEncodingBrotli (brotli), consts.ContentEncodingZstd.
+	// Common values: httpx.ContentEncodingGzip, httpx.ContentEncodingDeflate, httpx.ContentEncodingBrotli (brotli), httpx.ContentEncodingZstd.
 	Encoding() string
 }
 
@@ -43,9 +43,9 @@ type CompressionEncoder interface {
 //	type MyCompressorProvider struct{}
 //	func (p MyCompressorProvider) GetEncoder(encoding string) CompressionEncoder {
 //	    switch encoding {
-//	    case consts.ContentEncodingBrotli:
+//	    case httpx.ContentEncodingBrotli:
 //	        return BrotliEncoder{}
-//	    case consts.ContentEncodingZstd:
+//	    case httpx.ContentEncodingZstd:
 //	        return ZstdEncoder{}
 //	    }
 //	    return nil
@@ -56,7 +56,7 @@ type CompressionEncoder interface {
 //	}
 type CompressionProvider interface {
 	// GetEncoder returns a CompressionEncoder for the given encoding, or nil if not supported.
-	// The encoding will be lowercase (e.g., consts.ContentEncodingGzip, consts.ContentEncodingBrotli, consts.ContentEncodingZstd).
+	// The encoding will be lowercase (e.g., httpx.ContentEncodingGzip, httpx.ContentEncodingBrotli, httpx.ContentEncodingZstd).
 	GetEncoder(encoding string) CompressionEncoder
 }
 

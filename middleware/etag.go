@@ -476,7 +476,7 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 //	file, _ := os.Open("largefile.zip")
 //	stat, _ := file.Stat()
 //	etag := middleware.GenerateFileETag(stat, true) // weak ETag
-//	w.Header().Set(consts.HeaderETag, etag)
+//	w.Header().Set(httpx.HeaderETag, etag)
 func GenerateFileETag(modTime int64, size int64, weak bool) string {
 	tag := strconv.FormatInt(modTime, 10) + "-" + strconv.FormatInt(size, 10)
 	if weak {
@@ -493,7 +493,7 @@ func GenerateFileETag(modTime int64, size int64, weak bool) string {
 //	file, _ := os.Open("largefile.zip")
 //	stat, _ := file.Stat()
 //	etag := middleware.GenerateFileETagFromInfo(stat, true)
-//	w.Header().Set(consts.HeaderETag, etag)
+//	w.Header().Set(httpx.HeaderETag, etag)
 func GenerateFileETagFromInfo(info interface {
 	ModTime() time.Time
 	Size() int64

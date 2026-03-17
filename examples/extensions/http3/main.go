@@ -30,7 +30,7 @@ func main() {
 	})
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		w.Header().Set(consts.HeaderContentType, consts.MIMETextPlain)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		_, err := w.Write([]byte("Hello over HTTP/3!\n"))
 		return err
 	}))

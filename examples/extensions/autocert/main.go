@@ -14,6 +14,16 @@ var hosts = []string{
 	"www.example.com", // Additional domains
 }
 
+// autocertManagerWrapper wraps autocert.Manager to implement config.AutocertManager
+type autocertManagerWrapper struct {
+	*autocert.Manager
+	hostnames []string
+}
+
+func (a *autocertManagerWrapper) Hostnames() []string {
+	return a.hostnames
+}
+
 func main() {
 	// Create autocert manager for automatic Let's Encrypt certificates
 	// This requires the golang.org/x/crypto/acme/autocert package
@@ -23,6 +33,12 @@ func main() {
 		HostPolicy: autocert.HostWhitelist(hosts...),      // Allowed hosts
 	}
 
+	// Wrap the manager to implement config.AutocertManager
+	wrappedManager := &autocertManagerWrapper{
+		Manager:   manager,
+		hostnames: hosts,
+	}
+
 	app := zh.New(
 		config.Config{
 			Addr: ":80", // HTTP port for ACME challenges
@@ -30,7 +46,7 @@ func main() {
 				Addr: ":443", // HTTPS port
 			},
 			Extensions: config.ExtensionsConfig{
-				AutocertManager: manager, // Enable auto TLS
+				AutocertManager: wrappedManager, // Enable auto TLS
 			},
 		},
 	)

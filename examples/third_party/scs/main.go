@@ -10,6 +10,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 var (
@@ -87,7 +88,7 @@ func renderHTML(w http.ResponseWriter, title string, content template.HTML, r *h
 		Content: content,
 	}
 
-	w.Header().Set(consts.HeaderContentType, consts.MIMETextHTML)
+	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
 	return templates.ExecuteTemplate(w, "", data)
 }
 

@@ -42,7 +42,7 @@ func NewRequest(method, path string) *RequestBuilder {
 // Example:
 //
 //	req := zhtest.NewRequest(http.MethodGet, "/").
-//	    WithHeader(consts.HeaderAuthorization, "Bearer token").
+//	    WithHeader(httpx.HeaderAuthorization, "Bearer token").
 //	    Build()
 func (rb *RequestBuilder) WithHeader(key, value string) *RequestBuilder {
 	rb.headers.Add(key, value)

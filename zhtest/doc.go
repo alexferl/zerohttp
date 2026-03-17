@@ -21,7 +21,7 @@
 // Build requests with a fluent API:
 //
 //	req := zhtest.NewRequest(http.MethodPost, "/users").
-//	    WithHeader(consts.HeaderAuthorization, "Bearer token").
+//	    WithHeader(httpx.HeaderAuthorization, "Bearer token").
 //	    WithJSON(zh.M{"name": "John", "email": "john@example.com"}).
 //	    Build()
 //
@@ -31,7 +31,7 @@
 //
 //	zhtest.AssertWith(t, w).
 //	    Status(http.StatusCreated).
-//	    consts.HeaderContentType, "application/json").
+//	    httpx.HeaderContentType, "application/json").
 //	    JSONPathEqual("name", "John").
 //	    JSONPathEqual("email", "john@example.com")
 //
@@ -50,7 +50,7 @@
 //
 //	mw := middleware.CORS(config.DefaultCORSConfig)
 //	w := zhtest.TestMiddleware(mw, req)
-//	zhtest.AssertWith(t, w).Header(consts.HeaderAccessControlAllowOrigin, "*")
+//	zhtest.AssertWith(t, w).Header(httpx.HeaderAccessControlAllowOrigin, "*")
 //
 // # Direct Handler Testing
 //

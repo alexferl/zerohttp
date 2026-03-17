@@ -515,7 +515,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg config.JWTA
 
 // RefreshTokenHandler returns an http.HandlerFunc that handles token refresh.
 // Accepts: { "refresh_token": "..." }
-// Returns: { "access_token": "...", "refresh_token": "...", "token_type": consts.AuthSchemeBearer, "expires_in": 900 }
+// Returns: { "access_token": "...", "refresh_token": "...", "token_type": httpx.AuthSchemeBearer, "expires_in": 900 }
 // Users mount this at their chosen path: app.Post("/auth/refresh", middleware.RefreshTokenHandler(cfg))
 func RefreshTokenHandler(cfg config.JWTAuthConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
