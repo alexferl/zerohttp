@@ -10,7 +10,7 @@ import (
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/middleware"
-	redis "github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 // RedisStore implements config.RateLimitStore using Redis for distributed
