@@ -21,6 +21,11 @@ func main() {
 	app := zh.New(
 		config.Config{
 			DisableDefaultMiddlewares: true,
+			TLS: config.TLSConfig{
+				Addr:     ":8443",
+				CertFile: certFile,
+				KeyFile:  keyFile,
+			},
 		},
 	)
 
@@ -53,9 +58,6 @@ func main() {
 		go handleSession(sess)
 		return nil
 	}))
-
-	log.Println("Starting WebTransport server on https://localhost:8443")
-	log.Println("Open https://localhost:8443 in your browser to test")
 
 	if err := app.ListenAndServeTLS(certFile, keyFile); err != nil {
 		log.Fatal(err)

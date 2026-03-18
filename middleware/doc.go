@@ -43,7 +43,7 @@
 //   - [RequestLogger] - HTTP request/response logging
 //   - [RequestID] - Request ID generation and propagation
 //   - [RealIP] - Client IP extraction from proxy headers
-//   - [Tracing] - Distributed tracing support
+//   - [Tracer] - Distributed tracing support
 //
 // Content:
 //   - [Compress] - Gzip compression with configurable levels

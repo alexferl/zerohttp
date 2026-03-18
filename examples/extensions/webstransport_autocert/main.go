@@ -133,9 +133,6 @@ func main() {
 		return nil
 	}))
 
-	log.Printf("Starting WebTransport server with AutoTLS on https://%s", *domain)
-	log.Println("Ports 80 and 443 must be open and accessible from the internet")
-
 	// Start with AutoTLS - WebTransport starts automatically with Let's Encrypt!
 	log.Fatal(app.StartAutoTLS())
 }
