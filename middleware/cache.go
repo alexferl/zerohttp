@@ -31,6 +31,9 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 		statusCodeMap[code] = true
 	}
 
+	// Determine cache status header name (empty string means disabled)
+	cacheStatusHeader := config.StringOrDefault(c.CacheStatusHeader, httpx.HeaderXCache)
+
 	var store CacheStore
 	if c.Store != nil {
 		store = c.Store
@@ -73,6 +76,9 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 				log.GetGlobalLogger().Error("Cache store get failed", log.E(err), log.F("key", key))
 			} else if found {
 				reg.Counter("cache_requests_total", "result").WithLabelValues("hit").Inc()
+				if cacheStatusHeader != "" {
+					w.Header().Set(cacheStatusHeader, httpx.XCacheHit)
+				}
 				// Only return 304 if If-None-Match was actually provided
 				if ifNoneMatch != "" && etagMatches(ifNoneMatch, record.ETag) {
 					if record.ETag != "" {
@@ -114,6 +120,9 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 			}
 
 			reg.Counter("cache_requests_total", "result").WithLabelValues("miss").Inc()
+			if cacheStatusHeader != "" {
+				w.Header().Set(cacheStatusHeader, httpx.XCacheMiss)
+			}
 
 			recorder := &cacheResponseRecorder{
 				ResponseBuffer: rwutil.NewResponseBuffer(w, c.MaxBodySize),
