@@ -77,9 +77,9 @@ Demonstrations of built-in and custom middleware.
 - [**`security_headers_nonce/`**](middleware/security_headers_nonce/) - CSP with nonces
 - [**`set_header/`**](middleware/set_header/) - Header manipulation
 - [**`timeout/`**](middleware/timeout/) - Request timeouts
-- [**`tracing/`**](middleware/tracing/) - Distributed tracing
-- [**`tracing_jaeger/`**](middleware/tracing_jaeger/) - Jaeger tracing (has go.mod)
-- [**`tracing_otel/`**](middleware/tracing_otel/) - OpenTelemetry tracing (has go.mod)
+- [**`tracer/`**](middleware/tracer/) - Distributed tracing
+- [**`tracer_jaeger/`**](middleware/tracer_jaeger/) - Jaeger tracing (has go.mod)
+- [**`tracer_otel/`**](middleware/tracer_otel/) - OpenTelemetry tracing (has go.mod)
 - [**`trailing_slash/`**](middleware/trailing_slash/) - Trailing slash handling
 - [**`value/`**](middleware/value/) - Context value storage
 

@@ -56,9 +56,9 @@ func (m *mockSpan) RecordError(err error, opts ...trace.ErrorOption) {
 	m.errors = append(m.errors, err)
 }
 
-func TestTracing_CreatesSpan(t *testing.T) {
+func TestTrace_CreatesSpan(t *testing.T) {
 	mock := &mockTracer{}
-	mw := Tracing(mock)
+	mw := Tracer(mock)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -79,9 +79,9 @@ func TestTracing_CreatesSpan(t *testing.T) {
 	}
 }
 
-func TestTracing_SetsAttributes(t *testing.T) {
+func TestTrace_SetsAttributes(t *testing.T) {
 	mock := &mockTracer{}
-	mw := Tracing(mock)
+	mw := Tracer(mock)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -104,9 +104,9 @@ func TestTracing_SetsAttributes(t *testing.T) {
 	}
 }
 
-func TestTracing_ContentLength(t *testing.T) {
+func TestTrace_ContentLength(t *testing.T) {
 	mock := &mockTracer{}
-	mw := Tracing(mock)
+	mw := Tracer(mock)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -131,9 +131,9 @@ func TestTracing_ContentLength(t *testing.T) {
 	}
 }
 
-func TestTracing_ExemptPaths(t *testing.T) {
+func TestTrace_ExemptPaths(t *testing.T) {
 	mock := &mockTracer{}
-	mw := Tracing(mock, config.TracerConfig{
+	mw := Tracer(mock, config.TracerConfig{
 		ExemptPaths: []string{"/health", "/metrics"},
 	})
 
@@ -160,8 +160,8 @@ func TestTracing_ExemptPaths(t *testing.T) {
 	}
 }
 
-func TestTracing_NilTracer(t *testing.T) {
-	mw := Tracing(nil)
+func TestTrace_NilTracer(t *testing.T) {
+	mw := Tracer(nil)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -174,7 +174,7 @@ func TestTracing_NilTracer(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 }
 
-func TestTracing_StatusCode(t *testing.T) {
+func TestTrace_StatusCode(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
@@ -191,7 +191,7 @@ func TestTracing_StatusCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &mockTracer{}
-			mw := Tracing(mock)
+			mw := Tracer(mock)
 
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
@@ -209,9 +209,9 @@ func TestTracing_StatusCode(t *testing.T) {
 	}
 }
 
-func TestTracing_SpanNameFormatter(t *testing.T) {
+func TestTrace_SpanNameFormatter(t *testing.T) {
 	mock := &mockTracer{}
-	mw := Tracing(mock, config.TracerConfig{
+	mw := Tracer(mock, config.TracerConfig{
 		SpanNameFormatter: func(r *http.Request) string {
 			return "custom:" + r.Method
 		},
@@ -262,7 +262,7 @@ func TestScheme(t *testing.T) {
 	}
 }
 
-func TestTracingResponseWriter(t *testing.T) {
+func TestTraceResponseWriter(t *testing.T) {
 	mock := &mockTracer{}
 	ctx := context.Background()
 	_, span := mock.Start(ctx, "test")

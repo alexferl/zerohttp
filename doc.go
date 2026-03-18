@@ -431,7 +431,7 @@
 // Integrate your preferred tracing solution:
 //
 //	app := zh.New(config.Config{Tracer: myTracer})
-//	app.Use(middleware.Tracing(myTracer))
+//	app.Use(middleware.Tracer(myTracer))
 //
 //	// In handlers
 //	span := trace.SpanFromContext(r.Context())

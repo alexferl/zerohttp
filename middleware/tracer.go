@@ -10,8 +10,8 @@ import (
 	"github.com/alexferl/zerohttp/trace"
 )
 
-// Tracing creates a middleware that traces HTTP requests.
-func Tracing(tracer trace.Tracer, cfg ...config.TracerConfig) func(http.Handler) http.Handler {
+// Tracer creates a middleware that traces HTTP requests.
+func Tracer(tracer trace.Tracer, cfg ...config.TracerConfig) func(http.Handler) http.Handler {
 	if tracer == nil {
 		tracer = trace.NewNoopTracer()
 	}

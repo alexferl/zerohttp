@@ -42,7 +42,7 @@ func main() {
 		Tracer: config.TracerConfig{TracerField: tracer},
 	})
 
-	app.Use(middleware.Tracing(tracer))
+	app.Use(middleware.Tracer(tracer))
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, map[string]string{"message": "Hello!"})

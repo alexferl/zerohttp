@@ -16,7 +16,9 @@ func main() {
 	app := zh.New(
 		config.Config{
 			TLS: config.TLSConfig{
-				Addr: ":8443",
+				Addr:     ":8443",
+				CertFile: certFile,
+				KeyFile:  keyFile,
 			},
 		},
 	)
