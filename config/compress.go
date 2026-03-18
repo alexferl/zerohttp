@@ -14,6 +14,21 @@ const (
 	Deflate = CompressionAlgorithm(httpx.ContentEncodingDeflate)
 )
 
+// DefaultCompressTypes are the MIME types compressed by default.
+var DefaultCompressTypes = []string{
+	httpx.MIMETextHTML,
+	httpx.MIMETextCSS,
+	httpx.MIMETextPlain,
+	httpx.MIMETextJavaScript,
+	httpx.MIMEApplicationJavaScript,
+	httpx.MIMEApplicationJSON,
+	httpx.MIMEApplicationXML,
+	httpx.MIMETextXML,
+	httpx.MIMEApplicationRSSXML,
+	httpx.MIMEApplicationAtomXML,
+	httpx.MIMEImageSVGXML,
+}
+
 // CompressionEncoder is the interface for compression encoders.
 // Users can implement this interface to provide custom compression algorithms
 // (e.g., Brotli, zstd) without adding dependencies to the core library.
@@ -52,7 +67,7 @@ type CompressionEncoder interface {
 //	}
 //
 //	cfg := config.CompressConfig{
-//	    Provider: MyCompressorProvider{},
+//	    Providers: []config.CompressionProvider{MyCompressorProvider{}},
 //	}
 type CompressionProvider interface {
 	// GetEncoder returns a CompressionEncoder for the given encoding, or nil if not supported.
@@ -74,29 +89,17 @@ type CompressConfig struct {
 	// ExemptPaths contains paths to skip compression
 	ExemptPaths []string
 
-	// Provider is an optional custom compression provider.
-	// If set, the provider's encoders will be used in addition to built-in gzip/deflate.
+	// Providers are optional custom compression providers.
+	// If set, the providers' encoders will be used in addition to built-in gzip/deflate.
 	// This allows users to add Brotli, zstd, or other algorithms without core dependencies.
 	// Default: nil (use only built-in gzip/deflate)
-	Provider CompressionProvider
+	Providers []CompressionProvider
 }
 
 // DefaultCompressConfig contains the default values for compression configuration.
 var DefaultCompressConfig = CompressConfig{
-	Level: 6,
-	Types: []string{
-		httpx.MIMETextHTML,
-		"text/css",
-		httpx.MIMETextPlain,
-		"text/javascript",
-		"application/javascript",
-		httpx.MIMEApplicationJSON,
-		"application/xml",
-		"text/xml",
-		"application/rss+xml",
-		"application/atom+xml",
-		"image/svg+xml",
-	},
+	Level:       6,
+	Types:       DefaultCompressTypes,
 	Algorithms:  []CompressionAlgorithm{Gzip, Deflate},
 	ExemptPaths: []string{},
 }

@@ -362,10 +362,10 @@ func Compress(cfg ...config.CompressConfig) func(http.Handler) http.Handler {
 		compressor.algorithms[alg] = true
 	}
 
-	// Add custom encoders from provider if set
-	if c.Provider != nil {
+	// Add custom encoders from providers if set
+	for _, provider := range c.Providers {
 		for _, alg := range c.Algorithms {
-			if encoder := c.Provider.GetEncoder(string(alg)); encoder != nil {
+			if encoder := provider.GetEncoder(string(alg)); encoder != nil {
 				compressor.SetEncoder(encoder.Encoding(), func(w io.Writer, level int) io.Writer {
 					return encoder.Encode(w, level)
 				})

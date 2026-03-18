@@ -812,7 +812,7 @@ func TestCompressionProvider(t *testing.T) {
 		mw := Compress(config.CompressConfig{
 			Types:      []string{"text/plain"},
 			Algorithms: []config.CompressionAlgorithm{"nop", config.Gzip},
-			Provider:   provider,
+			Providers:  []config.CompressionProvider{provider},
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -838,7 +838,7 @@ func TestCompressionProvider(t *testing.T) {
 		mw := Compress(config.CompressConfig{
 			Types:      []string{"text/plain"},
 			Algorithms: []config.CompressionAlgorithm{config.Gzip},
-			Provider:   provider,
+			Providers:  []config.CompressionProvider{provider},
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -866,7 +866,7 @@ func TestCompressionProvider(t *testing.T) {
 			Types:      []string{"text/plain"},
 			Algorithms: []config.CompressionAlgorithm{"testlevel"},
 			Level:      9,
-			Provider:   provider,
+			Providers:  []config.CompressionProvider{provider},
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -896,7 +896,7 @@ func TestCompressionProvider(t *testing.T) {
 		mw := Compress(config.CompressConfig{
 			Types:      []string{"text/plain"},
 			Algorithms: []config.CompressionAlgorithm{"custom1", "custom2"},
-			Provider:   provider,
+			Providers:  []config.CompressionProvider{provider},
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -928,7 +928,7 @@ func TestCompressionProvider(t *testing.T) {
 		mw := Compress(config.CompressConfig{
 			Types:      []string{"text/plain"},
 			Algorithms: []config.CompressionAlgorithm{config.Gzip, "custom"},
-			Provider:   provider,
+			Providers:  []config.CompressionProvider{provider},
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -951,11 +951,47 @@ func TestCompressionProvider(t *testing.T) {
 		zhtest.AssertWith(t, rr2).Header(httpx.HeaderContentEncoding, "custom")
 	})
 
+	t.Run("multiple providers", func(t *testing.T) {
+		encoder1 := &testEncoder{encoding: "brotli"}
+		encoder2 := &testEncoder{encoding: "zstd"}
+		provider1 := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"brotli": encoder1,
+		}}
+		provider2 := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"zstd": encoder2,
+		}}
+
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{"brotli", "zstd"},
+			Providers:  []config.CompressionProvider{provider1, provider2},
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		// Test first provider's encoder
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req1.Header.Set(httpx.HeaderAcceptEncoding, "brotli")
+		rr1 := httptest.NewRecorder()
+		handler.ServeHTTP(rr1, req1)
+		zhtest.AssertWith(t, rr1).Header(httpx.HeaderContentEncoding, "brotli")
+
+		// Test second provider's encoder
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req2.Header.Set(httpx.HeaderAcceptEncoding, "zstd")
+		rr2 := httptest.NewRecorder()
+		handler.ServeHTTP(rr2, req2)
+		zhtest.AssertWith(t, rr2).Header(httpx.HeaderContentEncoding, "zstd")
+	})
+
 	t.Run("nil provider uses defaults only", func(t *testing.T) {
 		mw := Compress(config.CompressConfig{
 			Types:      []string{"text/plain"},
 			Algorithms: []config.CompressionAlgorithm{config.Gzip},
-			Provider:   nil,
+			Providers:  nil,
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

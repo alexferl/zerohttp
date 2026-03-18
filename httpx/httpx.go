@@ -27,11 +27,19 @@ const (
 	MIMETextPlain                 = "text/plain"
 	MIMETextPlainCharset          = "text/plain; charset=utf-8"
 	MIMETextEventStream           = "text/event-stream"
+	MIMETextCSS                   = "text/css"
+	MIMETextJavaScript            = "text/javascript"
 	MIMEApplicationJSON           = "application/json"
 	MIMEApplicationJSONCharset    = "application/json; charset=utf-8"
+	MIMEApplicationJavaScript     = "application/javascript"
+	MIMEApplicationXML            = "application/xml"
 	MIMEApplicationProblemJSON    = "application/problem+json"
 	MIMEApplicationFormURLEncoded = "application/x-www-form-urlencoded"
+	MIMEApplicationRSSXML         = "application/rss+xml"
+	MIMEApplicationAtomXML        = "application/atom+xml"
 	MIMEMultipartFormData         = "multipart/form-data"
+	MIMETextXML                   = "text/xml"
+	MIMEImageSVGXML               = "image/svg+xml"
 )
 
 // Request Headers
