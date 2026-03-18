@@ -47,6 +47,7 @@ Demonstrations of built-in and custom middleware.
 
 - [**`basic_auth/`**](middleware/basic_auth/) - Basic authentication
 - [**`cache/`**](middleware/cache/) - HTTP caching middleware
+- [**`cache_redis/`**](middleware/cache_redis/) - Redis-backed HTTP caching (has go.mod)
 - [**`circuit_breaker/`**](middleware/circuit_breaker/) - Circuit breaker pattern
 - [**`compress/`**](middleware/compress/) - Compression middleware (gzip/deflate)
 - [**`compress_brotli/`**](middleware/compress_brotli/) - Brotli compression (has go.mod)

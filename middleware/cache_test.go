@@ -334,6 +334,139 @@ func TestCache_Metrics(t *testing.T) {
 	})
 }
 
+func TestCache_XCacheHeader(t *testing.T) {
+	t.Run("sets X-Cache header on miss", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("response"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL: time.Minute,
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		if w.Header().Get(httpx.HeaderXCache) != httpx.XCacheMiss {
+			t.Errorf("expected X-Cache header to be %q, got %q", httpx.XCacheMiss, w.Header().Get(httpx.HeaderXCache))
+		}
+	})
+
+	t.Run("sets X-Cache header on hit", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("response"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL: time.Minute,
+		})
+
+		// First request - cache miss
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w1 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		if w1.Header().Get(httpx.HeaderXCache) != httpx.XCacheMiss {
+			t.Errorf("expected X-Cache header to be %q on first request, got %q", httpx.XCacheMiss, w1.Header().Get(httpx.HeaderXCache))
+		}
+
+		// Second request - cache hit
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w2 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		if w2.Header().Get(httpx.HeaderXCache) != httpx.XCacheHit {
+			t.Errorf("expected X-Cache header to be %q on second request, got %q", httpx.XCacheHit, w2.Header().Get(httpx.HeaderXCache))
+		}
+	})
+
+	t.Run("does not set X-Cache header on bypassed requests", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("response"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL: time.Minute,
+		})
+
+		// POST request - should bypass cache
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		w := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w, req)
+
+		if w.Header().Get(httpx.HeaderXCache) != "" {
+			t.Errorf("expected no X-Cache header for POST request, got %q", w.Header().Get(httpx.HeaderXCache))
+		}
+	})
+
+	t.Run("custom header name", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("response"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:        time.Minute,
+			CacheStatusHeader: config.String("X-My-Cache"),
+		})
+
+		// First request - cache miss
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w1 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		if w1.Header().Get("X-My-Cache") != httpx.XCacheMiss {
+			t.Errorf("expected X-My-Cache header to be %q on first request, got %q", httpx.XCacheMiss, w1.Header().Get("X-My-Cache"))
+		}
+		if w1.Header().Get(httpx.HeaderXCache) != "" {
+			t.Errorf("expected no X-Cache header, got %q", w1.Header().Get(httpx.HeaderXCache))
+		}
+
+		// Second request - cache hit
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w2 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		if w2.Header().Get("X-My-Cache") != httpx.XCacheHit {
+			t.Errorf("expected X-My-Cache header to be %q on second request, got %q", httpx.XCacheHit, w2.Header().Get("X-My-Cache"))
+		}
+	})
+
+	t.Run("disabled header", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("response"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:        time.Minute,
+			CacheStatusHeader: config.String(""),
+		})
+
+		// First request - cache miss but no header
+		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w1 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		if w1.Header().Get(httpx.HeaderXCache) != "" {
+			t.Errorf("expected no X-Cache header when disabled, got %q", w1.Header().Get(httpx.HeaderXCache))
+		}
+
+		// Second request - cache hit but no header
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		w2 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		if w2.Header().Get(httpx.HeaderXCache) != "" {
+			t.Errorf("expected no X-Cache header when disabled on hit, got %q", w2.Header().Get(httpx.HeaderXCache))
+		}
+	})
+}
+
 func TestCache_NonCacheableResponseBody(t *testing.T) {
 	t.Run("does not drop body for non-cacheable status codes", func(t *testing.T) {
 		callCount := 0

@@ -76,6 +76,10 @@ type CacheConfig struct {
 	// StatusCodes is a list of status codes that can be cached.
 	// Default: [200, 201, 204, 301, 302, 304, 307, 308]
 	StatusCodes []int
+
+	// CacheStatusHeader adds a header to responses indicating cache hit/miss.
+	// Set to empty string to disable. Default: "X-Cache"
+	CacheStatusHeader *string
 }
 
 // DefaultCacheConfig is the default configuration for the cache middleware.

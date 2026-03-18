@@ -131,8 +131,9 @@ const (
 
 // Custom/Extension Headers
 const (
-	HeaderXAPIKey             = "X-API-Key"
 	HeaderAccelExpires        = "X-Accel-Expires"
+	HeaderXAPIKey             = "X-API-Key"
+	HeaderXCache              = "X-Cache"
 	HeaderXCSRFToken          = "X-CSRF-Token"
 	HeaderXForwarded          = "X-Forwarded"
 	HeaderXForwardedFor       = "X-Forwarded-For"
@@ -189,6 +190,9 @@ const (
 	ContentEncodingZstd    = "zstd"
 
 	TransferEncodingChunked = "chunked"
+
+	XCacheHit  = "HIT"
+	XCacheMiss = "MISS"
 )
 
 const (
