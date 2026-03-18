@@ -59,7 +59,7 @@ func main() {
 	app.Use(middleware.Compress(config.CompressConfig{
 		Level:      6,
 		Algorithms: []config.CompressionAlgorithm{"zstd", config.Gzip, config.Deflate},
-		Provider:   ZstdProvider{},
+		Providers:  []config.CompressionProvider{ZstdProvider{}},
 	}))
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

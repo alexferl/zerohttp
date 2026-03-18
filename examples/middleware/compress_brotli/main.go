@@ -46,7 +46,7 @@ func main() {
 	app.Use(middleware.Compress(config.CompressConfig{
 		Level:      6,
 		Algorithms: []config.CompressionAlgorithm{"br", config.Gzip, config.Deflate},
-		Provider:   BrotliProvider{},
+		Providers:  []config.CompressionProvider{BrotliProvider{}},
 	}))
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
