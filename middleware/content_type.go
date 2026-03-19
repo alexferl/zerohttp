@@ -18,6 +18,8 @@ func ContentType(cfg ...config.ContentTypeConfig) func(http.Handler) http.Handle
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "ContentType")
+
 	allowedContentTypes := make(map[string]struct{}, len(c.ContentTypes))
 	for _, ctype := range c.ContentTypes {
 		allowedContentTypes[strings.TrimSpace(strings.ToLower(ctype))] = struct{}{}
@@ -25,11 +27,9 @@ func ContentType(cfg ...config.ContentTypeConfig) func(http.Handler) http.Handle
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			if r.ContentLength == 0 {

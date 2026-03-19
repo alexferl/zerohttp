@@ -15,7 +15,7 @@
 // The middleware supports:
 //   - Custom token extraction (Bearer header, cookies, custom headers)
 //   - Required claims validation
-//   - Exempt paths and methods
+//   - Excluded paths and methods
 //   - Custom error handling
 //   - Token refresh handling
 //
@@ -115,6 +115,8 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 		c.TokenExtractor = extractBearerToken
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "JWTAuth")
+
 	errorHandler := c.ErrorHandler
 	if errorHandler == nil {
 		errorHandler = defaultJWTErrorHandler
@@ -131,16 +133,14 @@ func JWTAuth(cfg ...config.JWTAuthConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			if slices.Contains(c.ExemptMethods, r.Method) {
+			if slices.Contains(c.ExcludedMethods, r.Method) {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			if c.TokenStore == nil {

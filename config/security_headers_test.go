@@ -39,8 +39,11 @@ func TestSecurityHeadersConfig_DefaultValues(t *testing.T) {
 	if cfg.XFrameOptions != "DENY" {
 		t.Errorf("expected default X-Frame-Options = 'DENY', got %s", cfg.XFrameOptions)
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 
 	// Test default HSTS values
@@ -117,7 +120,7 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			},
 			XContentTypeOptions: "nosniff",
 			XFrameOptions:       "SAMEORIGIN",
-			ExemptPaths:         []string{},
+			ExcludedPaths:       []string{},
 		}
 
 		if cfg.ContentSecurityPolicy != "default-src 'self'; script-src 'self' 'unsafe-inline'" {
@@ -150,7 +153,7 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			StrictTransportSecurity:         DefaultStrictTransportSecurity,
 			XContentTypeOptions:             "nosniff",
 			XFrameOptions:                   "SAMEORIGIN",
-			ExemptPaths:                     []string{},
+			ExcludedPaths:                   []string{},
 		}
 
 		if cfg.PermissionsPolicy != "camera=(), microphone=(), geolocation=()" {
@@ -187,7 +190,7 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			},
 			XContentTypeOptions: "nosniff",
 			XFrameOptions:       "DENY",
-			ExemptPaths:         []string{},
+			ExcludedPaths:       []string{},
 		}
 
 		if cfg.StrictTransportSecurity.MaxAge != 31536000 {
@@ -201,8 +204,8 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths field", func(t *testing.T) {
-		exemptPaths := []string{"/api/webhook", "/health", "/metrics"}
+	t.Run("excluded paths field", func(t *testing.T) {
+		excludedPaths := []string{"/api/webhook", "/health", "/metrics"}
 		cfg := SecurityHeadersConfig{
 			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
 			ContentSecurityPolicyReportOnly: false,
@@ -215,19 +218,44 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			StrictTransportSecurity:         DefaultStrictTransportSecurity,
 			XContentTypeOptions:             "nosniff",
 			XFrameOptions:                   "DENY",
-			ExemptPaths:                     exemptPaths,
+			ExcludedPaths:                   excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 3 {
-			t.Errorf("expected 3 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 3 {
+			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
+		}
+	})
+
+	t.Run("included paths field", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := SecurityHeadersConfig{
+			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
+			ContentSecurityPolicyReportOnly: false,
+			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
+			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
+			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
+			PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
+			ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
+			Server:                          "",
+			StrictTransportSecurity:         DefaultStrictTransportSecurity,
+			XContentTypeOptions:             "nosniff",
+			XFrameOptions:                   "DENY",
+			IncludedPaths:                   includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
 		}
 	})
 }
 
 func TestSecurityHeadersConfig_MultipleFields(t *testing.T) {
-	exemptPaths := []string{"/public", "/api/webhook"}
+	excludedPaths := []string{"/public", "/api/webhook"}
+	includedPaths := []string{"/api/public"}
 	cfg := SecurityHeadersConfig{
 		ContentSecurityPolicy:           "default-src 'self'",
 		ContentSecurityPolicyReportOnly: true,
@@ -240,7 +268,8 @@ func TestSecurityHeadersConfig_MultipleFields(t *testing.T) {
 		StrictTransportSecurity:         DefaultStrictTransportSecurity,
 		XContentTypeOptions:             "nosniff",
 		XFrameOptions:                   "SAMEORIGIN",
-		ExemptPaths:                     exemptPaths,
+		ExcludedPaths:                   excludedPaths,
+		IncludedPaths:                   includedPaths,
 	}
 
 	if cfg.ContentSecurityPolicy != "default-src 'self'" {
@@ -261,8 +290,11 @@ func TestSecurityHeadersConfig_MultipleFields(t *testing.T) {
 	if cfg.XFrameOptions != "SAMEORIGIN" {
 		t.Error("expected X-Frame-Options to be set correctly")
 	}
-	if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-		t.Error("expected exempt paths to be set correctly")
+	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+		t.Error("expected excluded paths to be set correctly")
+	}
+	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+		t.Error("expected included paths to be set correctly")
 	}
 }
 
@@ -293,7 +325,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					StrictTransportSecurity:         DefaultStrictTransportSecurity,
 					XContentTypeOptions:             "nosniff",
 					XFrameOptions:                   "DENY",
-					ExemptPaths:                     []string{},
+					ExcludedPaths:                   []string{},
 				}
 				if cfg.ContentSecurityPolicy != tt.csp {
 					t.Errorf("expected CSP = %s, got %s", tt.csp, cfg.ContentSecurityPolicy)
@@ -328,7 +360,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					StrictTransportSecurity:         DefaultStrictTransportSecurity,
 					XContentTypeOptions:             "nosniff",
 					XFrameOptions:                   "DENY",
-					ExemptPaths:                     []string{},
+					ExcludedPaths:                   []string{},
 				}
 
 				if cfg.CrossOriginEmbedderPolicy != tt.coep {
@@ -364,7 +396,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					StrictTransportSecurity:         DefaultStrictTransportSecurity,
 					XContentTypeOptions:             "nosniff",
 					XFrameOptions:                   "DENY",
-					ExemptPaths:                     []string{},
+					ExcludedPaths:                   []string{},
 				}
 				if cfg.ReferrerPolicy != policy {
 					t.Errorf("expected referrer policy = %s, got %s", policy, cfg.ReferrerPolicy)
@@ -390,7 +422,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					StrictTransportSecurity:         DefaultStrictTransportSecurity,
 					XContentTypeOptions:             "nosniff",
 					XFrameOptions:                   option,
-					ExemptPaths:                     []string{},
+					ExcludedPaths:                   []string{},
 				}
 				if cfg.XFrameOptions != option {
 					t.Errorf("expected X-Frame-Options = %s, got %s", option, cfg.XFrameOptions)
@@ -401,7 +433,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 }
 
 func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
-	t.Run("empty exempt paths", func(t *testing.T) {
+	t.Run("empty excluded paths", func(t *testing.T) {
 		cfg := SecurityHeadersConfig{
 			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
 			ContentSecurityPolicyReportOnly: false,
@@ -414,17 +446,17 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 			StrictTransportSecurity:         DefaultStrictTransportSecurity,
 			XContentTypeOptions:             "nosniff",
 			XFrameOptions:                   "DENY",
-			ExemptPaths:                     []string{},
+			ExcludedPaths:                   []string{},
 		}
-		if cfg.ExemptPaths == nil {
-			t.Error("expected exempt paths slice to be initialized, not nil")
+		if cfg.ExcludedPaths == nil {
+			t.Error("expected excluded paths slice to be initialized, not nil")
 		}
-		if len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %d entries", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
 		}
 	})
 
-	t.Run("nil exempt paths", func(t *testing.T) {
+	t.Run("nil excluded paths", func(t *testing.T) {
 		cfg := SecurityHeadersConfig{
 			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
 			ContentSecurityPolicyReportOnly: false,
@@ -437,10 +469,53 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 			StrictTransportSecurity:         DefaultStrictTransportSecurity,
 			XContentTypeOptions:             "nosniff",
 			XFrameOptions:                   "DENY",
-			ExemptPaths:                     nil,
+			ExcludedPaths:                   nil,
 		}
-		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+		if cfg.ExcludedPaths != nil {
+			t.Error("expected excluded paths to remain nil when nil is passed")
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := SecurityHeadersConfig{
+			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
+			ContentSecurityPolicyReportOnly: false,
+			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
+			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
+			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
+			PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
+			ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
+			Server:                          "",
+			StrictTransportSecurity:         DefaultStrictTransportSecurity,
+			XContentTypeOptions:             "nosniff",
+			XFrameOptions:                   "DENY",
+			IncludedPaths:                   []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := SecurityHeadersConfig{
+			ContentSecurityPolicy:           DefaultSecurityHeadersConfig.ContentSecurityPolicy,
+			ContentSecurityPolicyReportOnly: false,
+			CrossOriginEmbedderPolicy:       DefaultSecurityHeadersConfig.CrossOriginEmbedderPolicy,
+			CrossOriginOpenerPolicy:         DefaultSecurityHeadersConfig.CrossOriginOpenerPolicy,
+			CrossOriginResourcePolicy:       DefaultSecurityHeadersConfig.CrossOriginResourcePolicy,
+			PermissionsPolicy:               DefaultSecurityHeadersConfig.PermissionsPolicy,
+			ReferrerPolicy:                  DefaultSecurityHeadersConfig.ReferrerPolicy,
+			Server:                          "",
+			StrictTransportSecurity:         DefaultStrictTransportSecurity,
+			XContentTypeOptions:             "nosniff",
+			XFrameOptions:                   "DENY",
+			IncludedPaths:                   nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
 		}
 	})
 
@@ -455,8 +530,11 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 		if cfg.StrictTransportSecurity.MaxAge != 0 {
 			t.Errorf("expected zero HSTS max age = 0, got %d", cfg.StrictTransportSecurity.MaxAge)
 		}
-		if cfg.ExemptPaths != nil {
-			t.Errorf("expected zero exempt paths = nil, got %v", cfg.ExemptPaths)
+		if cfg.ExcludedPaths != nil {
+			t.Errorf("expected zero excluded paths = nil, got %v", cfg.ExcludedPaths)
+		}
+		if cfg.IncludedPaths != nil {
+			t.Errorf("expected zero included paths = nil, got %v", cfg.IncludedPaths)
 		}
 	})
 }
@@ -478,7 +556,7 @@ func TestSecurityHeadersConfig_StructCreation(t *testing.T) {
 		},
 		XContentTypeOptions: "nosniff",
 		XFrameOptions:       "SAMEORIGIN",
-		ExemptPaths:         []string{"/public"},
+		ExcludedPaths:       []string{"/public"},
 	}
 
 	if cfg.ContentSecurityPolicy != "default-src 'self'" {
@@ -490,7 +568,7 @@ func TestSecurityHeadersConfig_StructCreation(t *testing.T) {
 	if cfg.StrictTransportSecurity.MaxAge != 31536000 {
 		t.Error("expected HSTS max age to be set correctly")
 	}
-	if !reflect.DeepEqual(cfg.ExemptPaths, []string{"/public"}) {
-		t.Error("expected exempt paths to be set correctly")
+	if !reflect.DeepEqual(cfg.ExcludedPaths, []string{"/public"}) {
+		t.Error("expected excluded paths to be set correctly")
 	}
 }

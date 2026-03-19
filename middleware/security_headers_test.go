@@ -115,7 +115,7 @@ func TestSecurityHeaders_HSTSWithNestedOptions(t *testing.T) {
 	zhtest.AssertWith(t, w).Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 }
 
-func TestSecurityHeaders_ExemptPaths(t *testing.T) {
+func TestSecurityHeaders_ExcludedPaths(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -123,7 +123,7 @@ func TestSecurityHeaders_ExemptPaths(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(
 		SecurityHeaders(config.SecurityHeadersConfig{
 			ContentSecurityPolicy: "default-src 'self'",
-			ExemptPaths:           []string{"/skipme"},
+			ExcludedPaths:         []string{"/skipme"},
 		}),
 		handler,
 		req,
@@ -385,4 +385,53 @@ func TestGetCSPNonce_NotFound(t *testing.T) {
 	if nonce != "" {
 		t.Errorf("Expected empty string for missing nonce, got %q", nonce)
 	}
+}
+
+func TestSecurityHeaders_IncludedPaths(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	tests := []struct {
+		name               string
+		path               string
+		expectSecurityHdrs bool
+	}{
+		{"allowed path - has headers", "/api/users", true},
+		{"allowed exact path", "/admin", true},
+		{"non-allowed path - no headers", "/health", false},
+		{"non-allowed path 2", "/metrics", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := zhtest.NewRequest(http.MethodGet, tt.path).Build()
+			mw := SecurityHeaders(config.SecurityHeadersConfig{
+				ContentSecurityPolicy: "default-src 'self'",
+				IncludedPaths:         []string{"/api/", "/admin"},
+			})
+			w := zhtest.TestMiddlewareWithHandler(mw, handler, req)
+
+			zhtest.AssertWith(t, w).Status(http.StatusOK)
+			if tt.expectSecurityHdrs {
+				zhtest.AssertWith(t, w).HeaderExists(httpx.HeaderContentSecurityPolicy)
+			} else {
+				zhtest.AssertWith(t, w).HeaderNotExists(httpx.HeaderContentSecurityPolicy)
+			}
+		})
+	}
+}
+
+func TestSecurityHeaders_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = SecurityHeaders(config.SecurityHeadersConfig{
+		ContentSecurityPolicy: "default-src 'self'",
+		ExcludedPaths:         []string{"/health"},
+		IncludedPaths:         []string{"/api"},
+	})
 }

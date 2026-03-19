@@ -73,9 +73,9 @@ func TestDefaultMiddlewares_NilInputs(t *testing.T) {
 
 func TestPathMatches(t *testing.T) {
 	tests := []struct {
-		requestPath string
-		exemptPath  string
-		expected    bool
+		requestPath  string
+		excludedPath string
+		expected     bool
 	}{
 		{"/health", "/health", true},
 		{"/health", "/metrics", false},
@@ -92,11 +92,11 @@ func TestPathMatches(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.requestPath+"_vs_"+tt.exemptPath, func(t *testing.T) {
-			result := pathMatches(tt.requestPath, tt.exemptPath)
+		t.Run(tt.requestPath+"_vs_"+tt.excludedPath, func(t *testing.T) {
+			result := pathMatches(tt.requestPath, tt.excludedPath)
 			if result != tt.expected {
 				t.Errorf("pathMatches(%q, %q) = %v, expected %v",
-					tt.requestPath, tt.exemptPath, result, tt.expected)
+					tt.requestPath, tt.excludedPath, result, tt.expected)
 			}
 		})
 	}

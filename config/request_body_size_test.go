@@ -10,8 +10,11 @@ func TestRequestBodySizeConfig_DefaultValues(t *testing.T) {
 	if cfg.MaxBytes != 1<<20 {
 		t.Errorf("expected default max bytes = %d (1MB), got %d", 1<<20, cfg.MaxBytes)
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 
 	// Verify the 1MB calculation
@@ -40,8 +43,8 @@ func TestRequestBodySizeConfig_BoundaryValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := RequestBodySizeConfig{
-				MaxBytes:    tt.maxBytes,
-				ExemptPaths: []string{},
+				MaxBytes:      tt.maxBytes,
+				ExcludedPaths: []string{},
 			}
 			if cfg.MaxBytes != tt.maxBytes {
 				t.Errorf("expected max bytes = %d, got %d", tt.maxBytes, cfg.MaxBytes)
@@ -69,8 +72,8 @@ func TestRequestBodySizeConfig_CommonSizes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := RequestBodySizeConfig{
-				MaxBytes:    tt.maxBytes,
-				ExemptPaths: []string{},
+				MaxBytes:      tt.maxBytes,
+				ExcludedPaths: []string{},
 			}
 			if cfg.MaxBytes != tt.maxBytes {
 				t.Errorf("expected %s max bytes = %d, got %d", tt.name, tt.maxBytes, cfg.MaxBytes)
@@ -80,41 +83,41 @@ func TestRequestBodySizeConfig_CommonSizes(t *testing.T) {
 }
 
 func TestRequestBodySizeConfig_EdgeCases(t *testing.T) {
-	t.Run("empty exempt paths", func(t *testing.T) {
+	t.Run("empty excluded paths", func(t *testing.T) {
 		cfg := RequestBodySizeConfig{
-			MaxBytes:    1048576,
-			ExemptPaths: []string{},
+			MaxBytes:      1048576,
+			ExcludedPaths: []string{},
 		}
-		if cfg.ExemptPaths == nil {
-			t.Error("expected exempt paths slice to be initialized, not nil")
+		if cfg.ExcludedPaths == nil {
+			t.Error("expected excluded paths slice to be initialized, not nil")
 		}
-		if len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %d entries", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
 		}
 	})
 
-	t.Run("nil exempt paths", func(t *testing.T) {
+	t.Run("nil excluded paths", func(t *testing.T) {
 		cfg := RequestBodySizeConfig{
-			MaxBytes:    1048576,
-			ExemptPaths: nil,
+			MaxBytes:      1048576,
+			ExcludedPaths: nil,
 		}
-		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+		if cfg.ExcludedPaths != nil {
+			t.Error("expected excluded paths to remain nil when nil is passed")
 		}
 	})
 
 	t.Run("empty string paths", func(t *testing.T) {
-		exemptPaths := []string{"", "/upload", ""}
+		excludedPaths := []string{"", "/upload", ""}
 		cfg := RequestBodySizeConfig{
-			MaxBytes:    1048576,
-			ExemptPaths: exemptPaths,
+			MaxBytes:      1048576,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 3 {
-			t.Errorf("expected 3 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 3 {
+			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		for i, expectedPath := range exemptPaths {
-			if cfg.ExemptPaths[i] != expectedPath {
-				t.Errorf("expected exempt path[%d] = %q, got %q", i, expectedPath, cfg.ExemptPaths[i])
+		for i, expectedPath := range excludedPaths {
+			if cfg.ExcludedPaths[i] != expectedPath {
+				t.Errorf("expected excluded path[%d] = %q, got %q", i, expectedPath, cfg.ExcludedPaths[i])
 			}
 		}
 	})
@@ -124,15 +127,55 @@ func TestRequestBodySizeConfig_EdgeCases(t *testing.T) {
 		if cfg.MaxBytes != 0 {
 			t.Errorf("expected zero max bytes = 0, got %d", cfg.MaxBytes)
 		}
-		if cfg.ExemptPaths != nil {
-			t.Errorf("expected zero exempt paths = nil, got %v", cfg.ExemptPaths)
+		if cfg.ExcludedPaths != nil {
+			t.Errorf("expected zero excluded paths = nil, got %v", cfg.ExcludedPaths)
+		}
+		if cfg.IncludedPaths != nil {
+			t.Errorf("expected zero included paths = nil, got %v", cfg.IncludedPaths)
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := RequestBodySizeConfig{
+			MaxBytes:      1048576,
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := RequestBodySizeConfig{
+			MaxBytes:      1048576,
+			IncludedPaths: nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
+		}
+	})
+
+	t.Run("custom included paths", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := RequestBodySizeConfig{
+			MaxBytes:      1048576,
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
 		}
 	})
 }
 
 func TestRequestBodySizeConfig_PathPatterns(t *testing.T) {
 	t.Run("path patterns", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/api/v1/upload/*",
 			"/files/*",
 			"/media/upload",
@@ -142,19 +185,19 @@ func TestRequestBodySizeConfig_PathPatterns(t *testing.T) {
 			"/webhooks/large-payload",
 		}
 		cfg := RequestBodySizeConfig{
-			MaxBytes:    10485760, // 10MB
-			ExemptPaths: exemptPaths,
+			MaxBytes:      10485760, // 10MB
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 
 	t.Run("special character paths", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/api-v1/upload",
 			"/files_large",
 			"/upload-service",
@@ -165,34 +208,34 @@ func TestRequestBodySizeConfig_PathPatterns(t *testing.T) {
 			"/files/test@example.com",
 		}
 		cfg := RequestBodySizeConfig{
-			MaxBytes:    5242880, // 5MB
-			ExemptPaths: exemptPaths,
+			MaxBytes:      5242880, // 5MB
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 }
 
 func TestRequestBodySizeConfig_StructAssignment(t *testing.T) {
 	t.Run("direct struct assignment", func(t *testing.T) {
-		exemptPaths := []string{"/upload", "/download"}
+		excludedPaths := []string{"/upload", "/download"}
 		cfg := RequestBodySizeConfig{
-			MaxBytes:    5242880, // 5MB
-			ExemptPaths: exemptPaths,
+			MaxBytes:      5242880, // 5MB
+			ExcludedPaths: excludedPaths,
 		}
 
 		if cfg.MaxBytes != 5242880 {
 			t.Errorf("expected max bytes = 5242880, got %d", cfg.MaxBytes)
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Error("expected exempt paths to be set correctly")
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Error("expected excluded paths to be set correctly")
 		}
-		if len(cfg.ExemptPaths) != 2 {
-			t.Errorf("expected 2 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 2 {
+			t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
 	})
 
@@ -201,13 +244,13 @@ func TestRequestBodySizeConfig_StructAssignment(t *testing.T) {
 
 		// Modify fields directly
 		cfg.MaxBytes = 2097152 // 2MB
-		cfg.ExemptPaths = []string{"/api/upload", "/files"}
+		cfg.ExcludedPaths = []string{"/api/upload", "/files"}
 
 		if cfg.MaxBytes != 2097152 {
 			t.Errorf("expected modified max bytes = 2097152, got %d", cfg.MaxBytes)
 		}
-		if len(cfg.ExemptPaths) != 2 {
-			t.Errorf("expected 2 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 2 {
+			t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
 	})
 }

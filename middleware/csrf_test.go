@@ -86,13 +86,13 @@ func TestCSRF_DefaultValues(t *testing.T) {
 
 	// Test with explicit zero values to trigger default code paths
 	csrf := CSRF(config.CSRFConfig{
-		HMACKey:       testHMACKey,
-		CookieName:    "",
-		CookieMaxAge:  0,
-		CookiePath:    "",
-		TokenLookup:   "",
-		ExemptMethods: nil,
-		ExemptPaths:   nil,
+		HMACKey:         testHMACKey,
+		CookieName:      "",
+		CookieMaxAge:    0,
+		CookiePath:      "",
+		TokenLookup:     "",
+		ExcludedMethods: nil,
+		ExcludedPaths:   nil,
 	})(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -294,16 +294,16 @@ func TestCSRF_MismatchedTokens(t *testing.T) {
 	zhtest.AssertWith(t, rr2).Status(http.StatusForbidden)
 }
 
-func TestCSRF_ExemptMethods(t *testing.T) {
+func TestCSRF_ExcludedMethods(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	csrf := CSRF(config.CSRFConfig{HMACKey: testHMACKey})(handler)
 
-	exemptMethods := []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace}
+	excludedMethods := []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace}
 
-	for _, method := range exemptMethods {
+	for _, method := range excludedMethods {
 		req := httptest.NewRequest(method, "/", nil)
 		rr := httptest.NewRecorder()
 
@@ -313,14 +313,14 @@ func TestCSRF_ExemptMethods(t *testing.T) {
 	}
 }
 
-func TestCSRF_ExemptPaths(t *testing.T) {
+func TestCSRF_ExcludedPaths(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	csrf := CSRF(config.CSRFConfig{
-		HMACKey:     testHMACKey,
-		ExemptPaths: []string{"/api/webhook", "/public/"},
+		HMACKey:       testHMACKey,
+		ExcludedPaths: []string{"/api/webhook", "/public/"},
 	})(handler)
 
 	// Test exact path match
@@ -337,7 +337,7 @@ func TestCSRF_ExemptPaths(t *testing.T) {
 
 	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
 
-	// Test non-exempt path (should require token)
+	// Test non-excluded path (should require token)
 	req3 := httptest.NewRequest(http.MethodPost, "/api/other", nil)
 	rr3 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr3, req3)
@@ -685,25 +685,25 @@ func TestCSRF_TokenWithWrongSignature(t *testing.T) {
 	zhtest.AssertWith(t, rr2).Status(http.StatusForbidden)
 }
 
-func TestCSRF_CustomExemptMethods(t *testing.T) {
+func TestCSRF_CustomExcludedMethods(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// Only exempt PUT, not GET
+	// Only exclude PUT, not GET
 	csrf := CSRF(config.CSRFConfig{
-		HMACKey:       testHMACKey,
-		ExemptMethods: []string{http.MethodPut},
+		HMACKey:         testHMACKey,
+		ExcludedMethods: []string{http.MethodPut},
 	})(handler)
 
-	// GET without token should return 403 (not exempt)
+	// GET without token should return 403 (not excluded)
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr1 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr1, req1)
 
 	zhtest.AssertWith(t, rr1).Status(http.StatusForbidden)
 
-	// PUT should be exempt and work without token
+	// PUT should be excluded and work without token
 	req2 := httptest.NewRequest(http.MethodPut, "/", nil)
 	rr2 := httptest.NewRecorder()
 	csrf.ServeHTTP(rr2, req2)
@@ -948,7 +948,7 @@ func TestCSRF_TokenGenerationFailsClosed(t *testing.T) {
 		t.Error("handler should not be called when token generation fails")
 	})))
 
-	// Test GET request (exempt method) with failing token generation
+	// Test GET request (excluded method) with failing token generation
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
@@ -1074,4 +1074,68 @@ func TestCSRF_DefaultTokenGenerator(t *testing.T) {
 	if !found {
 		t.Error("expected csrf_token cookie to be set")
 	}
+}
+
+func TestCSRF_IncludedPaths(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:       testHMACKey,
+		IncludedPaths: []string{"/api/", "/admin"},
+	})(handler)
+
+	// Test allowed path - should require token
+	req1 := httptest.NewRequest(http.MethodPost, "/api/users", nil)
+	rr1 := httptest.NewRecorder()
+	csrf.ServeHTTP(rr1, req1)
+
+	zhtest.AssertWith(t, rr1).Status(http.StatusForbidden)
+
+	// Test non-allowed path - should skip CSRF
+	req2 := httptest.NewRequest(http.MethodPost, "/public", nil)
+	rr2 := httptest.NewRecorder()
+	csrf.ServeHTTP(rr2, req2)
+
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
+}
+
+func TestCSRF_IncludedPathsWithWildcard(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	csrf := CSRF(config.CSRFConfig{
+		HMACKey:       testHMACKey,
+		IncludedPaths: []string{"/api/*"},
+	})(handler)
+
+	// Test wildcard path - should require token
+	req1 := httptest.NewRequest(http.MethodPost, "/api/anything", nil)
+	rr1 := httptest.NewRecorder()
+	csrf.ServeHTTP(rr1, req1)
+
+	zhtest.AssertWith(t, rr1).Status(http.StatusForbidden)
+
+	// Test non-matching path - should skip CSRF
+	req2 := httptest.NewRequest(http.MethodPost, "/other", nil)
+	rr2 := httptest.NewRecorder()
+	csrf.ServeHTTP(rr2, req2)
+
+	zhtest.AssertWith(t, rr2).Status(http.StatusOK)
+}
+
+func TestCSRF_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = CSRF(config.CSRFConfig{
+		HMACKey:       testHMACKey,
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

@@ -109,7 +109,7 @@ func TestCache_Basic(t *testing.T) {
 		}
 	})
 
-	t.Run("respects exempt paths", func(t *testing.T) {
+	t.Run("respects excluded paths", func(t *testing.T) {
 		callCount := 0
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			callCount++
@@ -117,8 +117,8 @@ func TestCache_Basic(t *testing.T) {
 		})
 
 		cacheMiddleware := Cache(config.CacheConfig{
-			DefaultTTL:  time.Minute,
-			ExemptPaths: []string{"/api/live*"},
+			DefaultTTL:    time.Minute,
+			ExcludedPaths: []string{"/api/live*"},
 		})
 
 		req1 := httptest.NewRequest(http.MethodGet, "/api/live", nil)
@@ -130,7 +130,7 @@ func TestCache_Basic(t *testing.T) {
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
 		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for exempt path, got %d", callCount)
+			t.Errorf("Expected 2 handler calls for excluded path, got %d", callCount)
 		}
 	})
 }
@@ -814,5 +814,89 @@ func TestCache_BodyOverflow(t *testing.T) {
 		cacheMiddleware(handler).ServeHTTP(w, req)
 
 		zhtest.AssertWith(t, w).Status(http.StatusPartialContent)
+	})
+}
+
+func TestCache_IncludedPaths(t *testing.T) {
+	t.Run("only caches included paths", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("response"))
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:    time.Minute,
+			IncludedPaths: []string{"/api/", "/cache/*"},
+		})
+
+		// First request to allowed path - should hit handler
+		req1 := httptest.NewRequest(http.MethodGet, "/api/data", nil)
+		w1 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request to same allowed path - should be cached
+		req2 := httptest.NewRequest(http.MethodGet, "/api/data", nil)
+		w2 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call for cached path, got %d", callCount)
+		}
+
+		// Request to non-allowed path - should not be cached
+		callCount = 0
+		req3 := httptest.NewRequest(http.MethodGet, "/other", nil)
+		w3 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w3, req3)
+
+		req4 := httptest.NewRequest(http.MethodGet, "/other", nil)
+		w4 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w4, req4)
+
+		if callCount != 2 {
+			t.Errorf("Expected 2 handler calls for non-allowed path, got %d", callCount)
+		}
+	})
+
+	t.Run("wildcard included paths", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusOK)
+		})
+
+		cacheMiddleware := Cache(config.CacheConfig{
+			DefaultTTL:    time.Minute,
+			IncludedPaths: []string{"/cache/*"},
+		})
+
+		// Request to wildcard path
+		req1 := httptest.NewRequest(http.MethodGet, "/cache/anything", nil)
+		w1 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w1, req1)
+
+		req2 := httptest.NewRequest(http.MethodGet, "/cache/anything", nil)
+		w2 := httptest.NewRecorder()
+		cacheMiddleware(handler).ServeHTTP(w2, req2)
+
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call for wildcard path, got %d", callCount)
+		}
+	})
+}
+
+func TestCache_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = Cache(config.CacheConfig{
+		DefaultTTL:    time.Minute,
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
 	})
 }

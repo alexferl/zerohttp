@@ -108,8 +108,19 @@ type ReverseProxyConfig struct {
 	// Return an error to trigger the error handler
 	ModifyResponse func(*http.Response) error
 
-	// ExemptPaths contains paths that skip reverse proxying
-	ExemptPaths []string
+	// ExcludedPaths contains paths that skip reverse proxying.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where reverse proxying is explicitly applied.
+	// If set, reverse proxying will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, reverse proxying applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 }
 
 // DefaultReverseProxyConfig contains sensible defaults
@@ -122,5 +133,6 @@ var DefaultReverseProxyConfig = ReverseProxyConfig{
 	SetHeaders:      map[string]string{},
 	RemoveHeaders:   []string{},
 	ForwardHeaders:  true,
-	ExemptPaths:     []string{},
+	ExcludedPaths:   []string{},
+	IncludedPaths:   []string{},
 }

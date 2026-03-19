@@ -97,23 +97,23 @@ func TestContentTypeCustomConfig(t *testing.T) {
 	}
 }
 
-func TestContentTypeExemptPaths(t *testing.T) {
+func TestContentTypeExcludedPaths(t *testing.T) {
 	tests := []struct {
 		name       string
 		path       string
 		expectNext bool
 		expectCode int
 	}{
-		{"exempt exact path /health", "/health", true, http.StatusOK},
-		{"exempt exact path /api/upload", "/api/upload", true, http.StatusOK},
-		{"exempt prefix /webhooks/", "/webhooks/", true, http.StatusOK},
-		{"exempt prefix /webhooks/github", "/webhooks/github", true, http.StatusOK},
-		{"not exempt /api/users", "/api/users", false, http.StatusUnsupportedMediaType},
+		{"excluded exact path /health", "/health", true, http.StatusOK},
+		{"excluded exact path /api/upload", "/api/upload", true, http.StatusOK},
+		{"excluded prefix /webhooks/", "/webhooks/", true, http.StatusOK},
+		{"excluded prefix /webhooks/github", "/webhooks/github", true, http.StatusOK},
+		{"not excluded /api/users", "/api/users", false, http.StatusUnsupportedMediaType},
 	}
 
 	middleware := ContentType(config.ContentTypeConfig{
-		ContentTypes: []string{"application/json"},
-		ExemptPaths:  []string{"/health", "/webhooks/", "/api/upload"},
+		ContentTypes:  []string{"application/json"},
+		ExcludedPaths: []string{"/health", "/webhooks/", "/api/upload"},
 	})
 
 	for _, tt := range tests {
@@ -213,10 +213,10 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 		zhtest.AssertWith(t, rr).Status(http.StatusOK)
 	})
 
-	t.Run("nil exempt paths fallback", func(t *testing.T) {
+	t.Run("nil excluded paths fallback", func(t *testing.T) {
 		middleware := ContentType(config.ContentTypeConfig{
-			ContentTypes: []string{httpx.MIMEApplicationJSON},
-			ExemptPaths:  nil,
+			ContentTypes:  []string{httpx.MIMEApplicationJSON},
+			ExcludedPaths: nil,
 		})
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 		req.Header.Set(httpx.HeaderContentType, httpx.MIMETextPlain)
@@ -227,7 +227,60 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 		})).ServeHTTP(rr, req)
 
 		if called || rr.Code != http.StatusUnsupportedMediaType {
-			t.Error("should fallback to default exempt paths and reject text/plain")
+			t.Error("should fallback to default excluded paths and reject text/plain")
 		}
+	})
+}
+
+func TestContentTypeIncludedPaths(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		expectNext bool
+		expectCode int
+	}{
+		{"allowed exact /api", "/api", false, http.StatusUnsupportedMediaType},
+		{"allowed prefix /api/", "/api/users", false, http.StatusUnsupportedMediaType},
+		{"allowed exact /upload", "/upload", false, http.StatusUnsupportedMediaType},
+		{"not allowed /other", "/other", true, http.StatusOK},
+		{"not allowed /health", "/health", true, http.StatusOK},
+	}
+
+	middleware := ContentType(config.ContentTypeConfig{
+		ContentTypes:  []string{httpx.MIMEApplicationJSON},
+		IncludedPaths: []string{"/api/", "/api", "/upload"},
+	})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader("test data"))
+			req.Header.Set(httpx.HeaderContentType, httpx.MIMETextPlain)
+			rr := httptest.NewRecorder()
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+			middleware(next).ServeHTTP(rr, req)
+
+			if nextCalled != tt.expectNext {
+				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
+			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
+		})
+	}
+}
+
+func TestContentTypeBothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = ContentType(config.ContentTypeConfig{
+		ContentTypes:  []string{httpx.MIMEApplicationJSON},
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
 	})
 }

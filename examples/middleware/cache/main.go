@@ -54,7 +54,7 @@ func main() {
 	)
 
 	// Live/health endpoint - never cached
-	// Demonstrates exempt paths (or you could just not apply the middleware)
+	// Demonstrates excluded paths (or you could just not apply the middleware)
 	app.GET("/api/live", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, map[string]string{
 			"status":    "ok",
@@ -99,7 +99,6 @@ func main() {
 	)
 
 	// Stats endpoint - demonstrates custom store usage (in-memory here)
-	// This also shows how to exempt specific paths from caching
 	app.GET("/api/stats", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, map[string]any{
 			"requests":    12345,

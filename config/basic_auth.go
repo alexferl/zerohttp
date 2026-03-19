@@ -11,14 +11,26 @@ type BasicAuthConfig struct {
 	// Validator is a custom function to validate credentials (optional)
 	Validator func(username, password string) bool
 
-	// ExemptPaths contains paths that skip basic auth (e.g., /health, /login, /signup)
-	ExemptPaths []string
+	// ExcludedPaths contains paths that skip basic auth.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where basic auth is explicitly applied.
+	// If set, basic auth will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, basic auth applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 }
 
 // DefaultBasicAuthConfig contains the default basic authentication configuration
 var DefaultBasicAuthConfig = BasicAuthConfig{
-	Realm:       "Restricted",
-	Credentials: nil,
-	Validator:   nil,
-	ExemptPaths: []string{},
+	Realm:         "Restricted",
+	Credentials:   nil,
+	Validator:     nil,
+	ExcludedPaths: []string{},
+	IncludedPaths: []string{},
 }

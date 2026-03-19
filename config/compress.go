@@ -86,8 +86,19 @@ type CompressConfig struct {
 	// Algorithms are compression algorithms to support (defaults to gzip, deflate)
 	Algorithms []CompressionAlgorithm
 
-	// ExemptPaths contains paths to skip compression
-	ExemptPaths []string
+	// ExcludedPaths contains paths to skip compression.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where compression is explicitly applied.
+	// If set, compression will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, compression applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// Providers are optional custom compression providers.
 	// If set, the providers' encoders will be used in addition to built-in gzip/deflate.
@@ -98,8 +109,9 @@ type CompressConfig struct {
 
 // DefaultCompressConfig contains the default values for compression configuration.
 var DefaultCompressConfig = CompressConfig{
-	Level:       6,
-	Types:       DefaultCompressTypes,
-	Algorithms:  []CompressionAlgorithm{Gzip, Deflate},
-	ExemptPaths: []string{},
+	Level:         6,
+	Types:         DefaultCompressTypes,
+	Algorithms:    []CompressionAlgorithm{Gzip, Deflate},
+	ExcludedPaths: []string{},
+	IncludedPaths: []string{},
 }

@@ -31,7 +31,8 @@ type Compressor struct {
 	encodingPrecedence []string
 	level              int                                  // The compression level.
 	algorithms         map[config.CompressionAlgorithm]bool // Allowed algorithms
-	exemptPaths        []string                             // Paths to skip compression
+	excludedPaths      []string                             // Paths to skip compression
+	includedPaths      []string                             // Paths to allow compression (if set, only these paths)
 }
 
 // NewCompressor creates a new Compressor that will handle encoding responses.
@@ -61,7 +62,8 @@ func NewCompressor(level int, types ...string) *Compressor {
 		allowedTypes:     allowedTypes,
 		allowedWildcards: allowedWildcards,
 		algorithms:       make(map[config.CompressionAlgorithm]bool),
-		exemptPaths:      []string{},
+		excludedPaths:    []string{},
+		includedPaths:    []string{},
 	}
 
 	// Set default algorithms
@@ -108,21 +110,16 @@ func (c *Compressor) SetEncoder(encoding string, fn EncoderFunc) {
 	c.encodingPrecedence = append([]string{encoding}, c.encodingPrecedence...)
 }
 
-// isExemptPath checks if a path should be exempted from compression
-func (c *Compressor) isExemptPath(path string) bool {
-	for _, exemptPath := range c.exemptPaths {
-		if pathMatches(path, exemptPath) {
-			return true
-		}
-	}
-	return false
+// isExcludedPath checks if a path should be excluded from compression
+func (c *Compressor) isExcludedPath(path string) bool {
+	return !shouldProcessMiddleware(path, c.includedPaths, c.excludedPaths)
 }
 
 // Handler returns a new middleware that will compress the response.
 func (c *Compressor) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check exempt paths first
-		if c.isExemptPath(r.URL.Path) {
+		// Check excluded paths first
+		if c.isExcludedPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -353,8 +350,11 @@ func Compress(cfg ...config.CompressConfig) func(http.Handler) http.Handler {
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "Compress")
+
 	compressor := NewCompressor(c.Level, c.Types...)
-	compressor.exemptPaths = c.ExemptPaths
+	compressor.excludedPaths = c.ExcludedPaths
+	compressor.includedPaths = c.IncludedPaths
 
 	// Set allowed algorithms
 	compressor.algorithms = make(map[config.CompressionAlgorithm]bool)

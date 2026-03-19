@@ -48,8 +48,12 @@ func TestDefaultCacheConfig(t *testing.T) {
 			t.Error("expected Store to be nil by default")
 		}
 
-		if len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected ExemptPaths to be empty, got %v", cfg.ExemptPaths)
+		if len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected ExcludedPaths to be empty, got %v", cfg.ExcludedPaths)
+		}
+
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected IncludedPaths to be empty, got %v", cfg.IncludedPaths)
 		}
 
 		expectedStatusCodes := []int{200, 201, 204, 301, 302, 304, 307, 308}
@@ -89,16 +93,16 @@ func TestCacheConfigCustomization(t *testing.T) {
 		customStore := &mockCacheStore{}
 
 		cfg := CacheConfig{
-			CacheControl: "public, max-age=3600",
-			DefaultTTL:   time.Hour,
-			MaxBodySize:  5 * 1024 * 1024,
-			MaxEntries:   5000,
-			ETag:         false,
-			LastModified: false,
-			Vary:         []string{"Accept"},
-			Store:        customStore,
-			ExemptPaths:  []string{"/api/live", "/health"},
-			StatusCodes:  []int{200, 201},
+			CacheControl:  "public, max-age=3600",
+			DefaultTTL:    time.Hour,
+			MaxBodySize:   5 * 1024 * 1024,
+			MaxEntries:    5000,
+			ETag:          false,
+			LastModified:  false,
+			Vary:          []string{"Accept"},
+			Store:         customStore,
+			ExcludedPaths: []string{"/api/live", "/health"},
+			StatusCodes:   []int{200, 201},
 		}
 
 		if cfg.CacheControl != "public, max-age=3600" {
@@ -129,8 +133,78 @@ func TestCacheConfigCustomization(t *testing.T) {
 			t.Error("expected custom store to be set")
 		}
 
-		if len(cfg.ExemptPaths) != 2 {
-			t.Errorf("expected 2 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 2 {
+			t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
+		}
+	})
+}
+
+func TestCacheConfig_IncludedPaths(t *testing.T) {
+	t.Run("custom included paths", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := CacheConfig{
+			CacheControl:  DefaultCacheConfig.CacheControl,
+			DefaultTTL:    DefaultCacheConfig.DefaultTTL,
+			MaxBodySize:   DefaultCacheConfig.MaxBodySize,
+			MaxEntries:    DefaultCacheConfig.MaxEntries,
+			ETag:          DefaultCacheConfig.ETag,
+			LastModified:  DefaultCacheConfig.LastModified,
+			Vary:          DefaultCacheConfig.Vary,
+			StatusCodes:   DefaultCacheConfig.StatusCodes,
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if cfg.IncludedPaths[0] != "/api/public" {
+			t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
+		}
+		if cfg.IncludedPaths[1] != "/health" {
+			t.Errorf("expected second allowed path to be /health, got %s", cfg.IncludedPaths[1])
+		}
+	})
+
+	t.Run("both excluded and included paths", func(t *testing.T) {
+		excludedPaths := []string{"/api/live", "/health"}
+		includedPaths := []string{"/api/public"}
+		cfg := CacheConfig{
+			CacheControl:  DefaultCacheConfig.CacheControl,
+			DefaultTTL:    DefaultCacheConfig.DefaultTTL,
+			MaxBodySize:   DefaultCacheConfig.MaxBodySize,
+			MaxEntries:    DefaultCacheConfig.MaxEntries,
+			ETag:          DefaultCacheConfig.ETag,
+			LastModified:  DefaultCacheConfig.LastModified,
+			Vary:          DefaultCacheConfig.Vary,
+			StatusCodes:   DefaultCacheConfig.StatusCodes,
+			ExcludedPaths: excludedPaths,
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.ExcludedPaths) != 2 {
+			t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
+		}
+		if len(cfg.IncludedPaths) != 1 {
+			t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := CacheConfig{
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := CacheConfig{
+			IncludedPaths: nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
 		}
 	})
 }

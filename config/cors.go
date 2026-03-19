@@ -33,8 +33,19 @@ type CORSConfig struct {
 	// OptionsPassthrough allows OPTIONS requests to be passed to the next handler
 	OptionsPassthrough bool
 
-	// ExemptPaths contains paths that skip CORS processing
-	ExemptPaths []string
+	// ExcludedPaths contains paths that skip CORS processing.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where CORS processing is explicitly applied.
+	// If set, CORS will only be processed for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, CORS applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// AllowOriginFunc is a custom function to validate origins dynamically.
 	// If set, this takes precedence over AllowedOrigins matching.
@@ -64,5 +75,6 @@ var DefaultCORSConfig = CORSConfig{
 	AllowCredentials:   false,
 	MaxAge:             86400, // 24 hours
 	OptionsPassthrough: false,
-	ExemptPaths:        []string{},
+	ExcludedPaths:      []string{},
+	IncludedPaths:      []string{},
 }

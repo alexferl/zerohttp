@@ -51,8 +51,19 @@ type RateLimitConfig struct {
 	// Headers to include in response
 	IncludeHeaders bool
 
-	// ExemptPaths contains paths to skip rate limiting
-	ExemptPaths []string
+	// ExcludedPaths contains paths to skip rate limiting.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where rate limiting is explicitly applied.
+	// If set, rate limiting will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, rate limiting applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// Store is the storage backend for rate limiting.
 	// If nil, a secure in-memory store is used.
@@ -73,5 +84,6 @@ var DefaultRateLimitConfig = RateLimitConfig{
 	StatusCode:     http.StatusTooManyRequests,
 	Message:        "Rate limit exceeded",
 	IncludeHeaders: true,
-	ExemptPaths:    []string{},
+	ExcludedPaths:  []string{},
+	IncludedPaths:  []string{},
 }

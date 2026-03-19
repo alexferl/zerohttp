@@ -6,27 +6,27 @@ import (
 	"testing"
 )
 
-func TestTracerConfigWrapper_IsExempt(t *testing.T) {
+func TestTracerConfigWrapper_IsExcluded(t *testing.T) {
 	tests := []struct {
-		name        string
-		exemptPaths []string
-		path        string
-		want        bool
+		name          string
+		excludedPaths []string
+		path          string
+		want          bool
 	}{
 		{"exact match", []string{"/health", "/metrics"}, "/health", true},
-		{"not exempt", []string{"/health", "/metrics"}, "/api/users", false},
-		{"empty exempt list", []string{}, "/health", false},
-		{"nil exempt list", nil, "/health", false},
+		{"not excluded", []string{"/health", "/metrics"}, "/api/users", false},
+		{"empty excluded list", []string{}, "/health", false},
+		{"nil excluded list", nil, "/health", false},
 		{"partial match should not work", []string{"/health"}, "/healthz", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := TracerConfig{ExemptPaths: tt.exemptPaths}
+			cfg := TracerConfig{ExcludedPaths: tt.excludedPaths}
 			wrapper := cfg.Wrap()
-			got := wrapper.IsExempt(tt.path)
+			got := wrapper.IsExcluded(tt.path)
 			if got != tt.want {
-				t.Errorf("IsExempt(%q) = %v, want %v", tt.path, got, tt.want)
+				t.Errorf("IsExcluded(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
 	}
@@ -81,8 +81,17 @@ func TestDefaultSpanNameFormatter(t *testing.T) {
 }
 
 func TestDefaultTracerConfig(t *testing.T) {
-	if DefaultTracerConfig.ExemptPaths != nil {
-		t.Error("DefaultTracerConfig.ExemptPaths should be nil")
+	if DefaultTracerConfig.ExcludedPaths == nil {
+		t.Error("DefaultTracerConfig.ExcludedPaths should not be nil")
+	}
+	if len(DefaultTracerConfig.ExcludedPaths) != 0 {
+		t.Errorf("DefaultTracerConfig.ExcludedPaths should be empty, got %d", len(DefaultTracerConfig.ExcludedPaths))
+	}
+	if DefaultTracerConfig.IncludedPaths == nil {
+		t.Error("DefaultTracerConfig.IncludedPaths should not be nil")
+	}
+	if len(DefaultTracerConfig.IncludedPaths) != 0 {
+		t.Errorf("DefaultTracerConfig.IncludedPaths should be empty, got %d", len(DefaultTracerConfig.IncludedPaths))
 	}
 	if DefaultTracerConfig.SpanNameFormatter != nil {
 		t.Error("DefaultTracerConfig.SpanNameFormatter should be nil")

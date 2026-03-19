@@ -23,8 +23,11 @@ func TestHostValidationConfig_DefaultValues(t *testing.T) {
 	if cfg.Message != "Invalid Host header" {
 		t.Errorf("expected default Message to be 'Invalid Host header', got '%s'", cfg.Message)
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default ExemptPaths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default ExcludedPaths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default IncludedPaths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 }
 
@@ -35,7 +38,8 @@ func TestHostValidationConfig_CustomValues(t *testing.T) {
 		StrictPort:      true,
 		StatusCode:      http.StatusForbidden,
 		Message:         "Forbidden host",
-		ExemptPaths:     []string{"/health", "/metrics"},
+		ExcludedPaths:   []string{"/health", "/metrics"},
+		IncludedPaths:   []string{"/api/public"},
 	}
 
 	if len(cfg.AllowedHosts) != 2 {
@@ -59,8 +63,11 @@ func TestHostValidationConfig_CustomValues(t *testing.T) {
 	if cfg.Message != "Forbidden host" {
 		t.Errorf("expected Message to be 'Forbidden host', got '%s'", cfg.Message)
 	}
-	if len(cfg.ExemptPaths) != 2 {
-		t.Errorf("expected 2 exempt paths, got %d", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 2 {
+		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 1 {
+		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
 	}
 }
 
@@ -126,55 +133,109 @@ func TestHostValidationConfig_StatusCodeOptions(t *testing.T) {
 	}
 }
 
-func TestHostValidationConfig_ExemptPaths(t *testing.T) {
+func TestHostValidationConfig_ExcludedPaths(t *testing.T) {
 	tests := []struct {
-		name         string
-		exemptPaths  []string
-		expectedLen  int
-		expectedPath string
+		name          string
+		excludedPaths []string
+		expectedLen   int
+		expectedPath  string
 	}{
 		{
-			name:         "health and metrics",
-			exemptPaths:  []string{"/health", "/metrics"},
-			expectedLen:  2,
-			expectedPath: "/health",
+			name:          "health and metrics",
+			excludedPaths: []string{"/health", "/metrics"},
+			expectedLen:   2,
+			expectedPath:  "/health",
 		},
 		{
-			name:         "single path",
-			exemptPaths:  []string{"/api/status"},
-			expectedLen:  1,
-			expectedPath: "/api/status",
+			name:          "single path",
+			excludedPaths: []string{"/api/status"},
+			expectedLen:   1,
+			expectedPath:  "/api/status",
 		},
 		{
-			name:         "wildcard paths",
-			exemptPaths:  []string{"/health/*", "/public/*"},
-			expectedLen:  2,
-			expectedPath: "/health/*",
+			name:          "wildcard paths",
+			excludedPaths: []string{"/health/*", "/public/*"},
+			expectedLen:   2,
+			expectedPath:  "/health/*",
 		},
 		{
-			name:         "empty paths",
-			exemptPaths:  []string{},
-			expectedLen:  0,
-			expectedPath: "",
+			name:          "empty paths",
+			excludedPaths: []string{},
+			expectedLen:   0,
+			expectedPath:  "",
 		},
 		{
-			name:         "nil paths",
-			exemptPaths:  nil,
-			expectedLen:  0,
-			expectedPath: "",
+			name:          "nil paths",
+			excludedPaths: nil,
+			expectedLen:   0,
+			expectedPath:  "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := HostValidationConfig{
-				ExemptPaths: tt.exemptPaths,
+				ExcludedPaths: tt.excludedPaths,
 			}
-			if len(cfg.ExemptPaths) != tt.expectedLen {
-				t.Errorf("expected %d exempt paths, got %d", tt.expectedLen, len(cfg.ExemptPaths))
+			if len(cfg.ExcludedPaths) != tt.expectedLen {
+				t.Errorf("expected %d excluded paths, got %d", tt.expectedLen, len(cfg.ExcludedPaths))
 			}
-			if tt.expectedLen > 0 && cfg.ExemptPaths[0] != tt.expectedPath {
-				t.Errorf("expected first path to be '%s', got '%s'", tt.expectedPath, cfg.ExemptPaths[0])
+			if tt.expectedLen > 0 && cfg.ExcludedPaths[0] != tt.expectedPath {
+				t.Errorf("expected first path to be '%s', got '%s'", tt.expectedPath, cfg.ExcludedPaths[0])
+			}
+		})
+	}
+}
+
+func TestHostValidationConfig_IncludedPaths(t *testing.T) {
+	tests := []struct {
+		name          string
+		includedPaths []string
+		expectedLen   int
+		expectedPath  string
+	}{
+		{
+			name:          "public paths",
+			includedPaths: []string{"/api/public", "/health"},
+			expectedLen:   2,
+			expectedPath:  "/api/public",
+		},
+		{
+			name:          "single path",
+			includedPaths: []string{"/api/status"},
+			expectedLen:   1,
+			expectedPath:  "/api/status",
+		},
+		{
+			name:          "wildcard paths",
+			includedPaths: []string{"/public/*", "/api/v1/*"},
+			expectedLen:   2,
+			expectedPath:  "/public/*",
+		},
+		{
+			name:          "empty paths",
+			includedPaths: []string{},
+			expectedLen:   0,
+			expectedPath:  "",
+		},
+		{
+			name:          "nil paths",
+			includedPaths: nil,
+			expectedLen:   0,
+			expectedPath:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := HostValidationConfig{
+				IncludedPaths: tt.includedPaths,
+			}
+			if len(cfg.IncludedPaths) != tt.expectedLen {
+				t.Errorf("expected %d included paths, got %d", tt.expectedLen, len(cfg.IncludedPaths))
+			}
+			if tt.expectedLen > 0 && cfg.IncludedPaths[0] != tt.expectedPath {
+				t.Errorf("expected first path to be '%s', got '%s'", tt.expectedPath, cfg.IncludedPaths[0])
 			}
 		})
 	}

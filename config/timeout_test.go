@@ -18,8 +18,11 @@ func TestTimeoutConfig_DefaultValues(t *testing.T) {
 	if cfg.Message != "" {
 		t.Errorf("expected default message = '', got %s", cfg.Message)
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 
 	// Test default status code specifically
@@ -63,27 +66,43 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths assignment", func(t *testing.T) {
-		exemptPaths := []string{"/api/long-running", "/upload", "/stream", "/websocket"}
+	t.Run("excluded paths assignment", func(t *testing.T) {
+		excludedPaths := []string{"/api/long-running", "/upload", "/stream", "/websocket"}
 		cfg := TimeoutConfig{
-			Timeout:     DefaultTimeoutConfig.Timeout,
-			ExemptPaths: exemptPaths,
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 4 {
-			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 4 {
+			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
+		}
+	})
+
+	t.Run("included paths assignment", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := TimeoutConfig{
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
 		}
 	})
 
 	t.Run("multiple fields", func(t *testing.T) {
-		exemptPaths := []string{"/long-process", "/upload"}
+		excludedPaths := []string{"/long-process", "/upload"}
+		includedPaths := []string{"/api/public"}
 		cfg := TimeoutConfig{
-			Timeout:     2 * time.Minute,
-			StatusCode:  http.StatusServiceUnavailable,
-			Message:     "Service unavailable due to timeout",
-			ExemptPaths: exemptPaths,
+			Timeout:       2 * time.Minute,
+			StatusCode:    http.StatusServiceUnavailable,
+			Message:       "Service unavailable due to timeout",
+			ExcludedPaths: excludedPaths,
+			IncludedPaths: includedPaths,
 		}
 
 		if cfg.Timeout != 2*time.Minute {
@@ -95,8 +114,14 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 		if cfg.Message != "Service unavailable due to timeout" {
 			t.Error("expected timeout message to be set correctly")
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Error("expected exempt paths to be set correctly")
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Error("expected excluded paths to be set correctly")
+		}
+		if len(cfg.IncludedPaths) != 1 {
+			t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Error("expected included paths to be set correctly")
 		}
 	})
 }
@@ -191,76 +216,113 @@ func TestTimeoutConfig_MessageVariations(t *testing.T) {
 }
 
 func TestTimeoutConfig_EdgeCases(t *testing.T) {
-	t.Run("empty exempt paths", func(t *testing.T) {
+	t.Run("empty excluded paths", func(t *testing.T) {
 		cfg := TimeoutConfig{
-			Timeout:     DefaultTimeoutConfig.Timeout,
-			ExemptPaths: []string{},
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			ExcludedPaths: []string{},
 		}
-		if cfg.ExemptPaths == nil {
-			t.Error("expected exempt paths slice to be initialized, not nil")
+		if cfg.ExcludedPaths == nil {
+			t.Error("expected excluded paths slice to be initialized, not nil")
 		}
-		if len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %d entries", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
 		}
 	})
 
-	t.Run("nil exempt paths", func(t *testing.T) {
+	t.Run("nil excluded paths", func(t *testing.T) {
 		cfg := TimeoutConfig{
-			Timeout:     DefaultTimeoutConfig.Timeout,
-			ExemptPaths: nil,
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			ExcludedPaths: nil,
 		}
-		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+		if cfg.ExcludedPaths != nil {
+			t.Error("expected excluded paths to remain nil when nil is passed")
 		}
 	})
 
 	t.Run("empty string paths", func(t *testing.T) {
-		exemptPaths := []string{"", "/upload", ""}
+		excludedPaths := []string{"", "/upload", ""}
 		cfg := TimeoutConfig{
-			Timeout:     DefaultTimeoutConfig.Timeout,
-			ExemptPaths: exemptPaths,
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 3 {
-			t.Errorf("expected 3 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 3 {
+			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := TimeoutConfig{
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := TimeoutConfig{
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			IncludedPaths: nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
+		}
+	})
+
+	t.Run("custom included paths", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := TimeoutConfig{
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
 		}
 	})
 }
 
 func TestTimeoutConfig_PathPatterns(t *testing.T) {
 	t.Run("pattern paths", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/api/v1/upload/*", "/streaming/*", "/websocket", "/long-poll",
 			"*.upload", "/admin/backup/*", "/reports/generate", "/sse/*",
 		}
 		cfg := TimeoutConfig{
-			Timeout:     DefaultTimeoutConfig.Timeout,
-			ExemptPaths: exemptPaths,
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 
 	t.Run("special character paths", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/api-v1/upload", "/long_running_task", "/upload-service", "/stream.data",
 			"/process (background)", "/path with spaces", "/path/with/unicode-ñ", "/files/test@example.com",
 		}
 		cfg := TimeoutConfig{
-			Timeout:     DefaultTimeoutConfig.Timeout,
-			ExemptPaths: exemptPaths,
+			Timeout:       DefaultTimeoutConfig.Timeout,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 }

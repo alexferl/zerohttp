@@ -40,13 +40,23 @@ type CSRFConfig struct {
 	// Default: Returns 403 Forbidden with plain text error
 	ErrorHandler http.HandlerFunc
 
-	// ExemptPaths contains paths that skip CSRF validation
-	// Default: []string{}
-	ExemptPaths []string
+	// ExcludedPaths contains paths that skip CSRF validation.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
 
-	// ExemptMethods contains HTTP methods that skip CSRF validation
+	// IncludedPaths contains paths where CSRF validation is explicitly applied.
+	// If set, CSRF will only be validated for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, CSRF applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
+
+	// ExcludedMethods contains HTTP methods that skip CSRF validation
 	// Default: []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace}
-	ExemptMethods []string
+	ExcludedMethods []string
 
 	// HMACKey is the secret key used for HMAC signing (REQUIRED)
 	// Must be set explicitly. The middleware will panic if not set.
@@ -61,15 +71,16 @@ type CSRFConfig struct {
 
 // DefaultCSRFConfig contains the default values for CSRF configuration
 var DefaultCSRFConfig = CSRFConfig{
-	CookieName:     "csrf_token",
-	CookieMaxAge:   86400, // 24 hours
-	CookieDomain:   "",
-	CookiePath:     "/",
-	CookieSecure:   Bool(true),
-	CookieSameSite: http.SameSiteStrictMode,
-	TokenLookup:    "header:X-CSRF-Token",
-	ErrorHandler:   nil,
-	ExemptPaths:    []string{},
-	ExemptMethods:  []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace},
-	HMACKey:        nil,
+	CookieName:      "csrf_token",
+	CookieMaxAge:    86400, // 24 hours
+	CookieDomain:    "",
+	CookiePath:      "/",
+	CookieSecure:    Bool(true),
+	CookieSameSite:  http.SameSiteStrictMode,
+	TokenLookup:     "header:X-CSRF-Token",
+	ErrorHandler:    nil,
+	ExcludedPaths:   []string{},
+	IncludedPaths:   []string{},
+	ExcludedMethods: []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace},
+	HMACKey:         nil,
 }

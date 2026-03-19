@@ -240,23 +240,23 @@ func TestRequestLogger_CustomFields(t *testing.T) {
 	}
 }
 
-func TestRequestLogger_ExemptPaths(t *testing.T) {
+func TestRequestLogger_ExcludedPaths(t *testing.T) {
 	logger := &requestLoggerMockLogger{}
 	handler := &statusTestHandler{statusCode: http.StatusOK}
-	middleware := RequestLogger(logger, config.RequestLoggerConfig{ExemptPaths: []string{"/health", "/metrics"}})(handler)
+	middleware := RequestLogger(logger, config.RequestLoggerConfig{ExcludedPaths: []string{"/health", "/metrics"}})(handler)
 
 	req1 := zhtest.NewRequest(http.MethodGet, "/health").Build()
 	zhtest.Serve(middleware, req1)
 
 	if len(logger.infoLogs) != 0 {
-		t.Errorf("Expected no logs for exempt path, got %d", len(logger.infoLogs))
+		t.Errorf("Expected no logs for excluded path, got %d", len(logger.infoLogs))
 	}
 
 	req2 := zhtest.NewRequest(http.MethodGet, "/api").Build()
 	zhtest.Serve(middleware, req2)
 
 	if len(logger.infoLogs) != 1 {
-		t.Errorf("Expected 1 log for non-exempt path, got %d", len(logger.infoLogs))
+		t.Errorf("Expected 1 log for non-excluded path, got %d", len(logger.infoLogs))
 	}
 }
 
@@ -322,8 +322,8 @@ func TestDefaultRequestLoggerConfig(t *testing.T) {
 			t.Errorf("Expected field %s to be in default cfg", expected)
 		}
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("Expected default exempt paths to be empty, got %d", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("Expected default excluded paths to be empty, got %d", len(cfg.ExcludedPaths))
 	}
 	if cfg.MaxBodySize != 1024 {
 		t.Errorf("Expected default MaxBodySize to be 1024, got %d", cfg.MaxBodySize)
@@ -764,24 +764,24 @@ func (p *panicLogger) Fatal(msg string, fields ...log.Field)      {}
 func (p *panicLogger) WithFields(fields ...log.Field) log.Logger  { return p }
 func (p *panicLogger) WithContext(ctx context.Context) log.Logger { return p }
 
-func TestRequestLogger_ExemptPathsAndAllowedPathsPanic(t *testing.T) {
+func TestRequestLogger_ExcludedPathsAndIncludedPathsPanic(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("Expected panic when both ExemptPaths and AllowedPaths are set")
-		} else if !strings.Contains(r.(string), "cannot set both ExemptPaths and AllowedPaths") {
-			t.Errorf("Expected panic message about ExemptPaths and AllowedPaths, got: %v", r)
+			t.Error("Expected panic when both ExcludedPaths and IncludedPaths are set")
+		} else if !strings.Contains(r.(string), "cannot set both ExcludedPaths and IncludedPaths") {
+			t.Errorf("Expected panic message about ExcludedPaths and IncludedPaths, got: %v", r)
 		}
 	}()
 
 	logger := &panicLogger{}
 	_ = RequestLogger(logger, config.RequestLoggerConfig{
-		ExemptPaths:  []string{"/health"},
-		AllowedPaths: []string{"/api/debug"},
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api/debug"},
 	})
 }
 
-func TestRequestLogger_AllowedPaths(t *testing.T) {
-	t.Run("body logging only for allowed paths", func(t *testing.T) {
+func TestRequestLogger_IncludedPaths(t *testing.T) {
+	t.Run("body logging only for included paths", func(t *testing.T) {
 		logger := &requestLoggerMockLogger{}
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -790,7 +790,7 @@ func TestRequestLogger_AllowedPaths(t *testing.T) {
 			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
 			LogRequestBody:  true,
 			LogResponseBody: true,
-			AllowedPaths:    []string{"/api/debug"},
+			IncludedPaths:   []string{"/api/debug"},
 		})(handler)
 
 		// Request to allowed path - bodies should be logged
@@ -815,7 +815,7 @@ func TestRequestLogger_AllowedPaths(t *testing.T) {
 			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
 			LogRequestBody:  true,
 			LogResponseBody: true,
-			AllowedPaths:    []string{"/api/debug"},
+			IncludedPaths:   []string{"/api/debug"},
 		})(handler)
 
 		req2 := zhtest.NewRequest(http.MethodPost, "/api/other").
@@ -834,7 +834,7 @@ func TestRequestLogger_AllowedPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("prefix matching for allowed paths", func(t *testing.T) {
+	t.Run("prefix matching for included paths", func(t *testing.T) {
 		logger := &requestLoggerMockLogger{}
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -843,7 +843,7 @@ func TestRequestLogger_AllowedPaths(t *testing.T) {
 			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
 			LogRequestBody:  true,
 			LogResponseBody: true,
-			AllowedPaths:    []string{"/api/debug/"},
+			IncludedPaths:   []string{"/api/debug/"},
 		})(handler)
 
 		// Request to path under allowed prefix
@@ -860,7 +860,7 @@ func TestRequestLogger_AllowedPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("empty allowed paths allows all", func(t *testing.T) {
+	t.Run("empty included paths allows all", func(t *testing.T) {
 		logger := &requestLoggerMockLogger{}
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -869,7 +869,7 @@ func TestRequestLogger_AllowedPaths(t *testing.T) {
 			Fields:          []config.LogField{config.FieldPath, config.FieldRequestBody, config.FieldResponseBody},
 			LogRequestBody:  true,
 			LogResponseBody: true,
-			AllowedPaths:    []string{}, // Empty - should allow all
+			IncludedPaths:   []string{}, // Empty - should allow all
 		})(handler)
 
 		req := zhtest.NewRequest(http.MethodPost, "/api/anything").
@@ -881,7 +881,7 @@ func TestRequestLogger_AllowedPaths(t *testing.T) {
 			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
 		}
 		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
-			t.Error("Expected request_body to be present when AllowedPaths is empty")
+			t.Error("Expected request_body to be present when IncludedPaths is empty")
 		}
 	})
 }

@@ -45,7 +45,7 @@
 //	    Metrics: config.MetricsConfig{
 //	        Enabled:      true,
 //	        Endpoint:     "/metrics",
-//	        ExcludePaths: []string{"/health", "/readyz"},
+//	        ExcludedPaths: []string{"/health", "/readyz"},
 //	        CustomLabels: func(r *http.Request) map[string]string {
 //	            return map[string]string{
 //	                "tenant": r.Header.Get("X-Tenant-ID"),

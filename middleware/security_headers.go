@@ -21,13 +21,13 @@ func SecurityHeaders(cfg ...config.SecurityHeadersConfig) func(http.Handler) htt
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "SecurityHeaders")
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			csp := c.ContentSecurityPolicy

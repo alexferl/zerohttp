@@ -149,10 +149,10 @@ func TestHostValidation_WithPort(t *testing.T) {
 	}
 }
 
-func TestHostValidation_ExemptPaths(t *testing.T) {
+func TestHostValidation_ExcludedPaths(t *testing.T) {
 	mw := HostValidation(config.HostValidationConfig{
-		AllowedHosts: []string{"example.com"},
-		ExemptPaths:  []string{"/health", "/metrics"},
+		AllowedHosts:  []string{"example.com"},
+		ExcludedPaths: []string{"/health", "/metrics"},
 	})
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -164,10 +164,10 @@ func TestHostValidation_ExemptPaths(t *testing.T) {
 		host       string
 		wantStatus int
 	}{
-		{"exempt path with bad host", "/health", "evil.com", http.StatusOK},
-		{"exempt path 2", "/metrics", "evil.com", http.StatusOK},
-		{"non-exempt path with bad host", "/api", "evil.com", http.StatusBadRequest},
-		{"non-exempt path with good host", "/api", "example.com", http.StatusOK},
+		{"excluded path with bad host", "/health", "evil.com", http.StatusOK},
+		{"excluded path 2", "/metrics", "evil.com", http.StatusOK},
+		{"non-excluded path with bad host", "/api", "evil.com", http.StatusBadRequest},
+		{"non-excluded path with good host", "/api", "example.com", http.StatusOK},
 	}
 
 	for _, tt := range tests {
@@ -563,4 +563,50 @@ func TestIsValidHost(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHostValidation_IncludedPaths(t *testing.T) {
+	mw := HostValidation(config.HostValidationConfig{
+		AllowedHosts:  []string{"example.com"},
+		IncludedPaths: []string{"/api/", "/admin"},
+	})
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	tests := []struct {
+		name       string
+		path       string
+		host       string
+		wantStatus int
+	}{
+		{"allowed path with good host", "/api/users", "example.com", http.StatusOK},
+		{"allowed path with bad host", "/api/users", "evil.com", http.StatusBadRequest},
+		{"non-allowed path with good host", "/other", "example.com", http.StatusOK},
+		{"non-allowed path with bad host", "/other", "evil.com", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := zhtest.NewRequest(http.MethodGet, tt.path).Build()
+			req.Host = tt.host
+			w := zhtest.Serve(handler, req)
+
+			zhtest.AssertWith(t, w).Status(tt.wantStatus)
+		})
+	}
+}
+
+func TestHostValidation_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = HostValidation(config.HostValidationConfig{
+		AllowedHosts:  []string{"example.com"},
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

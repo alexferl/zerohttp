@@ -40,12 +40,16 @@ func TestCSRFConfig_DefaultValues(t *testing.T) {
 		t.Error("expected default ErrorHandler to be nil")
 	}
 
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default ExemptPaths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default ExcludedPaths to be empty, got %d paths", len(cfg.ExcludedPaths))
 	}
 
-	if len(cfg.ExemptMethods) != 4 {
-		t.Errorf("expected default ExemptMethods to have 4 methods, got %d", len(cfg.ExemptMethods))
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default IncludedPaths to be empty, got %d paths", len(cfg.IncludedPaths))
+	}
+
+	if len(cfg.ExcludedMethods) != 4 {
+		t.Errorf("expected default ExcludedMethods to have 4 methods, got %d", len(cfg.ExcludedMethods))
 	}
 
 	if cfg.HMACKey != nil {
@@ -144,7 +148,46 @@ func TestCSRFConfig_CustomValues(t *testing.T) {
 	})
 }
 
-func TestCSRFConfig_ExemptMethods(t *testing.T) {
+func TestCSRFConfig_IncludedPaths(t *testing.T) {
+	t.Run("custom included paths", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := CSRFConfig{
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if cfg.IncludedPaths[0] != "/api/public" {
+			t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
+		}
+		if cfg.IncludedPaths[1] != "/health" {
+			t.Errorf("expected second allowed path to be /health, got %s", cfg.IncludedPaths[1])
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := CSRFConfig{
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := CSRFConfig{
+			IncludedPaths: nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
+		}
+	})
+}
+
+func TestCSRFConfig_ExcludedMethods(t *testing.T) {
 	cfg := DefaultCSRFConfig
 
 	expectedMethods := map[string]bool{
@@ -154,9 +197,9 @@ func TestCSRFConfig_ExemptMethods(t *testing.T) {
 		http.MethodTrace:   true,
 	}
 
-	for _, method := range cfg.ExemptMethods {
+	for _, method := range cfg.ExcludedMethods {
 		if !expectedMethods[method] {
-			t.Errorf("unexpected exempt method: %s", method)
+			t.Errorf("unexpected excluded method: %s", method)
 		}
 	}
 }

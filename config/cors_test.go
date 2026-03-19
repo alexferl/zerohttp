@@ -34,8 +34,11 @@ func TestCORSConfig_DefaultValues(t *testing.T) {
 	if cfg.OptionsPassthrough != false {
 		t.Errorf("expected default options passthrough = false, got %t", cfg.OptionsPassthrough)
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 
 	// Test default method values
@@ -184,19 +187,35 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths", func(t *testing.T) {
-		exemptPaths := []string{"/health", "/metrics", "/internal", "/debug"}
+	t.Run("excluded paths", func(t *testing.T) {
+		excludedPaths := []string{"/health", "/metrics", "/internal", "/debug"}
 		cfg := CORSConfig{
 			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
 			AllowedMethods: DefaultCORSConfig.AllowedMethods,
 			AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
-			ExemptPaths:    exemptPaths,
+			ExcludedPaths:  excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 4 {
-			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 4 {
+			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
+		}
+	})
+
+	t.Run("included paths", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := CORSConfig{
+			AllowedOrigins: DefaultCORSConfig.AllowedOrigins,
+			AllowedMethods: DefaultCORSConfig.AllowedMethods,
+			AllowedHeaders: DefaultCORSConfig.AllowedHeaders,
+			IncludedPaths:  includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
 		}
 	})
 }
@@ -206,7 +225,8 @@ func TestCORSConfig_MultipleFields(t *testing.T) {
 	methods := []string{http.MethodGet, http.MethodPost}
 	headers := []string{"Content-Type"}
 	exposedHeaders := []string{"X-Total-Count"}
-	exemptPaths := []string{"/health"}
+	excludedPaths := []string{"/health"}
+	includedPaths := []string{"/api/public"}
 	cfg := CORSConfig{
 		AllowedOrigins:     origins,
 		AllowedMethods:     methods,
@@ -215,7 +235,8 @@ func TestCORSConfig_MultipleFields(t *testing.T) {
 		AllowCredentials:   true,
 		MaxAge:             7200,
 		OptionsPassthrough: true,
-		ExemptPaths:        exemptPaths,
+		ExcludedPaths:      excludedPaths,
+		IncludedPaths:      includedPaths,
 	}
 
 	if !reflect.DeepEqual(cfg.AllowedOrigins, origins) {
@@ -239,8 +260,11 @@ func TestCORSConfig_MultipleFields(t *testing.T) {
 	if cfg.OptionsPassthrough != true {
 		t.Error("expected options passthrough to be true")
 	}
-	if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-		t.Error("expected exempt paths to be set correctly")
+	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+		t.Error("expected excluded paths to be set correctly")
+	}
+	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+		t.Error("expected included paths to be set correctly")
 	}
 }
 
@@ -251,7 +275,8 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 			AllowedMethods: []string{},
 			AllowedHeaders: []string{},
 			ExposedHeaders: []string{},
-			ExemptPaths:    []string{},
+			ExcludedPaths:  []string{},
+			IncludedPaths:  []string{},
 		}
 
 		if cfg.AllowedOrigins == nil || len(cfg.AllowedOrigins) != 0 {
@@ -266,8 +291,11 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 		if cfg.ExposedHeaders == nil || len(cfg.ExposedHeaders) != 0 {
 			t.Errorf("expected empty exposed headers slice, got %v", cfg.ExposedHeaders)
 		}
-		if cfg.ExemptPaths == nil || len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %v", cfg.ExemptPaths)
+		if cfg.ExcludedPaths == nil || len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %v", cfg.ExcludedPaths)
+		}
+		if cfg.IncludedPaths == nil || len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %v", cfg.IncludedPaths)
 		}
 	})
 
@@ -277,7 +305,8 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 			AllowedMethods: nil,
 			AllowedHeaders: nil,
 			ExposedHeaders: nil,
-			ExemptPaths:    nil,
+			ExcludedPaths:  nil,
+			IncludedPaths:  nil,
 		}
 
 		if cfg.AllowedOrigins != nil {
@@ -292,8 +321,11 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 		if cfg.ExposedHeaders != nil {
 			t.Error("expected exposed headers to be nil when nil is passed")
 		}
-		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to be nil when nil is passed")
+		if cfg.ExcludedPaths != nil {
+			t.Error("expected excluded paths to be nil when nil is passed")
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to be nil when nil is passed")
 		}
 	})
 

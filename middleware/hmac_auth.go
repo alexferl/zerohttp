@@ -123,6 +123,8 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 		c.Algorithm = config.HMACSHA256
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "HMACAuth")
+
 	errorHandler := c.ErrorHandler
 	if errorHandler == nil {
 		errorHandler = defaultHMACErrorHandler
@@ -143,11 +145,9 @@ func HMACAuth(cfg ...config.HMACAuthConfig) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			var parsed *parsedAuth

@@ -30,13 +30,13 @@ func Timeout(cfg ...config.TimeoutConfig) func(http.Handler) http.Handler {
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "Timeout")
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			ctx, cancel := context.WithTimeout(r.Context(), c.Timeout)

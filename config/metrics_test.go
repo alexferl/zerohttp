@@ -27,9 +27,9 @@ func TestDefaultMetricsConfig(t *testing.T) {
 		t.Errorf("expected SizeBuckets %v, got %v", expectedSizeBuckets, defaults.SizeBuckets)
 	}
 
-	expectedExcludePaths := []string{"/metrics"}
-	if !reflect.DeepEqual(defaults.ExcludePaths, expectedExcludePaths) {
-		t.Errorf("expected ExcludePaths %v, got %v", expectedExcludePaths, defaults.ExcludePaths)
+	expectedExcludedPaths := []string{"/metrics"}
+	if !reflect.DeepEqual(defaults.ExcludedPaths, expectedExcludedPaths) {
+		t.Errorf("expected ExcludedPaths %v, got %v", expectedExcludedPaths, defaults.ExcludedPaths)
 	}
 
 	if defaults.PathLabelFunc == nil {
@@ -45,6 +45,9 @@ func TestDefaultMetricsConfig(t *testing.T) {
 	if defaults.CustomLabels != nil {
 		t.Error("expected CustomLabels to be nil by default")
 	}
+	if len(defaults.IncludedPaths) != 0 {
+		t.Errorf("expected IncludedPaths to be empty, got %d paths", len(defaults.IncludedPaths))
+	}
 }
 
 func TestMetricsConfig_CustomLabels(t *testing.T) {
@@ -59,7 +62,7 @@ func TestMetricsConfig_CustomLabels(t *testing.T) {
 		ServerAddr:      String("localhost:9091"),
 		DurationBuckets: []float64{0.1, 0.5, 1.0},
 		SizeBuckets:     []float64{1000, 10000},
-		ExcludePaths:    []string{"/health", "/readyz"},
+		ExcludedPaths:   []string{"/health", "/readyz"},
 		PathLabelFunc:   func(p string) string { return "/normalized" },
 		CustomLabels:    customLabels,
 	}
@@ -80,8 +83,8 @@ func TestMetricsConfig_CustomLabels(t *testing.T) {
 		t.Errorf("expected 2 SizeBuckets, got %d", len(cfg.SizeBuckets))
 	}
 
-	if !reflect.DeepEqual(cfg.ExcludePaths, []string{"/health", "/readyz"}) {
-		t.Errorf("expected ExcludePaths [health readyz], got %v", cfg.ExcludePaths)
+	if !reflect.DeepEqual(cfg.ExcludedPaths, []string{"/health", "/readyz"}) {
+		t.Errorf("expected ExcludedPaths [health readyz], got %v", cfg.ExcludedPaths)
 	}
 
 	result := cfg.PathLabelFunc("/api/users/123")
@@ -109,4 +112,40 @@ func TestMetricsConfig_EmptyServerAddr(t *testing.T) {
 	if cfg.ServerAddr == nil || *cfg.ServerAddr != "" {
 		t.Errorf("expected ServerAddr to be empty, got %v", cfg.ServerAddr)
 	}
+}
+
+func TestMetricsConfig_IncludedPaths(t *testing.T) {
+	t.Run("custom included paths", func(t *testing.T) {
+		cfg := MetricsConfig{
+			Endpoint:      "/metrics",
+			IncludedPaths: []string{"/api/public", "/health"},
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if cfg.IncludedPaths[0] != "/api/public" {
+			t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := MetricsConfig{
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := MetricsConfig{
+			IncludedPaths: nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
+		}
+	})
 }

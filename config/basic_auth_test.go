@@ -15,8 +15,11 @@ func TestBasicAuthConfig_DefaultValues(t *testing.T) {
 	if cfg.Validator != nil {
 		t.Error("expected default validator to be nil")
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 }
 
@@ -70,20 +73,38 @@ func TestBasicAuthConfig_CustomValues(t *testing.T) {
 		}
 	})
 
-	t.Run("custom exempt paths", func(t *testing.T) {
-		exemptPaths := []string{"/health", "/metrics", "/login", "/signup"}
+	t.Run("custom excluded paths", func(t *testing.T) {
+		excludedPaths := []string{"/health", "/metrics", "/login", "/signup"}
 		cfg := BasicAuthConfig{
-			ExemptPaths: exemptPaths,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 4 {
-			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 4 {
+			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
 		expectedPaths := map[string]bool{
 			"/health": true, "/metrics": true, "/login": true, "/signup": true,
 		}
-		for _, path := range cfg.ExemptPaths {
+		for _, path := range cfg.ExcludedPaths {
 			if !expectedPaths[path] {
-				t.Errorf("unexpected exempt path: %s", path)
+				t.Errorf("unexpected excluded path: %s", path)
+			}
+		}
+	})
+
+	t.Run("custom included paths", func(t *testing.T) {
+		includedPaths := []string{"/admin", "/api/private/"}
+		cfg := BasicAuthConfig{
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		expectedPaths := map[string]bool{
+			"/admin": true, "/api/private/": true,
+		}
+		for _, path := range cfg.IncludedPaths {
+			if !expectedPaths[path] {
+				t.Errorf("unexpected allowed path: %s", path)
 			}
 		}
 	})
@@ -91,16 +112,18 @@ func TestBasicAuthConfig_CustomValues(t *testing.T) {
 
 func TestBasicAuthConfig_MultipleFields(t *testing.T) {
 	credentials := map[string]string{"admin": "secret123", "user": "pass456"}
-	exemptPaths := []string{"/public", "/health"}
+	excludedPaths := []string{"/public", "/health"}
+	includedPaths := []string{"/admin", "/api/"}
 	validator := func(username, password string) bool {
 		return username == "custom" && password == "validate"
 	}
 
 	cfg := BasicAuthConfig{
-		Realm:       "Custom Realm",
-		Credentials: credentials,
-		Validator:   validator,
-		ExemptPaths: exemptPaths,
+		Realm:         "Custom Realm",
+		Credentials:   credentials,
+		Validator:     validator,
+		ExcludedPaths: excludedPaths,
+		IncludedPaths: includedPaths,
 	}
 
 	if cfg.Realm != "Custom Realm" {
@@ -118,8 +141,11 @@ func TestBasicAuthConfig_MultipleFields(t *testing.T) {
 	if !cfg.Validator("custom", "validate") {
 		t.Error("expected custom validator to work")
 	}
-	if len(cfg.ExemptPaths) != 2 {
-		t.Errorf("expected 2 exempt paths, got %d", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 2 {
+		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 2 {
+		t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
 	}
 }
 
@@ -145,24 +171,45 @@ func TestBasicAuthConfig_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("empty exempt paths", func(t *testing.T) {
+	t.Run("empty excluded paths", func(t *testing.T) {
 		cfg := BasicAuthConfig{
-			ExemptPaths: []string{},
+			ExcludedPaths: []string{},
 		}
-		if cfg.ExemptPaths == nil {
-			t.Error("expected exempt paths slice to be initialized, not nil")
+		if cfg.ExcludedPaths == nil {
+			t.Error("expected excluded paths slice to be initialized, not nil")
 		}
-		if len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %d entries", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
 		}
 	})
 
-	t.Run("nil exempt paths", func(t *testing.T) {
+	t.Run("nil excluded paths", func(t *testing.T) {
 		cfg := BasicAuthConfig{
-			ExemptPaths: nil,
+			ExcludedPaths: nil,
 		}
-		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+		if cfg.ExcludedPaths != nil {
+			t.Error("expected excluded paths to remain nil when nil is passed")
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := BasicAuthConfig{
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := BasicAuthConfig{
+			IncludedPaths: nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
 		}
 	})
 }

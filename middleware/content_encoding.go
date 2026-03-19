@@ -17,6 +17,8 @@ func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) htt
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "ContentEncoding")
+
 	allowedEncodings := make(map[string]struct{}, len(c.Encodings))
 	for _, encoding := range c.Encodings {
 		allowedEncodings[strings.TrimSpace(strings.ToLower(encoding))] = struct{}{}
@@ -24,12 +26,9 @@ func ContentEncoding(cfg ...config.ContentEncodingConfig) func(http.Handler) htt
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check exempt paths
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			// Skip validation for empty content body (like Chi does)

@@ -237,7 +237,7 @@ func main() {
 	jwtCfg := config.JWTAuthConfig{
 		TokenStore:      tokenStore,
 		RequiredClaims:  []string{"sub"},
-		ExemptPaths:     []string{"/login"},
+		ExcludedPaths:   []string{"/login"},
 		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 7 * 24 * time.Hour,
 	}

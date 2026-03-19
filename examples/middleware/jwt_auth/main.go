@@ -24,7 +24,7 @@ func main() {
 	jwtCfg := config.JWTAuthConfig{
 		TokenStore:     middleware.NewHS256TokenStore(jwtSecret, hp),
 		RequiredClaims: []string{"sub"},
-		ExemptPaths:    []string{"/login", "/register"},
+		ExcludedPaths:  []string{"/login", "/register"},
 		// Long expiry - 30 days (or use 0 for no expiry)
 		AccessTokenTTL: 30 * 24 * time.Hour,
 	}

@@ -234,8 +234,8 @@ func TestIdempotency_Required(t *testing.T) {
 	})
 }
 
-func TestIdempotency_ExemptPaths(t *testing.T) {
-	t.Run("skips idempotency for exempt paths", func(t *testing.T) {
+func TestIdempotency_ExcludedPaths(t *testing.T) {
+	t.Run("skips idempotency for excluded paths", func(t *testing.T) {
 		callCount := 0
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			callCount++
@@ -243,24 +243,24 @@ func TestIdempotency_ExemptPaths(t *testing.T) {
 		})
 
 		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
-			TTL:         time.Hour,
-			ExemptPaths: []string{"/webhook*"},
+			TTL:           time.Hour,
+			ExcludedPaths: []string{"/webhook*"},
 		})
 
-		// First request to exempt path
+		// First request to excluded path
 		req1 := httptest.NewRequest(http.MethodPost, "/webhook/stripe", bytes.NewReader([]byte(`{}`)))
 		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-webhook")
 		w1 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
-		// Second request to exempt path
+		// Second request to excluded path
 		req2 := httptest.NewRequest(http.MethodPost, "/webhook/stripe", bytes.NewReader([]byte(`{}`)))
 		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-webhook")
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
 		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for exempt path, got %d", callCount)
+			t.Errorf("Expected 2 handler calls for excluded path, got %d", callCount)
 		}
 	})
 }
@@ -1015,5 +1015,114 @@ func TestIdempotency_WriteHeaderIdempotent(t *testing.T) {
 		if w.Code != http.StatusCreated {
 			t.Errorf("Expected 201 (first WriteHeader), got %d", w.Code)
 		}
+	})
+}
+
+func TestIdempotency_IncludedPaths(t *testing.T) {
+	t.Run("only applies idempotency to included paths", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"id":"123"}`))
+		})
+
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL:           time.Hour,
+			IncludedPaths: []string{"/api/payments", "/api/transfers/"},
+		})
+
+		// First request to allowed path
+		req1 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-allowed")
+		w1 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request to same allowed path - should be cached
+		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-allowed")
+		w2 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
+
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call for allowed path (cached), got %d", callCount)
+		}
+		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+			t.Error("Replayed request should have X-Idempotency-Replay header")
+		}
+
+		// Request to non-allowed path - should not be cached
+		req3 := httptest.NewRequest(http.MethodPost, "/api/other", bytes.NewReader([]byte(`{"data":"test"}`)))
+		req3.Header.Set(httpx.HeaderIdempotencyKey, "key-other")
+		w3 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w3, req3)
+
+		// Second request to non-allowed path - should hit handler again
+		req4 := httptest.NewRequest(http.MethodPost, "/api/other", bytes.NewReader([]byte(`{"data":"test"}`)))
+		req4.Header.Set(httpx.HeaderIdempotencyKey, "key-other")
+		w4 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w4, req4)
+
+		if callCount != 3 {
+			t.Errorf("Expected 3 handler calls (non-allowed path not cached), got %d", callCount)
+		}
+	})
+
+	t.Run("included paths with prefix match", func(t *testing.T) {
+		callCount := 0
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			w.WriteHeader(http.StatusOK)
+		})
+
+		idempotencyMiddleware := Idempotency(config.IdempotencyConfig{
+			TTL:           time.Hour,
+			IncludedPaths: []string{"/api/"},
+		})
+
+		// Request to path under prefix
+		req1 := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader([]byte(`{}`)))
+		req1.Header.Set(httpx.HeaderIdempotencyKey, "key-prefix")
+		w1 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
+
+		// Second request - should be cached
+		req2 := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader([]byte(`{}`)))
+		req2.Header.Set(httpx.HeaderIdempotencyKey, "key-prefix")
+		w2 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
+
+		if callCount != 1 {
+			t.Errorf("Expected 1 handler call for prefix match, got %d", callCount)
+		}
+
+		// Request outside prefix - should not be cached
+		req3 := httptest.NewRequest(http.MethodPost, "/health", bytes.NewReader([]byte(`{}`)))
+		req3.Header.Set(httpx.HeaderIdempotencyKey, "key-health")
+		w3 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w3, req3)
+
+		req4 := httptest.NewRequest(http.MethodPost, "/health", bytes.NewReader([]byte(`{}`)))
+		req4.Header.Set(httpx.HeaderIdempotencyKey, "key-health")
+		w4 := httptest.NewRecorder()
+		idempotencyMiddleware(handler).ServeHTTP(w4, req4)
+
+		if callCount != 3 {
+			t.Errorf("Expected 3 handler calls (outside prefix not cached), got %d", callCount)
+		}
+	})
+}
+
+func TestIdempotency_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = Idempotency(config.IdempotencyConfig{
+		TTL:           time.Hour,
+		ExcludedPaths: []string{"/webhook"},
+		IncludedPaths: []string{"/api"},
 	})
 }

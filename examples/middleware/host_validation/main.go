@@ -56,7 +56,7 @@ func main() {
 		Port:         8080, // Server port - Host must include :8080
 	}))
 
-	// Example 5: Exempt paths (health check bypasses validation)
+	// Example 5: Excluded paths (health check bypasses validation)
 	app.GET("/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, zh.M{
 			"status": "healthy",
@@ -64,8 +64,8 @@ func main() {
 			"note":   "This endpoint bypasses host validation",
 		})
 	}), middleware.HostValidation(config.HostValidationConfig{
-		AllowedHosts: []string{"api.example.com"},
-		ExemptPaths:  []string{"/health"},
+		AllowedHosts:  []string{"api.example.com"},
+		ExcludedPaths: []string{"/health"},
 	}))
 
 	// Example 6: Custom error response

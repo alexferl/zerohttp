@@ -36,7 +36,7 @@
 //	        "admin": "secret-password",
 //	    },
 //	    Realm: "Restricted Area",
-//	    ExemptPaths: []string{"/health"},
+//	    ExcludedPaths: []string{"/health"},
 //	}))
 //
 // # JWT Authentication
@@ -44,7 +44,7 @@
 //	cfg := config.JWTAuthConfig{
 //	    TokenStore:     myTokenStore,
 //	    RequiredClaims: []string{"sub"},
-//	    ExemptPaths:    []string{"/login", "/register"},
+//	    ExcludedPaths:    []string{"/login", "/register"},
 //	}
 //	app.Use(middleware.JWTAuth(cfg))
 //
@@ -141,7 +141,7 @@
 //	    Metrics: config.MetricsConfig{
 //	        Enabled:  true,
 //	        Endpoint: "/metrics",
-//	        ExcludePaths: []string{"/health", "/readyz"},
+//	        ExcludedPaths: []string{"/health", "/readyz"},
 //	    },
 //	})
 //

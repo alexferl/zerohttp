@@ -232,12 +232,12 @@ func TestRateLimitCustomKeyExtractor(t *testing.T) {
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 }
 
-func TestRateLimitExemptPaths(t *testing.T) {
+func TestRateLimitExcludedPaths(t *testing.T) {
 	middleware := RateLimit(config.RateLimitConfig{
-		Rate:        1,
-		Window:      time.Second,
-		Algorithm:   config.TokenBucket,
-		ExemptPaths: []string{"/health", "/metrics"},
+		Rate:          1,
+		Window:        time.Second,
+		Algorithm:     config.TokenBucket,
+		ExcludedPaths: []string{"/health", "/metrics"},
 	})
 	count := 0
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -250,11 +250,11 @@ func TestRateLimitExemptPaths(t *testing.T) {
 		w := zhtest.Serve(handler, req)
 
 		if w.Code != http.StatusOK {
-			t.Errorf("exempt path request %d: expected status 200, got %d", i+1, w.Code)
+			t.Errorf("excluded path request %d: expected status 200, got %d", i+1, w.Code)
 		}
 	}
 	if count != 3 {
-		t.Errorf("expected 3 requests to exempt path, got %d", count)
+		t.Errorf("expected 3 requests to excluded path, got %d", count)
 	}
 	req := zhtest.NewRequest(http.MethodGet, "/api").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -643,4 +643,60 @@ func TestIPKeyExtractor_IPv6(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRateLimit_IncludedPaths(t *testing.T) {
+	middleware := RateLimit(config.RateLimitConfig{
+		Rate:          1,
+		Window:        time.Second,
+		Algorithm:     config.TokenBucket,
+		IncludedPaths: []string{"/api/", "/admin"},
+	})
+	count := 0
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count++
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	tests := []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{"allowed path - first request", "/api/users", http.StatusOK},
+		{"allowed path - rate limited", "/api/users", http.StatusTooManyRequests},
+		// Note: /admin shares the same rate limit (same IP), so it's also rate limited
+		{"allowed exact path - also rate limited", "/admin", http.StatusTooManyRequests},
+		{"non-allowed path - not rate limited 1", "/health", http.StatusOK},
+		{"non-allowed path - not rate limited 2", "/health", http.StatusOK},
+		{"non-allowed path - not rate limited 3", "/metrics", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := zhtest.NewRequest(http.MethodGet, tt.path).Build()
+			req.RemoteAddr = "127.0.0.1:12345"
+			w := zhtest.Serve(handler, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+}
+
+func TestRateLimit_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = RateLimit(config.RateLimitConfig{
+		Rate:          1,
+		Window:        time.Second,
+		Algorithm:     config.TokenBucket,
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

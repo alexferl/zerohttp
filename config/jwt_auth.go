@@ -75,13 +75,23 @@ type JWTAuthConfig struct {
 	// Default: none
 	RequiredClaims []string
 
-	// ExemptPaths are paths that skip JWT validation.
+	// ExcludedPaths are paths that skip JWT validation.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
 	// Default: []
-	ExemptPaths []string
+	ExcludedPaths []string
 
-	// ExemptMethods are HTTP methods that skip JWT validation.
-	// Default: [] (OPTIONS is always exempt)
-	ExemptMethods []string
+	// IncludedPaths contains paths where JWT validation is explicitly applied.
+	// If set, JWT validation will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, JWT validation applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
+
+	// ExcludedMethods are HTTP methods that skip JWT validation.
+	// Default: [] (OPTIONS is always excluded)
+	ExcludedMethods []string
 
 	// ErrorHandler is called when JWT validation fails.
 	// Default: Returns 401/403 with RFC 9457 Problem Details
@@ -103,8 +113,9 @@ type JWTAuthConfig struct {
 // DefaultJWTAuthConfig provides sensible defaults
 var DefaultJWTAuthConfig = JWTAuthConfig{
 	TokenExtractor:  extractBearerToken,
-	ExemptPaths:     []string{},
-	ExemptMethods:   []string{},
+	ExcludedPaths:   []string{},
+	IncludedPaths:   []string{},
+	ExcludedMethods: []string{},
 	RequiredClaims:  []string{},
 	AccessTokenTTL:  15 * time.Minute,
 	RefreshTokenTTL: 7 * 24 * time.Hour,

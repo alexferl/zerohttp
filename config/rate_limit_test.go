@@ -32,8 +32,11 @@ func TestRateLimitConfig_DefaultValues(t *testing.T) {
 	if cfg.IncludeHeaders != true {
 		t.Errorf("expected default include headers = true, got %t", cfg.IncludeHeaders)
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 }
 
@@ -86,16 +89,29 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths", func(t *testing.T) {
-		exemptPaths := []string{"/health", "/metrics", "/ping", "/status"}
+	t.Run("excluded paths", func(t *testing.T) {
+		excludedPaths := []string{"/health", "/metrics", "/ping", "/status"}
 		cfg := RateLimitConfig{
-			ExemptPaths: exemptPaths,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 4 {
-			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 4 {
+			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
+		}
+	})
+
+	t.Run("included paths", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := RateLimitConfig{
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
 		}
 	})
 
@@ -116,7 +132,8 @@ func TestRateLimitConfig_MultipleFields(t *testing.T) {
 	customExtractor := func(r *http.Request) string {
 		return r.Header.Get(httpx.HeaderAuthorization)
 	}
-	exemptPaths := []string{"/public", "/health"}
+	excludedPaths := []string{"/public", "/health"}
+	includedPaths := []string{"/api/public"}
 	cfg := RateLimitConfig{
 		Rate:           200,
 		Window:         5 * time.Minute,
@@ -125,7 +142,8 @@ func TestRateLimitConfig_MultipleFields(t *testing.T) {
 		StatusCode:     http.StatusForbidden,
 		Message:        "Rate limit reached",
 		IncludeHeaders: false,
-		ExemptPaths:    exemptPaths,
+		ExcludedPaths:  excludedPaths,
+		IncludedPaths:  includedPaths,
 	}
 
 	if cfg.Rate != 200 {
@@ -149,8 +167,14 @@ func TestRateLimitConfig_MultipleFields(t *testing.T) {
 	if cfg.IncludeHeaders != false {
 		t.Errorf("expected include headers = false, got %t", cfg.IncludeHeaders)
 	}
-	if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-		t.Error("expected exempt paths to be set correctly")
+	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+		t.Error("expected excluded paths to be set correctly")
+	}
+	if len(cfg.IncludedPaths) != 1 {
+		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
+	}
+	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+		t.Error("expected included paths to be set correctly")
 	}
 
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
@@ -214,19 +238,35 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("empty and nil exempt paths", func(t *testing.T) {
+	t.Run("empty and nil excluded paths", func(t *testing.T) {
 		cfg := RateLimitConfig{
-			ExemptPaths: []string{},
+			ExcludedPaths: []string{},
 		}
-		if cfg.ExemptPaths == nil || len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %v", cfg.ExemptPaths)
+		if cfg.ExcludedPaths == nil || len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %v", cfg.ExcludedPaths)
 		}
 
 		cfg2 := RateLimitConfig{
-			ExemptPaths: nil,
+			ExcludedPaths: nil,
 		}
-		if cfg2.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+		if cfg2.ExcludedPaths != nil {
+			t.Error("expected excluded paths to remain nil when nil is passed")
+		}
+	})
+
+	t.Run("empty and nil included paths", func(t *testing.T) {
+		cfg := RateLimitConfig{
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil || len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %v", cfg.IncludedPaths)
+		}
+
+		cfg2 := RateLimitConfig{
+			IncludedPaths: nil,
+		}
+		if cfg2.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
 		}
 	})
 
@@ -311,7 +351,7 @@ func TestRateLimitConfig_CustomKeyExtractors(t *testing.T) {
 }
 
 func TestRateLimitConfig_PathPatterns(t *testing.T) {
-	exemptPaths := []string{
+	excludedPaths := []string{
 		"/health",
 		"/metrics",
 		"/api/v1/health/*",
@@ -321,12 +361,12 @@ func TestRateLimitConfig_PathPatterns(t *testing.T) {
 		"/internal/status",
 	}
 	cfg := RateLimitConfig{
-		ExemptPaths: exemptPaths,
+		ExcludedPaths: excludedPaths,
 	}
-	if len(cfg.ExemptPaths) != len(exemptPaths) {
-		t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != len(excludedPaths) {
+		t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 	}
-	if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-		t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+		t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 	}
 }

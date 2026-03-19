@@ -16,14 +16,26 @@ type TimeoutConfig struct {
 	// Message to write on timeout (optional)
 	Message string
 
-	// ExemptPaths contains paths that skip timeout enforcement
-	ExemptPaths []string
+	// ExcludedPaths contains paths that skip timeout enforcement.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where timeout is explicitly applied.
+	// If set, timeout will only be enforced for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, timeout applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 }
 
 // DefaultTimeoutConfig contains the default values for timeout configuration.
 var DefaultTimeoutConfig = TimeoutConfig{
-	Timeout:     30 * time.Second,
-	StatusCode:  http.StatusGatewayTimeout,
-	Message:     "",
-	ExemptPaths: []string{},
+	Timeout:       30 * time.Second,
+	StatusCode:    http.StatusGatewayTimeout,
+	Message:       "",
+	ExcludedPaths: []string{},
+	IncludedPaths: []string{},
 }

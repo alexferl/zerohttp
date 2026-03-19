@@ -40,6 +40,8 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 		http.MethodDelete: true,
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "Idempotency")
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !stateChangingMethods[r.Method] {
@@ -47,11 +49,9 @@ func Idempotency(cfg ...config.IdempotencyConfig) func(http.Handler) http.Handle
 				return
 			}
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			idempotencyKey := r.Header.Get(c.HeaderName)

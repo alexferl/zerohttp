@@ -90,8 +90,8 @@ func TestJWTAuthConfig_Customization(t *testing.T) {
 	cfg := JWTAuthConfig{
 		TokenExtractor:  customExtractor,
 		RequiredClaims:  []string{"sub", "iss"},
-		ExemptPaths:     []string{"/health", "/metrics"},
-		ExemptMethods:   []string{http.MethodHead},
+		ExcludedPaths:   []string{"/health", "/metrics"},
+		ExcludedMethods: []string{http.MethodHead},
 		AccessTokenTTL:  30 * time.Minute,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 	}
@@ -107,16 +107,65 @@ func TestJWTAuthConfig_Customization(t *testing.T) {
 		t.Errorf("expected RequiredClaims [sub iss], got %v", cfg.RequiredClaims)
 	}
 
-	if len(cfg.ExemptPaths) != 2 || cfg.ExemptPaths[0] != "/health" || cfg.ExemptPaths[1] != "/metrics" {
-		t.Errorf("expected ExemptPaths [/health /metrics], got %v", cfg.ExemptPaths)
+	if len(cfg.ExcludedPaths) != 2 || cfg.ExcludedPaths[0] != "/health" || cfg.ExcludedPaths[1] != "/metrics" {
+		t.Errorf("expected ExcludedPaths [/health /metrics], got %v", cfg.ExcludedPaths)
 	}
 
-	if len(cfg.ExemptMethods) != 1 || cfg.ExemptMethods[0] != http.MethodHead {
-		t.Errorf("expected ExemptMethods [HEAD], got %v", cfg.ExemptMethods)
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected 0 included paths, got %d", len(cfg.IncludedPaths))
+	}
+
+	if len(cfg.ExcludedMethods) != 1 || cfg.ExcludedMethods[0] != http.MethodHead {
+		t.Errorf("expected ExcludedMethods [HEAD], got %v", cfg.ExcludedMethods)
 	}
 
 	if cfg.AccessTokenTTL != 30*time.Minute {
 		t.Errorf("expected AccessTokenTTL to be 30m, got %v", cfg.AccessTokenTTL)
+	}
+}
+
+func TestJWTAuthConfig_IncludedPaths(t *testing.T) {
+	customExtractor := func(r *http.Request) string {
+		return r.Header.Get("X-Custom-Token")
+	}
+
+	cfg := JWTAuthConfig{
+		TokenExtractor:  customExtractor,
+		RequiredClaims:  []string{"sub", "iss"},
+		ExcludedPaths:   []string{"/health"},
+		IncludedPaths:   []string{"/api/public", "/api/internal"},
+		ExcludedMethods: []string{http.MethodHead},
+		AccessTokenTTL:  30 * time.Minute,
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+
+	if len(cfg.IncludedPaths) != 2 {
+		t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+	}
+	if cfg.IncludedPaths[0] != "/api/public" {
+		t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
+	}
+	if cfg.IncludedPaths[1] != "/api/internal" {
+		t.Errorf("expected second allowed path to be /api/internal, got %s", cfg.IncludedPaths[1])
+	}
+
+	// Test empty included paths
+	cfg2 := JWTAuthConfig{
+		IncludedPaths: []string{},
+	}
+	if cfg2.IncludedPaths == nil {
+		t.Error("expected included paths slice to be initialized, not nil")
+	}
+	if len(cfg2.IncludedPaths) != 0 {
+		t.Errorf("expected empty included paths slice, got %d entries", len(cfg2.IncludedPaths))
+	}
+
+	// Test nil included paths
+	cfg3 := JWTAuthConfig{
+		IncludedPaths: nil,
+	}
+	if cfg3.IncludedPaths != nil {
+		t.Error("expected included paths to remain nil when nil is passed")
 	}
 }
 

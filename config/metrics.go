@@ -28,9 +28,19 @@ type MetricsConfig struct {
 	// Default: []float64{100, 1000, 10000, 100000, 1000000, 10000000}
 	SizeBuckets []float64
 
-	// ExcludePaths are paths to exclude from metrics (e.g., health checks).
-	// Default: ["/health", "/metrics"]
-	ExcludePaths []string
+	// ExcludedPaths are paths to exclude from metrics (e.g., health checks).
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: ["/metrics"]
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where metrics collection is explicitly applied.
+	// If set, metrics will only be collected for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, metrics collection applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// PathLabelFunc transforms path for labeling (e.g., normalize IDs).
 	// Default: identity function (path used as-is)
@@ -48,6 +58,7 @@ var DefaultMetricsConfig = MetricsConfig{
 	ServerAddr:      String("localhost:9090"),
 	DurationBuckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	SizeBuckets:     []float64{100, 1000, 10000, 100000, 1000000, 10000000},
-	ExcludePaths:    []string{"/metrics"},
+	ExcludedPaths:   []string{"/metrics"},
+	IncludedPaths:   []string{},
 	PathLabelFunc:   func(p string) string { return p },
 }

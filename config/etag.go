@@ -34,11 +34,22 @@ type ETagConfig struct {
 	// SkipContentTypes contains content types that should not have ETags generated
 	SkipContentTypes map[string]struct{}
 
-	// ExemptPaths contains paths to skip ETag generation
-	ExemptPaths []string
+	// ExcludedPaths contains paths to skip ETag generation.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
 
-	// ExemptFunc is a custom function to determine if ETag generation should be skipped for a request
-	ExemptFunc func(r *http.Request) bool
+	// IncludedPaths contains paths where ETag generation is explicitly applied.
+	// If set, ETag will only be generated for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, ETag applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
+
+	// ExcludedFunc is a custom function to determine if ETag generation should be skipped for a request
+	ExcludedFunc func(r *http.Request) bool
 }
 
 // DefaultETagConfig contains the default values for ETag configuration
@@ -66,6 +77,7 @@ var DefaultETagConfig = ETagConfig{
 	SkipContentTypes: map[string]struct{}{
 		httpx.MIMETextEventStream: {}, // SSE streaming
 	},
-	ExemptPaths: []string{},
-	ExemptFunc:  nil,
+	ExcludedPaths: []string{},
+	IncludedPaths: []string{},
+	ExcludedFunc:  nil,
 }

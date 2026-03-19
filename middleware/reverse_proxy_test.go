@@ -210,35 +210,35 @@ func TestReverseProxy_ForwardHeaders(t *testing.T) {
 	}
 }
 
-func TestReverseProxy_ExemptPaths(t *testing.T) {
+func TestReverseProxy_ExcludedPaths(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("upstream"))
 	}))
 	defer upstream.Close()
 
 	mw, _ := ReverseProxy(config.ReverseProxyConfig{
-		Target:      upstream.URL,
-		ExemptPaths: []string{"/health", "/metrics"},
+		Target:        upstream.URL,
+		ExcludedPaths: []string{"/health", "/metrics"},
 	})
 
-	// Test exempt path - should call next handler
+	// Test excluded path - should call next handler
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nextCalled = true
-		_, _ = w.Write([]byte("exempt"))
+		_, _ = w.Write([]byte("excluded"))
 	})
 
 	mw(next).ServeHTTP(rec, req)
 
 	if !nextCalled {
-		t.Error("expected next handler to be called for exempt path")
+		t.Error("expected next handler to be called for excluded path")
 	}
-	zhtest.AssertWith(t, rec).Body("exempt")
+	zhtest.AssertWith(t, rec).Body("excluded")
 
-	// Test non-exempt path - should go to upstream
+	// Test non-excluded path - should go to upstream
 	req2 := httptest.NewRequest(http.MethodGet, "/api", nil)
 	rec2 := httptest.NewRecorder()
 
@@ -572,7 +572,7 @@ func TestReverseProxy_WithNextHandler(t *testing.T) {
 	mw(next).ServeHTTP(rec, req)
 
 	if nextCalled {
-		t.Error("expected next handler NOT to be called without exempt paths")
+		t.Error("expected next handler NOT to be called without excluded paths")
 	}
 	zhtest.AssertWith(t, rec).Body("upstream")
 }
@@ -740,4 +740,71 @@ func TestReverseProxy_proxyResponseRecorder_Flush(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReverseProxy_IncludedPaths(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("upstream response: " + r.URL.Path))
+	}))
+	defer upstream.Close()
+
+	mw, _ := ReverseProxy(config.ReverseProxyConfig{
+		Target:        upstream.URL,
+		IncludedPaths: []string{"/api/", "/admin"},
+	})
+
+	tests := []struct {
+		name           string
+		path           string
+		expectUpstream bool
+		expectBody     string
+	}{
+		{"allowed path - goes to upstream", "/api/users", true, "upstream response: /api/users"},
+		{"allowed exact path", "/admin", true, "upstream response: /admin"},
+		{"non-allowed path - calls next", "/health", false, "next handler"},
+		{"non-allowed path 2", "/metrics", false, "next handler"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				_, _ = w.Write([]byte("next handler"))
+			})
+
+			mw(next).ServeHTTP(rec, req)
+
+			if tt.expectUpstream && nextCalled {
+				t.Error("expected upstream to handle request, but next was called")
+			}
+			if !tt.expectUpstream && !nextCalled {
+				t.Error("expected next handler to be called, but upstream handled it")
+			}
+			zhtest.AssertWith(t, rec).Body(tt.expectBody)
+		})
+	}
+}
+
+func TestReverseProxy_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_, _ = ReverseProxy(config.ReverseProxyConfig{
+		Target:        upstream.URL,
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

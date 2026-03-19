@@ -28,6 +28,8 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 		c.KeyExtractor = IPKeyExtractor()
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "RateLimit")
+
 	var store RateLimitStore
 	if c.Store != nil {
 		store = c.Store
@@ -43,11 +45,9 @@ func RateLimit(cfg ...config.RateLimitConfig) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			key := c.KeyExtractor(r)
