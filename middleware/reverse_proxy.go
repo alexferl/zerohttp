@@ -94,15 +94,15 @@ func ReverseProxy(cfg config.ReverseProxyConfig) (func(http.Handler) http.Handle
 		}
 	}
 
+	validatePathConfig(cfg.ExcludedPaths, cfg.IncludedPaths, "ReverseProxy")
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
-			for _, exempt := range cfg.ExemptPaths {
-				if pathMatches(r.URL.Path, exempt) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, cfg.IncludedPaths, cfg.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			b := rp.selectBackend()

@@ -111,9 +111,9 @@ func TestCompress(t *testing.T) {
 	}
 }
 
-func TestCompressExemptPaths(t *testing.T) {
+func TestCompressExcludedPaths(t *testing.T) {
 	middleware := Compress(config.CompressConfig{
-		ExemptPaths: []string{"/health", "/metrics", "/api/internal/"},
+		ExcludedPaths: []string{"/health", "/metrics", "/api/internal/"},
 	})
 
 	tests := []struct {
@@ -213,10 +213,10 @@ func TestCompressAlgorithms(t *testing.T) {
 func TestCompressAllOptions(t *testing.T) {
 	// Test all options working together
 	middleware := Compress(config.CompressConfig{
-		Level:       9,
-		Types:       []string{"text/html", "application/json"},
-		Algorithms:  []config.CompressionAlgorithm{config.Gzip},
-		ExemptPaths: []string{"/health"},
+		Level:         9,
+		Types:         []string{"text/html", "application/json"},
+		Algorithms:    []config.CompressionAlgorithm{config.Gzip},
+		ExcludedPaths: []string{"/health"},
 	})
 
 	tests := []struct {
@@ -236,7 +236,7 @@ func TestCompressAllOptions(t *testing.T) {
 			expectedEncoding: "gzip",
 		},
 		{
-			name:             "exempt path not compressed",
+			name:             "excluded path not compressed",
 			path:             "/health",
 			contentType:      "text/html",
 			content:          strings.Repeat("health check ", 10),
@@ -495,7 +495,7 @@ func TestCompressConfigDefaults(t *testing.T) {
 		{
 			name:           "no config - use all defaults",
 			config:         config.CompressConfig{},
-			description:    "Should use default level, types, algorithms, and exempt paths",
+			description:    "Should use default level, types, algorithms, and excluded paths",
 			shouldCompress: true,
 		},
 		{
@@ -523,9 +523,9 @@ func TestCompressConfigDefaults(t *testing.T) {
 			shouldCompress: true,
 		},
 		{
-			name:           "nil exempt paths - use defaults",
-			config:         config.CompressConfig{ExemptPaths: nil},
-			description:    "Nil exempt paths should use default (empty list)",
+			name:           "nil excluded paths - use defaults",
+			config:         config.CompressConfig{ExcludedPaths: nil},
+			description:    "Nil excluded paths should use default (empty list)",
 			shouldCompress: true,
 		},
 	}
@@ -569,9 +569,9 @@ func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 			expectCompression: false,
 		},
 		{
-			name:              "empty exempt paths - allow compression",
-			config:            config.CompressConfig{ExemptPaths: []string{}},
-			description:       "Empty exempt paths should allow compression on all paths",
+			name:              "empty excluded paths - allow compression",
+			config:            config.CompressConfig{ExcludedPaths: []string{}},
+			description:       "Empty excluded paths should allow compression on all paths",
 			expectCompression: true,
 		},
 	}
@@ -604,10 +604,10 @@ func TestCompressConfigExplicitEmptyValues(t *testing.T) {
 func TestCompressConfigDefaultsVsOverrides(t *testing.T) {
 	t.Run("defaults used when config values are nil or invalid", func(t *testing.T) {
 		mw := Compress(config.CompressConfig{
-			Level:       0,   // Should fallback to default (6)
-			Types:       nil, // Should use defaults
-			Algorithms:  nil, // Should use defaults
-			ExemptPaths: nil, // Should use defaults
+			Level:         0,   // Should fallback to default (6)
+			Types:         nil, // Should use defaults
+			Algorithms:    nil, // Should use defaults
+			ExcludedPaths: nil, // Should use defaults
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -799,6 +799,59 @@ func TestCompress_WriteHeader_MultipleCalls(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d (subsequent WriteHeader calls should be ignored)", rr.Code)
 	}
+}
+
+func TestCompress_IncludedPaths(t *testing.T) {
+	middleware := Compress(config.CompressConfig{
+		IncludedPaths: []string{"/api/", "/compress/*"},
+	})
+
+	tests := []struct {
+		path           string
+		shouldCompress bool
+	}{
+		{"/api/data", true},
+		{"/api/users", true},
+		{"/compress/anything", true},
+		{"/other", false},
+		{"/health", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
+				_, err := w.Write([]byte(strings.Repeat("test content ", 10)))
+				if err != nil {
+					t.Fatalf("failed to write response: %v", err)
+				}
+			}))
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			hasCompression := rr.Header().Get(httpx.HeaderContentEncoding) != ""
+			if hasCompression != tt.shouldCompress {
+				t.Errorf("path %s: expected compression=%v, got compression=%v", tt.path, tt.shouldCompress, hasCompression)
+			}
+		})
+	}
+}
+
+func TestCompress_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = Compress(config.CompressConfig{
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }
 
 // TestCompressionProvider tests the pluggable CompressionProvider interface

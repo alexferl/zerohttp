@@ -103,10 +103,10 @@ func TestBasicAuth(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name: "exempt path allows access",
+			name: "excluded path allows access",
 			middleware: BasicAuth(config.BasicAuthConfig{
-				Credentials: map[string]string{"admin": "secret"},
-				ExemptPaths: []string{"/health"},
+				Credentials:   map[string]string{"admin": "secret"},
+				ExcludedPaths: []string{"/health"},
 			}),
 			path:           "/health",
 			authHeader:     "",
@@ -114,10 +114,10 @@ func TestBasicAuth(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "non-exempt path requires auth",
+			name: "non-excluded path requires auth",
 			middleware: BasicAuth(config.BasicAuthConfig{
-				Credentials: map[string]string{"admin": "secret"},
-				ExemptPaths: []string{"/health"},
+				Credentials:   map[string]string{"admin": "secret"},
+				ExcludedPaths: []string{"/health"},
 			}),
 			path:           "/admin",
 			authHeader:     "",
@@ -204,15 +204,15 @@ func TestBasicAuthMalformedHeaders(t *testing.T) {
 	}
 }
 
-func TestBasicAuthExemptPaths(t *testing.T) {
+func TestBasicAuthExcludedPaths(t *testing.T) {
 	middleware := BasicAuth(config.BasicAuthConfig{
-		Credentials: map[string]string{"admin": "secret"},
-		ExemptPaths: []string{"/health", "/metrics", "/api/public/"},
+		Credentials:   map[string]string{"admin": "secret"},
+		ExcludedPaths: []string{"/health", "/metrics", "/api/public/"},
 	})
 
 	pathTests := []struct {
-		path   string
-		exempt bool
+		path     string
+		excluded bool
 	}{
 		{"/health", true},
 		{"/metrics", true},
@@ -226,12 +226,80 @@ func TestBasicAuthExemptPaths(t *testing.T) {
 		t.Run(tt.path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			expectedStatus := http.StatusUnauthorized
-			if tt.exempt {
+			if tt.excluded {
 				expectedStatus = http.StatusOK
 			}
-			testMiddleware(t, middleware, req, tt.exempt, expectedStatus)
+			testMiddleware(t, middleware, req, tt.excluded, expectedStatus)
 		})
 	}
+}
+
+func TestBasicAuthIncludedPaths(t *testing.T) {
+	middleware := BasicAuth(config.BasicAuthConfig{
+		Credentials:   map[string]string{"admin": "secret"},
+		IncludedPaths: []string{"/admin", "/api/private/"},
+	})
+
+	pathTests := []struct {
+		path       string
+		shouldAuth bool
+	}{
+		{"/admin", true},
+		{"/api/private/", true},
+		{"/api/private/data", true},
+		{"/health", false},
+		{"/metrics", false},
+		{"/public", false},
+	}
+
+	for _, tt := range pathTests {
+		t.Run(tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			expectedStatus := http.StatusOK
+			if tt.shouldAuth {
+				expectedStatus = http.StatusUnauthorized
+			}
+			testMiddleware(t, middleware, req, !tt.shouldAuth, expectedStatus)
+		})
+	}
+}
+
+func TestBasicAuthIncludedPathsWithAuth(t *testing.T) {
+	middleware := BasicAuth(config.BasicAuthConfig{
+		Credentials:   map[string]string{"admin": "secret"},
+		IncludedPaths: []string{"/admin"},
+	})
+
+	t.Run("allowed path with valid auth", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		req.Header.Set(httpx.HeaderAuthorization, createAuthHeader("admin", "secret"))
+		testMiddleware(t, middleware, req, true, http.StatusOK)
+	})
+
+	t.Run("allowed path with invalid auth", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		req.Header.Set(httpx.HeaderAuthorization, createAuthHeader("admin", "wrong"))
+		testMiddleware(t, middleware, req, false, http.StatusUnauthorized)
+	})
+
+	t.Run("non-allowed path without auth", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/public", nil)
+		testMiddleware(t, middleware, req, true, http.StatusOK)
+	})
+}
+
+func TestBasicAuthBothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = BasicAuth(config.BasicAuthConfig{
+		Credentials:   map[string]string{"admin": "secret"},
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/admin"},
+	})
 }
 
 func TestBasicAuthNoAuthConfigured(t *testing.T) {
@@ -254,10 +322,10 @@ func TestBasicAuthNoAuthConfigured(t *testing.T) {
 	zhtest.AssertWith(t, w).Status(http.StatusUnauthorized)
 }
 
-func TestBasicAuthNilExemptPathsFallback(t *testing.T) {
+func TestBasicAuthNilExcludedPathsFallback(t *testing.T) {
 	middleware := BasicAuth(config.BasicAuthConfig{
-		Credentials: map[string]string{"admin": "secret"},
-		ExemptPaths: nil,
+		Credentials:   map[string]string{"admin": "secret"},
+		ExcludedPaths: nil,
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)

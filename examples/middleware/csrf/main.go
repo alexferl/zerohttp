@@ -108,7 +108,7 @@ curl -X POST http://localhost:8080/submit \
     CookieMaxAge:   86400,
     CookieSecure:   config.Bool(true),
     CookieSameSite: http.SameSiteStrictMode,
-    ExemptPaths:    []string{"/api/webhook"},
+    ExcludedPaths:    []string{"/api/webhook"},
 }))</pre>
 
     <h2>Token Lookup Methods</h2>

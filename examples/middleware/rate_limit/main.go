@@ -55,13 +55,13 @@ func main() {
 		IncludeHeaders: true,
 	}))
 
-	// Example 5: Exempt health check from rate limiting
+	// Example 5: Exclude health check from rate limiting
 	app.GET("/health", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, zh.M{"status": "healthy"})
 	}), middleware.RateLimit(config.RateLimitConfig{
 		Rate:           10,
 		Window:         time.Second,
-		ExemptPaths:    []string{"/health", "/metrics"},
+		ExcludedPaths:  []string{"/health", "/metrics"},
 		IncludeHeaders: true,
 	}))
 

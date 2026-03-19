@@ -26,6 +26,8 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "Cache")
+
 	statusCodeMap := make(map[int]bool)
 	for _, code := range c.StatusCodes {
 		statusCodeMap[code] = true
@@ -50,11 +52,9 @@ func Cache(cfg ...config.CacheConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			// Note: Per RFC 9111, no-cache means revalidate, not bypass. We treat it as

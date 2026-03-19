@@ -10,8 +10,11 @@ func TestContentEncodingConfig_DefaultValues(t *testing.T) {
 	if len(cfg.Encodings) != 2 {
 		t.Errorf("expected 2 default encodings, got %d", len(cfg.Encodings))
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
 	}
 	expectedEncodings := []string{"gzip", "deflate"}
 	if !reflect.DeepEqual(cfg.Encodings, expectedEncodings) {
@@ -54,16 +57,29 @@ func TestContentEncodingConfig_StructAssignment(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths assignment", func(t *testing.T) {
-		exemptPaths := []string{"/api/upload", "/health", "/metrics", "/static"}
+	t.Run("excluded paths assignment", func(t *testing.T) {
+		excludedPaths := []string{"/api/upload", "/health", "/metrics", "/static"}
 		cfg := ContentEncodingConfig{
-			ExemptPaths: exemptPaths,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 4 {
-			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 4 {
+			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
+		}
+	})
+
+	t.Run("included paths assignment", func(t *testing.T) {
+		includedPaths := []string{"/api/public", "/health"}
+		cfg := ContentEncodingConfig{
+			IncludedPaths: includedPaths,
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
 		}
 	})
 
@@ -85,10 +101,12 @@ func TestContentEncodingConfig_StructAssignment(t *testing.T) {
 
 func TestContentEncodingConfig_MultipleFields(t *testing.T) {
 	encodings := []string{"br", "gzip"}
-	exemptPaths := []string{"/upload", "/download"}
+	excludedPaths := []string{"/upload", "/download"}
+	includedPaths := []string{"/api/public"}
 	cfg := ContentEncodingConfig{
-		Encodings:   encodings,
-		ExemptPaths: exemptPaths,
+		Encodings:     encodings,
+		ExcludedPaths: excludedPaths,
+		IncludedPaths: includedPaths,
 	}
 
 	if len(cfg.Encodings) != 2 {
@@ -97,40 +115,54 @@ func TestContentEncodingConfig_MultipleFields(t *testing.T) {
 	if !reflect.DeepEqual(cfg.Encodings, encodings) {
 		t.Error("expected encodings to be set correctly")
 	}
-	if len(cfg.ExemptPaths) != 2 {
-		t.Errorf("expected 2 exempt paths, got %d", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 2 {
+		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
 	}
-	if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-		t.Error("expected exempt paths to be set correctly")
+	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+		t.Error("expected excluded paths to be set correctly")
+	}
+	if len(cfg.IncludedPaths) != 1 {
+		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
+	}
+	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
+		t.Error("expected included paths to be set correctly")
 	}
 }
 
 func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 	t.Run("empty slices", func(t *testing.T) {
 		cfg := ContentEncodingConfig{
-			Encodings:   []string{},
-			ExemptPaths: []string{},
+			Encodings:     []string{},
+			ExcludedPaths: []string{},
+			IncludedPaths: []string{},
 		}
 
 		if cfg.Encodings == nil || len(cfg.Encodings) != 0 {
 			t.Errorf("expected empty encodings slice, got %v", cfg.Encodings)
 		}
-		if cfg.ExemptPaths == nil || len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %v", cfg.ExemptPaths)
+		if cfg.ExcludedPaths == nil || len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %v", cfg.ExcludedPaths)
+		}
+		if cfg.IncludedPaths == nil || len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %v", cfg.IncludedPaths)
 		}
 	})
 
 	t.Run("nil slices", func(t *testing.T) {
 		cfg := ContentEncodingConfig{
-			Encodings:   nil,
-			ExemptPaths: nil,
+			Encodings:     nil,
+			ExcludedPaths: nil,
+			IncludedPaths: nil,
 		}
 
 		if cfg.Encodings != nil {
 			t.Error("expected encodings to remain nil when nil is passed")
 		}
-		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+		if cfg.ExcludedPaths != nil {
+			t.Error("expected excluded paths to remain nil when nil is passed")
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
 		}
 	})
 
@@ -166,10 +198,10 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 
 	t.Run("empty string values", func(t *testing.T) {
 		encodings := []string{"", "gzip", ""}
-		exemptPaths := []string{"", "/health", ""}
+		excludedPaths := []string{"", "/health", ""}
 		cfg := ContentEncodingConfig{
-			Encodings:   encodings,
-			ExemptPaths: exemptPaths,
+			Encodings:     encodings,
+			ExcludedPaths: excludedPaths,
 		}
 
 		if len(cfg.Encodings) != 3 {
@@ -181,12 +213,12 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 			}
 		}
 
-		if len(cfg.ExemptPaths) != 3 {
-			t.Errorf("expected 3 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 3 {
+			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		for i, expectedPath := range exemptPaths {
-			if cfg.ExemptPaths[i] != expectedPath {
-				t.Errorf("expected exempt path[%d] = %q, got %q", i, expectedPath, cfg.ExemptPaths[i])
+		for i, expectedPath := range excludedPaths {
+			if cfg.ExcludedPaths[i] != expectedPath {
+				t.Errorf("expected excluded path[%d] = %q, got %q", i, expectedPath, cfg.ExcludedPaths[i])
 			}
 		}
 	})
@@ -194,7 +226,7 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 
 func TestContentEncodingConfig_PathPatterns(t *testing.T) {
 	t.Run("pattern paths", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/api/v1/upload/*",
 			"/static/*",
 			"/health",
@@ -204,18 +236,18 @@ func TestContentEncodingConfig_PathPatterns(t *testing.T) {
 			"/admin/files/*",
 		}
 		cfg := ContentEncodingConfig{
-			ExemptPaths: exemptPaths,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 
 	t.Run("special character paths", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/api-v1/upload",
 			"/static_files",
 			"/health-check",
@@ -225,13 +257,13 @@ func TestContentEncodingConfig_PathPatterns(t *testing.T) {
 			"/path/with/unicode-ñ",
 		}
 		cfg := ContentEncodingConfig{
-			ExemptPaths: exemptPaths,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 }

@@ -94,8 +94,8 @@ func TestTimeout_DefaultValues(t *testing.T) {
 			},
 		},
 		{
-			"nil exempt paths uses default",
-			config.TimeoutConfig{Timeout: 50 * time.Millisecond, ExemptPaths: nil},
+			"nil excluded paths uses default",
+			config.TimeoutConfig{Timeout: 50 * time.Millisecond, ExcludedPaths: nil},
 			100 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
 				zhtest.AssertWith(t, w).Status(http.StatusGatewayTimeout)
@@ -135,14 +135,14 @@ func TestTimeout_AllDefaults(t *testing.T) {
 	zhtest.AssertWith(t, w).Status(http.StatusOK).Body("success")
 }
 
-func TestTimeout_ExemptPaths(t *testing.T) {
+func TestTimeout_ExcludedPaths(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		_, _ = w.Write([]byte("done"))
 	})
 	middleware := Timeout(config.TimeoutConfig{
-		Timeout:     50 * time.Millisecond,
-		ExemptPaths: []string{"/health"},
+		Timeout:       50 * time.Millisecond,
+		ExcludedPaths: []string{"/health"},
 	})(handler)
 
 	req := zhtest.NewRequest(http.MethodGet, "/health").Build()
@@ -336,4 +336,56 @@ func TestTimeout_Flush_WritesBufferedData(t *testing.T) {
 	if rec.Body.String() != "hello" {
 		t.Errorf("expected body 'hello', got '%s'", rec.Body.String())
 	}
+}
+
+func TestTimeout_IncludedPaths(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		_, _ = w.Write([]byte("done"))
+	})
+
+	middleware := Timeout(config.TimeoutConfig{
+		Timeout:       50 * time.Millisecond,
+		IncludedPaths: []string{"/api/", "/admin"},
+	})(handler)
+
+	tests := []struct {
+		name       string
+		path       string
+		wantStatus int
+		wantBody   string
+	}{
+		{"allowed path - timeout applies", "/api/users", http.StatusGatewayTimeout, ""},
+		{"allowed exact path", "/admin", http.StatusGatewayTimeout, ""},
+		{"non-allowed path - no timeout", "/health", http.StatusOK, "done"},
+		{"non-allowed path 2", "/metrics", http.StatusOK, "done"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := zhtest.NewRequest(http.MethodGet, tt.path).Build()
+			w := zhtest.Serve(middleware, req)
+
+			if tt.wantStatus == http.StatusOK {
+				zhtest.AssertWith(t, w).Status(tt.wantStatus).Body(tt.wantBody)
+			} else {
+				// Timeout cases
+				zhtest.AssertWith(t, w).Status(tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestTimeout_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = Timeout(config.TimeoutConfig{
+		Timeout:       50 * time.Millisecond,
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

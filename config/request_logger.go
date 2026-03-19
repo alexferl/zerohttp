@@ -41,14 +41,18 @@ type RequestLoggerConfig struct {
 	// Fields to include in logs (defaults to all fields).
 	Fields []LogField
 
-	// ExemptPaths contains paths to skip logging (e.g., health checks).
-	ExemptPaths []string
+	// ExcludedPaths contains paths to skip logging (e.g., health checks).
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
 
-	// AllowedPaths contains paths where body logging is explicitly allowed.
+	// IncludedPaths contains paths where body logging is explicitly allowed.
 	// If set, body logging (LogRequestBody/LogResponseBody) will only occur
 	// for paths matching these patterns. Supports exact matches and prefixes (ending with /).
-	// If empty, body logging applies to all paths (subject to ExemptPaths).
-	AllowedPaths []string
+	// If empty, body logging applies to all paths (subject to ExcludedPaths).
+	// Default: []
+	IncludedPaths []string
 
 	// LogRequestBody enables logging of request bodies (defaults to false).
 	// This is opt-in due to performance and security considerations.
@@ -122,8 +126,8 @@ var DefaultRequestLoggerConfig = RequestLoggerConfig{
 		FieldClientIP,
 		FieldRequestID,
 	},
-	ExemptPaths:     []string{},
-	AllowedPaths:    []string{},
+	ExcludedPaths:   []string{},
+	IncludedPaths:   []string{},
 	MaxBodySize:     1024, // 1KB default
 	SensitiveFields: DefaultSensitiveFields,
 }

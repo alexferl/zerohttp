@@ -66,13 +66,13 @@ app := zh.New(config.Config{
 })
 ```
 
-### Exempting Paths
+### Excluding Paths
 
 ```go
 app := zh.New(config.Config{
     RequestBodySize: config.RequestBodySizeConfig{
         MaxBytes:    1 * 1024 * 1024, // 1MB
-        ExemptPaths: []string{"/api/webhook", "/health"},
+        ExcludedPaths: []string{"/api/webhook", "/health"},
     },
 })
 ```

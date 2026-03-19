@@ -415,6 +415,8 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "ETag")
+
 	if c.Algorithm != config.FNV && c.Algorithm != config.MD5 {
 		c.Algorithm = config.DefaultETagConfig.Algorithm
 	}
@@ -423,14 +425,12 @@ func ETag(cfg ...config.ETagConfig) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
-			if c.ExemptFunc != nil && c.ExemptFunc(r) {
+			if c.ExcludedFunc != nil && c.ExcludedFunc(r) {
 				next.ServeHTTP(w, r)
 				return
 			}

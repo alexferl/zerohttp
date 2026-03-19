@@ -294,7 +294,7 @@ func TestHMACAuth_FutureTimestamp(t *testing.T) {
 	}
 }
 
-func TestHMACAuth_ExemptPath(t *testing.T) {
+func TestHMACAuth_ExcludedPath(t *testing.T) {
 	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
 	mw := HMACAuth(config.HMACAuthConfig{
 		CredentialStore: func(id string) []string {
@@ -303,7 +303,7 @@ func TestHMACAuth_ExemptPath(t *testing.T) {
 			}
 			return nil
 		},
-		ExemptPaths: []string{"/health", "/metrics"},
+		ExcludedPaths: []string{"/health", "/metrics"},
 	})
 
 	var handlerCalled bool
@@ -317,10 +317,10 @@ func TestHMACAuth_ExemptPath(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	if !handlerCalled {
-		t.Error("handler was not called for exempt path")
+		t.Error("handler was not called for excluded path")
 	}
 	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for exempt path, got %d", rr.Code)
+		t.Errorf("expected 200 for excluded path, got %d", rr.Code)
 	}
 }
 
@@ -1920,4 +1920,67 @@ func TestHMACAuth_PresignedURL_NoHeaderModification(t *testing.T) {
 		t.Errorf("X-Timestamp header was modified by middleware: original=%q, final=%q",
 			originalTimestampHeader, finalTimestampHeader)
 	}
+}
+
+func TestHMACAuth_IncludedPaths(t *testing.T) {
+	creds := map[string]string{"test-key": "test-secret-key-that-is-32-bytes-long!"}
+	mw := HMACAuth(config.HMACAuthConfig{
+		CredentialStore: func(id string) []string {
+			if secret, ok := creds[id]; ok {
+				return []string{secret}
+			}
+			return nil
+		},
+		IncludedPaths: []string{"/api/", "/admin"},
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	signer := NewHMACSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
+
+	// Test allowed path - should require auth
+	req1 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	if err := signer.SignRequest(req1); err != nil {
+		t.Fatalf("failed to sign request: %v", err)
+	}
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+
+	if rr1.Code != http.StatusOK {
+		t.Errorf("expected 200 for allowed path with valid auth, got %d", rr1.Code)
+	}
+
+	// Test non-allowed path - should skip auth
+	req2 := httptest.NewRequest(http.MethodGet, "/public", nil)
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-allowed path, got %d", rr2.Code)
+	}
+
+	// Test non-allowed path with missing auth - should still pass
+	req3 := httptest.NewRequest(http.MethodGet, "/other", nil)
+	rr3 := httptest.NewRecorder()
+	handler.ServeHTTP(rr3, req3)
+
+	if rr3.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-allowed path without auth, got %d", rr3.Code)
+	}
+}
+
+func TestHMACAuth_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = HMACAuth(config.HMACAuthConfig{
+		CredentialStore: func(id string) []string { return nil },
+		ExcludedPaths:   []string{"/health"},
+		IncludedPaths:   []string{"/api"},
+	})
 }

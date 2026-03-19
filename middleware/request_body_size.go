@@ -20,15 +20,15 @@ func RequestBodySize(cfg ...config.RequestBodySizeConfig) func(http.Handler) htt
 		c.MaxBytes = config.DefaultRequestBodySizeConfig.MaxBytes
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "RequestBodySize")
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			// Wrap the response writer to detect 413 status

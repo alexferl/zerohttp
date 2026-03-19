@@ -153,7 +153,7 @@ func main() {
 	)
 
 	// Live/health endpoint - never cached
-	// Demonstrates exempt paths (or you could just not apply the middleware)
+	// Demonstrates excluded paths (or you could just not apply the middleware)
 	app.GET("/api/live", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, map[string]string{
 			"status":    "ok",

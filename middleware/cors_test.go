@@ -200,7 +200,7 @@ func TestCORSOptionsPassthrough(t *testing.T) {
 	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
-func TestCORSExemptPaths(t *testing.T) {
+func TestCORSExcludedPaths(t *testing.T) {
 	tests := []struct {
 		path       string
 		expectCORS bool
@@ -209,7 +209,7 @@ func TestCORSExemptPaths(t *testing.T) {
 		{"/no-cors", false},
 		{"/api/users", true},
 	}
-	mw := CORS(config.CORSConfig{ExemptPaths: []string{"/skip-cors", "/no-cors"}})
+	mw := CORS(config.CORSConfig{ExcludedPaths: []string{"/skip-cors", "/no-cors"}})
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
@@ -223,7 +223,7 @@ func TestCORSExemptPaths(t *testing.T) {
 			if tt.expectCORS && corsOrigin == "" {
 				t.Error("expected CORS headers")
 			} else if !tt.expectCORS && corsOrigin != "" {
-				t.Error("expected no CORS headers for exempt path")
+				t.Error("expected no CORS headers for excluded path")
 			}
 		})
 	}
@@ -271,8 +271,8 @@ func TestCORSNilConfig(t *testing.T) {
 	}
 }
 
-func TestCORSNilExemptPathsFallback(t *testing.T) {
-	mw := CORS(config.CORSConfig{ExemptPaths: nil})
+func TestCORSNilExcludedPathsFallback(t *testing.T) {
+	mw := CORS(config.CORSConfig{ExcludedPaths: nil})
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set(httpx.HeaderOrigin, "https://example.com")
 	rr := httptest.NewRecorder()
@@ -283,7 +283,7 @@ func TestCORSNilExemptPathsFallback(t *testing.T) {
 	})).ServeHTTP(rr, req)
 
 	if !called {
-		t.Error("should fallback to default exempt paths and process CORS")
+		t.Error("should fallback to default excluded paths and process CORS")
 	}
 	zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlAllowOrigin, "*")
 }
@@ -547,4 +547,50 @@ func TestCORSCustomOriginFuncWithCredentials(t *testing.T) {
 	if got := rr.Header().Get("Vary"); got != "Origin" {
 		t.Errorf("expected Vary: Origin, got %s", got)
 	}
+}
+
+func TestCORSIncludedPaths(t *testing.T) {
+	tests := []struct {
+		path       string
+		expectCORS bool
+	}{
+		{"/api/users", true},
+		{"/api/data", true},
+		{"/admin", true},
+		{"/health", false},
+		{"/metrics", false},
+	}
+	mw := CORS(config.CORSConfig{
+		IncludedPaths: []string{"/api/", "/admin"},
+	})
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set(httpx.HeaderOrigin, "https://example.com")
+			rr := httptest.NewRecorder()
+			mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rr, req)
+
+			corsOrigin := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin)
+			if tt.expectCORS && corsOrigin == "" {
+				t.Error("expected CORS headers")
+			} else if !tt.expectCORS && corsOrigin != "" {
+				t.Error("expected no CORS headers for non-allowed path")
+			}
+		})
+	}
+}
+
+func TestCORSBothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = CORS(config.CORSConfig{
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

@@ -65,7 +65,7 @@ func TestRequestBodySize_Limits(t *testing.T) {
 	}
 }
 
-func TestRequestBodySize_ExemptPaths(t *testing.T) {
+func TestRequestBodySize_ExcludedPaths(t *testing.T) {
 	tests := []struct {
 		path        string
 		expectError bool
@@ -81,8 +81,8 @@ func TestRequestBodySize_ExemptPaths(t *testing.T) {
 		t.Run(tt.path, func(t *testing.T) {
 			handler := &requestBodySizeTestHandler{}
 			middleware := RequestBodySize(config.RequestBodySizeConfig{
-				MaxBytes:    5,
-				ExemptPaths: []string{"/upload", "/webhook", "/api/large"},
+				MaxBytes:      5,
+				ExcludedPaths: []string{"/upload", "/webhook", "/api/large"},
 			})(handler)
 			largeBody := bytes.NewReader([]byte("this is a long body"))
 			req := zhtest.NewRequest(http.MethodPost, tt.path).WithBody(largeBody).Build()
@@ -93,20 +93,20 @@ func TestRequestBodySize_ExemptPaths(t *testing.T) {
 			}
 			hasError := handler.bodyError != nil
 			if !tt.expectError && hasError {
-				t.Errorf("Expected no error for exempt path %s, got %v", tt.path, handler.bodyError)
+				t.Errorf("Expected no error for excluded path %s, got %v", tt.path, handler.bodyError)
 			}
 			if tt.expectError && !hasError {
-				t.Errorf("Expected error for non-exempt path %s, got none", tt.path)
+				t.Errorf("Expected error for non-excluded path %s, got none", tt.path)
 			}
 		})
 	}
 }
 
-func TestRequestBodySize_EmptyExemptPaths(t *testing.T) {
+func TestRequestBodySize_EmptyExcludedPaths(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
 	middleware := RequestBodySize(config.RequestBodySizeConfig{
-		MaxBytes:    10,
-		ExemptPaths: []string{},
+		MaxBytes:      10,
+		ExcludedPaths: []string{},
 	})(handler)
 	largeBody := bytes.NewReader([]byte("this body is longer than 10 bytes"))
 	req := zhtest.NewRequest(http.MethodPost, "/any-path").WithBody(largeBody).Build()
@@ -116,7 +116,7 @@ func TestRequestBodySize_EmptyExemptPaths(t *testing.T) {
 		t.Error("Expected handler to be called")
 	}
 	if handler.bodyError == nil {
-		t.Error("Expected error when no paths are exempt")
+		t.Error("Expected error when no paths are excluded")
 	}
 }
 
@@ -147,11 +147,11 @@ func TestRequestBodySize_ConfigFallbacks(t *testing.T) {
 	}
 }
 
-func TestRequestBodySize_NilExemptPaths(t *testing.T) {
+func TestRequestBodySize_NilExcludedPaths(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
 	middleware := RequestBodySize(config.RequestBodySizeConfig{
-		MaxBytes:    100,
-		ExemptPaths: nil,
+		MaxBytes:      100,
+		ExcludedPaths: nil,
 	})(handler)
 	smallBody := bytes.NewReader([]byte("small body"))
 	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(smallBody).Build()
@@ -161,15 +161,15 @@ func TestRequestBodySize_NilExemptPaths(t *testing.T) {
 		t.Error("Expected handler to be called")
 	}
 	if handler.bodyError != nil {
-		t.Errorf("Expected no error with nil exempt paths, got %v", handler.bodyError)
+		t.Errorf("Expected no error with nil excluded paths, got %v", handler.bodyError)
 	}
 }
 
 func TestRequestBodySize_MultipleOptions(t *testing.T) {
 	handler := &requestBodySizeTestHandler{}
 	middleware := RequestBodySize(config.RequestBodySizeConfig{
-		MaxBytes:    10,
-		ExemptPaths: []string{"/test"},
+		MaxBytes:      10,
+		ExcludedPaths: []string{"/test"},
 	})(handler)
 	largeBody := bytes.NewReader([]byte("this body is longer than 10 bytes but less than 100"))
 	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(largeBody).Build()
@@ -189,11 +189,11 @@ func TestDefaultRequestBodySizeConfig(t *testing.T) {
 	if cfg.MaxBytes != expectedMaxBytes {
 		t.Errorf("Expected default max bytes %d, got %d", expectedMaxBytes, cfg.MaxBytes)
 	}
-	if cfg.ExemptPaths == nil {
-		t.Error("Expected default exempt paths to be empty slice, got nil")
+	if cfg.ExcludedPaths == nil {
+		t.Error("Expected default excluded paths to be empty slice, got nil")
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("Expected default exempt paths to be empty, got %d items", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("Expected default excluded paths to be empty, got %d items", len(cfg.ExcludedPaths))
 	}
 }
 
@@ -340,4 +340,56 @@ func TestRequestBodySize_Flush_SupportsSSE(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
+}
+
+func TestRequestBodySize_IncludedPaths(t *testing.T) {
+	tests := []struct {
+		path        string
+		expectError bool
+	}{
+		{"/api/upload", true},
+		{"/api/data", true},
+		{"/admin", true},
+		{"/health", false},
+		{"/metrics", false},
+		{"/public", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			handler := &requestBodySizeTestHandler{}
+			middleware := RequestBodySize(config.RequestBodySizeConfig{
+				MaxBytes:      5,
+				IncludedPaths: []string{"/api/", "/admin"},
+			})(handler)
+			largeBody := bytes.NewReader([]byte("this is a long body"))
+			req := zhtest.NewRequest(http.MethodPost, tt.path).WithBody(largeBody).Build()
+			zhtest.Serve(middleware, req)
+
+			if !handler.called {
+				t.Errorf("Expected handler to be called for path %s", tt.path)
+			}
+			hasError := handler.bodyError != nil
+			if !tt.expectError && hasError {
+				t.Errorf("Expected no error for non-allowed path %s, got %v", tt.path, handler.bodyError)
+			}
+			if tt.expectError && !hasError {
+				t.Errorf("Expected error for allowed path %s, got none", tt.path)
+			}
+		})
+	}
+}
+
+func TestRequestBodySize_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = RequestBodySize(config.RequestBodySizeConfig{
+		MaxBytes:      1024,
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

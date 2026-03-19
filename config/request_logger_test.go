@@ -17,8 +17,8 @@ func TestRequestLoggerConfig_DefaultValues(t *testing.T) {
 	if len(cfg.Fields) != 13 {
 		t.Errorf("expected 13 default fields, got %d", len(cfg.Fields))
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected default exempt paths to be empty, got %d paths", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
 	}
 
 	// Test default field values
@@ -62,9 +62,9 @@ func TestRequestLoggerConfig_FieldConstants(t *testing.T) {
 func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 	t.Run("log errors assignment", func(t *testing.T) {
 		cfg := RequestLoggerConfig{
-			LogErrors:   false,
-			Fields:      DefaultRequestLoggerConfig.Fields,
-			ExemptPaths: []string{},
+			LogErrors:     false,
+			Fields:        DefaultRequestLoggerConfig.Fields,
+			ExcludedPaths: []string{},
 		}
 		if cfg.LogErrors != false {
 			t.Errorf("expected log errors = false, got %t", cfg.LogErrors)
@@ -79,9 +79,9 @@ func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 	t.Run("fields assignment", func(t *testing.T) {
 		fields := []LogField{FieldMethod, FieldPath, FieldStatus, FieldDurationHuman}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      fields,
-			ExemptPaths: []string{},
+			LogErrors:     true,
+			Fields:        fields,
+			ExcludedPaths: []string{},
 		}
 		if len(cfg.Fields) != 4 {
 			t.Errorf("expected 4 fields, got %d", len(cfg.Fields))
@@ -91,28 +91,28 @@ func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 		}
 	})
 
-	t.Run("exempt paths assignment", func(t *testing.T) {
-		exemptPaths := []string{"/health", "/metrics", "/ping", "/status"}
+	t.Run("excluded paths assignment", func(t *testing.T) {
+		excludedPaths := []string{"/health", "/metrics", "/ping", "/status"}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      DefaultRequestLoggerConfig.Fields,
-			ExemptPaths: exemptPaths,
+			LogErrors:     true,
+			Fields:        DefaultRequestLoggerConfig.Fields,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 4 {
-			t.Errorf("expected 4 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 4 {
+			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 
 	t.Run("multiple fields assignment", func(t *testing.T) {
 		fields := []LogField{FieldMethod, FieldStatus, FieldDurationHuman}
-		exemptPaths := []string{"/health", "/metrics"}
+		excludedPaths := []string{"/health", "/metrics"}
 		cfg := RequestLoggerConfig{
-			LogErrors:   false,
-			Fields:      fields,
-			ExemptPaths: exemptPaths,
+			LogErrors:     false,
+			Fields:        fields,
+			ExcludedPaths: excludedPaths,
 		}
 
 		if cfg.LogErrors != false {
@@ -121,8 +121,8 @@ func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 		if !reflect.DeepEqual(cfg.Fields, fields) {
 			t.Error("expected fields to be set correctly")
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Error("expected exempt paths to be set correctly")
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Error("expected excluded paths to be set correctly")
 		}
 	})
 }
@@ -131,9 +131,9 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 	t.Run("minimal fields", func(t *testing.T) {
 		fields := []LogField{FieldMethod, FieldPath, FieldStatus}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      fields,
-			ExemptPaths: []string{},
+			LogErrors:     true,
+			Fields:        fields,
+			ExcludedPaths: []string{},
 		}
 		if len(cfg.Fields) != 3 {
 			t.Errorf("expected 3 minimal fields, got %d", len(cfg.Fields))
@@ -153,9 +153,9 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 		for _, field := range allFields {
 			t.Run(string(field), func(t *testing.T) {
 				cfg := RequestLoggerConfig{
-					LogErrors:   true,
-					Fields:      []LogField{field},
-					ExemptPaths: []string{},
+					LogErrors:     true,
+					Fields:        []LogField{field},
+					ExcludedPaths: []string{},
 				}
 				if len(cfg.Fields) != 1 {
 					t.Errorf("expected 1 field, got %d", len(cfg.Fields))
@@ -170,9 +170,9 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 	t.Run("duration fields", func(t *testing.T) {
 		durationFields := []LogField{FieldDurationNS, FieldDurationHuman}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      durationFields,
-			ExemptPaths: []string{},
+			LogErrors:     true,
+			Fields:        durationFields,
+			ExcludedPaths: []string{},
 		}
 		if len(cfg.Fields) != 2 {
 			t.Errorf("expected 2 duration fields, got %d", len(cfg.Fields))
@@ -185,9 +185,9 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 	t.Run("security fields", func(t *testing.T) {
 		securityFields := []LogField{FieldRemoteAddr, FieldClientIP, FieldUserAgent, FieldReferer}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      securityFields,
-			ExemptPaths: []string{},
+			LogErrors:     true,
+			Fields:        securityFields,
+			ExcludedPaths: []string{},
 		}
 		if len(cfg.Fields) != 4 {
 			t.Errorf("expected 4 security fields, got %d", len(cfg.Fields))
@@ -201,9 +201,9 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 	t.Run("empty fields", func(t *testing.T) {
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      []LogField{},
-			ExemptPaths: []string{},
+			LogErrors:     true,
+			Fields:        []LogField{},
+			ExcludedPaths: []string{},
 		}
 		if cfg.Fields == nil {
 			t.Error("expected fields slice to be initialized, not nil")
@@ -215,52 +215,52 @@ func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 
 	t.Run("nil fields", func(t *testing.T) {
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      nil,
-			ExemptPaths: []string{},
+			LogErrors:     true,
+			Fields:        nil,
+			ExcludedPaths: []string{},
 		}
 		if cfg.Fields != nil {
 			t.Error("expected fields to remain nil when nil is passed")
 		}
 	})
 
-	t.Run("empty exempt paths", func(t *testing.T) {
+	t.Run("empty excluded paths", func(t *testing.T) {
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      DefaultRequestLoggerConfig.Fields,
-			ExemptPaths: []string{},
+			LogErrors:     true,
+			Fields:        DefaultRequestLoggerConfig.Fields,
+			ExcludedPaths: []string{},
 		}
-		if cfg.ExemptPaths == nil {
-			t.Error("expected exempt paths slice to be initialized, not nil")
+		if cfg.ExcludedPaths == nil {
+			t.Error("expected excluded paths slice to be initialized, not nil")
 		}
-		if len(cfg.ExemptPaths) != 0 {
-			t.Errorf("expected empty exempt paths slice, got %d entries", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 0 {
+			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
 		}
 	})
 
-	t.Run("nil exempt paths", func(t *testing.T) {
+	t.Run("nil excluded paths", func(t *testing.T) {
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      DefaultRequestLoggerConfig.Fields,
-			ExemptPaths: nil,
+			LogErrors:     true,
+			Fields:        DefaultRequestLoggerConfig.Fields,
+			ExcludedPaths: nil,
 		}
-		if cfg.ExemptPaths != nil {
-			t.Error("expected exempt paths to remain nil when nil is passed")
+		if cfg.ExcludedPaths != nil {
+			t.Error("expected excluded paths to remain nil when nil is passed")
 		}
 	})
 
 	t.Run("empty string paths", func(t *testing.T) {
-		exemptPaths := []string{"", "/health", ""}
+		excludedPaths := []string{"", "/health", ""}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      DefaultRequestLoggerConfig.Fields,
-			ExemptPaths: exemptPaths,
+			LogErrors:     true,
+			Fields:        DefaultRequestLoggerConfig.Fields,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != 3 {
-			t.Errorf("expected 3 exempt paths, got %d", len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != 3 {
+			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 
@@ -272,46 +272,46 @@ func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 		if cfg.Fields != nil {
 			t.Errorf("expected zero fields = nil, got %v", cfg.Fields)
 		}
-		if cfg.ExemptPaths != nil {
-			t.Errorf("expected zero exempt paths = nil, got %v", cfg.ExemptPaths)
+		if cfg.ExcludedPaths != nil {
+			t.Errorf("expected zero excluded paths = nil, got %v", cfg.ExcludedPaths)
 		}
 	})
 }
 
 func TestRequestLoggerConfig_PathPatterns(t *testing.T) {
 	t.Run("pattern paths", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/health", "/metrics", "/api/v1/health/*", "/monitoring/*",
 			"*.json", "/admin/debug/*", "/internal/status", "/ping",
 		}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      DefaultRequestLoggerConfig.Fields,
-			ExemptPaths: exemptPaths,
+			LogErrors:     true,
+			Fields:        DefaultRequestLoggerConfig.Fields,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 
 	t.Run("special character paths", func(t *testing.T) {
-		exemptPaths := []string{
+		excludedPaths := []string{
 			"/api-v1/health", "/metrics_endpoint", "/health-check", "/status.json",
 			"/monitoring (internal)", "/path with spaces", "/path/with/unicode-ñ", "/endpoint@service.com",
 		}
 		cfg := RequestLoggerConfig{
-			LogErrors:   true,
-			Fields:      DefaultRequestLoggerConfig.Fields,
-			ExemptPaths: exemptPaths,
+			LogErrors:     true,
+			Fields:        DefaultRequestLoggerConfig.Fields,
+			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExemptPaths) != len(exemptPaths) {
-			t.Errorf("expected %d exempt paths, got %d", len(exemptPaths), len(cfg.ExemptPaths))
+		if len(cfg.ExcludedPaths) != len(excludedPaths) {
+			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, exemptPaths) {
-			t.Errorf("expected exempt paths = %v, got %v", exemptPaths, cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
+			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
 		}
 	})
 }
@@ -319,9 +319,9 @@ func TestRequestLoggerConfig_PathPatterns(t *testing.T) {
 func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 	t.Run("basic struct creation", func(t *testing.T) {
 		cfg := RequestLoggerConfig{
-			LogErrors:   false,
-			Fields:      []LogField{FieldMethod, FieldStatus},
-			ExemptPaths: []string{"/health", "/metrics"},
+			LogErrors:     false,
+			Fields:        []LogField{FieldMethod, FieldStatus},
+			ExcludedPaths: []string{"/health", "/metrics"},
 		}
 
 		if cfg.LogErrors != false {
@@ -330,8 +330,8 @@ func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 		if !reflect.DeepEqual(cfg.Fields, []LogField{FieldMethod, FieldStatus}) {
 			t.Errorf("expected fields = [method status], got %v", cfg.Fields)
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, []string{"/health", "/metrics"}) {
-			t.Errorf("expected exempt paths = [/health /metrics], got %v", cfg.ExemptPaths)
+		if !reflect.DeepEqual(cfg.ExcludedPaths, []string{"/health", "/metrics"}) {
+			t.Errorf("expected excluded paths = [/health /metrics], got %v", cfg.ExcludedPaths)
 		}
 	})
 
@@ -344,17 +344,17 @@ func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 		if !reflect.DeepEqual(cfg.Fields, DefaultRequestLoggerConfig.Fields) {
 			t.Errorf("expected fields to match default")
 		}
-		if !reflect.DeepEqual(cfg.ExemptPaths, DefaultRequestLoggerConfig.ExemptPaths) {
-			t.Errorf("expected exempt paths to match default")
+		if !reflect.DeepEqual(cfg.ExcludedPaths, DefaultRequestLoggerConfig.ExcludedPaths) {
+			t.Errorf("expected excluded paths to match default")
 		}
 	})
 
 	t.Run("logging scenarios", func(t *testing.T) {
 		tests := []struct {
-			name        string
-			logErrors   bool
-			fields      []LogField
-			exemptPaths []string
+			name          string
+			logErrors     bool
+			fields        []LogField
+			excludedPaths []string
 		}{
 			{"minimal logging", false, []LogField{FieldMethod, FieldPath, FieldStatus}, []string{"/health"}},
 			{"verbose logging", true, DefaultRequestLoggerConfig.Fields, []string{}},
@@ -365,9 +365,9 @@ func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				cfg := RequestLoggerConfig{
-					LogErrors:   tt.logErrors,
-					Fields:      tt.fields,
-					ExemptPaths: tt.exemptPaths,
+					LogErrors:     tt.logErrors,
+					Fields:        tt.fields,
+					ExcludedPaths: tt.excludedPaths,
 				}
 
 				if cfg.LogErrors != tt.logErrors {
@@ -376,8 +376,8 @@ func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 				if !reflect.DeepEqual(cfg.Fields, tt.fields) {
 					t.Errorf("expected fields = %v, got %v", tt.fields, cfg.Fields)
 				}
-				if !reflect.DeepEqual(cfg.ExemptPaths, tt.exemptPaths) {
-					t.Errorf("expected exempt paths = %v, got %v", tt.exemptPaths, cfg.ExemptPaths)
+				if !reflect.DeepEqual(cfg.ExcludedPaths, tt.excludedPaths) {
+					t.Errorf("expected excluded paths = %v, got %v", tt.excludedPaths, cfg.ExcludedPaths)
 				}
 			})
 		}

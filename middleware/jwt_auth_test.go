@@ -210,9 +210,9 @@ func TestJWTAuth_Success(t *testing.T) {
 	}
 }
 
-func TestJWTAuth_ExemptPath(t *testing.T) {
+func TestJWTAuth_ExcludedPath(t *testing.T) {
 	middleware := JWTAuth(config.JWTAuthConfig{
-		ExemptPaths: []string{"/health"},
+		ExcludedPaths: []string{"/health"},
 	})
 
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -239,9 +239,9 @@ func TestJWTAuth_ExemptPath(t *testing.T) {
 	}
 }
 
-func TestJWTAuth_ExemptMethod(t *testing.T) {
+func TestJWTAuth_ExcludedMethod(t *testing.T) {
 	middleware := JWTAuth(config.JWTAuthConfig{
-		ExemptMethods: []string{http.MethodHead},
+		ExcludedMethods: []string{http.MethodHead},
 	})
 
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2357,4 +2357,62 @@ func TestRefreshTokenHandler_GenerateRefreshTokenError(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
 	}
+}
+
+func TestJWTAuth_IncludedPaths(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (config.JWTClaims, error) {
+			return map[string]any{"sub": "user123"}, nil
+		},
+	}
+
+	mw := JWTAuth(config.JWTAuthConfig{
+		TokenStore:    store,
+		IncludedPaths: []string{"/api/admin", "/api/private/"},
+	})
+
+	tests := []struct {
+		name       string
+		path       string
+		token      string
+		wantStatus int
+	}{
+		{"allowed path with token", "/api/admin", "valid-token", http.StatusOK},
+		{"allowed path without token", "/api/admin", "", http.StatusUnauthorized},
+		{"allowed prefix path with token", "/api/private/data", "valid-token", http.StatusOK},
+		{"allowed prefix path without token", "/api/private/data", "", http.StatusUnauthorized},
+		{"non-allowed path with token", "/public", "valid-token", http.StatusOK},
+		{"non-allowed path without token", "/public", "", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			if tt.token != "" {
+				req.Header.Set(httpx.HeaderAuthorization, "Bearer "+tt.token)
+			}
+			rr := httptest.NewRecorder()
+			mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, rr.Code)
+			}
+		})
+	}
+}
+
+func TestJWTAuth_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = JWTAuth(config.JWTAuthConfig{
+		TokenStore:    &mockTokenStore{},
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

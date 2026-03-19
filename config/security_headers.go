@@ -101,8 +101,19 @@ type SecurityHeadersConfig struct {
 	// XFrameOptions sets the `X-Frame-Options` header
 	XFrameOptions string
 
-	// ExemptPaths contains paths to skip security headers
-	ExemptPaths []string
+	// ExcludedPaths contains paths to skip security headers.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where security headers are explicitly applied.
+	// If set, security headers will only be set for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, security headers apply to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 }
 
 // DefaultSecurityHeadersConfig contains the default values for security headers configuration.
@@ -116,5 +127,6 @@ var DefaultSecurityHeadersConfig = SecurityHeadersConfig{
 	StrictTransportSecurity:   DefaultStrictTransportSecurity,
 	XContentTypeOptions:       "nosniff",
 	XFrameOptions:             "DENY",
-	ExemptPaths:               []string{},
+	ExcludedPaths:             []string{},
+	IncludedPaths:             []string{},
 }

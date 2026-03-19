@@ -242,8 +242,8 @@ func BenchmarkReverseProxy_Rewrites(b *testing.B) {
 	})
 }
 
-// BenchmarkReverseProxy_ExemptPaths measures exempt path checking overhead
-func BenchmarkReverseProxy_ExemptPaths(b *testing.B) {
+// BenchmarkReverseProxy_ExcludedPaths measures excluded path checking overhead
+func BenchmarkReverseProxy_ExcludedPaths(b *testing.B) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -254,21 +254,21 @@ func BenchmarkReverseProxy_ExemptPaths(b *testing.B) {
 	})
 
 	testCases := []struct {
-		name        string
-		exemptPaths []string
-		path        string
+		name          string
+		excludedPaths []string
+		path          string
 	}{
-		{"NoExemptions", nil, "/api/users"},
-		{"OneExemption_NoMatch", []string{"/health"}, "/api/users"},
-		{"ManyExemptions_NoMatch", []string{"/health", "/metrics", "/ready", "/live"}, "/api/users"},
-		{"ExemptMatch", []string{"/health"}, "/health"},
+		{"NoExcluded", nil, "/api/users"},
+		{"OneExcluded_NoMatch", []string{"/health"}, "/api/users"},
+		{"ManyExcluded_NoMatch", []string{"/health", "/metrics", "/ready", "/live"}, "/api/users"},
+		{"ExcludedMatch", []string{"/health"}, "/health"},
 	}
 
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			mw, cleanup := ReverseProxy(config.ReverseProxyConfig{
-				Target:      upstream.URL,
-				ExemptPaths: tc.exemptPaths,
+				Target:        upstream.URL,
+				ExcludedPaths: tc.excludedPaths,
 			})
 			defer cleanup()
 			handler := mw(nextHandler)

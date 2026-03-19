@@ -7,7 +7,7 @@ This example demonstrates zerohttp's rate limiting middleware with various confi
 - Token bucket and sliding window algorithms
 - Per-client rate limiting with custom key extractors
 - Rate limit headers (X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset)
-- Path exemptions for health checks
+- Path exclusions for health checks
 - Configurable in-memory store
 
 ## Running the Example
@@ -20,13 +20,13 @@ The server starts on `http://localhost:8080`.
 
 ## Endpoints
 
-| Endpoint               | Rate Limit          | Description                     |
-|------------------------|---------------------|---------------------------------|
-| `GET /api/default`     | 100 req/min         | Default token bucket limiter    |
-| `GET /api/strict`      | 10 req/second       | Strict sliding window limiter   |
-| `GET /api/user`        | 5 req/min per user  | Per-user rate limiting          |
-| `GET /api/high-volume` | 1000 req/min        | High-volume endpoint            |
-| `GET /health`          | Exempt              | Health check (no rate limit)    |
+| Endpoint               | Rate Limit         | Description                     |
+|------------------------|--------------------|---------------------------------|
+| `GET /api/default`     | 100 req/min        | Default token bucket limiter    |
+| `GET /api/strict`      | 10 req/second      | Strict sliding window limiter   |
+| `GET /api/user`        | 5 req/min per user | Per-user rate limiting          |
+| `GET /api/high-volume` | 1000 req/min       | High-volume endpoint            |
+| `GET /health`          | Excluded           | Health check (no rate limit)    |
 
 ## Test Commands
 
@@ -64,7 +64,7 @@ X-RateLimit-Remaining: 95
 X-RateLimit-Reset: 1704067200
 ```
 
-### Health check (exempt from rate limiting)
+### Health check (excluded from rate limiting)
 ```bash
 curl -i http://localhost:8080/health
 ```

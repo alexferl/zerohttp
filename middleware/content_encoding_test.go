@@ -128,7 +128,7 @@ func TestContentEncodingCustomConfig(t *testing.T) {
 	}
 }
 
-func TestContentEncodingExemptPaths(t *testing.T) {
+func TestContentEncodingExcludedPaths(t *testing.T) {
 	tests := []struct {
 		name       string
 		path       string
@@ -136,14 +136,14 @@ func TestContentEncodingExemptPaths(t *testing.T) {
 		expectNext bool
 		expectCode int
 	}{
-		{"exempt exact", "/health", "br", true, http.StatusOK},
-		{"exempt prefix", "/api/webhooks/github", "br", true, http.StatusOK},
-		{"not exempt", "/api/users", "br", false, http.StatusUnsupportedMediaType},
+		{"excluded exact", "/health", "br", true, http.StatusOK},
+		{"excluded prefix", "/api/webhooks/github", "br", true, http.StatusOK},
+		{"not excluded", "/api/users", "br", false, http.StatusUnsupportedMediaType},
 	}
 
 	middleware := ContentEncoding(config.ContentEncodingConfig{
-		Encodings:   []string{"gzip"},
-		ExemptPaths: []string{"/health", "/api/webhooks/"},
+		Encodings:     []string{"gzip"},
+		ExcludedPaths: []string{"/health", "/api/webhooks/"},
 	})
 
 	for _, tt := range tests {
@@ -207,10 +207,10 @@ func TestContentEncodingNilEncodingsFallback(t *testing.T) {
 	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
-func TestContentEncodingNilExemptPathsFallback(t *testing.T) {
+func TestContentEncodingNilExcludedPathsFallback(t *testing.T) {
 	middleware := ContentEncoding(config.ContentEncodingConfig{
-		Encodings:   []string{"gzip"},
-		ExemptPaths: nil,
+		Encodings:     []string{"gzip"},
+		ExcludedPaths: nil,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("test"))
 	req.Header.Set(httpx.HeaderContentEncoding, "br")
@@ -226,4 +226,56 @@ func TestContentEncodingNilExemptPathsFallback(t *testing.T) {
 		t.Error("handler should not be called with disallowed encoding")
 	}
 	zhtest.AssertWith(t, rr).Status(http.StatusUnsupportedMediaType)
+}
+
+func TestContentEncodingIncludedPaths(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		encoding   string
+		expectNext bool
+		expectCode int
+	}{
+		{"allowed prefix", "/api/users", "br", false, http.StatusUnsupportedMediaType},
+		{"allowed exact", "/upload", "br", false, http.StatusUnsupportedMediaType},
+		{"not allowed", "/other", "br", true, http.StatusOK},
+	}
+
+	middleware := ContentEncoding(config.ContentEncodingConfig{
+		Encodings:     []string{"gzip"},
+		IncludedPaths: []string{"/api/", "/upload"},
+	})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader("test"))
+			req.Header.Set(httpx.HeaderContentEncoding, tt.encoding)
+			rr := httptest.NewRecorder()
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+			middleware(next).ServeHTTP(rr, req)
+
+			if nextCalled != tt.expectNext {
+				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
+			}
+			zhtest.AssertWith(t, rr).Status(tt.expectCode)
+		})
+	}
+}
+
+func TestContentEncodingBothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = ContentEncoding(config.ContentEncodingConfig{
+		Encodings:     []string{"gzip"},
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

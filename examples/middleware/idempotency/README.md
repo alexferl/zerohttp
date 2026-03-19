@@ -6,7 +6,7 @@ This example demonstrates zerohttp's idempotency middleware for safe request ret
 
 - In-memory response caching by idempotency key
 - Required vs optional idempotency keys
-- Exempt paths for webhooks
+- Excluded paths for webhooks
 - Body size limits for caching
 - Idempotency-Replay header for cached responses
 
@@ -24,7 +24,7 @@ The server starts on `http://localhost:8080`.
 |-------------------------|-------------|----------------------------------|
 | `POST /api/payments`    | Optional    | Basic idempotency with caching   |
 | `POST /api/transfers`   | Required    | Fails without idempotency key    |
-| `POST /api/webhooks`    | Exempt      | Skips idempotency check          |
+| `POST /api/webhooks`    | Excluded    | Skips idempotency check          |
 | `POST /api/bulk-import` | Optional    | Max body size limit (1KB)        |
 | `GET /api/status`       | N/A         | GET requests bypass idempotency  |
 
@@ -70,7 +70,7 @@ curl -i -X POST http://localhost:8080/api/transfers \
   -d '{"amount":500}'
 ```
 
-### Exempt path (webhook - no idempotency check)
+### Excluded path (webhook - no idempotency check)
 ```bash
 curl -i -X POST http://localhost:8080/api/webhooks \
   -H 'Content-Type: application/json' \

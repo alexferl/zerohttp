@@ -69,9 +69,19 @@ type CacheConfig struct {
 	// Default: nil
 	Store CacheStore
 
-	// ExemptPaths are paths that should not be cached.
+	// ExcludedPaths are paths that should not be cached.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
 	// Default: []
-	ExemptPaths []string
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where caching is explicitly applied.
+	// If set, caching will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, caching applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// StatusCodes is a list of status codes that can be cached.
 	// Default: [200, 201, 204, 301, 302, 304, 307, 308]
@@ -84,13 +94,14 @@ type CacheConfig struct {
 
 // DefaultCacheConfig is the default configuration for the cache middleware.
 var DefaultCacheConfig = CacheConfig{
-	CacheControl: "private, max-age=60",
-	DefaultTTL:   time.Minute,
-	MaxBodySize:  10 * 1024 * 1024,
-	MaxEntries:   10000,
-	ETag:         true,
-	LastModified: true,
-	Vary:         []string{httpx.HeaderAccept, httpx.HeaderAcceptEncoding, httpx.HeaderAcceptLanguage},
-	ExemptPaths:  []string{},
-	StatusCodes:  []int{200, 201, 204, 301, 302, 304, 307, 308},
+	CacheControl:  "private, max-age=60",
+	DefaultTTL:    time.Minute,
+	MaxBodySize:   10 * 1024 * 1024,
+	MaxEntries:    10000,
+	ETag:          true,
+	LastModified:  true,
+	Vary:          []string{httpx.HeaderAccept, httpx.HeaderAcceptEncoding, httpx.HeaderAcceptLanguage},
+	ExcludedPaths: []string{},
+	IncludedPaths: []string{},
+	StatusCodes:   []int{200, 201, 204, 301, 302, 304, 307, 308},
 }

@@ -32,8 +32,11 @@ func TestDefaultReverseProxyConfig(t *testing.T) {
 	if !cfg.ForwardHeaders {
 		t.Error("expected ForwardHeaders to be true")
 	}
-	if len(cfg.ExemptPaths) != 0 {
-		t.Errorf("expected ExemptPaths to be empty, got %d items", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 0 {
+		t.Errorf("expected ExcludedPaths to be empty, got %d items", len(cfg.ExcludedPaths))
+	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected IncludedPaths to be empty, got %d items", len(cfg.IncludedPaths))
 	}
 }
 
@@ -100,7 +103,8 @@ func TestReverseProxyConfig(t *testing.T) {
 		},
 		RemoveHeaders:  []string{"X-Internal"},
 		ForwardHeaders: true,
-		ExemptPaths:    []string{"/health", "/metrics"},
+		ExcludedPaths:  []string{"/health", "/metrics"},
+		IncludedPaths:  []string{"/api/public"},
 	}
 
 	if cfg.Target != "http://localhost:8081" {
@@ -142,9 +146,48 @@ func TestReverseProxyConfig(t *testing.T) {
 	if !cfg.ForwardHeaders {
 		t.Error("expected ForwardHeaders to be true")
 	}
-	if len(cfg.ExemptPaths) != 2 {
-		t.Errorf("expected 2 ExemptPaths, got %d", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 2 {
+		t.Errorf("expected 2 ExcludedPaths, got %d", len(cfg.ExcludedPaths))
 	}
+	if len(cfg.IncludedPaths) != 1 {
+		t.Errorf("expected 1 AllowedPath, got %d", len(cfg.IncludedPaths))
+	}
+}
+
+func TestReverseProxyConfig_IncludedPaths(t *testing.T) {
+	t.Run("custom included paths", func(t *testing.T) {
+		cfg := ReverseProxyConfig{
+			Target:        "http://localhost:8081",
+			IncludedPaths: []string{"/api/public", "/health"},
+		}
+		if len(cfg.IncludedPaths) != 2 {
+			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
+		}
+		if cfg.IncludedPaths[0] != "/api/public" {
+			t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
+		}
+	})
+
+	t.Run("empty included paths", func(t *testing.T) {
+		cfg := ReverseProxyConfig{
+			IncludedPaths: []string{},
+		}
+		if cfg.IncludedPaths == nil {
+			t.Error("expected included paths slice to be initialized, not nil")
+		}
+		if len(cfg.IncludedPaths) != 0 {
+			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
+		}
+	})
+
+	t.Run("nil included paths", func(t *testing.T) {
+		cfg := ReverseProxyConfig{
+			IncludedPaths: nil,
+		}
+		if cfg.IncludedPaths != nil {
+			t.Error("expected included paths to remain nil when nil is passed")
+		}
+	})
 }
 
 func TestReverseProxyConfigWithTargets(t *testing.T) {

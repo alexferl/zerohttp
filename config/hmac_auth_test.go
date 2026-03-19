@@ -36,6 +36,9 @@ func TestHMACAuthConfig_DefaultValues(t *testing.T) {
 	if cfg.CredentialStore != nil {
 		t.Error("expected default CredentialStore to be nil")
 	}
+	if len(cfg.IncludedPaths) != 0 {
+		t.Errorf("expected default IncludedPaths to be empty, got %d paths", len(cfg.IncludedPaths))
+	}
 }
 
 func TestHMACHashAlgorithm_String(t *testing.T) {
@@ -70,7 +73,8 @@ func TestHMACAuthConfig_CustomValues(t *testing.T) {
 		ClockSkewGrace:       2 * time.Minute,
 		RequiredHeaders:      []string{"host", "x-timestamp", "x-request-id"},
 		OptionalHeaders:      []string{"content-type", "x-correlation-id"},
-		ExemptPaths:          []string{"/health", "/metrics"},
+		ExcludedPaths:        []string{"/health", "/metrics"},
+		IncludedPaths:        []string{"/api/public"},
 		ErrorHandler:         customErrorHandler,
 		AuthHeaderName:       "X-Authorization",
 		TimestampHeader:      "X-Date",
@@ -115,8 +119,12 @@ func TestHMACAuthConfig_CustomValues(t *testing.T) {
 		t.Error("expected ErrorHandler to be set")
 	}
 
-	if len(cfg.ExemptPaths) != 2 {
-		t.Errorf("expected 2 exempt paths, got %d", len(cfg.ExemptPaths))
+	if len(cfg.ExcludedPaths) != 2 {
+		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
+	}
+
+	if len(cfg.IncludedPaths) != 1 {
+		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
 	}
 
 	if len(cfg.RequiredHeaders) != 3 {
@@ -129,7 +137,8 @@ func TestHMACAuthConfig_EmptySlices(t *testing.T) {
 		CredentialStore: func(id string) []string { return nil },
 		RequiredHeaders: []string{},
 		OptionalHeaders: []string{},
-		ExemptPaths:     []string{},
+		ExcludedPaths:   []string{},
+		IncludedPaths:   []string{},
 	}
 
 	if cfg.RequiredHeaders == nil {
@@ -140,8 +149,12 @@ func TestHMACAuthConfig_EmptySlices(t *testing.T) {
 		t.Error("OptionalHeaders should not be nil, should be empty slice")
 	}
 
-	if cfg.ExemptPaths == nil {
-		t.Error("ExemptPaths should not be nil, should be empty slice")
+	if cfg.ExcludedPaths == nil {
+		t.Error("ExcludedPaths should not be nil, should be empty slice")
+	}
+
+	if cfg.IncludedPaths == nil {
+		t.Error("IncludedPaths should not be nil, should be empty slice")
 	}
 }
 

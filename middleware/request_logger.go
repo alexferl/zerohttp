@@ -22,8 +22,8 @@ func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(ht
 		zconfig.Merge(&c, cfg[0])
 	}
 
-	if len(c.ExemptPaths) > 0 && len(c.AllowedPaths) > 0 {
-		logger.Panic("RequestLogger: cannot set both ExemptPaths and AllowedPaths")
+	if len(c.ExcludedPaths) > 0 && len(c.IncludedPaths) > 0 {
+		logger.Panic("RequestLogger: cannot set both ExcludedPaths and IncludedPaths")
 	}
 
 	fieldMap := make(map[config.LogField]bool)
@@ -33,8 +33,8 @@ func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(ht
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
+			for _, excludedPath := range c.ExcludedPaths {
+				if pathMatches(r.URL.Path, excludedPath) {
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -42,7 +42,7 @@ func RequestLogger(logger log.Logger, cfg ...config.RequestLoggerConfig) func(ht
 
 			start := time.Now()
 
-			bodyLoggingAllowed := isBodyLoggingAllowed(r.URL.Path, c.AllowedPaths)
+			bodyLoggingAllowed := isBodyLoggingAllowed(r.URL.Path, c.IncludedPaths)
 
 			var requestBody string
 			if c.LogRequestBody && bodyLoggingAllowed {
@@ -333,13 +333,13 @@ func isSensitiveField(field string, sensitiveFields []string) bool {
 }
 
 // isBodyLoggingAllowed checks if body logging is allowed for the given path.
-// If allowedPaths is empty, body logging is allowed for all paths.
-// If allowedPaths is set, body logging is only allowed for matching paths.
-func isBodyLoggingAllowed(path string, allowedPaths []string) bool {
-	if len(allowedPaths) == 0 {
+// If includedPaths is empty, body logging is allowed for all paths.
+// If includedPaths is set, body logging is only allowed for matching paths.
+func isBodyLoggingAllowed(path string, includedPaths []string) bool {
+	if len(includedPaths) == 0 {
 		return true
 	}
-	for _, allowedPath := range allowedPaths {
+	for _, allowedPath := range includedPaths {
 		if pathMatches(path, allowedPath) {
 			return true
 		}

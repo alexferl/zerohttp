@@ -55,7 +55,7 @@ func main() {
 		}),
 	)
 
-	// Webhook endpoint - exempt from idempotency
+	// Webhook endpoint - excluded from idempotency
 	// External systems may retry webhooks with same payload
 	app.POST("/api/webhooks", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, map[string]string{
@@ -64,9 +64,9 @@ func main() {
 		})
 	}),
 		middleware.Idempotency(config.IdempotencyConfig{
-			TTL:         1 * time.Hour,
-			MaxBodySize: 1024 * 1024,
-			ExemptPaths: []string{"/api/webhooks"}, // Skip idempotency for webhooks
+			TTL:           1 * time.Hour,
+			MaxBodySize:   1024 * 1024,
+			ExcludedPaths: []string{"/api/webhooks"}, // Skip idempotency for webhooks
 		}),
 	)
 

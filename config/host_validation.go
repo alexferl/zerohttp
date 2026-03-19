@@ -28,8 +28,19 @@ type HostValidationConfig struct {
 	// Defaults to "Invalid Host header"
 	Message string
 
-	// ExemptPaths contains paths to skip host validation
-	ExemptPaths []string
+	// ExcludedPaths contains paths to skip host validation.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where host validation is explicitly applied.
+	// If set, host validation will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, host validation applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 }
 
 // DefaultHostValidationConfig contains default values for host validation
@@ -39,5 +50,6 @@ var DefaultHostValidationConfig = HostValidationConfig{
 	StrictPort:      false,
 	StatusCode:      400,
 	Message:         "Invalid Host header",
-	ExemptPaths:     []string{},
+	ExcludedPaths:   []string{},
+	IncludedPaths:   []string{},
 }

@@ -7,7 +7,7 @@ This example demonstrates zerohttp's host validation middleware for protecting a
 - Exact host matching
 - Subdomain allowlisting
 - Strict port validation
-- Exempt paths
+- Excluded paths
 - Custom error responses
 
 ## Running the Example
@@ -26,7 +26,7 @@ The server starts on `http://localhost:8080`.
 | `GET /api/subdomains`  | `*.example.com`      | Subdomains allowed     |
 | `GET /api/multi`       | Multiple hosts       | Multiple allowed hosts |
 | `GET /api/strict-port` | `localhost:8080`     | Requires port in Host  |
-| `GET /health`          | Any (exempt)         | Bypasses validation    |
+| `GET /health`          | Any (excluded)       | Bypasses validation    |
 | `GET /api/custom`      | `secure.example.com` | Custom error response  |
 
 ## Test Commands
@@ -49,7 +49,7 @@ curl -H "Host: localhost:8080" http://localhost:8080/api/strict-port
 curl -H "Host: localhost" http://localhost:8080/api/strict-port  # rejected
 ```
 
-### Exempt path (no validation)
+### Excluded path (no validation)
 ```bash
 curl -H "Host: anything.com" http://localhost:8080/health
 ```

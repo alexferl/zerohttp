@@ -11,10 +11,20 @@ import (
 type TracerConfig struct {
 	TracerField trace.Tracer
 
-	// ExemptPaths is a list of paths that should not be traced.
+	// ExcludedPaths is a list of paths that should not be traced.
 	// Requests to these paths will not create spans.
-	// Default: nil (all paths are traced)
-	ExemptPaths []string
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
+	// Default: []
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where tracing is explicitly applied.
+	// If set, tracing will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, tracing applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// SpanNameFormatter is a custom function to generate span names.
 	// If nil, the default formatter is used (returns "{method} {path}").
@@ -24,7 +34,8 @@ type TracerConfig struct {
 
 // DefaultTracerConfig contains the default values for TracerConfig.
 var DefaultTracerConfig = TracerConfig{
-	ExemptPaths:       nil,
+	ExcludedPaths:     []string{},
+	IncludedPaths:     []string{},
 	SpanNameFormatter: nil,
 }
 
@@ -44,9 +55,9 @@ func (c TracerConfig) Wrap() *TracerConfigWrapper {
 	return &TracerConfigWrapper{Config: c}
 }
 
-// IsExempt checks if a path is exempt from tracing.
-func (w *TracerConfigWrapper) IsExempt(path string) bool {
-	return slices.Contains(w.Config.ExemptPaths, path)
+// IsExcluded checks if a path is excluded from tracing.
+func (w *TracerConfigWrapper) IsExcluded(path string) bool {
+	return slices.Contains(w.Config.ExcludedPaths, path)
 }
 
 // GetSpanName returns the span name for a request.

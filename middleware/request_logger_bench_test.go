@@ -205,25 +205,25 @@ func BenchmarkRequestLogger_LogLevelRouting(b *testing.B) {
 	}
 }
 
-// BenchmarkRequestLogger_ExemptPaths measures exempt path checking overhead
-func BenchmarkRequestLogger_ExemptPaths(b *testing.B) {
+// BenchmarkRequestLogger_ExcludedPaths measures excluded path checking overhead
+func BenchmarkRequestLogger_ExcludedPaths(b *testing.B) {
 	testCases := []struct {
-		name        string
-		exemptPaths []string
-		path        string
+		name          string
+		excludedPaths []string
+		path          string
 	}{
-		{"NoExemptions", nil, "/api/users"},
-		{"OneExemption", []string{"/health"}, "/api/users"},
-		{"ManyExemptions", []string{"/health", "/metrics", "/ready", "/live"}, "/api/users"},
-		{"ExemptMatch", []string{"/health"}, "/health"},
+		{"NoExcluded", nil, "/api/users"},
+		{"OneExcluded", []string{"/health"}, "/api/users"},
+		{"ManyExcluded", []string{"/health", "/metrics", "/ready", "/live"}, "/api/users"},
+		{"ExcludedMatch", []string{"/health"}, "/health"},
 	}
 
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			logger := &noopLogger{}
 			mw := RequestLogger(logger, config.RequestLoggerConfig{
-				Fields:      []config.LogField{config.FieldMethod, config.FieldPath},
-				ExemptPaths: tc.exemptPaths,
+				Fields:        []config.LogField{config.FieldMethod, config.FieldPath},
+				ExcludedPaths: tc.excludedPaths,
 			})
 
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

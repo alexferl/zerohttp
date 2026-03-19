@@ -59,7 +59,7 @@ type Middleware struct {
 
 	DurationBuckets []float64
 	SizeBuckets     []float64
-	ExcludePaths    map[string]struct{}
+	ExcludedPaths   map[string]struct{}
 	PathLabelFunc   func(string) string
 	CustomLabels    func(r *http.Request) map[string]string
 	customLabelKeys []string
@@ -82,7 +82,7 @@ func NewMiddleware(reg Registry, cfg ...config.MetricsConfig) func(http.Handler)
 	}
 
 	excludePaths := make(map[string]struct{})
-	for _, p := range c.ExcludePaths {
+	for _, p := range c.ExcludedPaths {
 		excludePaths[p] = struct{}{}
 	}
 
@@ -90,7 +90,7 @@ func NewMiddleware(reg Registry, cfg ...config.MetricsConfig) func(http.Handler)
 		reg:             reg,
 		DurationBuckets: c.DurationBuckets,
 		SizeBuckets:     c.SizeBuckets,
-		ExcludePaths:    excludePaths,
+		ExcludedPaths:   excludePaths,
 		PathLabelFunc:   c.PathLabelFunc,
 		CustomLabels:    c.CustomLabels,
 	}
@@ -107,7 +107,7 @@ func NewMiddleware(reg Registry, cfg ...config.MetricsConfig) func(http.Handler)
 			// Add registry to context so other middleware can access it
 			r = r.WithContext(WithRegistry(r.Context(), reg))
 
-			if _, excluded := mm.ExcludePaths[r.URL.Path]; excluded {
+			if _, excluded := mm.ExcludedPaths[r.URL.Path]; excluded {
 				next.ServeHTTP(w, r)
 				return
 			}

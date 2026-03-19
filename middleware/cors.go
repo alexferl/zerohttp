@@ -19,6 +19,8 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "CORS")
+
 	allowedOriginMap := make(map[string]bool)
 	allowAllOrigins := false
 	for _, origin := range c.AllowedOrigins {
@@ -48,11 +50,9 @@ func CORS(cfg ...config.CORSConfig) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
 			origin := r.Header.Get(httpx.HeaderOrigin)

@@ -65,9 +65,19 @@ type IdempotencyConfig struct {
 	// Default: false
 	Required bool
 
-	// ExemptPaths are paths that should skip idempotency check.
+	// ExcludedPaths are paths that should skip idempotency check.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
 	// Default: []
-	ExemptPaths []string
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where idempotency check is explicitly applied.
+	// If set, idempotency check will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, idempotency check applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// MaxKeys limits the number of unique keys stored in the default
 	// in-memory store. Defaults to 10000. Set to 0 for unlimited (not recommended).
@@ -98,7 +108,8 @@ var DefaultIdempotencyConfig = IdempotencyConfig{
 	TTL:                   24 * time.Hour,
 	MaxBodySize:           1024 * 1024,
 	Required:              false,
-	ExemptPaths:           []string{},
+	ExcludedPaths:         []string{},
+	IncludedPaths:         []string{},
 	MaxKeys:               10000,
 	LockRetryInterval:     10 * time.Millisecond,
 	LockMaxRetries:        300,

@@ -132,7 +132,7 @@ func TestMiddleware_BasicRequest(t *testing.T) {
 func TestMiddleware_ExcludedPath(t *testing.T) {
 	reg := NewRegistry()
 	cfg := config.MetricsConfig{
-		ExcludePaths:  []string{"/health", "/metrics"},
+		ExcludedPaths: []string{"/health", "/metrics"},
 		PathLabelFunc: func(p string) string { return p },
 	}
 

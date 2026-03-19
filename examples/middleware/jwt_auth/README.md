@@ -7,7 +7,7 @@ This example demonstrates zerohttp's JWT authentication middleware using HS256.
 - HS256 JWT token signing
 - Access token generation with configurable TTL
 - Required claims validation
-- Exempt paths for public endpoints
+- Exclude paths for public endpoints
 - Scope-based access control
 
 ## Running the Example

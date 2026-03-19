@@ -52,9 +52,9 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 		tokenGenerator = generateToken
 	}
 
-	exemptMethodMap := make(map[string]bool)
-	for _, method := range c.ExemptMethods {
-		exemptMethodMap[strings.ToUpper(method)] = true
+	excludedMethodMap := make(map[string]bool)
+	for _, method := range c.ExcludedMethods {
+		excludedMethodMap[strings.ToUpper(method)] = true
 	}
 
 	lookupSource, lookupName := parseTokenLookup(c.TokenLookup)
@@ -64,18 +64,18 @@ func CSRF(cfg ...config.CSRFConfig) func(http.Handler) http.Handler {
 		errorHandler = defaultCSRFErrorHandler
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "CSRF")
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
-			for _, exemptPath := range c.ExemptPaths {
-				if pathMatches(r.URL.Path, exemptPath) {
-					next.ServeHTTP(w, r)
-					return
-				}
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
+				next.ServeHTTP(w, r)
+				return
 			}
 
-			if exemptMethodMap[strings.ToUpper(r.Method)] {
+			if excludedMethodMap[strings.ToUpper(r.Method)] {
 				cookie, err := r.Cookie(c.CookieName)
 				var token string
 				if err != nil || cookie.Value == "" || !validateTokenFormat(cookie.Value) {

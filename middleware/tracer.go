@@ -21,11 +21,13 @@ func Tracer(tracer trace.Tracer, cfg ...config.TracerConfig) func(http.Handler) 
 		zconfig.Merge(&c, cfg[0])
 	}
 
+	validatePathConfig(c.ExcludedPaths, c.IncludedPaths, "Tracer")
+
 	wrapper := c.Wrap()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if wrapper.IsExempt(r.URL.Path) {
+			if !shouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
 				next.ServeHTTP(w, r)
 				return
 			}

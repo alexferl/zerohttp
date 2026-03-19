@@ -307,26 +307,26 @@ func BenchmarkCompress_NoCompressionFallback(b *testing.B) {
 	})
 }
 
-// BenchmarkCompress_ExemptPaths measures path exemption checking overhead
-func BenchmarkCompress_ExemptPaths(b *testing.B) {
+// BenchmarkCompress_ExcludedPaths measures path exclusion checking overhead
+func BenchmarkCompress_ExcludedPaths(b *testing.B) {
 	content := []byte(strings.Repeat("Test content. ", 20))
 
 	testCases := []struct {
-		name        string
-		exemptPaths []string
-		path        string
+		name          string
+		excludedPaths []string
+		path          string
 	}{
-		{"NoExemptions", nil, "/test"},
-		{"OneExemption", []string{"/health"}, "/test"},
-		{"ManyExemptions", []string{"/health", "/metrics", "/api/internal/", "/debug/", "/admin/"}, "/test"},
-		{"ExemptPathMatch", []string{"/health", "/metrics", "/api/internal/"}, "/api/internal/data"},
+		{"NoExcluded", nil, "/test"},
+		{"OneExcluded", []string{"/health"}, "/test"},
+		{"ManyExcluded", []string{"/health", "/metrics", "/api/internal/", "/debug/", "/admin/"}, "/test"},
+		{"ExcludedPathMatch", []string{"/health", "/metrics", "/api/internal/"}, "/api/internal/data"},
 	}
 
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			mw := Compress(config.CompressConfig{
-				Types:       []string{"text/plain"},
-				ExemptPaths: tc.exemptPaths,
+				Types:         []string{"text/plain"},
+				ExcludedPaths: tc.excludedPaths,
 			})
 
 			handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

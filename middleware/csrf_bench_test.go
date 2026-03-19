@@ -120,10 +120,10 @@ func BenchmarkCSRF_ExtractToken(b *testing.B) {
 func BenchmarkCSRF_Middleware(b *testing.B) {
 	key := []byte("test-key-32-bytes-long-for-hmac!!")
 
-	b.Run("GET_ExemptMethod", func(b *testing.B) {
+	b.Run("GET_ExcludedMethod", func(b *testing.B) {
 		handler := CSRF(config.CSRFConfig{
-			HMACKey:       key,
-			ExemptMethods: []string{http.MethodGet},
+			HMACKey:         key,
+			ExcludedMethods: []string{http.MethodGet},
 		})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -140,8 +140,8 @@ func BenchmarkCSRF_Middleware(b *testing.B) {
 
 	b.Run("GET_NewToken", func(b *testing.B) {
 		handler := CSRF(config.CSRFConfig{
-			HMACKey:       key,
-			ExemptMethods: []string{}, // GET is not exempt, will generate token
+			HMACKey:         key,
+			ExcludedMethods: []string{}, // GET is not excluded, will generate token
 		})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -282,19 +282,19 @@ func BenchmarkCSRF_SetCookie(b *testing.B) {
 	}
 }
 
-// BenchmarkCSRF_ExemptPaths measures exempt path checking
-func BenchmarkCSRF_ExemptPaths(b *testing.B) {
+// BenchmarkCSRF_ExcludedPaths measures excluded path checking
+func BenchmarkCSRF_ExcludedPaths(b *testing.B) {
 	key := []byte("test-key-32-bytes-long-for-hmac!!")
-	exemptPaths := []string{"/api/*", "/health", "/static/*"}
+	excludedPaths := []string{"/api/*", "/health", "/static/*"}
 
 	handler := CSRF(config.CSRFConfig{
-		HMACKey:     key,
-		ExemptPaths: exemptPaths,
+		HMACKey:       key,
+		ExcludedPaths: excludedPaths,
 	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	b.Run("ExemptPath", func(b *testing.B) {
+	b.Run("ExcludedPath", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -305,7 +305,7 @@ func BenchmarkCSRF_ExemptPaths(b *testing.B) {
 		}
 	})
 
-	b.Run("NonExemptPath", func(b *testing.B) {
+	b.Run("NonExcludedPath", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -347,8 +347,8 @@ func BenchmarkCSRF_Concurrent(b *testing.B) {
 
 	b.Run("Middleware_GET", func(b *testing.B) {
 		handler := CSRF(config.CSRFConfig{
-			HMACKey:       key,
-			ExemptMethods: []string{http.MethodGet},
+			HMACKey:         key,
+			ExcludedMethods: []string{http.MethodGet},
 		})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))

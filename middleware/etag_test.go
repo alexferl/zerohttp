@@ -237,36 +237,36 @@ func TestETag_MD5Algorithm(t *testing.T) {
 	}
 }
 
-func TestETag_ExemptPaths(t *testing.T) {
-	handler := ETag(config.ETagConfig{ExemptPaths: []string{"/skip"}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestETag_ExcludedPaths(t *testing.T) {
+	handler := ETag(config.ETagConfig{ExcludedPaths: []string{"/skip"}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
-	// Request to exempt path
+	// Request to excluded path
 	req1 := httptest.NewRequest(http.MethodGet, "/skip", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
 	if rec1.Header().Get("ETag") != "" {
-		t.Error("expected no ETag header for exempt path")
+		t.Error("expected no ETag header for excluded path")
 	}
 
-	// Request to non-exempt path
+	// Request to non-excluded path
 	req2 := httptest.NewRequest(http.MethodGet, "/other", nil)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
 	if rec2.Header().Get("ETag") == "" {
-		t.Error("expected ETag header for non-exempt path")
+		t.Error("expected ETag header for non-excluded path")
 	}
 }
 
-func TestETag_ExemptFunc(t *testing.T) {
-	exemptFunc := func(r *http.Request) bool {
+func TestETag_ExcludedFunc(t *testing.T) {
+	excludedFunc := func(r *http.Request) bool {
 		return r.Header.Get("X-Skip-ETag") == "true"
 	}
 
-	handler := ETag(config.ETagConfig{ExemptFunc: exemptFunc})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := ETag(config.ETagConfig{ExcludedFunc: excludedFunc})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -277,7 +277,7 @@ func TestETag_ExemptFunc(t *testing.T) {
 	handler.ServeHTTP(rec1, req1)
 
 	if rec1.Header().Get("ETag") != "" {
-		t.Error("expected no ETag header when exempt func returns true")
+		t.Error("expected no ETag header when excluded func returns true")
 	}
 
 	// Request without skip header
@@ -286,7 +286,7 @@ func TestETag_ExemptFunc(t *testing.T) {
 	handler.ServeHTTP(rec2, req2)
 
 	if rec2.Header().Get("ETag") == "" {
-		t.Error("expected ETag header when exempt func returns false")
+		t.Error("expected ETag header when excluded func returns false")
 	}
 }
 
@@ -1033,8 +1033,8 @@ func TestETagMatches_ExactMatches(t *testing.T) {
 	}
 }
 
-func TestETag_ExemptPaths_PrefixMatch(t *testing.T) {
-	handler := ETag(config.ETagConfig{ExemptPaths: []string{"/api/"}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestETag_ExcludedPaths_PrefixMatch(t *testing.T) {
+	handler := ETag(config.ETagConfig{ExcludedPaths: []string{"/api/"}})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -1044,7 +1044,7 @@ func TestETag_ExemptPaths_PrefixMatch(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Header().Get("ETag") != "" {
-		t.Error("expected no ETag header for exempt path prefix")
+		t.Error("expected no ETag header for excluded path prefix")
 	}
 }
 
@@ -1072,7 +1072,7 @@ func TestETag_NilConfigMaps(t *testing.T) {
 		Weak:            config.Bool(true),
 		MaxBufferSize:   1024,
 		SkipStatusCodes: nil,
-		ExemptPaths:     []string{},
+		ExcludedPaths:   []string{},
 	}
 
 	handler := func(next http.Handler) http.Handler {
@@ -1185,7 +1185,7 @@ func TestETag_NilSkipContentTypes(t *testing.T) {
 		MaxBufferSize:    1024,
 		SkipStatusCodes:  map[int]struct{}{},
 		SkipContentTypes: nil, // nil
-		ExemptPaths:      []string{},
+		ExcludedPaths:    []string{},
 	}
 
 	handler := func(next http.Handler) http.Handler {
@@ -1369,4 +1369,43 @@ func TestETag_ConcurrentWriteAndFlush(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
+}
+
+func TestETag_IncludedPaths(t *testing.T) {
+	handler := ETag(config.ETagConfig{
+		IncludedPaths: []string{"/api/", "/admin"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello"))
+	}))
+
+	// Request to allowed path - should generate ETag
+	req1 := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+
+	if rec1.Header().Get("ETag") == "" {
+		t.Error("expected ETag header for allowed path")
+	}
+
+	// Request to non-allowed path - should skip ETag
+	req2 := httptest.NewRequest(http.MethodGet, "/other", nil)
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+
+	if rec2.Header().Get("ETag") != "" {
+		t.Error("expected no ETag header for non-allowed path")
+	}
+}
+
+func TestETag_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = ETag(config.ETagConfig{
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }

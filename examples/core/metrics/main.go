@@ -23,9 +23,9 @@ func main() {
 	// for security. This prevents exposing metrics to the public internet.
 	app := zh.New(config.Config{
 		Metrics: config.MetricsConfig{
-			Enabled:      config.Bool(true),
-			Endpoint:     "/metrics",
-			ExcludePaths: []string{"/health", "/metrics"},
+			Enabled:       config.Bool(true),
+			Endpoint:      "/metrics",
+			ExcludedPaths: []string{"/health", "/metrics"},
 			PathLabelFunc: func(p string) string {
 				// Normalize dynamic paths - replace numeric IDs with placeholders
 				// e.g., /users/123 -> /users/{id}

@@ -46,9 +46,19 @@ type HMACAuthConfig struct {
 	// Default: ["content-type"]
 	OptionalHeaders []string
 
-	// ExemptPaths are paths that skip HMAC validation.
+	// ExcludedPaths are paths that skip HMAC validation.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// Cannot be used with IncludedPaths - setting both will panic.
 	// Default: []
-	ExemptPaths []string
+	ExcludedPaths []string
+
+	// IncludedPaths contains paths where HMAC validation is explicitly applied.
+	// If set, HMAC validation will only occur for paths matching these patterns.
+	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
+	// If empty, HMAC validation applies to all paths (subject to ExcludedPaths).
+	// Cannot be used with ExcludedPaths - setting both will panic.
+	// Default: []
+	IncludedPaths []string
 
 	// ErrorHandler is called when HMAC validation fails.
 	// Default: Returns 401 Unauthorized with RFC 9457 Problem Details
@@ -100,7 +110,8 @@ var DefaultHMACAuthConfig = HMACAuthConfig{
 	ClockSkewGrace:       1 * time.Minute,
 	RequiredHeaders:      []string{"host", "x-timestamp"},
 	OptionalHeaders:      []string{"content-type"},
-	ExemptPaths:          []string{},
+	ExcludedPaths:        []string{},
+	IncludedPaths:        []string{},
 	ErrorHandler:         nil,
 	AuthHeaderName:       httpx.HeaderAuthorization,
 	TimestampHeader:      httpx.HeaderXTimestamp,

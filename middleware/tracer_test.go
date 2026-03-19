@@ -131,32 +131,32 @@ func TestTrace_ContentLength(t *testing.T) {
 	}
 }
 
-func TestTrace_ExemptPaths(t *testing.T) {
+func TestTrace_ExcludedPaths(t *testing.T) {
 	mock := &mockTracer{}
 	mw := Tracer(mock, config.TracerConfig{
-		ExemptPaths: []string{"/health", "/metrics"},
+		ExcludedPaths: []string{"/health", "/metrics"},
 	})
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Request to exempt path should not create span
+	// Request to excluded path should not create span
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
 	if len(mock.spans) != 0 {
-		t.Errorf("Expected 0 spans for exempt path, got %d", len(mock.spans))
+		t.Errorf("Expected 0 spans for excluded path, got %d", len(mock.spans))
 	}
 
-	// Request to non-exempt path should create span
+	// Request to non-excluded path should create span
 	req = httptest.NewRequest(http.MethodGet, "/api/users", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
 	if len(mock.spans) != 1 {
-		t.Errorf("Expected 1 span for non-exempt path, got %d", len(mock.spans))
+		t.Errorf("Expected 1 span for non-excluded path, got %d", len(mock.spans))
 	}
 }
 
@@ -290,4 +290,60 @@ func TestTraceResponseWriter(t *testing.T) {
 	if trw.StatusCode() != 200 {
 		t.Error("WriteHeader should not change status after already written")
 	}
+}
+
+func TestTrace_IncludedPaths(t *testing.T) {
+	mock := &mockTracer{}
+	mw := Tracer(mock, config.TracerConfig{
+		IncludedPaths: []string{"/api/", "/admin"},
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	tests := []struct {
+		name       string
+		path       string
+		expectSpan bool
+	}{
+		{"allowed path - creates span", "/api/users", true},
+		{"allowed exact path", "/admin", true},
+		{"non-allowed path - no span", "/health", false},
+		{"non-allowed path 2", "/metrics", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset spans for each test
+			mock.spans = nil
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			if tt.expectSpan {
+				if len(mock.spans) != 1 {
+					t.Errorf("Expected 1 span for allowed path, got %d", len(mock.spans))
+				}
+			} else {
+				if len(mock.spans) != 0 {
+					t.Errorf("Expected 0 spans for non-allowed path, got %d", len(mock.spans))
+				}
+			}
+		})
+	}
+}
+
+func TestTrace_BothExcludedAndIncludedPathsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+		}
+	}()
+
+	_ = Tracer(&mockTracer{}, config.TracerConfig{
+		ExcludedPaths: []string{"/health"},
+		IncludedPaths: []string{"/api"},
+	})
 }
