@@ -152,7 +152,7 @@ func TestCache_ConditionalRequests(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
-		etag := w1.Header().Get("ETag")
+		etag := w1.Header().Get(httpx.HeaderETag)
 		if etag == "" {
 			t.Fatal("Expected ETag to be set")
 		}
@@ -185,14 +185,14 @@ func TestCache_ConditionalRequests(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
-		lastModified := w1.Header().Get("Last-Modified")
+		lastModified := w1.Header().Get(httpx.HeaderLastModified)
 		if lastModified == "" {
 			t.Fatal("Expected Last-Modified to be set")
 		}
 
 		// Second request with If-Modified-Since
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req2.Header.Set("If-Modified-Since", lastModified)
+		req2.Header.Set(httpx.HeaderIfModifiedSince, lastModified)
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -205,25 +205,25 @@ func TestCache_VaryHeaders(t *testing.T) {
 		callCount := 0
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			callCount++
-			w.Header().Set(httpx.HeaderContentType, r.Header.Get("Accept"))
+			w.Header().Set(httpx.HeaderContentType, r.Header.Get(httpx.HeaderAccept))
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("response"))
 		})
 
 		cacheMiddleware := Cache(config.CacheConfig{
 			DefaultTTL: time.Minute,
-			Vary:       []string{"Accept"},
+			Vary:       []string{httpx.HeaderAccept},
 		})
 
 		// JSON request
 		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req1.Header.Set("Accept", "application/json")
+		req1.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 		w1 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
 		// XML request - should hit handler again
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req2.Header.Set("Accept", "application/xml")
+		req2.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationXML)
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -233,7 +233,7 @@ func TestCache_VaryHeaders(t *testing.T) {
 
 		// Same JSON request - should be cached
 		req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req3.Header.Set("Accept", "application/json")
+		req3.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
 		w3 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w3, req3)
 
@@ -530,7 +530,7 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 		if len(contentTypeValues) != 1 {
 			t.Errorf("expected Content-Type to appear exactly once, got %d times: %v", len(contentTypeValues), contentTypeValues)
 		}
-		if w.Header().Get(httpx.HeaderContentType) != "application/json" {
+		if w.Header().Get(httpx.HeaderContentType) != httpx.MIMEApplicationJSON {
 			t.Errorf("expected Content-Type to be application/json, got %s", w.Header().Get(httpx.HeaderContentType))
 		}
 
@@ -558,7 +558,7 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 		req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w1 := httptest.NewRecorder()
 		w1.Header().Set("X-Security-Header", "security-value")
-		w1.Header().Set("X-Request-Id", "req-123")
+		w1.Header().Set(httpx.HeaderXRequestId, "req-123")
 
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
@@ -570,7 +570,7 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w2 := httptest.NewRecorder()
 		w2.Header().Set("X-Security-Header", "security-value")
-		w2.Header().Set("X-Request-Id", "req-456")
+		w2.Header().Set(httpx.HeaderXRequestId, "req-456")
 
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -585,12 +585,12 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 		}
 
 		// Request ID should be the NEW one (from middleware), not cached
-		requestIDs := w2.Header()["X-Request-Id"]
+		requestIDs := w2.Header()[httpx.HeaderXRequestId]
 		if len(requestIDs) != 1 {
 			t.Errorf("X-Request-Id should appear exactly once, got %d: %v", len(requestIDs), requestIDs)
 		}
-		if w2.Header().Get("X-Request-Id") != "req-456" {
-			t.Errorf("X-Request-Id should be 'req-456' (from middleware), got %q", w2.Header().Get("X-Request-Id"))
+		if w2.Header().Get(httpx.HeaderXRequestId) != "req-456" {
+			t.Errorf("X-Request-Id should be 'req-456' (from middleware), got %q", w2.Header().Get(httpx.HeaderXRequestId))
 		}
 
 		// Handler's custom header should be present from cache

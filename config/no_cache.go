@@ -10,10 +10,10 @@ import (
 var Epoch = time.Unix(0, 0).UTC().Format(http.TimeFormat)
 
 var DefaultNoCacheHeaders = map[string]string{
-	httpx.HeaderExpires:      Epoch,
-	httpx.HeaderCacheControl: "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
-	httpx.HeaderPragma:       httpx.CacheControlNoCache,
-	httpx.HeaderAccelExpires: "0",
+	httpx.HeaderExpires:       Epoch,
+	httpx.HeaderCacheControl:  "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
+	httpx.HeaderPragma:        httpx.CacheControlNoCache,
+	httpx.HeaderXAccelExpires: "0",
 }
 
 var DefaultETagHeaders = []string{

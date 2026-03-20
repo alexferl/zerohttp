@@ -26,7 +26,7 @@ func TestETag_GeneratesETag(t *testing.T) {
 
 	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
-	etag := rec.Header().Get("ETag")
+	etag := rec.Header().Get(httpx.HeaderETag)
 	if etag == "" {
 		t.Error("expected ETag header to be set")
 	}
@@ -47,7 +47,7 @@ func TestETag_NotModified(t *testing.T) {
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 	if etag == "" {
 		t.Fatal("expected ETag header to be set")
 	}
@@ -72,7 +72,7 @@ func TestETag_NotModified_MultipleETags(t *testing.T) {
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Request with multiple ETags in If-None-Match
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -106,7 +106,7 @@ func TestETag_NoETagOnPOST(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for POST request")
 	}
 }
@@ -122,7 +122,7 @@ func TestETag_NoETagOnErrorStatus(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for error response")
 	}
 }
@@ -137,7 +137,7 @@ func TestETag_NoETagOnNoContent(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for 204 response")
 	}
 }
@@ -153,14 +153,14 @@ func TestETag_NoETagOnStreamingContent(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for SSE streaming content")
 	}
 }
 
 func TestETag_NoETagOnNoStore(t *testing.T) {
 	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set(httpx.HeaderCacheControl, httpx.CacheControlNoStore)
 		_, _ = w.Write([]byte("hello"))
 	}))
 
@@ -169,7 +169,7 @@ func TestETag_NoETagOnNoStore(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header when Cache-Control: no-store")
 	}
 }
@@ -185,8 +185,8 @@ func TestETag_PreservesExistingETag(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != `"custom-etag"` {
-		t.Errorf("expected custom ETag to be preserved, got %s", rec.Header().Get("ETag"))
+	if rec.Header().Get(httpx.HeaderETag) != `"custom-etag"` {
+		t.Errorf("expected custom ETag to be preserved, got %s", rec.Header().Get(httpx.HeaderETag))
 	}
 }
 
@@ -200,7 +200,7 @@ func TestETag_StrongETag(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	etag := rec.Header().Get("ETag")
+	etag := rec.Header().Get(httpx.HeaderETag)
 	if strings.HasPrefix(etag, `W/`) {
 		t.Errorf("expected strong ETag without W/ prefix, got %s", etag)
 	}
@@ -220,12 +220,12 @@ func TestETag_MD5Algorithm(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	fnvHandler.ServeHTTP(rec1, req1)
-	fnvETag := rec1.Header().Get("ETag")
+	fnvETag := rec1.Header().Get(httpx.HeaderETag)
 
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec2 := httptest.NewRecorder()
 	md5Handler.ServeHTTP(rec2, req2)
-	md5ETag := rec2.Header().Get("ETag")
+	md5ETag := rec2.Header().Get(httpx.HeaderETag)
 
 	if fnvETag == md5ETag {
 		t.Error("expected different ETags for FNV and MD5 algorithms")
@@ -247,7 +247,7 @@ func TestETag_ExcludedPaths(t *testing.T) {
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
-	if rec1.Header().Get("ETag") != "" {
+	if rec1.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for excluded path")
 	}
 
@@ -256,7 +256,7 @@ func TestETag_ExcludedPaths(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Header().Get("ETag") == "" {
+	if rec2.Header().Get(httpx.HeaderETag) == "" {
 		t.Error("expected ETag header for non-excluded path")
 	}
 }
@@ -276,7 +276,7 @@ func TestETag_ExcludedFunc(t *testing.T) {
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
-	if rec1.Header().Get("ETag") != "" {
+	if rec1.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header when excluded func returns true")
 	}
 
@@ -285,7 +285,7 @@ func TestETag_ExcludedFunc(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Header().Get("ETag") == "" {
+	if rec2.Header().Get(httpx.HeaderETag) == "" {
 		t.Error("expected ETag header when excluded func returns false")
 	}
 }
@@ -300,7 +300,7 @@ func TestETag_SkipContentTypes(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for skipped content type")
 	}
 }
@@ -315,7 +315,7 @@ func TestETag_SkipStatusCodes(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for skipped status code")
 	}
 }
@@ -337,7 +337,7 @@ func TestETag_MaxBufferSize(t *testing.T) {
 		t.Error("expected full response body even when buffer exceeded")
 	}
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag when content exceeds max buffer size")
 	}
 }
@@ -352,7 +352,7 @@ func TestETag_HEADRequest(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	etag := rec.Header().Get("ETag")
+	etag := rec.Header().Get(httpx.HeaderETag)
 	if etag == "" {
 		t.Error("expected ETag header for HEAD request")
 	}
@@ -368,12 +368,12 @@ func TestETag_ChangedContent(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag1 := rec1.Header().Get("ETag")
+	etag1 := rec1.Header().Get(httpx.HeaderETag)
 
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
-	etag2 := rec2.Header().Get("ETag")
+	etag2 := rec2.Header().Get(httpx.HeaderETag)
 
 	if etag1 == etag2 {
 		t.Error("expected different ETags for different content")
@@ -399,7 +399,7 @@ func TestETag_NotModified_StrongVsWeak(t *testing.T) {
 	handler.ServeHTTP(rec1, req1)
 
 	// Extract just the hash part from the weak ETag (remove W/ prefix and quotes)
-	weakETag := rec1.Header().Get("ETag")
+	weakETag := rec1.Header().Get(httpx.HeaderETag)
 	hashPart := weakETag[3 : len(weakETag)-1] // Remove W/" and "
 	strongETag := `"` + hashPart + `"`
 
@@ -421,7 +421,7 @@ func TestETag_DefaultConfig(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") == "" {
+	if rec.Header().Get(httpx.HeaderETag) == "" {
 		t.Error("expected ETag header")
 	}
 }
@@ -442,12 +442,12 @@ func TestETag_ContentEncodingAware(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handlerGzip.ServeHTTP(rec1, req1)
-	etagGzip := rec1.Header().Get("ETag")
+	etagGzip := rec1.Header().Get(httpx.HeaderETag)
 
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec2 := httptest.NewRecorder()
 	handlerPlain.ServeHTTP(rec2, req2)
-	etagPlain := rec2.Header().Get("ETag")
+	etagPlain := rec2.Header().Get(httpx.HeaderETag)
 
 	if etagGzip == etagPlain {
 		t.Error("expected different ETags for gzip vs plain content")
@@ -464,7 +464,7 @@ func TestETag_ContentEncodingNotModified(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Second request with matching If-None-Match
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -486,7 +486,7 @@ func TestETag_IfRange_MatchingETag(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Range request with matching If-Range
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -630,7 +630,7 @@ func TestETag_Range_OpenEnded(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Range request with open-ended range (bytes=5-)
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -653,7 +653,7 @@ func TestETag_Range_InvalidRange(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Range request with invalid range (start > end)
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -679,7 +679,7 @@ func TestETag_IfMatch_Matches(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Request with matching If-Match should succeed
 	req2 := httptest.NewRequest(http.MethodPut, "/", nil)
@@ -786,7 +786,7 @@ func TestETag_FlushPreventsDoubleWrite(t *testing.T) {
 	}
 
 	// Also verify the ETag was generated correctly
-	etag := rec.Header().Get("ETag")
+	etag := rec.Header().Get(httpx.HeaderETag)
 	if etag == "" {
 		t.Error("expected ETag header to be set")
 	}
@@ -803,7 +803,7 @@ func TestETag_Range_InvalidFormat(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Range request with invalid format (missing dash)
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -825,7 +825,7 @@ func TestETag_Range_NonNumericStart(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Range request with non-numeric start
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -847,7 +847,7 @@ func TestETag_Range_NonNumericEnd(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
-	etag := rec1.Header().Get("ETag")
+	etag := rec1.Header().Get(httpx.HeaderETag)
 
 	// Range request with non-numeric end
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -872,7 +872,7 @@ func TestETag_InvalidAlgorithm(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") == "" {
+	if rec.Header().Get(httpx.HeaderETag) == "" {
 		t.Error("expected ETag header even with invalid algorithm")
 	}
 }
@@ -934,7 +934,7 @@ func TestServeContentWithETag_ServesContent(t *testing.T) {
 
 	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
-	if rec.Header().Get("ETag") == "" {
+	if rec.Header().Get(httpx.HeaderETag) == "" {
 		t.Error("expected ETag header")
 	}
 }
@@ -999,7 +999,7 @@ func TestETag_EmptyBody(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	// Empty body should not generate ETag
-	etag := rec.Header().Get("ETag")
+	etag := rec.Header().Get(httpx.HeaderETag)
 	// ETag might be empty or a valid hash of empty content depending on implementation
 	// The important thing is it doesn't panic
 	_ = etag
@@ -1043,7 +1043,7 @@ func TestETag_ExcludedPaths_PrefixMatch(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for excluded path prefix")
 	}
 }
@@ -1144,7 +1144,7 @@ func TestETag_PUTWithoutIfMatch(t *testing.T) {
 	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
 	// No ETag generated for non-GET/HEAD
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag for PUT without If-Match")
 	}
 }
@@ -1207,7 +1207,7 @@ func TestETag_NilSkipContentTypes(t *testing.T) {
 	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 
 	// Should generate ETag even with nil SkipContentTypes
-	if rec.Header().Get("ETag") == "" {
+	if rec.Header().Get(httpx.HeaderETag) == "" {
 		t.Error("expected ETag header")
 	}
 }
@@ -1215,7 +1215,7 @@ func TestETag_NilSkipContentTypes(t *testing.T) {
 func TestETag_ChunkedTransferEncoding(t *testing.T) {
 	// Chunked transfer encoding should skip ETag
 	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Transfer-Encoding", "chunked")
+		w.Header().Set(httpx.HeaderTransferEncoding, httpx.TransferEncodingChunked)
 		_, _ = w.Write([]byte("chunked data"))
 	}))
 
@@ -1224,7 +1224,7 @@ func TestETag_ChunkedTransferEncoding(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	// Should not generate ETag for chunked responses
-	if rec.Header().Get("ETag") != "" {
+	if rec.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag for chunked transfer encoding")
 	}
 
@@ -1258,7 +1258,7 @@ func TestETag_Metrics(t *testing.T) {
 		t.Errorf("expected 200, got %d", rr1.Code)
 	}
 
-	etag := rr1.Header().Get("ETag")
+	etag := rr1.Header().Get(httpx.HeaderETag)
 	if etag == "" {
 		t.Fatal("expected ETag")
 	}
@@ -1383,7 +1383,7 @@ func TestETag_IncludedPaths(t *testing.T) {
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
-	if rec1.Header().Get("ETag") == "" {
+	if rec1.Header().Get(httpx.HeaderETag) == "" {
 		t.Error("expected ETag header for allowed path")
 	}
 
@@ -1392,7 +1392,7 @@ func TestETag_IncludedPaths(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Header().Get("ETag") != "" {
+	if rec2.Header().Get(httpx.HeaderETag) != "" {
 		t.Error("expected no ETag header for non-allowed path")
 	}
 }

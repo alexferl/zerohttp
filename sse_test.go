@@ -677,7 +677,7 @@ func TestSSEWithReplay(t *testing.T) {
 	t.Run("replays events when Last-Event-ID present", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set(httpx.HeaderLastEventID, "0")
+		r.Header.Set(httpx.HeaderLastEventId, "0")
 		replay := NewInMemoryReplayer(100, 0)
 
 		replay.Store(SSEEvent{Data: []byte("event1")})
@@ -697,7 +697,7 @@ func TestSSEWithReplay(t *testing.T) {
 	t.Run("returns error for invalid Last-Event-ID", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set(httpx.HeaderLastEventID, "not-a-number")
+		r.Header.Set(httpx.HeaderLastEventId, "not-a-number")
 		replay := NewInMemoryReplayer(100, 0)
 
 		_, err := SSEWithReplay(w, r, replay)
@@ -709,7 +709,7 @@ func TestSSEWithReplay(t *testing.T) {
 	t.Run("returns error when Last-Event-ID present but replayer is nil", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		r.Header.Set(httpx.HeaderLastEventID, "1")
+		r.Header.Set(httpx.HeaderLastEventId, "1")
 
 		_, err := SSEWithReplay(w, r, nil)
 		if err == nil {

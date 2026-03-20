@@ -53,11 +53,11 @@ func TestCORSPreflightRequest(t *testing.T) {
 		checkProblemDetail            bool
 		checkAllowHeader              bool
 	}{
-		{"valid", "https://example.com", http.MethodPost, "Content-Type", http.StatusNoContent, false, false, false},
+		{"valid", "https://example.com", http.MethodPost, httpx.HeaderContentType, http.StatusNoContent, false, false, false},
 		{"multiple headers", "https://example.com", http.MethodPut, "Content-Type, Authorization", http.StatusNoContent, false, false, false},
 		{"bad method", "https://example.com", http.MethodTrace, "", http.StatusMethodNotAllowed, false, true, true},
 		{"bad header", "https://example.com", http.MethodPost, "X-Custom-Header", http.StatusForbidden, false, true, false},
-		{"no origin", "", http.MethodPost, "Content-Type", http.StatusNoContent, false, false, false},
+		{"no origin", "", http.MethodPost, httpx.HeaderContentType, http.StatusNoContent, false, false, false},
 	}
 	mw := CORS()
 	for _, tt := range tests {
@@ -233,13 +233,13 @@ func TestCORSCustomConfig(t *testing.T) {
 	mw := CORS(config.CORSConfig{
 		AllowedOrigins: []string{"https://myapp.com"},
 		AllowedMethods: []string{http.MethodGet, http.MethodPost},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowedHeaders: []string{httpx.HeaderContentType},
 		MaxAge:         3600,
 	})
 	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 	req.Header.Set(httpx.HeaderOrigin, "https://myapp.com")
 	req.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodPost)
-	req.Header.Set(httpx.HeaderAccessControlRequestHeaders, "Content-Type")
+	req.Header.Set(httpx.HeaderAccessControlRequestHeaders, httpx.HeaderContentType)
 	rr := httptest.NewRecorder()
 	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 
@@ -371,7 +371,7 @@ func TestCORS_Metrics(t *testing.T) {
 
 	// Test preflight request
 	req1 := httptest.NewRequest(http.MethodOptions, "/test", nil)
-	req1.Header.Set("Origin", "https://allowed.com")
+	req1.Header.Set(httpx.HeaderOrigin, "https://allowed.com")
 	req1.Header.Set(httpx.HeaderAccessControlRequestMethod, http.MethodPost)
 	rr1 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr1, req1)
@@ -382,7 +382,7 @@ func TestCORS_Metrics(t *testing.T) {
 
 	// Test allowed origin
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req2.Header.Set("Origin", "https://allowed.com")
+	req2.Header.Set(httpx.HeaderOrigin, "https://allowed.com")
 	rr2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr2, req2)
 
@@ -392,7 +392,7 @@ func TestCORS_Metrics(t *testing.T) {
 
 	// Test rejected origin
 	req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req3.Header.Set("Origin", "https://rejected.com")
+	req3.Header.Set(httpx.HeaderOrigin, "https://rejected.com")
 	rr3 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr3, req3)
 
@@ -500,11 +500,11 @@ func TestCORSAllowOriginFunc(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})).ServeHTTP(rr, req)
 
-			varyHeader := rr.Header().Get("Vary")
-			if tt.expectVary && varyHeader != "Origin" {
+			varyHeader := rr.Header().Get(httpx.HeaderVary)
+			if tt.expectVary && varyHeader != httpx.HeaderOrigin {
 				t.Errorf("expected Vary: Origin, got %s", varyHeader)
 			}
-			if !tt.expectVary && varyHeader == "Origin" {
+			if !tt.expectVary && varyHeader == httpx.HeaderOrigin {
 				t.Errorf("unexpected Vary: Origin header")
 			}
 
@@ -544,7 +544,7 @@ func TestCORSCustomOriginFuncWithCredentials(t *testing.T) {
 		t.Errorf("expected credentials header, got %s", got)
 	}
 
-	if got := rr.Header().Get("Vary"); got != "Origin" {
+	if got := rr.Header().Get(httpx.HeaderVary); got != httpx.HeaderOrigin {
 		t.Errorf("expected Vary: Origin, got %s", got)
 	}
 }

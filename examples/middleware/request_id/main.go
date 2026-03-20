@@ -30,7 +30,7 @@ func main() {
 	// This endpoint returns the request ID from the response header
 	app.GET("/headers", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		// The middleware automatically sets the response header
-		requestID := w.Header().Get(httpx.HeaderXRequestID)
+		requestID := w.Header().Get(httpx.HeaderXRequestId)
 
 		return zh.R.JSON(w, http.StatusOK, map[string]string{
 			"message":    "Check response headers too!",
@@ -48,7 +48,7 @@ func main() {
 		})
 	}),
 		middleware.RequestID(config.RequestIDConfig{
-			Header: httpx.HeaderXRequestID,
+			Header: httpx.HeaderXRequestId,
 			Generator: func() string {
 				// Simple UUID-like format for demo purposes
 				// In production, use github.com/google/uuid

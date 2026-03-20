@@ -163,6 +163,53 @@ func TestHandlerFunc(t *testing.T) {
 		}
 	})
 
+	// Test that headResponseWriter calls WriteHeader on underlying ResponseWriter
+	// This ensures middleware like compress can set headers even for HEAD requests
+	t.Run("headResponseWriter calls WriteHeader", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		hrw := &headResponseWriter{ResponseWriter: recorder}
+
+		// Write without calling WriteHeader first
+		_, _ = hrw.Write([]byte("test"))
+
+		// Verify WriteHeader was called (status should be 200)
+		if recorder.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, recorder.Code)
+		}
+	})
+
+	t.Run("headResponseWriter Content-Length matches GET", func(t *testing.T) {
+		handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			return R.JSON(w, http.StatusOK, map[string]string{"message": "hello"})
+		})
+
+		router := NewRouter()
+		router.GET("/test", handler)
+
+		// GET request
+		getReq := httptest.NewRequest(http.MethodGet, "/test", nil)
+		getRec := httptest.NewRecorder()
+		router.ServeHTTP(getRec, getReq)
+		// Use actual body size since httptest doesn't auto-set Content-Length
+		getSize := len(getRec.Body.Bytes())
+
+		// HEAD request
+		headReq := httptest.NewRequest(http.MethodHead, "/test", nil)
+		headRec := httptest.NewRecorder()
+		router.ServeHTTP(headRec, headReq)
+		headCL := headRec.Header().Get(httpx.HeaderContentLength)
+
+		// HEAD Content-Length should match GET body size
+		if headCL == "" {
+			t.Error("HEAD request missing Content-Length header")
+			return
+		}
+		if headCL != fmt.Sprintf("%d", getSize) {
+			t.Errorf("HEAD Content-Length (%s) != GET body size (%d)", headCL, getSize)
+		}
+	})
+
 	t.Run("interface compatibility", func(t *testing.T) {
 		var _ http.Handler = HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 			return nil
@@ -663,7 +710,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		router := NewRouter()
 		router.GET("/test", testHandler("get"))
 		router.OPTIONS("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Allow", "CUSTOM")
+			w.Header().Set(httpx.HeaderAllow, "CUSTOM")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("custom options"))
 		}))

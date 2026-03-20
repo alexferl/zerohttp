@@ -248,7 +248,7 @@ func BenchmarkStatic_ETagGeneration(b *testing.B) {
 		req := httptest.NewRequest(http.MethodGet, "/app.js", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		etag := w.Header().Get("Etag")
+		etag := w.Header().Get(httpx.HeaderETag)
 
 		// Now benchmark conditional requests with If-None-Match
 		req = httptest.NewRequest(http.MethodGet, "/app.js", nil)

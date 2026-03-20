@@ -9,6 +9,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware"
 	"github.com/redis/go-redis/v9"
 )
@@ -107,9 +108,9 @@ func main() {
 	}))
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		limit := w.Header().Get("X-RateLimit-Limit")
-		remaining := w.Header().Get("X-RateLimit-Remaining")
-		reset := w.Header().Get("X-RateLimit-Reset")
+		limit := w.Header().Get(httpx.HeaderXRateLimitLimit)
+		remaining := w.Header().Get(httpx.HeaderXRateLimitRemaining)
+		reset := w.Header().Get(httpx.HeaderXRateLimitReset)
 
 		return zh.R.JSON(w, http.StatusOK, zh.M{
 			"message":   "Hello with Redis rate limiting!",

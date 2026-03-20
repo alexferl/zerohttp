@@ -77,7 +77,9 @@ func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// This prevents HTTP/2 "request body closed" errors when handlers
 	// (like templ) try to write during HEAD requests.
 	if r.Method == http.MethodHead {
-		w = &headResponseWriter{ResponseWriter: w}
+		hrw := &headResponseWriter{ResponseWriter: w}
+		w = hrw
+		defer func() { _ = hrw.Close() }() // Ensure Content-Length is set after handler completes
 	}
 
 	if err := h(w, r); err != nil {
@@ -150,17 +152,40 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	}
 }
 
-// headResponseWriter wraps a ResponseWriter and discards body writes for HEAD requests
+// headResponseWriter wraps a ResponseWriter and discards body writes for HEAD requests.
+// It buffers the response to determine Content-Length before writing headers.
 type headResponseWriter struct {
 	http.ResponseWriter
+	buf  []byte
+	code int
 }
 
 // Ensure headResponseWriter implements http.ResponseWriter
 var _ http.ResponseWriter = (*headResponseWriter)(nil)
 
 func (h *headResponseWriter) Write(p []byte) (int, error) {
-	// Discard body writes for HEAD requests
+	// Buffer the data instead of discarding immediately
+	h.buf = append(h.buf, p...)
 	return len(p), nil
+}
+
+func (h *headResponseWriter) WriteHeader(code int) {
+	h.code = code
+	// Don't write headers yet - we'll do it in Close()
+}
+
+// Close writes the headers with Content-Length and discards the body.
+// This must be called after the handler completes.
+func (h *headResponseWriter) Close() error {
+	if h.code == 0 {
+		h.code = http.StatusOK
+	}
+	// Set Content-Length based on buffered bytes
+	if len(h.buf) > 0 {
+		h.Header().Set(httpx.HeaderContentLength, fmt.Sprintf("%d", len(h.buf)))
+	}
+	h.ResponseWriter.WriteHeader(h.code)
+	return nil
 }
 
 // Flush implements http.Flusher to support streaming responses like SSE.

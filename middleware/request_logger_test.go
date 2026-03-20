@@ -954,7 +954,7 @@ func TestRequestLogger_Flush_SupportsSSE(t *testing.T) {
 		}
 
 		// Write and flush like SSE would
-		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("data: hello\n\n"))
 		f.Flush()

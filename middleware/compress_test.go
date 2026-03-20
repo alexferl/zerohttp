@@ -801,6 +801,91 @@ func TestCompress_WriteHeader_MultipleCalls(t *testing.T) {
 	}
 }
 
+func TestCompress_HEADRequest_ContentEncoding(t *testing.T) {
+	// Test that HEAD requests return Content-Encoding header when compression is applicable
+	// even when Content-Type is not explicitly set (relies on default detection)
+	mw := Compress(config.CompressConfig{
+		Types: []string{"text/html"},
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handler does NOT set Content-Type explicitly
+		// This simulates real-world cases where WriteHeader is called before Content-Type is determined
+		w.WriteHeader(http.StatusOK)
+		// Note: No body written, which is typical for HEAD requests
+	}))
+
+	req := httptest.NewRequest(http.MethodHead, "/test", nil)
+	req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	// HEAD requests should still return Content-Encoding header when Accept-Encoding is sent
+	// because the middleware should assume compression is possible
+	encoding := rr.Header().Get(httpx.HeaderContentEncoding)
+	if encoding != httpx.ContentEncodingGzip {
+		t.Errorf("HEAD request: expected Content-Encoding=%q, got %q", httpx.ContentEncodingGzip, encoding)
+	}
+}
+
+func TestCompress_HEADRequest_WithContentType_ContentEncoding(t *testing.T) {
+	// Test that HEAD requests return Content-Encoding header when Content-Type is set
+	mw := Compress(config.CompressConfig{
+		Types: []string{"text/html"},
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(httpx.HeaderContentType, "text/html")
+		w.WriteHeader(http.StatusOK)
+		// Note: No body written, which is typical for HEAD requests
+	}))
+
+	req := httptest.NewRequest(http.MethodHead, "/test", nil)
+	req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	// HEAD requests should return Content-Encoding header when Content-Type is compressible
+	encoding := rr.Header().Get(httpx.HeaderContentEncoding)
+	if encoding != httpx.ContentEncodingGzip {
+		t.Errorf("HEAD request with Content-Type: expected Content-Encoding=%q, got %q", httpx.ContentEncodingGzip, encoding)
+	}
+}
+
+func TestCompress_HEADRequest_NoContentLength(t *testing.T) {
+	// Test that HEAD requests don't have Content-Length set for compressed responses
+	// since we can't know the compressed size without actually compressing
+	mw := Compress(config.CompressConfig{
+		Types: []string{"text/html"},
+	})
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(httpx.HeaderContentType, "text/html")
+		_, _ = w.Write([]byte("test content that would be compressed"))
+	}))
+
+	req := httptest.NewRequest(http.MethodHead, "/test", nil)
+	req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	// HEAD requests should not have Content-Length for compressed responses
+	// since we can't determine the compressed size without actually compressing
+	contentLength := rr.Header().Get(httpx.HeaderContentLength)
+	if contentLength != "" {
+		t.Errorf("HEAD request: expected no Content-Length for compressed response, got %q", contentLength)
+	}
+
+	// But Content-Encoding should still be set
+	encoding := rr.Header().Get(httpx.HeaderContentEncoding)
+	if encoding != httpx.ContentEncodingGzip {
+		t.Errorf("HEAD request: expected Content-Encoding=%q, got %q", httpx.ContentEncodingGzip, encoding)
+	}
+}
+
 func TestCompress_IncludedPaths(t *testing.T) {
 	middleware := Compress(config.CompressConfig{
 		IncludedPaths: []string{"/api/", "/compress/*"},

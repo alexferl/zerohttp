@@ -48,7 +48,7 @@ func TestCORSConfig_DefaultValues(t *testing.T) {
 	}
 
 	// Test default header values
-	expectedHeaders := []string{httpx.HeaderAccept, httpx.HeaderAuthorization, httpx.HeaderContentType, httpx.HeaderXCSRFToken, httpx.HeaderXRequestID}
+	expectedHeaders := []string{httpx.HeaderAccept, httpx.HeaderAuthorization, httpx.HeaderContentType, httpx.HeaderXCSRFToken, httpx.HeaderXRequestId}
 	if !reflect.DeepEqual(cfg.AllowedHeaders, expectedHeaders) {
 		t.Errorf("expected default headers = %v, got %v", expectedHeaders, cfg.AllowedHeaders)
 	}

@@ -92,7 +92,7 @@ func TestSetHeader_NilHeaders(t *testing.T) {
 func TestSetHeader_OverrideExistingHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
-		w.Header().Set("Server", "Default-Server")
+		w.Header().Set(httpx.HeaderServer, "Default-Server")
 		w.WriteHeader(http.StatusOK)
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
@@ -111,7 +111,7 @@ func TestSetHeader_OverrideExistingHeaders(t *testing.T) {
 	if contentType := w.Header().Get(httpx.HeaderContentType); contentType != "text/html" {
 		t.Errorf("Expected Content-Type to be overridden to 'text/html', got '%s'", contentType)
 	}
-	if server := w.Header().Get("Server"); server != "Default-Server" {
+	if server := w.Header().Get(httpx.HeaderServer); server != "Default-Server" {
 		t.Errorf("Expected Server to be overridden to 'Default-Server', got '%s'", server)
 	}
 }

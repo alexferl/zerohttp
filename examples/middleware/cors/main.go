@@ -18,7 +18,7 @@ func main() {
 		AllowedOrigins:   []string{"http://localhost:3000", "https://example.com"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{httpx.HeaderAccept, httpx.HeaderAuthorization, httpx.HeaderContentType, httpx.HeaderXCSRFToken},
-		ExposedHeaders:   []string{httpx.HeaderXRequestID},
+		ExposedHeaders:   []string{httpx.HeaderXRequestId},
 		AllowCredentials: true,
 		MaxAge:           86400,
 	}))

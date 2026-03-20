@@ -7,23 +7,24 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRequestID_ExistingHeader(t *testing.T) {
 	handler := &testHandler{}
 	existingID := "existing-request-id-123"
-	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("X-Request-Id", existingID).Build()
+	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader(httpx.HeaderXRequestId, existingID).Build()
 	w := zhtest.TestMiddlewareWithHandler(RequestID(), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	if handler.requestID != existingID {
 		t.Errorf("Expected to use existing request ID %s, got %s", existingID, handler.requestID)
 	}
-	if reqHeaderValue := handler.request.Header.Get("X-Request-Id"); reqHeaderValue != existingID {
+	if reqHeaderValue := handler.request.Header.Get(httpx.HeaderXRequestId); reqHeaderValue != existingID {
 		t.Errorf("Expected request header to be %s, got %s", existingID, reqHeaderValue)
 	}
-	if respHeaderValue := w.Header().Get("X-Request-Id"); respHeaderValue != existingID {
+	if respHeaderValue := w.Header().Get(httpx.HeaderXRequestId); respHeaderValue != existingID {
 		t.Errorf("Expected response header to be %s, got %s", existingID, respHeaderValue)
 	}
 }
@@ -47,7 +48,7 @@ func TestRequestID_CustomHeader(t *testing.T) {
 	if reqHeaderValue != respHeaderValue {
 		t.Errorf("Expected request and response headers to match: %s != %s", reqHeaderValue, respHeaderValue)
 	}
-	zhtest.AssertWith(t, w).HeaderNotExists("X-Request-Id")
+	zhtest.AssertWith(t, w).HeaderNotExists(httpx.HeaderXRequestId)
 }
 
 func TestRequestID_CustomGenerator(t *testing.T) {
@@ -110,7 +111,7 @@ func TestRequestID_EmptyConfigValues(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(RequestID(config.RequestIDConfig{}), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	zhtest.AssertWith(t, w).HeaderExists("X-Request-Id")
+	zhtest.AssertWith(t, w).HeaderExists(httpx.HeaderXRequestId)
 	if len(handler.requestID) != 32 {
 		t.Errorf("Expected default generated ID length 32, got %d", len(handler.requestID))
 	}
@@ -163,7 +164,7 @@ func TestGetRequestID_EdgeCases(t *testing.T) {
 
 func TestDefaultRequestIDConfig(t *testing.T) {
 	cfg := config.DefaultRequestIDConfig
-	if cfg.Header != "X-Request-Id" {
+	if cfg.Header != httpx.HeaderXRequestId {
 		t.Errorf("Expected default header 'X-Request-Id', got %s", cfg.Header)
 	}
 	if cfg.Generator == nil {
