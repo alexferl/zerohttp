@@ -1,10 +1,10 @@
-# Zerolog Integration Example
+# zerolog Integration Example
 
-This example demonstrates how to integrate [Zerolog](https://github.com/rs/zerolog) (a high-performance structured logging library) with zerohttp.
+This example demonstrates how to integrate [zerolog](https://github.com/rs/zerolog) (a high-performance structured logging library) with zerohttp.
 
 ## Features
 
-- Structured JSON logging with Zerolog
+- Structured JSON logging with zerolog
 - Console output with pretty formatting
 - Adapter pattern for zerohttp's Logger interface
 - Field type handling (string, int, error, bool, etc.)
@@ -23,9 +23,9 @@ The server starts on `http://localhost:8080`.
 
 ## Endpoints
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | Returns a JSON response and logs an info message |
+| Endpoint | Description                                      |
+|----------|--------------------------------------------------|
+| `GET /`  | Returns a JSON response and logs an info message |
 
 ## Log Output
 
@@ -37,15 +37,15 @@ When you visit `http://localhost:8080`, you'll see structured log output:
 
 ## Project Structure
 
-- `main.go` - Server setup with Zerolog logger injection
-- `adapter.go` - Zerolog adapter implementing zerohttp's Logger interface
+- `main.go` - Server setup with zerolog logger injection
+- `adapter.go` - zerolog adapter implementing zerohttp's Logger interface
 
 ## How It Works
 
-The `ZerologAdapter` wraps a `zerolog.Logger` and implements zerohttp's `log.Logger` interface:
+The `zerologAdapter` wraps a `zerolog.Logger` and implements zerohttp's `log.Logger` interface:
 
 ```go
-type ZerologAdapter struct {
+type zerologAdapter struct {
     logger zerolog.Logger
 }
 ```
@@ -61,11 +61,11 @@ zl := zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).
     Timestamp().
     Caller().
     Logger()
-logger := NewZerologAdapter(zl)
+logger := NewzerologAdapter(zl)
 
 app := zh.New(config.Config{
     Logger: logger,
 })
 ```
 
-Now all zerohttp logging (request logging, errors, etc.) uses Zerolog for output.
+Now all zerohttp logging (request logging, errors, etc.) uses zerolog for output.
