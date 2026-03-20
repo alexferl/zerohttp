@@ -127,6 +127,7 @@ func (c *Compressor) Handler(next http.Handler) http.Handler {
 		reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 
 		encoder, encoding, cleanup := c.selectEncoder(r.Header, w)
+		isHead := r.Method == http.MethodHead
 		cw := &compressResponseWriter{
 			ResponseWriter:   w,
 			w:                w,
@@ -134,14 +135,21 @@ func (c *Compressor) Handler(next http.Handler) http.Handler {
 			contentWildcards: c.allowedWildcards,
 			encoding:         encoding,
 			compressible:     false,
+			isHeadRequest:    isHead,
 		}
-		if encoder != nil {
+		// Don't use encoder for HEAD requests - it would set incorrect Content-Length
+		if encoder != nil && !isHead {
 			cw.w = encoder
 		}
 
-		defer cleanup()
+		// Only cleanup/close encoder if we used it
+		if !isHead {
+			defer cleanup()
+			defer func() {
+				_ = cw.Close()
+			}()
+		}
 		defer func() {
-			_ = cw.Close()
 			// Record metric for encoding used
 			enc := encoding
 			if enc == "" {
@@ -231,6 +239,7 @@ type compressResponseWriter struct {
 	encoding         string
 	wroteHeader      bool
 	compressible     bool
+	isHeadRequest    bool
 }
 
 func (cw *compressResponseWriter) isCompressible() bool {
@@ -259,22 +268,35 @@ func (cw *compressResponseWriter) WriteHeader(code int) {
 		return
 	}
 
-	if !cw.isCompressible() {
-		cw.compressible = false
-		return
-	}
-
 	if cw.encoding != "" {
-		cw.compressible = true
-		cw.Header().Set(httpx.HeaderContentEncoding, cw.encoding)
-		cw.Header().Add(httpx.HeaderVary, httpx.HeaderAcceptEncoding)
-		cw.Header().Del(httpx.HeaderContentLength)
+		isCompressible := cw.isCompressible()
+		contentType := cw.Header().Get(httpx.HeaderContentType)
+
+		// Set Content-Encoding header if:
+		// 1. Content is compressible, OR
+		// 2. No Content-Type is set (e.g., HEAD request where type isn't determined yet)
+		if isCompressible || contentType == "" {
+			cw.Header().Set(httpx.HeaderContentEncoding, cw.encoding)
+			cw.Header().Add(httpx.HeaderVary, httpx.HeaderAcceptEncoding)
+			cw.Header().Del(httpx.HeaderContentLength)
+		}
+
+		if isCompressible {
+			cw.compressible = true
+		}
 	}
 }
 
 func (cw *compressResponseWriter) Write(p []byte) (int, error) {
 	if !cw.wroteHeader {
 		cw.WriteHeader(http.StatusOK)
+	}
+	// For HEAD requests, don't write body to response.
+	// We can't set Content-Length correctly because:
+	// 1. WriteHeader is already called by this point
+	// 2. We don't know compressed size without actually compressing
+	if cw.isHeadRequest {
+		return len(p), nil
 	}
 	return cw.writer().Write(p)
 }

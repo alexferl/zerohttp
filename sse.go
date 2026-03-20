@@ -519,7 +519,7 @@ func SSEWithReplay(w http.ResponseWriter, r *http.Request, replayer SSEReplayer)
 	}
 
 	// Check for Last-Event-ID header for replay
-	lastEventID := r.Header.Get(httpx.HeaderLastEventID)
+	lastEventID := r.Header.Get(httpx.HeaderLastEventId)
 	if lastEventID != "" {
 		if replayer == nil {
 			_ = stream.Close()

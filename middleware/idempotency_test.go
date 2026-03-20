@@ -39,7 +39,7 @@ func TestIdempotency_Basic(t *testing.T) {
 		if callCount != 1 {
 			t.Errorf("Expected 1 handler call, got %d", callCount)
 		}
-		if w1.Header().Get("X-Idempotency-Replay") != "" {
+		if w1.Header().Get(httpx.HeaderXIdempotencyReplay) != "" {
 			t.Error("First request should not have X-Idempotency-Replay header")
 		}
 
@@ -53,7 +53,7 @@ func TestIdempotency_Basic(t *testing.T) {
 		if callCount != 1 {
 			t.Errorf("Expected still 1 handler call, got %d (should be cached)", callCount)
 		}
-		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
 			t.Error("Replayed request should have X-Idempotency-Replay: true header")
 		}
 		if w2.Header().Get("X-Custom") != "value" {
@@ -324,7 +324,7 @@ func TestIdempotency_CustomHeaderName(t *testing.T) {
 		if callCount != 1 {
 			t.Errorf("Expected 1 handler call (cached), got %d", callCount)
 		}
-		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
 			t.Error("Expected X-Idempotency-Replay header on replay")
 		}
 	})
@@ -403,7 +403,7 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 		if w2.Code != http.StatusCreated {
 			t.Errorf("Expected 201 for second request, got %d", w2.Code)
 		}
-		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
 			t.Error("Second request should have X-Idempotency-Replay: true header")
 		}
 		if w2.Header().Get("X-Handler") != "first" {
@@ -627,7 +627,7 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 
 		// Simulate middleware that sets headers before idempotency
 		w1.Header().Set("X-Security-Header", "security-value")
-		w1.Header().Set("X-Request-Id", "req-123")
+		w1.Header().Set(httpx.HeaderXRequestId, "req-123")
 
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
@@ -638,7 +638,7 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 
 		// Simulate same middleware setting headers before idempotency replay
 		w2.Header().Set("X-Security-Header", "security-value")
-		w2.Header().Set("X-Request-Id", "req-456") // Different request ID
+		w2.Header().Set(httpx.HeaderXRequestId, "req-456") // Different request ID
 
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
@@ -648,7 +648,7 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 			t.Errorf("X-Security-Header should appear once, got %d: %v", len(securityHeaders), securityHeaders)
 		}
 
-		requestIds := w2.Header()["X-Request-Id"]
+		requestIds := w2.Header()[httpx.HeaderXRequestId]
 		if len(requestIds) != 1 {
 			t.Errorf("X-Request-Id should appear once, got %d: %v", len(requestIds), requestIds)
 		}
@@ -662,7 +662,7 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 			t.Error("X-Custom header should be replayed from cache")
 		}
 
-		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
 			t.Error("Expected X-Idempotency-Replay header on replay")
 		}
 	})
@@ -758,7 +758,7 @@ func TestIdempotency_HandlerWritesNothing(t *testing.T) {
 		if callCount != 1 {
 			t.Errorf("Expected 1 handler call (cached), got %d", callCount)
 		}
-		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
 			t.Error("Expected X-Idempotency-Replay header on replay")
 		}
 	})
@@ -956,8 +956,8 @@ func TestIdempotency_WriteHeaderHopByHop(t *testing.T) {
 		callCount := 0
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			callCount++
-			w.Header().Set("Connection", "keep-alive")
-			w.Header().Set("Keep-Alive", "timeout=5")
+			w.Header().Set(httpx.HeaderConnection, httpx.ConnectionKeepAlive)
+			w.Header().Set(httpx.HeaderKeepAlive, "timeout=5")
 			w.Header().Set("X-Custom", "value")
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"id":"123"}`))
@@ -980,10 +980,10 @@ func TestIdempotency_WriteHeaderHopByHop(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
 		// Hop-by-hop headers should not be replayed
-		if w2.Header().Get("Connection") != "" {
+		if w2.Header().Get(httpx.HeaderConnection) != "" {
 			t.Error("Connection header should not be replayed (hop-by-hop)")
 		}
-		if w2.Header().Get("Keep-Alive") != "" {
+		if w2.Header().Get(httpx.HeaderKeepAlive) != "" {
 			t.Error("Keep-Alive header should not be replayed (hop-by-hop)")
 		}
 		// Custom header should be replayed
@@ -1047,7 +1047,7 @@ func TestIdempotency_IncludedPaths(t *testing.T) {
 		if callCount != 1 {
 			t.Errorf("Expected 1 handler call for allowed path (cached), got %d", callCount)
 		}
-		if w2.Header().Get("X-Idempotency-Replay") != "true" {
+		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
 			t.Error("Replayed request should have X-Idempotency-Replay header")
 		}
 

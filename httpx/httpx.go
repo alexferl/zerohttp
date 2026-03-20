@@ -8,7 +8,7 @@
 //
 // Header name constants include (among others):
 //
-//	[HeaderContentType], [HeaderAuthorization], [HeaderXRequestID]
+//	[HeaderContentType], [HeaderAuthorization], [HeaderXRequestId]
 //	[HeaderCacheControl], [HeaderETag], [HeaderLocation]
 //
 // CORS and Security headers include (among others):
@@ -65,7 +65,7 @@ const (
 	HeaderIfNoneMatch       = "If-None-Match"
 	HeaderIfRange           = "If-Range"
 	HeaderIfUnmodifiedSince = "If-Unmodified-Since"
-	HeaderLastEventID       = "Last-Event-ID"
+	HeaderLastEventId       = "Last-Event-Id"
 	HeaderMaxForwards       = "Max-Forwards"
 	HeaderOrigin            = "Origin"
 	HeaderPragma            = "Pragma"
@@ -139,7 +139,7 @@ const (
 
 // Custom/Extension Headers
 const (
-	HeaderAccelExpires        = "X-Accel-Expires"
+	HeaderXAccelExpires       = "X-Accel-Expires"
 	HeaderXAPIKey             = "X-API-Key"
 	HeaderXCache              = "X-Cache"
 	HeaderXCSRFToken          = "X-CSRF-Token"
@@ -156,7 +156,7 @@ const (
 	HeaderXRateLimitReset     = "X-RateLimit-Reset"
 	HeaderXRateLimitWindow    = "X-RateLimit-Window"
 	HeaderXRealIP             = "X-Real-IP"
-	HeaderXRequestID          = "X-Request-ID"
+	HeaderXRequestId          = "X-Request-Id"
 	HeaderXRequestedWith      = "X-Requested-With"
 	HeaderXTimestamp          = "X-Timestamp"
 )

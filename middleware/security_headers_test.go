@@ -348,7 +348,7 @@ func TestSecurityHeaders_CSPNonceReportOnly(t *testing.T) {
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	zhtest.AssertWith(t, w).HeaderNotExists(httpx.HeaderContentSecurityPolicy)
 
-	csp := w.Header().Get("Content-Security-Policy-Report-Only")
+	csp := w.Header().Get(httpx.HeaderContentSecurityPolicyReportOnly)
 	if !strings.Contains(csp, "'nonce-") {
 		t.Errorf("CSP-Report-Only header should contain nonce, got: %s", csp)
 	}

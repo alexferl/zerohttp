@@ -69,7 +69,7 @@ var DefaultCORSConfig = CORSConfig{
 		httpx.HeaderAuthorization,
 		httpx.HeaderContentType,
 		httpx.HeaderXCSRFToken,
-		httpx.HeaderXRequestID,
+		httpx.HeaderXRequestId,
 	},
 	ExposedHeaders:     []string{},
 	AllowCredentials:   false,

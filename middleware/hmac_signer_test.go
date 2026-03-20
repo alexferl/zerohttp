@@ -281,7 +281,7 @@ func TestHMACSigner_CustomHeadersRoundTrip(t *testing.T) {
 	signer.SetHeadersToSign([]string{"host", "x-timestamp", "x-request-id"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	req.Header.Set(httpx.HeaderXRequestID, "test-request-123")
+	req.Header.Set(httpx.HeaderXRequestId, "test-request-123")
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
 	}

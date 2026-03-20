@@ -92,7 +92,7 @@ func BenchmarkIdempotency_HeaderReplay(b *testing.B) {
 		for j := 0; j < len(record.Headers)-1; j += 2 {
 			w.Header().Add(record.Headers[j], record.Headers[j+1])
 		}
-		w.Header().Set("X-Idempotency-Replay", "true")
+		w.Header().Set(httpx.HeaderXIdempotencyReplay, "true")
 		w.WriteHeader(record.StatusCode)
 		_, _ = w.Write(record.Body)
 	}

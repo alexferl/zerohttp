@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/httpx"
 )
 
 // flusherRecorder is a test ResponseWriter that implements http.Flusher
@@ -207,7 +209,7 @@ func TestResponseWriter_Flush_SupportsSSE(t *testing.T) {
 	}
 
 	// Write and flush like SSE would
-	rw.Header().Set("Content-Type", "text/event-stream")
+	rw.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)
 	rw.WriteHeader(http.StatusOK)
 	_, _ = rw.Write([]byte("data: hello\n\n"))
 	f.Flush()

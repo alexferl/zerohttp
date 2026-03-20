@@ -1345,13 +1345,13 @@ func TestHMACAuth_HeaderTampering_Detected(t *testing.T) {
 
 	// Sign a request with specific headers
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	req.Header.Set(httpx.HeaderXRequestID, "original-request-id")
+	req.Header.Set(httpx.HeaderXRequestId, "original-request-id")
 	if err := signer.SignRequest(req); err != nil {
 		t.Fatalf("failed to sign request: %v", err)
 	}
 
 	// Tamper with the header after signing
-	req.Header.Set(httpx.HeaderXRequestID, "tampered-request-id")
+	req.Header.Set(httpx.HeaderXRequestId, "tampered-request-id")
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
