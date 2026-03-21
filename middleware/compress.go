@@ -31,6 +31,7 @@ type Compressor struct {
 	encodingPrecedence []string
 	level              int                                  // The compression level.
 	algorithms         map[config.CompressionAlgorithm]bool // Allowed algorithms
+	algorithmOrder     []config.CompressionAlgorithm        // Algorithm precedence order
 	excludedPaths      []string                             // Paths to skip compression
 	includedPaths      []string                             // Paths to allow compression (if set, only these paths)
 }
@@ -69,9 +70,17 @@ func NewCompressor(level int, types ...string) *Compressor {
 	// Set default algorithms
 	c.algorithms[config.Gzip] = true
 	c.algorithms[config.Deflate] = true
+	c.algorithmOrder = []config.CompressionAlgorithm{config.Gzip, config.Deflate}
 
-	c.SetEncoder(httpx.ContentEncodingDeflate, encoderDeflate)
-	c.SetEncoder(httpx.ContentEncodingGzip, encoderGzip)
+	// Register encoders in algorithm order (first = highest precedence)
+	for _, alg := range c.algorithmOrder {
+		switch alg {
+		case config.Gzip:
+			c.SetEncoder(httpx.ContentEncodingGzip, encoderGzip)
+		case config.Deflate:
+			c.SetEncoder(httpx.ContentEncodingDeflate, encoderDeflate)
+		}
+	}
 	return c
 }
 
@@ -163,42 +172,37 @@ func (c *Compressor) Handler(next http.Handler) http.Handler {
 }
 
 // selectEncoder returns the encoder, the name of the encoder, and a closer function.
+// Uses algorithmOrder to determine precedence (first = highest priority).
 func (c *Compressor) selectEncoder(h http.Header, w io.Writer) (io.Writer, string, func()) {
 	header := h.Get(httpx.HeaderAcceptEncoding)
 	accepted := strings.Split(strings.ToLower(header), ",")
 
-	for _, name := range c.encodingPrecedence {
-		if matchAcceptEncoding(accepted, name) {
-			// Check if algorithm is allowed
-			var allowed bool
-			switch name {
-			case httpx.ContentEncodingGzip:
-				allowed = c.algorithms[config.Gzip]
-			case httpx.ContentEncodingDeflate:
-				allowed = c.algorithms[config.Deflate]
-			default:
-				allowed = true // Custom encoders are always allowed if added
-			}
+	// Iterate through algorithms in configured order (highest precedence first)
+	for _, alg := range c.algorithmOrder {
+		name := strings.ToLower(string(alg))
+		if !matchAcceptEncoding(accepted, name) {
+			continue
+		}
 
-			if !allowed {
-				continue
-			}
+		// Check if algorithm is allowed
+		if !c.algorithms[alg] {
+			continue
+		}
 
-			if pool, ok := c.pooledEncoders[name]; ok {
-				encoder := pool.Get().(ioResetterWriter)
-				cleanup := func() {
-					pool.Put(encoder)
-				}
-				encoder.Reset(w)
-				return encoder, name, cleanup
+		if pool, ok := c.pooledEncoders[name]; ok {
+			encoder := pool.Get().(ioResetterWriter)
+			cleanup := func() {
+				pool.Put(encoder)
 			}
-			if fn, ok := c.encoders[name]; ok {
-				encoder := fn(w, c.level)
-				if encoder == nil {
-					continue // Skip if encoder failed to create (invalid level)
-				}
-				return encoder, name, func() {}
+			encoder.Reset(w)
+			return encoder, name, cleanup
+		}
+		if fn, ok := c.encoders[name]; ok {
+			encoder := fn(w, c.level)
+			if encoder == nil {
+				continue // Skip if encoder failed to create (invalid level)
 			}
+			return encoder, name, func() {}
 		}
 	}
 	return nil, "", func() {}
@@ -378,19 +382,39 @@ func Compress(cfg ...config.CompressConfig) func(http.Handler) http.Handler {
 	compressor.excludedPaths = c.ExcludedPaths
 	compressor.includedPaths = c.IncludedPaths
 
-	// Set allowed algorithms
+	// Set allowed algorithms and their precedence order
 	compressor.algorithms = make(map[config.CompressionAlgorithm]bool)
+	compressor.algorithmOrder = make([]config.CompressionAlgorithm, 0, len(c.Algorithms))
+
+	// Process algorithms in order, registering encoders from providers or built-ins
 	for _, alg := range c.Algorithms {
 		compressor.algorithms[alg] = true
-	}
+		algStr := strings.ToLower(string(alg))
 
-	// Add custom encoders from providers if set
-	for _, provider := range c.Providers {
-		for _, alg := range c.Algorithms {
-			if encoder := provider.GetEncoder(string(alg)); encoder != nil {
-				compressor.SetEncoder(encoder.Encoding(), func(w io.Writer, level int) io.Writer {
-					return encoder.Encode(w, level)
-				})
+		// Try to get encoder from providers first
+		var encoder config.CompressionEncoder
+		for _, provider := range c.Providers {
+			if enc := provider.GetEncoder(algStr); enc != nil {
+				encoder = enc
+				break
+			}
+		}
+
+		if encoder != nil {
+			// Custom encoder from provider
+			compressor.SetEncoder(encoder.Encoding(), func(w io.Writer, level int) io.Writer {
+				return encoder.Encode(w, level)
+			})
+			compressor.algorithmOrder = append(compressor.algorithmOrder, alg)
+		} else {
+			// Built-in encoder
+			switch alg {
+			case config.Gzip:
+				compressor.SetEncoder(httpx.ContentEncodingGzip, encoderGzip)
+				compressor.algorithmOrder = append(compressor.algorithmOrder, alg)
+			case config.Deflate:
+				compressor.SetEncoder(httpx.ContentEncodingDeflate, encoderDeflate)
+				compressor.algorithmOrder = append(compressor.algorithmOrder, alg)
 			}
 		}
 	}
