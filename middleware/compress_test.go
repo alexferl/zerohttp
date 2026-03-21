@@ -285,6 +285,9 @@ func TestCompressor(t *testing.T) {
 	compressor.SetEncoder("nop", func(w io.Writer, _ int) io.Writer {
 		return w
 	})
+	// Add nop to algorithm order so selectEncoder will consider it
+	compressor.algorithmOrder = append([]config.CompressionAlgorithm{config.CompressionAlgorithm("nop")}, compressor.algorithmOrder...)
+	compressor.algorithms[config.CompressionAlgorithm("nop")] = true
 
 	if len(compressor.encoders) != 1 {
 		t.Errorf("nop encoder should be stored in the encoders map")
@@ -1144,6 +1147,57 @@ func TestCompressionProvider(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, httpx.ContentEncodingGzip)
+	})
+
+	t.Run("algorithms order determines precedence with providers", func(t *testing.T) {
+		// When both algorithms are acceptable, the first one in Algorithms list should be chosen
+		brotliEncoder := &testEncoder{encoding: "br"}
+		zstdEncoder := &testEncoder{encoding: "zstd"}
+
+		brotliProvider := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"br": brotliEncoder,
+		}}
+		zstdProvider := &testProvider{encoders: map[string]config.CompressionEncoder{
+			"zstd": zstdEncoder,
+		}}
+
+		// Test with zstd first in algorithms - it should be preferred
+		mw := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{"zstd", "br"},
+			Providers:  []config.CompressionProvider{brotliProvider, zstdProvider},
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		// Client accepts both, but zstd should be chosen (first in Algorithms)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set(httpx.HeaderAcceptEncoding, "br, zstd")
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		zhtest.AssertWith(t, rr).Header(httpx.HeaderContentEncoding, "zstd")
+
+		// Test with brotli first in algorithms - it should be preferred
+		mw2 := Compress(config.CompressConfig{
+			Types:      []string{"text/plain"},
+			Algorithms: []config.CompressionAlgorithm{"br", "zstd"},
+			Providers:  []config.CompressionProvider{zstdProvider, brotliProvider},
+		})
+
+		handler2 := mw2(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
+			_, _ = w.Write([]byte("test content"))
+		}))
+
+		// Client accepts both, but brotli should be chosen (first in Algorithms)
+		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req2.Header.Set(httpx.HeaderAcceptEncoding, "br, zstd")
+		rr2 := httptest.NewRecorder()
+		handler2.ServeHTTP(rr2, req2)
+		zhtest.AssertWith(t, rr2).Header(httpx.HeaderContentEncoding, "br")
 	})
 }
 

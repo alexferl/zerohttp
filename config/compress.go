@@ -83,7 +83,9 @@ type CompressConfig struct {
 	// Types are MIME types to compress (defaults to common text types)
 	Types []string
 
-	// Algorithms are compression algorithms to support (defaults to gzip, deflate)
+	// Algorithms are compression algorithms to support (defaults to gzip, deflate).
+	// The order determines precedence when the client accepts multiple encodings -
+	// earlier algorithms are preferred over later ones.
 	Algorithms []CompressionAlgorithm
 
 	// ExcludedPaths contains paths to skip compression.
