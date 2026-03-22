@@ -72,10 +72,10 @@ func TestLogLevels(t *testing.T) {
 		logFunc  func(*DefaultLogger, string, ...Field)
 		expected string
 	}{
-		{"Debug", (*DefaultLogger).Debug, "[DEBUG]"},
-		{"Info", (*DefaultLogger).Info, "[INFO]"},
-		{"Warn", (*DefaultLogger).Warn, "[WARN]"},
-		{"Error", (*DefaultLogger).Error, "[ERROR]"},
+		{"Debug", (*DefaultLogger).Debug, "[DBG]"},
+		{"Info", (*DefaultLogger).Info, "[INF]"},
+		{"Warn", (*DefaultLogger).Warn, "[WRN]"},
+		{"Error", (*DefaultLogger).Error, "[ERR]"},
 	}
 
 	for _, tt := range tests {
@@ -99,7 +99,7 @@ func TestLogWithFields(t *testing.T) {
 	logger.Info("test", F("key1", "value1"), F("key2", 42))
 
 	output := buf.String()
-	expected := []string{"[INFO]", "test", "key1=value1", "key2=42"}
+	expected := []string{"[INF]", "test", "key1=value1", "key2=42"}
 
 	for _, exp := range expected {
 		if !strings.Contains(output, exp) {
@@ -119,8 +119,8 @@ func TestLogPanic(t *testing.T) {
 		}
 
 		output := buf.String()
-		if !strings.Contains(output, "[PANIC]") {
-			t.Errorf("expected output to contain '[PANIC]', got '%s'", output)
+		if !strings.Contains(output, "[PNC]") {
+			t.Errorf("expected output to contain '[PNC]', got '%s'", output)
 		}
 		if !strings.Contains(output, "panic message") {
 			t.Errorf("expected output to contain 'panic message', got '%s'", output)
@@ -142,7 +142,7 @@ func TestWithFields(t *testing.T) {
 	loggerWithFields.Info("test message", F("extra", "field"))
 
 	output := buf.String()
-	expected := []string{"[INFO]", "test message", "base=value", "count=1", "extra=field"}
+	expected := []string{"[INF]", "test message", "base=value", "count=1", "extra=field"}
 
 	for _, exp := range expected {
 		if !strings.Contains(output, exp) {
@@ -213,8 +213,8 @@ func TestStdLogger(t *testing.T) {
 	stdLogger.Println("TLS handshake error: test")
 
 	output := buf.String()
-	if !strings.Contains(output, "[ERROR]") {
-		t.Errorf("expected output to contain '[ERROR]', got '%s'", output)
+	if !strings.Contains(output, "[ERR]") {
+		t.Errorf("expected output to contain '[ERR]', got '%s'", output)
 	}
 	if !strings.Contains(output, "TLS handshake error: test") {
 		t.Errorf("expected output to contain 'TLS handshake error: test', got '%s'", output)
@@ -237,8 +237,8 @@ func TestLogWriter(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "[ERROR]") {
-		t.Errorf("expected output to contain '[ERROR]', got '%s'", output)
+	if !strings.Contains(output, "[ERR]") {
+		t.Errorf("expected output to contain '[ERR]', got '%s'", output)
 	}
 	if !strings.Contains(output, "test message") {
 		t.Errorf("expected output to contain 'test message', got '%s'", output)
