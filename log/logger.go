@@ -8,6 +8,31 @@ import (
 	"strings"
 )
 
+// ANSI color codes for terminal output
+const (
+	colorReset       = "\033[0m"
+	colorRed         = "\033[31m"
+	colorGreen       = "\033[32m"
+	colorYellow      = "\033[33m"
+	colorBlue        = "\033[34m"
+	colorMagenta     = "\033[35m"
+	colorCyan        = "\033[36m"
+	colorGray        = "\033[90m"
+	colorWhiteBold   = "\033[1;37m"
+	colorWhiteOnRed  = "\033[97;41m"
+	colorWhiteOnBlue = "\033[97;44m"
+)
+
+// levelColors maps log levels to ANSI colors
+var levelColors = map[string]string{
+	"DBG": colorWhiteOnBlue,
+	"INF": colorGreen,
+	"WRN": colorYellow,
+	"ERR": colorRed,
+	"PNC": colorMagenta,
+	"FTL": colorWhiteOnRed,
+}
+
 // Logger defines the interface for logging in the framework
 type Logger interface {
 	// Debug logs a debug message
@@ -61,48 +86,93 @@ var _ Logger = (*DefaultLogger)(nil)
 
 // DefaultLogger is a simple implementation using Go's standard log package
 type DefaultLogger struct {
-	logger *log.Logger
-	fields []Field
+	logger   *log.Logger
+	fields   []Field
+	colorize bool
 }
 
 // NewDefaultLogger creates a new default logger instance.
 // It uses Go's standard log package with stdout output and standard flags.
+// Colors are enabled by default for TTY terminals, unless NO_COLOR is set
+// or running in a CI environment.
 func NewDefaultLogger() *DefaultLogger {
 	return &DefaultLogger{
-		logger: log.New(os.Stdout, "", log.LstdFlags),
-		fields: make([]Field, 0),
+		logger:   log.New(os.Stdout, "", log.LstdFlags),
+		fields:   make([]Field, 0),
+		colorize: shouldColorize(),
 	}
+}
+
+// shouldColorize returns true if colors should be enabled.
+// It checks for NO_COLOR environment variable and common CI environments.
+func shouldColorize() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+
+	// Check for common CI environment variables
+	ciVars := []string{"CI", "CONTINUOUS_INTEGRATION", "BUILD_ID", "BUILD_NUMBER"}
+	for _, v := range ciVars {
+		if os.Getenv(v) != "" {
+			return false
+		}
+	}
+
+	// Check for specific CI services
+	ciServices := []string{
+		"GITHUB_ACTIONS",
+		"GITLAB_CI",
+		"CIRCLECI",
+		"TRAVIS",
+		"JENKINS_URL",
+		"BUILDKITE",
+		"DRONE",
+		"TEAMCITY_VERSION",
+	}
+	for _, v := range ciServices {
+		if os.Getenv(v) != "" {
+			return false
+		}
+	}
+
+	return true
+}
+
+// SetColorize enables or disables colored output.
+// When disabled, logs are output without ANSI color codes.
+func (l *DefaultLogger) SetColorize(enabled bool) {
+	l.colorize = enabled
 }
 
 // Debug logs a debug message with optional fields
 func (l *DefaultLogger) Debug(msg string, fields ...Field) {
-	l.logWithLevel("DEBUG", msg, fields...)
+	l.logWithLevel("DBG", msg, fields...)
 }
 
 // Info logs an info message with optional fields
 func (l *DefaultLogger) Info(msg string, fields ...Field) {
-	l.logWithLevel("INFO", msg, fields...)
+	l.logWithLevel("INF", msg, fields...)
 }
 
 // Warn logs a warning message with optional fields
 func (l *DefaultLogger) Warn(msg string, fields ...Field) {
-	l.logWithLevel("WARN", msg, fields...)
+	l.logWithLevel("WRN", msg, fields...)
 }
 
 // Error logs an error message with optional fields
 func (l *DefaultLogger) Error(msg string, fields ...Field) {
-	l.logWithLevel("ERROR", msg, fields...)
+	l.logWithLevel("ERR", msg, fields...)
 }
 
 // Panic logs a panic message with optional fields and then panics
 func (l *DefaultLogger) Panic(msg string, fields ...Field) {
-	l.logWithLevel("PANIC", msg, fields...)
+	l.logWithLevel("PNC", msg, fields...)
 	panic(msg)
 }
 
 // Fatal logs a fatal message with optional fields and then exits with code 1
 func (l *DefaultLogger) Fatal(msg string, fields ...Field) {
-	l.logWithLevel("FATAL", msg, fields...)
+	l.logWithLevel("FTL", msg, fields...)
 	os.Exit(1)
 }
 
@@ -128,18 +198,53 @@ func (l *DefaultLogger) WithContext(ctx context.Context) Logger {
 
 // logWithLevel logs a message at the specified level with fields.
 // It formats the message with the level prefix and appends all fields.
+// If colorize is enabled, it applies ANSI color codes to the level and field keys.
 func (l *DefaultLogger) logWithLevel(level, msg string, fields ...Field) {
 	allFields := append(l.fields, fields...)
 
-	logMsg := "[" + level + "] " + msg
-	if len(allFields) > 0 {
-		logMsg += " |"
-		for _, field := range allFields {
-			logMsg += " " + field.Key + "=" + formatValue(field.Value)
+	var b strings.Builder
+	if l.colorize {
+		levelColor := levelColors[level]
+		if levelColor == "" {
+			levelColor = colorReset
+		}
+		b.WriteString(levelColor)
+		b.WriteString("[")
+		b.WriteString(level)
+		b.WriteString("]")
+		b.WriteString(colorReset)
+		b.WriteString(" ")
+		b.WriteString(colorWhiteBold)
+		b.WriteString(msg)
+		b.WriteString(colorReset)
+		if len(allFields) > 0 {
+			b.WriteString(" |")
+			for _, field := range allFields {
+				b.WriteString(" ")
+				b.WriteString(colorCyan)
+				b.WriteString(field.Key)
+				b.WriteString(colorReset)
+				b.WriteString("=")
+				b.WriteString(formatValue(field.Value))
+			}
+		}
+	} else {
+		b.WriteString("[")
+		b.WriteString(level)
+		b.WriteString("] ")
+		b.WriteString(msg)
+		if len(allFields) > 0 {
+			b.WriteString(" |")
+			for _, field := range allFields {
+				b.WriteString(" ")
+				b.WriteString(field.Key)
+				b.WriteString("=")
+				b.WriteString(formatValue(field.Value))
+			}
 		}
 	}
 
-	l.logger.Println(logMsg)
+	l.logger.Println(b.String())
 }
 
 // formatValue converts a field value to its string representation.

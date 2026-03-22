@@ -818,10 +818,6 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 				methodNotAllowedHandler := r.methodNotAllowedHandler
 				r.handlerMu.RUnlock()
 				methodNotAllowedHandler.ServeHTTP(w, req)
-
-				if shouldLog {
-					middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusMethodNotAllowed, time.Since(start), "", "")
-				}
 				return
 			}
 
@@ -839,10 +835,6 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 		notFoundHandler := r.notFoundHandler
 		r.handlerMu.RUnlock()
 		notFoundHandler.ServeHTTP(w, req)
-
-		if shouldLog {
-			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
-		}
 	}
 }
 

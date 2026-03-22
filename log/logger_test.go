@@ -72,10 +72,10 @@ func TestLogLevels(t *testing.T) {
 		logFunc  func(*DefaultLogger, string, ...Field)
 		expected string
 	}{
-		{"Debug", (*DefaultLogger).Debug, "[DEBUG]"},
-		{"Info", (*DefaultLogger).Info, "[INFO]"},
-		{"Warn", (*DefaultLogger).Warn, "[WARN]"},
-		{"Error", (*DefaultLogger).Error, "[ERROR]"},
+		{"Debug", (*DefaultLogger).Debug, "[DBG]"},
+		{"Info", (*DefaultLogger).Info, "[INF]"},
+		{"Warn", (*DefaultLogger).Warn, "[WRN]"},
+		{"Error", (*DefaultLogger).Error, "[ERR]"},
 	}
 
 	for _, tt := range tests {
@@ -99,7 +99,7 @@ func TestLogWithFields(t *testing.T) {
 	logger.Info("test", F("key1", "value1"), F("key2", 42))
 
 	output := buf.String()
-	expected := []string{"[INFO]", "test", "key1=value1", "key2=42"}
+	expected := []string{"[INF]", "test", "key1=value1", "key2=42"}
 
 	for _, exp := range expected {
 		if !strings.Contains(output, exp) {
@@ -119,8 +119,8 @@ func TestLogPanic(t *testing.T) {
 		}
 
 		output := buf.String()
-		if !strings.Contains(output, "[PANIC]") {
-			t.Errorf("expected output to contain '[PANIC]', got '%s'", output)
+		if !strings.Contains(output, "[PNC]") {
+			t.Errorf("expected output to contain '[PNC]', got '%s'", output)
 		}
 		if !strings.Contains(output, "panic message") {
 			t.Errorf("expected output to contain 'panic message', got '%s'", output)
@@ -142,7 +142,7 @@ func TestWithFields(t *testing.T) {
 	loggerWithFields.Info("test message", F("extra", "field"))
 
 	output := buf.String()
-	expected := []string{"[INFO]", "test message", "base=value", "count=1", "extra=field"}
+	expected := []string{"[INF]", "test message", "base=value", "count=1", "extra=field"}
 
 	for _, exp := range expected {
 		if !strings.Contains(output, exp) {
@@ -213,8 +213,8 @@ func TestStdLogger(t *testing.T) {
 	stdLogger.Println("TLS handshake error: test")
 
 	output := buf.String()
-	if !strings.Contains(output, "[ERROR]") {
-		t.Errorf("expected output to contain '[ERROR]', got '%s'", output)
+	if !strings.Contains(output, "[ERR]") {
+		t.Errorf("expected output to contain '[ERR]', got '%s'", output)
 	}
 	if !strings.Contains(output, "TLS handshake error: test") {
 		t.Errorf("expected output to contain 'TLS handshake error: test', got '%s'", output)
@@ -237,13 +237,196 @@ func TestLogWriter(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "[ERROR]") {
-		t.Errorf("expected output to contain '[ERROR]', got '%s'", output)
+	if !strings.Contains(output, "[ERR]") {
+		t.Errorf("expected output to contain '[ERR]', got '%s'", output)
 	}
 	if !strings.Contains(output, "test message") {
 		t.Errorf("expected output to contain 'test message', got '%s'", output)
 	}
 	if strings.Contains(output, "\n\n") {
 		t.Errorf("expected no double newlines from trimming, got: '%s'", output)
+	}
+}
+
+func TestSetColorize(t *testing.T) {
+	logger, buf := createTestLogger()
+
+	// Test disabling colors
+	logger.SetColorize(false)
+	logger.Info("no color message")
+
+	output := buf.String()
+	if !strings.Contains(output, "[INF]") {
+		t.Errorf("expected output to contain '[INF]', got '%s'", output)
+	}
+	if !strings.Contains(output, "no color message") {
+		t.Errorf("expected output to contain 'no color message', got '%s'", output)
+	}
+	// With colors disabled, there should be no ANSI codes
+	if strings.Contains(output, "\033[") {
+		t.Errorf("expected no ANSI codes when colorize is disabled, got '%s'", output)
+	}
+
+	// Test re-enabling colors
+	buf.Reset()
+	logger.SetColorize(true)
+	logger.Info("color message")
+
+	output = buf.String()
+	if !strings.Contains(output, "[INF]") {
+		t.Errorf("expected output to contain '[INF]', got '%s'", output)
+	}
+}
+
+func TestLogWithColorsEnabled(t *testing.T) {
+	logger, buf := createTestLogger()
+	logger.SetColorize(true)
+
+	logger.Info("colored info")
+	output := buf.String()
+
+	// Should contain ANSI color codes
+	if !strings.Contains(output, "\033[") {
+		t.Errorf("expected ANSI codes when colors enabled, got '%s'", output)
+	}
+}
+
+func TestLogWithColorsDisabled(t *testing.T) {
+	logger, buf := createTestLogger()
+	logger.SetColorize(false)
+
+	logger.Info("plain info")
+	output := buf.String()
+
+	// Should NOT contain ANSI color codes
+	if strings.Contains(output, "\033[") {
+		t.Errorf("expected no ANSI codes when colors disabled, got '%s'", output)
+	}
+}
+
+func TestShouldColorize_NO_COLOR(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := shouldColorize()
+	if result {
+		t.Error("shouldColorize should return false when NO_COLOR is set")
+	}
+}
+
+func TestShouldColorize_CI(t *testing.T) {
+	tests := []string{"CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "TRAVIS"}
+
+	for _, envVar := range tests {
+		t.Run(envVar, func(t *testing.T) {
+			t.Setenv(envVar, "true")
+			result := shouldColorize()
+			if result {
+				t.Errorf("shouldColorize should return false when %s is set", envVar)
+			}
+		})
+	}
+}
+
+func TestGlobalLogger(t *testing.T) {
+	// Save original logger
+	original := GetGlobalLogger()
+	defer SetGlobalLogger(original)
+
+	// Set up test logger
+	testLogger := NewDefaultLogger()
+	SetGlobalLogger(testLogger)
+
+	// Test GetGlobalLogger returns our test logger
+	if GetGlobalLogger() != testLogger {
+		t.Error("GetGlobalLogger should return the set global logger")
+	}
+}
+
+func TestGlobalLoggerMethods(t *testing.T) {
+	// Save and restore original
+	original := GetGlobalLogger()
+	defer SetGlobalLogger(original)
+
+	// Use NoopLogger to avoid output during tests
+	SetGlobalLogger(&NoopLogger{})
+
+	// Test that global methods don't panic via GetGlobalLogger
+	GetGlobalLogger().Debug("debug message", F("key", "value"))
+	GetGlobalLogger().Info("info message", F("key", "value"))
+	GetGlobalLogger().Warn("warn message", F("key", "value"))
+	GetGlobalLogger().Error("error message", F("key", "value"))
+
+	// Test WithFields chaining on global
+	logger := GetGlobalLogger().WithFields(F("field", "value"))
+	logger.Info("chained message")
+}
+
+func TestLogFatal(t *testing.T) {
+	logger, _ := createTestLogger()
+
+	// We can't actually test Fatal since it calls os.Exit
+	// Just verify the method exists and has correct signature by compiling
+	_ = logger.Fatal
+}
+
+func TestLogWithAllLevels(t *testing.T) {
+	logger, buf := createTestLogger()
+	logger.SetColorize(false)
+
+	tests := []struct {
+		name     string
+		logFunc  func(string, ...Field)
+		expected string
+	}{
+		{"Debug", logger.Debug, "[DBG]"},
+		{"Info", logger.Info, "[INF]"},
+		{"Warn", logger.Warn, "[WRN]"},
+		{"Error", logger.Error, "[ERR]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf.Reset()
+			tt.logFunc("test")
+			output := buf.String()
+			if !strings.Contains(output, tt.expected) {
+				t.Errorf("expected output to contain '%s', got '%s'", tt.expected, output)
+			}
+		})
+	}
+}
+
+func TestLogWithFieldsColorKeys(t *testing.T) {
+	logger, buf := createTestLogger()
+	logger.SetColorize(true)
+
+	logger.Info("test", F("mykey", "myvalue"))
+	output := buf.String()
+
+	// Should contain the key with cyan color
+	if !strings.Contains(output, "mykey") {
+		t.Errorf("expected output to contain 'mykey', got '%s'", output)
+	}
+	if !strings.Contains(output, "myvalue") {
+		t.Errorf("expected output to contain 'myvalue', got '%s'", output)
+	}
+}
+
+func TestLogAllLevelColors(t *testing.T) {
+	logger, _ := createTestLogger()
+	logger.SetColorize(true)
+
+	// Just ensure all levels work with colors
+	levels := []struct {
+		name string
+		fn   func(string, ...Field)
+	}{
+		{"DBG", logger.Debug},
+		{"INF", logger.Info},
+		{"WRN", logger.Warn},
+		{"ERR", logger.Error},
+	}
+
+	for _, level := range levels {
+		level.fn("test message for " + level.name)
 	}
 }
