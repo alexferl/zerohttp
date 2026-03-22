@@ -55,7 +55,7 @@ type ETagConfig struct {
 // DefaultETagConfig contains the default values for ETag configuration
 var DefaultETagConfig = ETagConfig{
 	Algorithm:     FNV,
-	Weak:          Bool(true),
+	Weak:          Bool(false),
 	MaxBufferSize: 1024 * 1024, // 1MB
 	SkipStatusCodes: map[int]struct{}{
 		http.StatusNoContent:           {},

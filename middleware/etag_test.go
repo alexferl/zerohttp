@@ -31,9 +31,12 @@ func TestETag_GeneratesETag(t *testing.T) {
 		t.Error("expected ETag header to be set")
 	}
 
-	// Check that it's a weak ETag by default
-	if !strings.HasPrefix(etag, `W/"`) {
-		t.Errorf("expected weak ETag to start with W/\", got %s", etag)
+	// Check that it's a strong ETag by default
+	if strings.HasPrefix(etag, `W/`) {
+		t.Errorf("expected strong ETag without W/ prefix, got %s", etag)
+	}
+	if !strings.HasPrefix(etag, `"`) {
+		t.Errorf("expected strong ETag to start with quote, got %s", etag)
 	}
 }
 
@@ -231,9 +234,9 @@ func TestETag_MD5Algorithm(t *testing.T) {
 		t.Error("expected different ETags for FNV and MD5 algorithms")
 	}
 
-	// MD5 produces 32 hex characters
-	if len(md5ETag) != len(`W/"`)+32+len(`"`) {
-		t.Errorf("expected MD5 ETag length to be %d, got %d", len(`W/"`)+32+len(`"`), len(md5ETag))
+	// MD5 produces 32 hex characters for strong ETag: " + 32hex + " = 34 chars
+	if len(md5ETag) != 34 {
+		t.Errorf("expected MD5 ETag length to be 34, got %d", len(md5ETag))
 	}
 }
 
@@ -389,7 +392,7 @@ func TestETag_ChangedContent(t *testing.T) {
 }
 
 func TestETag_NotModified_StrongVsWeak(t *testing.T) {
-	// Test that weak ETag from server matches strong ETag in If-None-Match
+	// Test that strong ETag from server matches weak ETag in If-None-Match
 	handler := ETag()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("hello world"))
 	}))
@@ -398,14 +401,14 @@ func TestETag_NotModified_StrongVsWeak(t *testing.T) {
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
-	// Extract just the hash part from the weak ETag (remove W/ prefix and quotes)
-	weakETag := rec1.Header().Get(httpx.HeaderETag)
-	hashPart := weakETag[3 : len(weakETag)-1] // Remove W/" and "
-	strongETag := `"` + hashPart + `"`
+	// Extract just the hash part from the strong ETag (remove quotes)
+	strongETag := rec1.Header().Get(httpx.HeaderETag)
+	hashPart := strongETag[1 : len(strongETag)-1] // Remove " and "
+	weakETag := `W/"` + hashPart + `"`
 
-	// Request with strong ETag should still match weak ETag
+	// Request with weak ETag should still match strong ETag
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
-	req2.Header.Set(httpx.HeaderIfNoneMatch, strongETag)
+	req2.Header.Set(httpx.HeaderIfNoneMatch, weakETag)
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 

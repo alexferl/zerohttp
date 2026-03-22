@@ -292,6 +292,11 @@ func (ew *etagResponseWriter) finalizeLocked() {
 	}
 	ew.finalized = true
 
+	// Refresh content encoding from the actual response headers.
+	// This is needed because downstream middleware (e.g., Compress) may have
+	// set Content-Encoding after we initially captured it in writeHeaderLocked.
+	ew.contentEncoding = ew.ResponseWriter.Header().Get(httpx.HeaderContentEncoding)
+
 	etag := ew.generateETag()
 
 	if etag != "" {

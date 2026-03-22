@@ -187,10 +187,11 @@ const (
 
 	CacheControlNoCache        = "no-cache"
 	CacheControlNoStore        = "no-store"
-	CacheControlMustRevalidate = "must-revalidate"
-	CacheControlPublic         = "public"
-	CacheControlPrivate        = "private"
+	CacheControlNoTransform    = "no-transform"
 	CacheControlMaxAge         = "max-age"
+	CacheControlMustRevalidate = "must-revalidate"
+	CacheControlPrivate        = "private"
+	CacheControlPublic         = "public"
 
 	ContentEncodingGzip    = "gzip"
 	ContentEncodingDeflate = "deflate"
