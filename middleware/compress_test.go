@@ -1252,8 +1252,8 @@ func TestCompress_WriteHeaderBeforeWrite(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
+			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte("<html><body>Not Found</body></html>"))
 		}))
 
@@ -1288,8 +1288,8 @@ func TestCompress_WriteHeaderBeforeWrite(t *testing.T) {
 		for _, status := range testCases {
 			t.Run(fmt.Sprintf("status_%d", status), func(t *testing.T) {
 				handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(status)
 					w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+					w.WriteHeader(status)
 					_, _ = w.Write([]byte(`{"error":"test"}`))
 				}))
 
@@ -1312,9 +1312,9 @@ func TestCompress_WriteHeaderBeforeWrite(t *testing.T) {
 		})
 
 		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			w.WriteHeader(http.StatusNotFound)
 			w.WriteHeader(http.StatusOK) // Should be ignored
-			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 			_, _ = w.Write([]byte("content"))
 		}))
 
@@ -1326,6 +1326,81 @@ func TestCompress_WriteHeaderBeforeWrite(t *testing.T) {
 
 		if rr.Code != http.StatusNotFound {
 			t.Errorf("expected status code %d, got %d", http.StatusNotFound, rr.Code)
+		}
+	})
+
+	t.Run("implicit 200 when Write is called without WriteHeader", func(t *testing.T) {
+		mw := Compress(config.CompressConfig{
+			Types: []string{"text/html"},
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
+			// No WriteHeader call - Write should trigger implicit 200
+			_, _ = w.Write([]byte("<html>content</html>"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected status code %d, got %d", http.StatusOK, rr.Code)
+		}
+
+		if rr.Header().Get(httpx.HeaderContentEncoding) != httpx.ContentEncodingGzip {
+			t.Errorf("expected Content-Encoding=%q, got %q", httpx.ContentEncodingGzip, rr.Header().Get(httpx.HeaderContentEncoding))
+		}
+	})
+
+	t.Run("non-compressible types are not compressed", func(t *testing.T) {
+		mw := Compress(config.CompressConfig{
+			Types: []string{"text/html"}, // Only HTML, not images
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, "image/png")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("fake-image-data"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test.png", nil)
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected status code %d, got %d", http.StatusOK, rr.Code)
+		}
+
+		// Should NOT have Content-Encoding header since image/png is not compressible
+		if rr.Header().Get(httpx.HeaderContentEncoding) != "" {
+			t.Errorf("expected no Content-Encoding for image/png, got %q", rr.Header().Get(httpx.HeaderContentEncoding))
+		}
+	})
+
+	t.Run("no compression when Accept-Encoding not set", func(t *testing.T) {
+		mw := Compress(config.CompressConfig{
+			Types: []string{"text/html"},
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("<html>content</html>"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		// No Accept-Encoding header
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Header().Get(httpx.HeaderContentEncoding) != "" {
+			t.Errorf("expected no Content-Encoding without Accept-Encoding, got %q", rr.Header().Get(httpx.HeaderContentEncoding))
 		}
 	})
 }
