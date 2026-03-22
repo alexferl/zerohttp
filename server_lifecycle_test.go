@@ -395,15 +395,27 @@ func TestServer_RegisterPostStartupHook(t *testing.T) {
 
 func TestServer_StartupHooks_RunInOrder(t *testing.T) {
 	var order []string
+	var mu sync.Mutex
+	hooksDone := make(chan struct{})
 	server := New(config.Config{
 		Lifecycle: config.LifecycleConfig{
 			StartupHooks: []config.StartupHookConfig{
 				{Name: "hook-1", Hook: func(ctx context.Context) error {
+					mu.Lock()
 					order = append(order, "hook-1")
+					mu.Unlock()
 					return nil
 				}},
 				{Name: "hook-2", Hook: func(ctx context.Context) error {
+					mu.Lock()
 					order = append(order, "hook-2")
+					mu.Unlock()
+					return nil
+				}},
+			},
+			PostStartupHooks: []config.StartupHookConfig{
+				{Name: "done", Hook: func(ctx context.Context) error {
+					close(hooksDone)
 					return nil
 				}},
 			},
@@ -414,20 +426,25 @@ func TestServer_StartupHooks_RunInOrder(t *testing.T) {
 	server.listener = listener
 	server.server = &http.Server{Addr: listener.Addr().String()}
 
-	// Start server in goroutine - it will fail because we don't actually run it
-	// but startup hooks will run
+	// Start server in goroutine
 	go func() {
 		_ = server.Start()
 	}()
 
-	// Give time for startup hooks to run
-	time.Sleep(100 * time.Millisecond)
+	// Wait for hooks to complete
+	select {
+	case <-hooksDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for hooks")
+	}
 
 	// Shutdown to clean up
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)
 
+	mu.Lock()
+	defer mu.Unlock()
 	if len(order) != 2 {
 		t.Errorf("Expected 2 hooks to run, got %d", len(order))
 	}
@@ -572,14 +589,20 @@ func TestServer_StartupHook_RespectsContextCancellation(t *testing.T) {
 
 func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 	var order []string
+	var mu sync.Mutex
+	hooksDone := make(chan struct{})
 	server := New()
 
 	server.RegisterStartupHook("hook-a", func(ctx context.Context) error {
+		mu.Lock()
 		order = append(order, "hook-a")
+		mu.Unlock()
 		return nil
 	})
 	server.RegisterStartupHook("hook-b", func(ctx context.Context) error {
+		mu.Lock()
 		order = append(order, "hook-b")
+		mu.Unlock()
 		return nil
 	})
 
@@ -587,7 +610,18 @@ func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 	server.startupHooks = append(server.startupHooks, config.StartupHookConfig{
 		Name: "hook-config",
 		Hook: func(ctx context.Context) error {
+			mu.Lock()
 			order = append(order, "hook-config")
+			mu.Unlock()
+			return nil
+		},
+	})
+
+	// Add post-startup hook to signal completion
+	server.postStartupHooks = append(server.postStartupHooks, config.StartupHookConfig{
+		Name: "done",
+		Hook: func(ctx context.Context) error {
+			close(hooksDone)
 			return nil
 		},
 	})
@@ -600,13 +634,20 @@ func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 		_ = server.Start()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for hooks to complete
+	select {
+	case <-hooksDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for hooks")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)
 
 	// Should have 3 hooks: hook-a, hook-b, hook-config
+	mu.Lock()
+	defer mu.Unlock()
 	if len(order) != 3 {
 		t.Errorf("Expected 3 hooks to run, got %d: %v", len(order), order)
 	}
@@ -614,23 +655,32 @@ func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 
 func TestServer_StartupHookOrder(t *testing.T) {
 	var order []string
+	var mu sync.Mutex
+	hooksDone := make(chan struct{})
 	server := New(config.Config{
 		Lifecycle: config.LifecycleConfig{
 			PreStartupHooks: []config.StartupHookConfig{
 				{Name: "pre", Hook: func(ctx context.Context) error {
+					mu.Lock()
 					order = append(order, "pre")
+					mu.Unlock()
 					return nil
 				}},
 			},
 			StartupHooks: []config.StartupHookConfig{
 				{Name: "startup", Hook: func(ctx context.Context) error {
+					mu.Lock()
 					order = append(order, "startup")
+					mu.Unlock()
 					return nil
 				}},
 			},
 			PostStartupHooks: []config.StartupHookConfig{
 				{Name: "post", Hook: func(ctx context.Context) error {
+					mu.Lock()
 					order = append(order, "post")
+					mu.Unlock()
+					close(hooksDone)
 					return nil
 				}},
 			},
@@ -645,12 +695,19 @@ func TestServer_StartupHookOrder(t *testing.T) {
 		_ = server.Start()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for hooks to complete
+	select {
+	case <-hooksDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for hooks")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_ = server.Shutdown(ctx)
 
+	mu.Lock()
+	defer mu.Unlock()
 	if len(order) != 3 {
 		t.Errorf("Expected 3 hooks to run, got %d: %v", len(order), order)
 	}

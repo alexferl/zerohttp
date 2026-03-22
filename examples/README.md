@@ -23,6 +23,7 @@ Basic functionality that doesn't require external dependencies beyond the standa
 - [**`healthcheck/`**](core/healthcheck/) - Health check endpoints
 - [**`hello_world/`**](core/hello_world/) - Simplest possible server
 - [**`lifecycle/`**](core/lifecycle/) - Server lifecycle hooks
+- [**`logger/`**](core/logger/) - Log level filtering
 - [**`metrics/`**](core/metrics/) - Prometheus metrics endpoint
 - [**`pprof/`**](core/pprof/) - Performance profiling endpoints
 - [**`problem_detail/`**](core/problem_detail/) - RFC 7807 Problem Detail responses
