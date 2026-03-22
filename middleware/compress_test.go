@@ -1242,3 +1242,90 @@ func (p *testProvider) GetEncoder(encoding string) config.CompressionEncoder {
 	}
 	return nil
 }
+
+// TestCompress_WriteHeaderBeforeWrite tests that calling WriteHeader before Write
+// still works correctly with compression middleware
+func TestCompress_WriteHeaderBeforeWrite(t *testing.T) {
+	t.Run("status code is preserved when WriteHeader is called before Write", func(t *testing.T) {
+		mw := Compress(config.CompressConfig{
+			Types: []string{"text/html"},
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)
+			_, _ = w.Write([]byte("<html><body>Not Found</body></html>"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("expected status code %d, got %d", http.StatusNotFound, rr.Code)
+		}
+
+		if rr.Header().Get(httpx.HeaderContentEncoding) != httpx.ContentEncodingGzip {
+			t.Errorf("expected Content-Encoding=%q, got %q", httpx.ContentEncodingGzip, rr.Header().Get(httpx.HeaderContentEncoding))
+		}
+	})
+
+	t.Run("non-200 status codes work correctly", func(t *testing.T) {
+		mw := Compress(config.CompressConfig{
+			Types: []string{"application/json"},
+		})
+
+		testCases := []int{
+			http.StatusBadRequest,
+			http.StatusUnauthorized,
+			http.StatusForbidden,
+			http.StatusNotFound,
+			http.StatusInternalServerError,
+		}
+
+		for _, status := range testCases {
+			t.Run(fmt.Sprintf("status_%d", status), func(t *testing.T) {
+				handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(status)
+					w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+					_, _ = w.Write([]byte(`{"error":"test"}`))
+				}))
+
+				req := httptest.NewRequest(http.MethodGet, "/test", nil)
+				req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+				rr := httptest.NewRecorder()
+
+				handler.ServeHTTP(rr, req)
+
+				if rr.Code != status {
+					t.Errorf("expected status code %d, got %d", status, rr.Code)
+				}
+			})
+		}
+	})
+
+	t.Run("multiple WriteHeader calls use first status", func(t *testing.T) {
+		mw := Compress(config.CompressConfig{
+			Types: []string{"text/plain"},
+		})
+
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusOK) // Should be ignored
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
+			_, _ = w.Write([]byte("content"))
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set(httpx.HeaderAcceptEncoding, httpx.ContentEncodingGzip)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("expected status code %d, got %d", http.StatusNotFound, rr.Code)
+		}
+	})
+}

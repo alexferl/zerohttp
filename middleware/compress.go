@@ -159,6 +159,8 @@ func (c *Compressor) Handler(next http.Handler) http.Handler {
 			}()
 		}
 		defer func() {
+			// Flush headers if not already flushed (e.g., for HEAD requests that don't write body)
+			cw.flushHeader()
 			// Record metric for encoding used
 			enc := encoding
 			if enc == "" {
@@ -244,6 +246,8 @@ type compressResponseWriter struct {
 	wroteHeader      bool
 	compressible     bool
 	isHeadRequest    bool
+	statusCode       int  // stored status for deferred WriteHeader
+	headerFlushed    bool // whether headers have been flushed to underlying ResponseWriter
 }
 
 func (cw *compressResponseWriter) isCompressible() bool {
@@ -266,13 +270,25 @@ func (cw *compressResponseWriter) WriteHeader(code int) {
 		return
 	}
 	cw.wroteHeader = true
-	defer cw.ResponseWriter.WriteHeader(code)
+	cw.statusCode = code
+	// Don't call underlying WriteHeader yet - defer until Write() is called
+	// This allows handlers to set status before writing body without breaking compression
+}
 
-	if cw.Header().Get(httpx.HeaderContentEncoding) != "" {
+// flushHeader writes the stored status and headers to the underlying ResponseWriter.
+// This is called on the first Write() to ensure headers are sent with the correct status.
+func (cw *compressResponseWriter) flushHeader() {
+	if cw.headerFlushed {
 		return
 	}
+	cw.headerFlushed = true
 
-	if cw.encoding != "" {
+	code := cw.statusCode
+	if code == 0 {
+		code = http.StatusOK
+	}
+
+	if cw.Header().Get(httpx.HeaderContentEncoding) == "" && cw.encoding != "" {
 		isCompressible := cw.isCompressible()
 		contentType := cw.Header().Get(httpx.HeaderContentType)
 
@@ -289,12 +305,12 @@ func (cw *compressResponseWriter) WriteHeader(code int) {
 			cw.compressible = true
 		}
 	}
+
+	cw.ResponseWriter.WriteHeader(code)
 }
 
 func (cw *compressResponseWriter) Write(p []byte) (int, error) {
-	if !cw.wroteHeader {
-		cw.WriteHeader(http.StatusOK)
-	}
+	cw.flushHeader()
 	// For HEAD requests, don't write body to response.
 	// We can't set Content-Length correctly because:
 	// 1. WriteHeader is already called by this point
