@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 )
 
 // Logger defines the interface for logging in the framework
@@ -152,4 +153,33 @@ func formatValue(v any) string {
 	default:
 		return fmt.Sprint(val)
 	}
+}
+
+// logWriter is an io.Writer adapter that writes to a Logger.
+// It's used to bridge Go's standard log package with structured loggers.
+type logWriter struct {
+	logger Logger
+}
+
+// Write implements io.Writer, writing the message to the underlying logger.
+// It trims trailing newlines for cleaner log output.
+func (w *logWriter) Write(p []byte) (n int, err error) {
+	msg := strings.TrimSuffix(string(p), "\n")
+	msg = strings.TrimSuffix(msg, "\r")
+	w.logger.Error(msg)
+	return len(p), nil
+}
+
+// StdLogger returns a standard library *log.Logger that writes to the provided Logger.
+// This is useful for integrating with libraries that expect a standard logger,
+// such as http.Server.ErrorLog.
+//
+// Example usage with http.Server:
+//
+//	logger := log.NewZerologLogger() // or any Logger implementation
+//	server := &http.Server{
+//	    ErrorLog: log.StdLogger(logger),
+//	}
+func StdLogger(logger Logger) *log.Logger {
+	return log.New(&logWriter{logger: logger}, "", 0)
 }

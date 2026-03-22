@@ -204,3 +204,46 @@ func TestChainedWithFields(t *testing.T) {
 		}
 	}
 }
+
+func TestStdLogger(t *testing.T) {
+	logger, buf := createTestLogger()
+
+	stdLogger := StdLogger(logger)
+
+	stdLogger.Println("TLS handshake error: test")
+
+	output := buf.String()
+	if !strings.Contains(output, "[ERROR]") {
+		t.Errorf("expected output to contain '[ERROR]', got '%s'", output)
+	}
+	if !strings.Contains(output, "TLS handshake error: test") {
+		t.Errorf("expected output to contain 'TLS handshake error: test', got '%s'", output)
+	}
+	if strings.Contains(output, "\n\n") {
+		t.Errorf("expected no double newlines, output had double newline: '%s'", output)
+	}
+}
+
+func TestLogWriter(t *testing.T) {
+	logger, buf := createTestLogger()
+	writer := &logWriter{logger: logger}
+
+	n, err := writer.Write([]byte("test message\n"))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if n != 13 {
+		t.Errorf("expected 13 bytes written, got %d", n)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "[ERROR]") {
+		t.Errorf("expected output to contain '[ERROR]', got '%s'", output)
+	}
+	if !strings.Contains(output, "test message") {
+		t.Errorf("expected output to contain 'test message', got '%s'", output)
+	}
+	if strings.Contains(output, "\n\n") {
+		t.Errorf("expected no double newlines from trimming, got: '%s'", output)
+	}
+}

@@ -183,10 +183,10 @@ func New(cfg ...config.Config) *Server {
 	router.SetLogger(logger)
 	router.SetConfig(c)
 
-	server := createHTTPServer(c)
-	tlsServer := createTLSServer(c)
+	server := createHTTPServer(c, logger)
+	tlsServer := createTLSServer(c, logger)
 	registry := createMetricsRegistry(c)
-	metricsServer := createMetricsServer(c, registry)
+	metricsServer := createMetricsServer(c, registry, logger)
 
 	baseCtx, cancelBaseCtx := context.WithCancel(context.Background())
 
@@ -761,8 +761,11 @@ func createLogger(c config.Config) log.Logger {
 }
 
 // createHTTPServer creates the HTTP server from config.
-func createHTTPServer(c config.Config) *http.Server {
+func createHTTPServer(c config.Config, logger log.Logger) *http.Server {
 	if c.Server != nil {
+		if c.Server.ErrorLog == nil {
+			c.Server.ErrorLog = log.StdLogger(logger)
+		}
 		return c.Server
 	}
 	return &http.Server{
@@ -772,12 +775,16 @@ func createHTTPServer(c config.Config) *http.Server {
 		WriteTimeout:      DefaultWriteTimeout,
 		IdleTimeout:       DefaultIdleTimeout,
 		MaxHeaderBytes:    1 << 20, // 1 MB
+		ErrorLog:          log.StdLogger(logger),
 	}
 }
 
 // createTLSServer creates the TLS server from config if TLS is configured.
-func createTLSServer(c config.Config) *http.Server {
+func createTLSServer(c config.Config, logger log.Logger) *http.Server {
 	if c.TLS.Server != nil {
+		if c.TLS.Server.ErrorLog == nil {
+			c.TLS.Server.ErrorLog = log.StdLogger(logger)
+		}
 		return c.TLS.Server
 	}
 	if !needsTLSServer(c) {
@@ -790,6 +797,7 @@ func createTLSServer(c config.Config) *http.Server {
 		WriteTimeout:      DefaultWriteTimeout,
 		IdleTimeout:       DefaultIdleTimeout,
 		MaxHeaderBytes:    1 << 20, // 1 MB
+		ErrorLog:          log.StdLogger(logger),
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			NextProtos: []string{"h2", "http/1.1"},
@@ -817,7 +825,7 @@ func createMetricsRegistry(c config.Config) metrics.Registry {
 
 // createMetricsServer creates a separate metrics server if ServerAddr indicates a separate server.
 // Returns nil if ServerAddr is empty (metrics on main server) or metrics disabled.
-func createMetricsServer(c config.Config, registry metrics.Registry) *http.Server {
+func createMetricsServer(c config.Config, registry metrics.Registry, logger log.Logger) *http.Server {
 	if registry == nil {
 		return nil
 	}
@@ -843,6 +851,7 @@ func createMetricsServer(c config.Config, registry metrics.Registry) *http.Serve
 		WriteTimeout:      DefaultWriteTimeout,
 		IdleTimeout:       DefaultIdleTimeout,
 		Handler:           handler,
+		ErrorLog:          log.StdLogger(logger),
 	}
 }
 
