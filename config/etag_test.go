@@ -12,8 +12,8 @@ func TestDefaultETagConfig(t *testing.T) {
 		t.Errorf("expected default algorithm to be FNV, got %s", cfg.Algorithm)
 	}
 
-	if cfg.Weak == nil || !*cfg.Weak {
-		t.Error("expected default Weak to be true")
+	if cfg.Weak == nil || *cfg.Weak {
+		t.Error("expected default Weak to be false")
 	}
 
 	if cfg.MaxBufferSize != 1024*1024 {

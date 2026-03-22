@@ -260,13 +260,45 @@ func (cw *compressResponseWriter) isCompressible() bool {
 	return false
 }
 
+// shouldCompress returns true if the response should be compressed based on various criteria
+func (cw *compressResponseWriter) shouldCompress(code int) bool {
+	// Skip 1xx Informational, 204 No Content, and 304 Not Modified
+	// These status codes don't have bodies per RFC 7230
+	if code < 200 || code == http.StatusNoContent || code == http.StatusNotModified {
+		return false
+	}
+
+	// Skip if Content-Encoding already set (already encoded)
+	if cw.Header().Get(httpx.HeaderContentEncoding) != "" {
+		return false
+	}
+
+	// Skip 206 Partial Content (range requests should not be transformed)
+	if code == http.StatusPartialContent {
+		return false
+	}
+
+	// Skip if Cache-Control: no-transform is set
+	cacheControl := cw.Header().Get(httpx.HeaderCacheControl)
+	if strings.Contains(cacheControl, httpx.CacheControlNoTransform) {
+		return false
+	}
+
+	// Skip if no encoding was selected
+	if cw.encoding == "" {
+		return false
+	}
+
+	return true
+}
+
 func (cw *compressResponseWriter) WriteHeader(code int) {
 	if cw.wroteHeader {
 		return
 	}
 	cw.wroteHeader = true
 
-	if cw.Header().Get(httpx.HeaderContentEncoding) == "" && cw.encoding != "" {
+	if cw.shouldCompress(code) {
 		isCompressible := cw.isCompressible()
 		contentType := cw.Header().Get(httpx.HeaderContentType)
 
