@@ -29,6 +29,29 @@
 //	logger := log.GetGlobalLogger()
 //	logger.Info("Server starting", log.F("port", 8080))
 //
+// # Log Levels
+//
+// The default logger supports log level filtering. Messages below the configured
+// level are silently discarded.
+//
+// Available levels (in order of verbosity):
+//
+//	log.DebugLevel // 0 - most verbose
+//	log.InfoLevel  // 1 - default
+//	log.WarnLevel  // 2
+//	log.ErrorLevel // 3
+//	log.PanicLevel // 4
+//	log.FatalLevel // 5 - least verbose
+//
+// Set the log level:
+//
+//	logger := log.NewDefaultLogger()
+//	logger.SetLevel(log.DebugLevel) // Show all messages
+//
+// Get the current log level:
+//
+//	level := logger.GetLevel()
+//
 // # Using Fields
 //
 // Create structured log entries with fields:

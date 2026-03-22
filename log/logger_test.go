@@ -430,3 +430,143 @@ func TestLogAllLevelColors(t *testing.T) {
 		level.fn("test message for " + level.name)
 	}
 }
+
+func TestLogLevelFiltering(t *testing.T) {
+	tests := []struct {
+		name          string
+		setLevel      LogLevel
+		logLevel      LogLevel
+		shouldLog     bool
+		expectedLevel string
+	}{
+		{"Debug at Debug level", DebugLevel, DebugLevel, true, "[DBG]"},
+		{"Info at Debug level", DebugLevel, InfoLevel, true, "[INF]"},
+		{"Error at Debug level", DebugLevel, ErrorLevel, true, "[ERR]"},
+		{"Debug at Info level", InfoLevel, DebugLevel, false, ""},
+		{"Info at Info level", InfoLevel, InfoLevel, true, "[INF]"},
+		{"Warn at Info level", InfoLevel, WarnLevel, true, "[WRN]"},
+		{"Debug at Warn level", WarnLevel, DebugLevel, false, ""},
+		{"Info at Warn level", WarnLevel, InfoLevel, false, ""},
+		{"Warn at Warn level", WarnLevel, WarnLevel, true, "[WRN]"},
+		{"Error at Warn level", WarnLevel, ErrorLevel, true, "[ERR]"},
+		{"Info at Error level", ErrorLevel, InfoLevel, false, ""},
+		{"Error at Error level", ErrorLevel, ErrorLevel, true, "[ERR]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, buf := createTestLogger()
+			logger.SetLevel(tt.setLevel)
+
+			switch tt.logLevel {
+			case DebugLevel:
+				logger.Debug("test message")
+			case InfoLevel:
+				logger.Info("test message")
+			case WarnLevel:
+				logger.Warn("test message")
+			case ErrorLevel:
+				logger.Error("test message")
+			}
+
+			output := buf.String()
+			if tt.shouldLog {
+				if !strings.Contains(output, tt.expectedLevel) {
+					t.Errorf("expected output to contain '%s', got '%s'", tt.expectedLevel, output)
+				}
+				if !strings.Contains(output, "test message") {
+					t.Errorf("expected output to contain 'test message', got '%s'", output)
+				}
+			} else {
+				if output != "" {
+					t.Errorf("expected no output, got '%s'", output)
+				}
+			}
+		})
+	}
+}
+
+func TestDefaultLogLevel(t *testing.T) {
+	logger := NewDefaultLogger()
+	if logger.GetLevel() != InfoLevel {
+		t.Errorf("expected default log level to be InfoLevel, got %v", logger.GetLevel())
+	}
+}
+
+func TestSetAndGetLevel(t *testing.T) {
+	logger := NewDefaultLogger()
+
+	// Test setting different levels
+	levels := []LogLevel{DebugLevel, InfoLevel, WarnLevel, ErrorLevel, PanicLevel, FatalLevel}
+	for _, level := range levels {
+		logger.SetLevel(level)
+		if logger.GetLevel() != level {
+			t.Errorf("expected level %v, got %v", level, logger.GetLevel())
+		}
+	}
+}
+
+func TestLogLevelString(t *testing.T) {
+	tests := []struct {
+		level    LogLevel
+		expected string
+	}{
+		{DebugLevel, "DBG"},
+		{InfoLevel, "INF"},
+		{WarnLevel, "WRN"},
+		{ErrorLevel, "ERR"},
+		{PanicLevel, "PNC"},
+		{FatalLevel, "FTL"},
+		{LogLevel(999), "UNK"}, // Unknown level
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			result := tt.level.String()
+			if result != tt.expected {
+				t.Errorf("expected '%s', got '%s'", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestWithFieldsPreservesLevel(t *testing.T) {
+	logger, _ := createTestLogger()
+	logger.SetLevel(WarnLevel)
+
+	newLogger := logger.WithFields(F("key", "value"))
+	defaultLogger, ok := newLogger.(*DefaultLogger)
+	if !ok {
+		t.Fatal("WithFields should return *DefaultLogger")
+	}
+
+	if defaultLogger.GetLevel() != WarnLevel {
+		t.Errorf("expected level to be preserved as WarnLevel, got %v", defaultLogger.GetLevel())
+	}
+}
+
+func TestPanicWithLevelFiltering(t *testing.T) {
+	// Test that Panic always panics even when filtered
+	logger, buf := createTestLogger()
+	logger.SetLevel(FatalLevel) // Set level higher than Panic
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic but none occurred")
+		}
+		// Panic should not have logged since level is Fatal
+		output := buf.String()
+		if strings.Contains(output, "[PNC]") {
+			t.Error("Panic should not log when level is Fatal")
+		}
+	}()
+
+	logger.Panic("panic message")
+}
+
+func TestFatalWithLevelFiltering(t *testing.T) {
+	// We can't test Fatal since it calls os.Exit, but we can verify it exists
+	logger, _ := createTestLogger()
+	logger.SetLevel(FatalLevel)
+	_ = logger.Fatal
+}

@@ -23,6 +23,44 @@ const (
 	colorWhiteOnBlue = "\033[97;44m"
 )
 
+// LogLevel represents the severity level of a log message.
+type LogLevel int
+
+const (
+	// DebugLevel is the most verbose level, used for detailed debugging information.
+	DebugLevel LogLevel = iota
+	// InfoLevel is used for general informational messages.
+	InfoLevel
+	// WarnLevel is used for warning messages that indicate potential issues.
+	WarnLevel
+	// ErrorLevel is used for error messages.
+	ErrorLevel
+	// PanicLevel is used for critical errors that cause panics.
+	PanicLevel
+	// FatalLevel is used for critical errors that cause the application to exit.
+	FatalLevel
+)
+
+// String returns the string representation of the log level.
+func (l LogLevel) String() string {
+	switch l {
+	case DebugLevel:
+		return "DBG"
+	case InfoLevel:
+		return "INF"
+	case WarnLevel:
+		return "WRN"
+	case ErrorLevel:
+		return "ERR"
+	case PanicLevel:
+		return "PNC"
+	case FatalLevel:
+		return "FTL"
+	default:
+		return "UNK"
+	}
+}
+
 // levelColors maps log levels to ANSI colors
 var levelColors = map[string]string{
 	"DBG": colorWhiteOnBlue,
@@ -89,17 +127,20 @@ type DefaultLogger struct {
 	logger   *log.Logger
 	fields   []Field
 	colorize bool
+	level    LogLevel
 }
 
 // NewDefaultLogger creates a new default logger instance.
 // It uses Go's standard log package with stdout output and standard flags.
 // Colors are enabled by default for TTY terminals, unless NO_COLOR is set
 // or running in a CI environment.
+// The default log level is InfoLevel.
 func NewDefaultLogger() *DefaultLogger {
 	return &DefaultLogger{
 		logger:   log.New(os.Stdout, "", log.LstdFlags),
 		fields:   make([]Field, 0),
 		colorize: shouldColorize(),
+		level:    InfoLevel,
 	}
 }
 
@@ -144,35 +185,59 @@ func (l *DefaultLogger) SetColorize(enabled bool) {
 	l.colorize = enabled
 }
 
+// SetLevel sets the minimum log level for the logger.
+// Messages with a level lower than the set level will be discarded.
+// Default level is InfoLevel.
+func (l *DefaultLogger) SetLevel(level LogLevel) {
+	l.level = level
+}
+
+// GetLevel returns the current minimum log level.
+func (l *DefaultLogger) GetLevel() LogLevel {
+	return l.level
+}
+
 // Debug logs a debug message with optional fields
 func (l *DefaultLogger) Debug(msg string, fields ...Field) {
-	l.logWithLevel("DBG", msg, fields...)
+	if l.level <= DebugLevel {
+		l.logWithLevel(DebugLevel, msg, fields...)
+	}
 }
 
 // Info logs an info message with optional fields
 func (l *DefaultLogger) Info(msg string, fields ...Field) {
-	l.logWithLevel("INF", msg, fields...)
+	if l.level <= InfoLevel {
+		l.logWithLevel(InfoLevel, msg, fields...)
+	}
 }
 
 // Warn logs a warning message with optional fields
 func (l *DefaultLogger) Warn(msg string, fields ...Field) {
-	l.logWithLevel("WRN", msg, fields...)
+	if l.level <= WarnLevel {
+		l.logWithLevel(WarnLevel, msg, fields...)
+	}
 }
 
 // Error logs an error message with optional fields
 func (l *DefaultLogger) Error(msg string, fields ...Field) {
-	l.logWithLevel("ERR", msg, fields...)
+	if l.level <= ErrorLevel {
+		l.logWithLevel(ErrorLevel, msg, fields...)
+	}
 }
 
 // Panic logs a panic message with optional fields and then panics
 func (l *DefaultLogger) Panic(msg string, fields ...Field) {
-	l.logWithLevel("PNC", msg, fields...)
+	if l.level <= PanicLevel {
+		l.logWithLevel(PanicLevel, msg, fields...)
+	}
 	panic(msg)
 }
 
 // Fatal logs a fatal message with optional fields and then exits with code 1
 func (l *DefaultLogger) Fatal(msg string, fields ...Field) {
-	l.logWithLevel("FTL", msg, fields...)
+	if l.level <= FatalLevel {
+		l.logWithLevel(FatalLevel, msg, fields...)
+	}
 	os.Exit(1)
 }
 
@@ -184,8 +249,10 @@ func (l *DefaultLogger) WithFields(fields ...Field) Logger {
 	copy(newFields[len(l.fields):], fields)
 
 	return &DefaultLogger{
-		logger: l.logger,
-		fields: newFields,
+		logger:   l.logger,
+		fields:   newFields,
+		colorize: l.colorize,
+		level:    l.level,
 	}
 }
 
@@ -199,18 +266,19 @@ func (l *DefaultLogger) WithContext(ctx context.Context) Logger {
 // logWithLevel logs a message at the specified level with fields.
 // It formats the message with the level prefix and appends all fields.
 // If colorize is enabled, it applies ANSI color codes to the level and field keys.
-func (l *DefaultLogger) logWithLevel(level, msg string, fields ...Field) {
+func (l *DefaultLogger) logWithLevel(level LogLevel, msg string, fields ...Field) {
 	allFields := append(l.fields, fields...)
 
+	levelStr := level.String()
 	var b strings.Builder
 	if l.colorize {
-		levelColor := levelColors[level]
+		levelColor := levelColors[levelStr]
 		if levelColor == "" {
 			levelColor = colorReset
 		}
 		b.WriteString(levelColor)
 		b.WriteString("[")
-		b.WriteString(level)
+		b.WriteString(levelStr)
 		b.WriteString("]")
 		b.WriteString(colorReset)
 		b.WriteString(" ")
@@ -230,7 +298,7 @@ func (l *DefaultLogger) logWithLevel(level, msg string, fields ...Field) {
 		}
 	} else {
 		b.WriteString("[")
-		b.WriteString(level)
+		b.WriteString(levelStr)
 		b.WriteString("] ")
 		b.WriteString(msg)
 		if len(allFields) > 0 {
