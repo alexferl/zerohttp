@@ -78,7 +78,7 @@ The Recover middleware is automatically included via `DefaultMiddlewares()`:
 To customize recover behavior, add it manually:
 
 ```go
-app.Use(middleware.Recover(logger, config.RecoverConfig{
+app.Use(recover.New(logger, recover.Config{
     EnableStackTrace: true,   // Include stack traces in logs
     StackSize:        4096,   // Stack trace buffer size (bytes)
     RequestIDHeader:  "X-Request-Id",
@@ -88,10 +88,10 @@ app.Use(middleware.Recover(logger, config.RecoverConfig{
 Or disable default middlewares and add your own:
 
 ```go
-app := zh.New(config.Config{
+app := zh.New(zh.Config{
     DisableDefaultMiddlewares: true,
 })
-app.Use(middleware.Recover(app.Logger(), config.DefaultRecoverConfig))
+app.Use(recover.New(app.Logger(), recover.DefaultConfig))
 ```
 
 ## Security Note

@@ -8,10 +8,10 @@
 //
 // No tracing is enabled by default. To enable tracing:
 //
-//	app := zh.New(config.Config{
+//	app := zh.New(zh.Config{
 //	    Tracer: myTracer,
 //	})
-//	app.Use(middleware.Tracer(myTracer))
+//	app.Use(tracer.New(myTracer))
 //
 // # Accessing Spans in Handlers
 //

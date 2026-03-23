@@ -16,7 +16,7 @@ import (
 //
 // Example:
 //
-//	middleware.HostValidation(config.HostValidationConfig{
+//	host.New(host.Config{
 //	    AllowedHosts:    []string{"api.example.com", "example.com"},
 //	    AllowSubdomains: true,
 //	})

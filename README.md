@@ -145,14 +145,14 @@ app.GET("/docs", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) err
 zerohttp uses struct-based configuration:
 
 ```go
-app := zh.New(config.Config{
+app := zh.New(zh.Config{
     Addr: ":8080",
-    TLS: config.TLSConfig{
+    TLS: zh.TLSConfig{
         Addr:     ":8443",
         CertFile: "cert.pem",
         KeyFile:  "key.pem",
     },
-    RequestBodySize: config.RequestBodySizeConfig{
+    RequestBodySize: requestbodysize.Config{
         MaxBytes: 5 * 1024 * 1024, // 5MB
     },
 })
@@ -168,7 +168,7 @@ These middlewares are applied automatically:
 - **Security Headers** - CSP, HSTS, X-Frame-Options, etc.
 - **Request Logging** - Structured request/response logging
 
-Disable or customize via `config.Config`.
+Disable or customize via `zh.Config`.
 
 ## Testing
 

@@ -395,14 +395,16 @@
 // zerohttp provides pluggable interfaces for optional features.
 // Configure via Config:
 //
-//	app := zh.New(config.Config{
-//	    Validator:          myValidator,
-//	    Tracer:             myTracer,
-//	    AutocertManager:    myCertManager,
-//	    HTTP3Server:        myH3Server,
-//	    SSEProvider:        mySSEProvider,
-//	    WebSocketUpgrader:  myWSUpgrader,
-//	    WebTransportServer: myWTServer,
+//	app := zh.New(zh.Config{
+//	    Validator: myValidator,
+//	    Tracer:    myTracer,
+//	    Extensions: zh.ExtensionsConfig{
+//	        AutocertManager:    myCertManager,
+//	        HTTP3Server:        myH3Server,
+//	        SSEProvider:        mySSEProvider,
+//	        WebSocketUpgrader:  myWSUpgrader,
+//	        WebTransportServer: myWTServer,
+//	    },
 //	})
 //
 // # Custom Validator
@@ -424,14 +426,14 @@
 //	    })
 //	}
 //
-//	app := zh.New(config.Config{Validator: &myValidator{v: validator.New()}})
+//	app := zh.New(zh.Config{Validator: &myValidator{v: validator.New()}})
 //
 // # Distributed Tracing
 //
 // Integrate your preferred tracing solution:
 //
-//	app := zh.New(config.Config{Tracer: myTracer})
-//	app.Use(middleware.Tracer(myTracer))
+//	app := zh.New(zh.Config{Tracer: myTracer})
+//	app.Use(tracer.New(myTracer))
 //
 //	// In handlers
 //	span := trace.SpanFromContext(r.Context())
@@ -449,7 +451,11 @@
 //	    HostPolicy: autocert.HostWhitelist("example.com"),
 //	}
 //
-//	app := zh.New(config.Config{AutocertManager: manager})
+//	app := zh.New(zh.Config{
+//	    Extensions: zh.ExtensionsConfig{
+//	        AutocertManager: manager,
+//	    },
+//	})
 //	app.StartAutoTLS()
 //
 // # HTTP/3
@@ -468,19 +474,22 @@
 //
 // Real-time unidirectional streaming:
 //
-//	app := zh.New(config.Config{
-//	    SSEProvider: zh.NewDefaultProvider(),
+//	app := zh.New(zh.Config{
+//	    Extensions: zh.ExtensionsConfig{
+//	        SSEProvider: sse.NewDefaultProvider(),
+//	    },
 //	})
 //
 //	app.GET("/events", func(w http.ResponseWriter, r *http.Request) error {
-//	    stream, err := app.SSEProvider().NewSSE(w, r)
+//	    provider := app.SSEProvider()
+//	    stream, err := provider.NewSSE(w, r)
 //	    if err != nil {
 //	        return err
 //	    }
 //	    defer stream.Close()
 //
 //	    for i := 0; i < 10; i++ {
-//	        stream.Send(zh.SSEEvent{Name: "message", Data: []byte("hello")})
+//	        stream.Send(sse.Event{Name: "message", Data: []byte("hello")})
 //	        time.Sleep(1 * time.Second)
 //	    }
 //	    return nil
@@ -490,8 +499,10 @@
 //
 // Real-time bidirectional communication. Bring your own library:
 //
-//	app := zh.New(config.Config{
-//	    WebSocketUpgrader: &myUpgrader{upgrader: websocketUpgrader},
+//	app := zh.New(zh.Config{
+//	    Extensions: zh.ExtensionsConfig{
+//	        WebSocketUpgrader: &myUpgrader{upgrader: websocketUpgrader},
+//	    },
 //	})
 //
 //	app.GET("/ws", func(w http.ResponseWriter, r *http.Request) error {
@@ -517,12 +528,14 @@
 //
 // # Configuration
 //
-// Configure the server using [config.Config]:
+// Configure the server using [Config]:
 //
-//	app := zh.New(config.Config{
-//	    ReadTimeout:    10 * time.Second,
-//	    WriteTimeout:   15 * time.Second,
-//	    MaxHeaderBytes: 1 << 20,
+//	app := zh.New(zh.Config{
+//	    Server: &http.Server{
+//	        ReadTimeout:    10 * time.Second,
+//	        WriteTimeout:   15 * time.Second,
+//	        MaxHeaderBytes: 1 << 20,
+//	    },
 //	})
 //
 // # Server Lifecycle
@@ -530,17 +543,23 @@
 // Start the server with various methods:
 //
 //	// HTTP
-//	app.Start()                    // Uses PORT env var or :8080
-//	app.ListenAndServe(":3000")    // Custom port
+//	app.Start()              // Uses config.Addr or :8080
+//	app.ListenAndServe()     // Uses configured address
 //
 //	// HTTPS
 //	app.StartTLS("cert.pem", "key.pem")
-//	app.StartAutoTLS()             // Let's Encrypt
+//	app.StartAutoTLS()       // Let's Encrypt
 //
 //	// With graceful shutdown
-//	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+//	go app.Start()
+//
+//	quit := make(chan os.Signal, 1)
+//	signal.Notify(quit, os.Interrupt)
+//	<-quit
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 //	defer cancel()
-//	if err := app.StartWithContext(ctx); err != nil {
+//	if err := app.Shutdown(ctx); err != nil {
 //	    log.Fatal(err)
 //	}
 //
@@ -556,7 +575,7 @@
 //
 //	    zhtest.AssertWith(t, w).
 //	        Status(http.StatusOK).
-//	        httpx.HeaderContentType, "application/json").
+//	        Header("Content-Type", "application/json").
 //	        JSONPathEqual("name", "John Doe")
 //	}
 //

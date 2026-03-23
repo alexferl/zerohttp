@@ -18,7 +18,9 @@
 // Create an SSE endpoint using the server helper:
 //
 //	app := zh.New(zh.Config{
-//	    SSEProvider: sse.NewDefaultProvider(),
+//	    Extensions: zh.ExtensionsConfig{
+//	        SSEProvider: sse.NewDefaultProvider(),
+//	    },
 //	})
 //
 //	app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
@@ -97,8 +99,10 @@
 //	    return myCustomSSE(w, r)
 //	}
 //
-//	app := zh.New(config.Config{
-//	    SSEProvider: &MyProvider{},
+//	app := zh.New(zh.Config{
+//	    Extensions: zh.ExtensionsConfig{
+//	        SSEProvider: &MyProvider{},
+//	    },
 //	})
 //
 // # Event Format

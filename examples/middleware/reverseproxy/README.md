@@ -53,7 +53,7 @@ for i in {1..5}; do curl http://localhost:8080/lb/; done
 
 ### Simple Proxy
 ```go
-rp, cleanup := middleware.ReverseProxy(config.ReverseProxyConfig{
+rp, cleanup := reverseproxy.New(reverseproxy.Config{
     Target:      "http://localhost:8081",
     StripPrefix: "/api",
 })
@@ -62,12 +62,12 @@ defer cleanup()
 
 ### Load Balancer
 ```go
-rp, cleanup := middleware.ReverseProxy(config.ReverseProxyConfig{
-    Targets: []config.Backend{
+rp, cleanup := reverseproxy.New(reverseproxy.Config{
+    Targets: []reverseproxy.Backend{
         {Target: "http://backend1:8081", Weight: 1},
         {Target: "http://backend2:8081", Weight: 2},
     },
-    LoadBalancer:        config.RoundRobin,
+    LoadBalancer:        reverseproxy.RoundRobin,
     HealthCheckInterval: 10 * time.Second,
     HealthCheckPath:     "/health",
 })
@@ -76,7 +76,7 @@ defer cleanup()
 
 ### Custom Headers
 ```go
-rp, cleanup := middleware.ReverseProxy(config.ReverseProxyConfig{
+rp, cleanup := reverseproxy.New(reverseproxy.Config{
     Target: "http://api.example.com",
     SetHeaders: map[string]string{
         "X-Proxy-By": "zerohttp",

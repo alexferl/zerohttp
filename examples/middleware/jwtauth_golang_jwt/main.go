@@ -61,7 +61,7 @@ func (s *GolangJWTTokenStore) Generate(_ context.Context, claims jwtauth.JWTClai
 		}
 	}
 
-	// exp is already set by middleware.GenerateAccessToken/GenerateRefreshToken
+	// exp is already set by jwtauth.GenerateAccessToken/GenerateRefreshToken
 	// Just add type claim for refresh tokens
 	if tokenType == jwtauth.RefreshToken {
 		mapClaims["type"] = jwtauth.TokenTypeRefresh
