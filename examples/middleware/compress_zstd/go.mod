@@ -3,8 +3,8 @@ module github.com/alexferl/zerohttp/examples/huma
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.0.0
-	github.com/klauspost/compress v1.18.4
+	github.com/alexferl/zerohttp v0.58.0
+	github.com/klauspost/compress v1.18.5
 )
 
 replace github.com/alexferl/zerohttp => ../../..

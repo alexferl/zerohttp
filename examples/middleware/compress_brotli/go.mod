@@ -3,7 +3,7 @@ module github.com/alexferl/zerohttp/examples/huma
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.0.0
+	github.com/alexferl/zerohttp v0.58.0
 	github.com/andybalholm/brotli v1.2.0
 )
 

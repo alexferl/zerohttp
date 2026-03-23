@@ -3,7 +3,7 @@ module github.com/alexferl/zerohttp/examples/cache_redis
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.0.0
+	github.com/alexferl/zerohttp v0.58.0
 	github.com/redis/go-redis/v9 v9.18.0
 )
 

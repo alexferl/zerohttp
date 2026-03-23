@@ -3,7 +3,7 @@ module github.com/alexferl/zerohttp/examples/websocket
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.0.0
+	github.com/alexferl/zerohttp v0.58.0
 	github.com/gorilla/websocket v1.5.3
 )
 
