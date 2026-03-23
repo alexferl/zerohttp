@@ -13,7 +13,7 @@ import "github.com/alexferl/zerohttp/sse"
 //
 //	app.GET("/events", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 //	    provider := app.SSEProvider()
-//	    sse, err := provider.NewSSE(w, r)
+//	    sse, err := provider.New(w, r)
 //	    if err != nil {
 //	        return err
 //	    }

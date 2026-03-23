@@ -482,7 +482,7 @@
 //
 //	app.GET("/events", func(w http.ResponseWriter, r *http.Request) error {
 //	    provider := app.SSEProvider()
-//	    stream, err := provider.NewSSE(w, r)
+//	    stream, err := provider.New(w, r)
 //	    if err != nil {
 //	        return err
 //	    }
