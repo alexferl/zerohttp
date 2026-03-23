@@ -124,11 +124,6 @@ func IsBindError(err error) bool {
 	return zerrors.IsBindError(err)
 }
 
-// IsBindingError checks if an error is a binding error (should return 400).
-func IsBindingError(err error) bool {
-	return IsBindError(err)
-}
-
 // IsValidationError checks if an error is a validation error (should return 422).
 func IsValidationError(err error) bool {
 	var validationErrorer ValidationErrorer

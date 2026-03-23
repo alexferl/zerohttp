@@ -550,7 +550,7 @@ func TestBindAndValidate(t *testing.T) {
 					t.Errorf("expected error, got nil")
 					return
 				}
-				if tt.isBindingError && !IsBindingError(err) {
+				if tt.isBindingError && !IsBindError(err) {
 					t.Errorf("expected binding error, got %T: %v", err, err)
 				}
 				if !tt.isBindingError && !IsValidationError(err) {
@@ -649,9 +649,9 @@ func TestBindError_Unwrap(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	// Test IsBindingError with nil
-	if IsBindingError(nil) {
-		t.Error("expected IsBindingError(nil) to be false")
+	// Test IsBindError with nil
+	if IsBindError(nil) {
+		t.Error("expected IsBindError(nil) to be false")
 	}
 	// Test errors.As works with wrapped error
 	var bindErr *BindError
