@@ -14,10 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/requestlogger"
 )
 
 var (
@@ -291,7 +290,7 @@ type Router interface {
 	// Config returns the current configuration used by the router.
 	// This configuration controls various aspects of router behavior
 	// including middleware settings and error response handling.
-	Config() config.Config
+	Config() Config
 
 	// SetConfig updates the router's configuration. This affects how
 	// the router handles various behaviors including middleware settings
@@ -299,7 +298,7 @@ type Router interface {
 	//
 	// Note: Changing the configuration affects both regular routes
 	// and 404/405 error responses.
-	SetConfig(config config.Config)
+	SetConfig(config Config)
 }
 
 // Ensure defaultRouter implements Router
@@ -339,7 +338,7 @@ type defaultRouter struct {
 	// config holds the complete configuration for the router including
 	// middleware settings and behavioral options. This configuration
 	// affects how routes and error responses are handled.
-	config config.Config
+	config Config
 
 	// finalizeOnce ensures the router is finalized exactly once, even with concurrent access.
 	// The finalize operation registers the catch-all handler for 404/405 responses.
@@ -353,7 +352,7 @@ type defaultRouter struct {
 //
 //	router := NewRouter(loggingMiddleware, authMiddleware)
 func NewRouter(mw ...func(http.Handler) http.Handler) Router {
-	cfg := config.DefaultConfig
+	cfg := DefaultConfig
 	logger := log.NewDefaultLogger()
 
 	// Initialize the package-level logger for error handling
@@ -609,7 +608,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		if strings.Contains(req.URL.Path, "..") {
 			logger.Warn("Path traversal attempt blocked", log.F("path", req.URL.Path))
 			notFoundHandler.ServeHTTP(w, req)
-			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
+			requestlogger.Log(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
 			return
 		}
 
@@ -619,7 +618,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 		for _, prefix := range apiPrefixes {
 			if strings.HasPrefix(cleanPath, prefix) {
 				notFoundHandler.ServeHTTP(w, req)
-				middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
+				requestlogger.Log(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
 				return
 			}
 		}
@@ -632,7 +631,7 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			if statErr == nil && !stat.IsDir() {
 				rec := &statusCapture{ResponseWriter: w, status: http.StatusOK}
 				fileServer.ServeHTTP(rec, req)
-				middleware.LogRequest(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
+				requestlogger.Log(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
 				return
 			}
 		}
@@ -645,10 +644,10 @@ func (r *defaultRouter) createStaticHandler(filesystem fs.FS, fallback bool, api
 			rec := &statusCapture{ResponseWriter: w, status: http.StatusOK}
 			fileServer.ServeHTTP(rec, req)
 			req.URL.Path = originalPath // Restore NOW, before LogRequest reads req.URL.Path
-			middleware.LogRequest(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
+			requestlogger.Log(logger, requestLoggerConfig, nil, req, rec.status, time.Since(start), "", "")
 		} else {
 			notFoundHandler.ServeHTTP(w, req)
-			middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
+			requestlogger.Log(logger, requestLoggerConfig, nil, req, http.StatusNotFound, time.Since(start), "", "")
 		}
 	})
 }
@@ -688,7 +687,7 @@ func (r *defaultRouter) SetLogger(logger log.Logger) {
 // Config returns the current configuration used by the router.
 // This configuration controls various aspects of router behavior
 // including middleware settings and error response handling.
-func (r *defaultRouter) Config() config.Config {
+func (r *defaultRouter) Config() Config {
 	return r.config
 }
 
@@ -698,7 +697,7 @@ func (r *defaultRouter) Config() config.Config {
 //
 // Note: Changing the configuration affects both regular routes
 // and 404/405 error responses.
-func (r *defaultRouter) SetConfig(cfg config.Config) {
+func (r *defaultRouter) SetConfig(cfg Config) {
 	r.config = cfg
 }
 
@@ -799,7 +798,7 @@ func (r *defaultRouter) catchAllHandler() http.HandlerFunc {
 				w.Header().Set(httpx.HeaderAllow, allowHeader)
 				w.WriteHeader(http.StatusNoContent)
 				if shouldLog {
-					middleware.LogRequest(logger, requestLoggerConfig, nil, req, http.StatusNoContent, time.Since(start), "", "")
+					requestlogger.Log(logger, requestLoggerConfig, nil, req, http.StatusNoContent, time.Since(start), "", "")
 				}
 				return
 			}

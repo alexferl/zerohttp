@@ -7,7 +7,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/requestid"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 	// Endpoint that demonstrates accessing request ID from context
 	app.GET("/trace", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		// Access the request ID from context (added by RequestID middleware)
-		requestID := middleware.GetRequestID(r.Context())
+		requestID := requestid.Get(r.Context())
 
 		// Simulate some work that uses the request ID for logging/tracing
 		start := time.Now()
@@ -35,7 +35,7 @@ func main() {
 
 	// Endpoint that simulates distributed tracing across services
 	app.GET("/chain", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		requestID := middleware.GetRequestID(r.Context())
+		requestID := requestid.Get(r.Context())
 
 		// In a real app, this would call another service with the request ID
 		// propagated in the outgoing request headers
@@ -53,7 +53,7 @@ func main() {
 
 // doWork simulates some async work that uses the request context
 func doWork(ctx context.Context) {
-	requestID := middleware.GetRequestID(ctx)
+	requestID := requestid.Get(ctx)
 	_ = requestID // In real code, you'd log this or include in spans
 
 	// Simulate work

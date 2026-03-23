@@ -31,7 +31,7 @@
 //
 //	zhtest.AssertWith(t, w).
 //	    Status(http.StatusCreated).
-//	    httpx.HeaderContentType, "application/json").
+//	    Header(httpx.HeaderContentType, "application/json").
 //	    JSONPathEqual("name", "John").
 //	    JSONPathEqual("email", "john@example.com")
 //
@@ -48,7 +48,7 @@
 //
 // Test middleware in isolation:
 //
-//	mw := middleware.CORS(config.DefaultCORSConfig)
+//	mw := cors.New(cors.DefaultConfig)
 //	w := zhtest.TestMiddleware(mw, req)
 //	zhtest.AssertWith(t, w).Header(httpx.HeaderAccessControlAllowOrigin, "*")
 //

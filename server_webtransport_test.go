@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/extensions/autocert"
 )
 
 func TestServer_Shutdown_WithWebTransportError(t *testing.T) {
@@ -38,10 +38,10 @@ type mockWebTransportServerWithAutocert struct {
 	mockWebTransportServer
 	mu                                  sync.Mutex
 	listenAndServeTLSWithAutocertCalled bool
-	autocertManager                     config.AutocertManager
+	autocertManager                     autocert.Manager
 }
 
-func (m *mockWebTransportServerWithAutocert) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+func (m *mockWebTransportServerWithAutocert) ListenAndServeTLSWithAutocert(manager autocert.Manager) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.listenAndServeTLSWithAutocertCalled = true
@@ -60,11 +60,11 @@ func TestServer_StartAutoTLS_WithWebTransportAutocert(t *testing.T) {
 	wtServer := &mockWebTransportServerWithAutocert{}
 
 	// Use unique port to avoid conflicts with other tests
-	server := New(config.Config{
-		TLS: config.TLSConfig{
+	server := New(Config{
+		TLS: TLSConfig{
 			Addr: "localhost:28443",
 		},
-		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
+		Extensions: ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetWebTransportServer(wtServer)
 
@@ -104,7 +104,7 @@ func TestServer_StartAutoTLS_WithWebTransportNoAutocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	wtServer := &mockWebTransportServer{} // This doesn't implement WebTransportServerWithAutocert
 
-	server := New(config.Config{Extensions: config.ExtensionsConfig{AutocertManager: mgr}})
+	server := New(Config{Extensions: ExtensionsConfig{AutocertManager: mgr}})
 	server.SetWebTransportServer(wtServer)
 
 	// Run StartAutoTLS in a goroutine since it blocks
@@ -220,7 +220,7 @@ func TestServer_Start_WithWebTransport(t *testing.T) {
 	}
 }
 
-// mockWebTransportServer is a mock implementation of config.WebTransportServer for testing
+// mockWebTransportServer is a mock implementation of WebTransportServer for testing
 type mockWebTransportServer struct {
 	mu                      sync.Mutex
 	listenAndServeTLSCalled bool
@@ -264,7 +264,7 @@ func TestServer_SetWebTransportServer(t *testing.T) {
 
 func TestServer_SetWebTransportServer_WithConfig(t *testing.T) {
 	mockWT := &mockWebTransportServer{}
-	server := New(config.Config{Extensions: config.ExtensionsConfig{WebTransportServer: mockWT}})
+	server := New(Config{Extensions: ExtensionsConfig{WebTransportServer: mockWT}})
 
 	if server.webTransportServer != mockWT {
 		t.Error("Expected WebTransport server to be set via config")

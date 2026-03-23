@@ -5,8 +5,9 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/basicauth"
+	"github.com/alexferl/zerohttp/middleware/ratelimit"
+	"github.com/alexferl/zerohttp/middleware/requestid"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 
 	// API group with common middleware
 	app.Group(func(api zh.Router) {
-		api.Use(middleware.RequestID(config.DefaultConfig.RequestID))
+		api.Use(requestid.New(zh.DefaultConfig.RequestID))
 
 		// Users endpoints
 		api.GET("/users", zh.HandlerFunc(listUsers))
@@ -30,11 +31,11 @@ func main() {
 	})
 
 	// Admin group with authentication middleware
-	adminCfg := config.DefaultBasicAuthConfig
+	adminCfg := basicauth.Config{}
 	adminCfg.Credentials = map[string]string{"admin": "admin"}
 
 	app.Group(func(admin zh.Router) {
-		admin.Use(middleware.BasicAuth(adminCfg))
+		admin.Use(basicauth.New(adminCfg))
 
 		admin.GET("/admin/dashboard", zh.HandlerFunc(dashboard))
 		admin.GET("/admin/settings", zh.HandlerFunc(settings))
@@ -43,14 +44,14 @@ func main() {
 
 	// Nested group example - API v2 with rate limiting
 	app.Group(func(v2 zh.Router) {
-		v2.Use(middleware.RateLimit())
+		v2.Use(ratelimit.New())
 
 		// Public v2 endpoints
 		v2.GET("/v2/public/status", zh.HandlerFunc(status))
 
 		// Authenticated v2 endpoints (nested group)
 		v2.Group(func(auth zh.Router) {
-			auth.Use(middleware.BasicAuth(adminCfg))
+			auth.Use(basicauth.New(adminCfg))
 
 			auth.GET("/v2/profile", zh.HandlerFunc(getProfile))
 			auth.PUT("/v2/profile", zh.HandlerFunc(updateProfile))

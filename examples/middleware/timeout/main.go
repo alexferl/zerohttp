@@ -7,14 +7,13 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/timeout"
 )
 
 func main() {
 	app := zh.New()
 
-	app.Use(middleware.Timeout(config.TimeoutConfig{
+	app.Use(timeout.New(timeout.Config{
 		Timeout: 2 * time.Second,
 		Message: "Request timeout",
 	}))

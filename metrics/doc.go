@@ -11,7 +11,7 @@
 //	app := zh.New() // Metrics automatically available at /metrics
 //
 //	// Access metrics in handlers
-//	app.GET("/orders", func(w http.ResponseWriter, r *http.Request) error {
+//	app.GET("/orders", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 //	    reg := metrics.SafeRegistry(metrics.GetRegistry(r.Context()))
 //	    counter := reg.Counter("orders_total", "status")
 //	    counter.WithLabelValues("completed").Inc()
@@ -41,8 +41,8 @@
 //
 // Customize metrics behavior:
 //
-//	app := zh.New(config.Config{
-//	    Metrics: config.MetricsConfig{
+//	app := zh.New(zh.Config{
+//	    Metrics: metrics.Config{
 //	        Enabled:      true,
 //	        Endpoint:     "/metrics",
 //	        ExcludedPaths: []string{"/health", "/readyz"},

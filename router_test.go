@@ -12,6 +12,7 @@ import (
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/middleware/requestlogger"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -983,7 +984,7 @@ func TestRouter_Configuration(t *testing.T) {
 
 	t.Run("config management", func(t *testing.T) {
 		router := NewRouter()
-		customConfig := config.DefaultConfig
+		customConfig := DefaultConfig
 		customConfig.RequestID.Header = "X-Custom-Request-Id"
 		customConfig.RequestID.Generator = func() string { return "custom-id-12345" }
 
@@ -1600,8 +1601,8 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 func TestShouldLogRequest(t *testing.T) {
 	t.Run("returns true when Enabled is nil (default)", func(t *testing.T) {
 		r := NewRouter().(*defaultRouter)
-		r.SetConfig(config.Config{
-			RequestLogger: config.RequestLoggerConfig{
+		r.SetConfig(Config{
+			RequestLogger: requestlogger.Config{
 				Enabled: nil, // use default
 			},
 		})
@@ -1613,8 +1614,8 @@ func TestShouldLogRequest(t *testing.T) {
 
 	t.Run("returns true when Enabled is explicitly true", func(t *testing.T) {
 		r := NewRouter().(*defaultRouter)
-		r.SetConfig(config.Config{
-			RequestLogger: config.RequestLoggerConfig{
+		r.SetConfig(Config{
+			RequestLogger: requestlogger.Config{
 				Enabled: config.Bool(true),
 			},
 		})
@@ -1626,8 +1627,8 @@ func TestShouldLogRequest(t *testing.T) {
 
 	t.Run("returns false when Enabled is explicitly false", func(t *testing.T) {
 		r := NewRouter().(*defaultRouter)
-		r.SetConfig(config.Config{
-			RequestLogger: config.RequestLoggerConfig{
+		r.SetConfig(Config{
+			RequestLogger: requestlogger.Config{
 				Enabled: config.Bool(false),
 			},
 		})
@@ -1639,9 +1640,9 @@ func TestShouldLogRequest(t *testing.T) {
 
 	t.Run("returns false when DisableDefaultMiddlewares is true", func(t *testing.T) {
 		r := NewRouter().(*defaultRouter)
-		r.SetConfig(config.Config{
+		r.SetConfig(Config{
 			DisableDefaultMiddlewares: true,
-			RequestLogger: config.RequestLoggerConfig{
+			RequestLogger: requestlogger.Config{
 				Enabled: config.Bool(true), // even if Enabled is true
 			},
 		})
@@ -1653,9 +1654,9 @@ func TestShouldLogRequest(t *testing.T) {
 
 	t.Run("returns true when DisableDefaultMiddlewares is false and Enabled is nil", func(t *testing.T) {
 		r := NewRouter().(*defaultRouter)
-		r.SetConfig(config.Config{
+		r.SetConfig(Config{
 			DisableDefaultMiddlewares: false,
-			RequestLogger: config.RequestLoggerConfig{
+			RequestLogger: requestlogger.Config{
 				Enabled: nil,
 			},
 		})

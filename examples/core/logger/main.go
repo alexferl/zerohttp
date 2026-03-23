@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	zlog "github.com/alexferl/zerohttp/log"
 )
 
@@ -15,7 +14,7 @@ func main() {
 	logger := zlog.NewDefaultLogger()
 	logger.SetLevel(zlog.DebugLevel)
 
-	app := zh.New(config.Config{
+	app := zh.New(zh.Config{
 		Logger: logger,
 	})
 

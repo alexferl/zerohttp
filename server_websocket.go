@@ -1,7 +1,7 @@
 // Package zerohttp provides WebSocket upgrader configuration. See [Server.SetWebSocketUpgrader] and [Server.WebSocketUpgrader].
 package zerohttp
 
-import "github.com/alexferl/zerohttp/config"
+import "github.com/alexferl/zerohttp/extensions/websocket"
 
 // SetWebSocketUpgrader sets the WebSocket upgrader instance. This can be used to inject
 // a WebSocket implementation (e.g., gorilla/websocket, nhooyr/websocket) after creating the server.
@@ -32,7 +32,7 @@ import "github.com/alexferl/zerohttp/config"
 //
 // Parameters:
 //   - upgrader: A WebSocket upgrader instance implementing the config.WebSocketUpgrader interface
-func (s *Server) SetWebSocketUpgrader(upgrader config.WebSocketUpgrader) {
+func (s *Server) SetWebSocketUpgrader(upgrader websocket.Upgrader) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.webSocketUpgrader = upgrader
@@ -40,7 +40,7 @@ func (s *Server) SetWebSocketUpgrader(upgrader config.WebSocketUpgrader) {
 
 // WebSocketUpgrader returns the configured WebSocket upgrader (if any).
 // Returns nil if no WebSocket upgrader has been configured.
-func (s *Server) WebSocketUpgrader() config.WebSocketUpgrader {
+func (s *Server) WebSocketUpgrader() websocket.Upgrader {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.webSocketUpgrader

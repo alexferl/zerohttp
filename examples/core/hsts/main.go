@@ -5,21 +5,21 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/middleware/securityheaders"
 )
 
 func main() {
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			Addr: "localhost:8080",
-			TLS: config.TLSConfig{
+			TLS: zh.TLSConfig{
 				Addr:     "localhost:8443",
 				CertFile: "cert.pem",
 				KeyFile:  "key.pem",
 			},
 			// Enable HSTS with custom configuration
-			SecurityHeaders: config.SecurityHeadersConfig{
-				StrictTransportSecurity: config.StrictTransportSecurity{
+			SecurityHeaders: securityheaders.Config{
+				StrictTransportSecurity: securityheaders.StrictTransportSecurity{
 					MaxAge:            31536000, // 1 year in seconds
 					ExcludeSubdomains: false,    // Apply to subdomains too
 					PreloadEnabled:    false,    // Set to true only if submitting to hstspreload.org

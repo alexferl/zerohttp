@@ -6,11 +6,10 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/middleware/compress"
 	"github.com/klauspost/compress/zstd"
 
 	"github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
 )
 
 // ZstdEncoder implements config.CompressionEncoder
@@ -46,7 +45,7 @@ func (e ZstdEncoder) Encoding() string {
 // ZstdProvider implements config.CompressionProvider
 type ZstdProvider struct{}
 
-func (p ZstdProvider) GetEncoder(encoding string) config.CompressionEncoder {
+func (p ZstdProvider) GetEncoder(encoding string) compress.Encoder {
 	if encoding == "zstd" {
 		return ZstdEncoder{}
 	}
@@ -56,10 +55,10 @@ func (p ZstdProvider) GetEncoder(encoding string) config.CompressionEncoder {
 func main() {
 	app := zerohttp.New()
 
-	app.Use(middleware.Compress(config.CompressConfig{
+	app.Use(compress.New(compress.Config{
 		Level:      6,
-		Algorithms: []config.CompressionAlgorithm{"zstd", config.Gzip, config.Deflate},
-		Providers:  []config.CompressionProvider{ZstdProvider{}},
+		Algorithms: []compress.Algorithm{"zstd", compress.Gzip, compress.Deflate},
+		Providers:  []compress.Provider{ZstdProvider{}},
 	}))
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

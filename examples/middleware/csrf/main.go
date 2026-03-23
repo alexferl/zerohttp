@@ -6,19 +6,19 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/csrf"
 )
 
 func main() {
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			DisableDefaultMiddlewares: true,
 		},
 	)
 
 	// Add CSRF middleware with form token lookup for traditional HTML forms
 	// Using a fixed HMAC key so tokens remain valid across server restarts
-	app.Use(middleware.CSRF(config.CSRFConfig{
+	app.Use(csrf.New(csrf.Config{
 		TokenLookup:  "form:csrf_token",
 		CookieSecure: config.Bool(false), // Disable Secure flag for local HTTP testing
 		HMACKey:      []byte("demo-csrf-key-for-local-testing-only!!"),
@@ -102,7 +102,7 @@ curl -X POST http://localhost:8080/submit \
   -d "message=hello"</pre>
 
     <h2>Configuration Options</h2>
-    <pre>app.Use(middleware.CSRF(config.CSRFConfig{
+    <pre>app.Use(csrf.New(csrf.Config{
     TokenLookup:    "form:csrf_token",
     CookieName:     "csrf_token",
     CookieMaxAge:   86400,
@@ -123,7 +123,7 @@ curl -X POST http://localhost:8080/submit \
 
 func formHandler(w http.ResponseWriter, r *http.Request) error {
 	// Get CSRF token from context (set by middleware)
-	csrfToken := middleware.GetCSRFToken(r)
+	csrfToken := csrf.Get(r)
 
 	html := `<!DOCTYPE html>
 <html>
@@ -142,7 +142,7 @@ func formHandler(w http.ResponseWriter, r *http.Request) error {
 </head>
 <body>
     <h1>CSRF Protected Form</h1>
-    <p><a href="/">← Back to overview</a></p>
+    <p><a href="/">&larr; Back to overview</a></p>
 
     <div class="info">
         <strong>CSRF Token:</strong>
@@ -193,7 +193,7 @@ func submitHandler(w http.ResponseWriter, r *http.Request) error {
 
 func apiDemoHandler(w http.ResponseWriter, r *http.Request) error {
 	// Get CSRF token from context (set by middleware)
-	csrfToken := middleware.GetCSRFToken(r)
+	csrfToken := csrf.Get(r)
 
 	html := `<!DOCTYPE html>
 <html>
@@ -213,7 +213,7 @@ func apiDemoHandler(w http.ResponseWriter, r *http.Request) error {
 </head>
 <body>
     <h1>AJAX CSRF Token Demo</h1>
-    <p><a href="/">← Back to overview</a></p>
+    <p><a href="/">&larr; Back to overview</a></p>
 
     <div class="info">
         This demo shows how to properly include CSRF tokens in AJAX requests.

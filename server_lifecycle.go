@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -22,10 +21,10 @@ import (
 //	app.RegisterPreStartupHook("validate-config", func(ctx context.Context) error {
 //	    return validateConfig()
 //	})
-func (s *Server) RegisterPreStartupHook(name string, hook config.StartupHook) {
+func (s *Server) RegisterPreStartupHook(name string, hook StartupHook) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.preStartupHooks = append(s.preStartupHooks, config.StartupHookConfig{Name: name, Hook: hook})
+	s.preStartupHooks = append(s.preStartupHooks, StartupHookConfig{Name: name, Hook: hook})
 }
 
 // RegisterStartupHook registers a hook to run concurrently with servers starting up.
@@ -40,10 +39,10 @@ func (s *Server) RegisterPreStartupHook(name string, hook config.StartupHook) {
 //	app.RegisterStartupHook("migrations", func(ctx context.Context) error {
 //	    return goose.Up(db.DB, "migrations")
 //	})
-func (s *Server) RegisterStartupHook(name string, hook config.StartupHook) {
+func (s *Server) RegisterStartupHook(name string, hook StartupHook) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.startupHooks = append(s.startupHooks, config.StartupHookConfig{Name: name, Hook: hook})
+	s.startupHooks = append(s.startupHooks, StartupHookConfig{Name: name, Hook: hook})
 }
 
 // RegisterPostStartupHook registers a hook to run after servers have started accepting connections.
@@ -58,10 +57,10 @@ func (s *Server) RegisterStartupHook(name string, hook config.StartupHook) {
 //	app.RegisterPostStartupHook("announce-ready", func(ctx context.Context) error {
 //	    return notifyServiceDiscovery()
 //	})
-func (s *Server) RegisterPostStartupHook(name string, hook config.StartupHook) {
+func (s *Server) RegisterPostStartupHook(name string, hook StartupHook) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.postStartupHooks = append(s.postStartupHooks, config.StartupHookConfig{Name: name, Hook: hook})
+	s.postStartupHooks = append(s.postStartupHooks, StartupHookConfig{Name: name, Hook: hook})
 }
 
 // runPreStartupHooks executes pre-startup hooks sequentially in registration order.
@@ -171,10 +170,10 @@ func (s *Server) runPostStartupHooks(ctx context.Context) error {
 //	    health.SetUnhealthy()
 //	    return nil
 //	})
-func (s *Server) RegisterPreShutdownHook(name string, hook config.ShutdownHook) {
+func (s *Server) RegisterPreShutdownHook(name string, hook ShutdownHook) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.preShutdownHooks = append(s.preShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+	s.preShutdownHooks = append(s.preShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
 }
 
 // RegisterShutdownHook registers a hook to run concurrently with server shutdown.
@@ -189,10 +188,10 @@ func (s *Server) RegisterPreShutdownHook(name string, hook config.ShutdownHook) 
 //	app.RegisterShutdownHook("close-db", func(ctx context.Context) error {
 //	    return db.Close()
 //	})
-func (s *Server) RegisterShutdownHook(name string, hook config.ShutdownHook) {
+func (s *Server) RegisterShutdownHook(name string, hook ShutdownHook) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.shutdownHooks = append(s.shutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+	s.shutdownHooks = append(s.shutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
 }
 
 // RegisterPostShutdownHook registers a hook to run after servers have shut down.
@@ -207,10 +206,10 @@ func (s *Server) RegisterShutdownHook(name string, hook config.ShutdownHook) {
 //	app.RegisterPostShutdownHook("cleanup", func(ctx context.Context) error {
 //	    return os.RemoveAll("/tmp/app-*")
 //	})
-func (s *Server) RegisterPostShutdownHook(name string, hook config.ShutdownHook) {
+func (s *Server) RegisterPostShutdownHook(name string, hook ShutdownHook) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.postShutdownHooks = append(s.postShutdownHooks, config.ShutdownHookConfig{Name: name, Hook: hook})
+	s.postShutdownHooks = append(s.postShutdownHooks, ShutdownHookConfig{Name: name, Hook: hook})
 }
 
 // runPreShutdownHooks executes pre-shutdown hooks sequentially in registration order.
@@ -261,7 +260,7 @@ func (s *Server) startShutdownHooks(ctx context.Context) (*sync.WaitGroup, chan 
 
 	for _, hook := range hooks {
 		wg.Add(1)
-		go func(h config.ShutdownHookConfig) {
+		go func(h ShutdownHookConfig) {
 			defer wg.Done()
 
 			s.logger.Debug("Running shutdown hook", log.F("hook", h.Name))

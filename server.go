@@ -11,10 +11,14 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/extensions/autocert"
+	"github.com/alexferl/zerohttp/extensions/http3"
+	"github.com/alexferl/zerohttp/extensions/websocket"
+	"github.com/alexferl/zerohttp/extensions/webtransport"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/metrics"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/sse"
 )
 
 // Default server timeout constants
@@ -76,28 +80,28 @@ type Server struct {
 	logger log.Logger
 
 	// preStartupHooks execute sequentially before any startup hooks.
-	preStartupHooks []config.StartupHookConfig
+	preStartupHooks []StartupHookConfig
 
 	// startupHooks execute sequentially before the server starts accepting connections.
 	// If any startup hook returns an error, the server will not start.
-	startupHooks []config.StartupHookConfig
+	startupHooks []StartupHookConfig
 
 	// postStartupHooks execute sequentially after the server has started.
-	postStartupHooks []config.StartupHookConfig
+	postStartupHooks []StartupHookConfig
 
 	// preShutdownHooks execute sequentially before server shutdown begins.
-	preShutdownHooks []config.ShutdownHookConfig
+	preShutdownHooks []ShutdownHookConfig
 
 	// shutdownHooks execute concurrently with server shutdown.
-	shutdownHooks []config.ShutdownHookConfig
+	shutdownHooks []ShutdownHookConfig
 
 	// postShutdownHooks execute sequentially after all servers are shut down.
-	postShutdownHooks []config.ShutdownHookConfig
+	postShutdownHooks []ShutdownHookConfig
 
 	// validator is an optional struct validator for validating request data.
 	// Users can inject their own implementation (e.g., go-playground/validator/v10).
 	// If nil, the default built-in validator will be used.
-	validator config.Validator
+	validator Validator
 
 	// metricsRegistry holds the metrics registry for collecting and exposing metrics.
 	// If nil, metrics collection is disabled.
@@ -117,33 +121,33 @@ type Server struct {
 	// autocertManager handles automatic certificate provisioning and renewal
 	// using Let's Encrypt ACME protocol. If set, enables automatic TLS.
 	// Users must provide their own implementation (e.g., golang.org/x/crypto/acme/autocert.Manager).
-	autocertManager config.AutocertManager
+	autocertManager autocert.Manager
 
 	// http3Server is an optional HTTP/3 server for handling HTTP/3 traffic over QUIC.
 	// Users can inject their own implementation (e.g., quic-go/http3) to enable HTTP/3.
 	// If nil, HTTP/3 server will not be started.
-	http3Server config.HTTP3Server
+	http3Server http3.Server
 
 	// sseProvider is an optional SSE provider for handling Server-Sent Events connections.
 	// Users can inject their own implementation or use the built-in stdlib provider.
 	// If nil, SSE is not available but users can still handle SSE manually in their handlers.
-	sseProvider config.SSEProvider
+	sseProvider sse.Provider
 
 	// webSocketUpgrader is an optional WebSocket upgrader for handling WebSocket connections.
 	// Users provide their own implementation using their preferred WebSocket library.
 	// If nil, WebSocket is not available but users can still handle upgrades manually.
-	webSocketUpgrader config.WebSocketUpgrader
+	webSocketUpgrader websocket.Upgrader
 
 	// webTransportServer is an optional WebTransport server for handling WebTransport sessions.
 	// Users can inject their own implementation (e.g., quic-go/webtransport-go) to enable WebTransport.
 	// If nil, WebTransport support will not be enabled.
 	// The server will be started automatically when ListenAndServeTLS or Start is called.
-	webTransportServer config.WebTransportServer
+	webTransportServer webtransport.Server
 }
 
-// New creates and configures a new Server instance with the provided config.
+// New creates and configures a new Server instance with the provided
 // It initializes the server with sensible defaults that can be overridden
-// using the provided config.
+// using the provided
 //
 // The server includes:
 //   - HTTP and HTTPS support
@@ -160,22 +164,22 @@ type Server struct {
 //
 // Example - With custom configuration:
 //
-//	app := zh.New(config.Config{
+//	app := zh.New(Config{
 //	    Addr:         ":8080",
 //	    ReadTimeout:  10 * time.Second,
 //	    WriteTimeout: 15 * time.Second,
 //	    Logger:       myLogger,
-//	    Metrics: config.MetricsConfig{
+//	    Metrics: MetricsConfig{
 //	        Enabled: config.Bool(false), // Disable metrics
 //	    },
 //	})
 //
 // Example - With pluggable validator:
 //
-//	app := zh.New(config.Config{
+//	app := zh.New(Config{
 //	    Validator: myCustomValidator,
 //	})
-func New(cfg ...config.Config) *Server {
+func New(cfg ...Config) *Server {
 	c := mergeConfig(cfg...)
 	router := NewRouter()
 	logger := createLogger(c)
@@ -515,8 +519,8 @@ func (s *Server) Logger() log.Logger {
 //	app.SetValidator(&myValidator{v: validator.New()})
 //
 // Parameters:
-//   - validator: A validator instance implementing the config.Validator interface
-func (s *Server) SetValidator(validator config.Validator) {
+//   - validator: A validator instance implementing the Validator interface
+func (s *Server) SetValidator(validator Validator) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.validator = validator
@@ -525,7 +529,7 @@ func (s *Server) SetValidator(validator config.Validator) {
 // Validator returns the configured struct validator (if any).
 // Returns nil if no custom validator has been configured - in this case,
 // the default built-in validator (zh.V) should be used.
-func (s *Server) Validator() config.Validator {
+func (s *Server) Validator() Validator {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.validator
@@ -738,8 +742,8 @@ func (s *Server) Close() error {
 }
 
 // mergeConfig merges user config with defaults.
-func mergeConfig(cfg ...config.Config) config.Config {
-	c := config.DefaultConfig
+func mergeConfig(cfg ...Config) Config {
+	c := DefaultConfig
 	if len(cfg) > 0 {
 		userCfg := cfg[0]
 		zconfig.Merge(&c, userCfg)
@@ -753,15 +757,15 @@ func mergeConfig(cfg ...config.Config) config.Config {
 }
 
 // createLogger creates a logger instance from config or returns default.
-func createLogger(c config.Config) log.Logger {
+func createLogger(c Config) log.Logger {
 	if c.Logger != nil {
 		return c.Logger
 	}
 	return log.NewDefaultLogger()
 }
 
-// createHTTPServer creates the HTTP server from config.
-func createHTTPServer(c config.Config, logger log.Logger) *http.Server {
+// createHTTPServer creates the HTTP server from
+func createHTTPServer(c Config, logger log.Logger) *http.Server {
 	if c.Server != nil {
 		if c.Server.ErrorLog == nil {
 			c.Server.ErrorLog = log.StdLogger(logger)
@@ -780,7 +784,7 @@ func createHTTPServer(c config.Config, logger log.Logger) *http.Server {
 }
 
 // createTLSServer creates the TLS server from config if TLS is configured.
-func createTLSServer(c config.Config, logger log.Logger) *http.Server {
+func createTLSServer(c Config, logger log.Logger) *http.Server {
 	if c.TLS.Server != nil {
 		if c.TLS.Server.ErrorLog == nil {
 			c.TLS.Server.ErrorLog = log.StdLogger(logger)
@@ -806,7 +810,7 @@ func createTLSServer(c config.Config, logger log.Logger) *http.Server {
 }
 
 // needsTLSServer returns true if the config requires a TLS server to be created.
-func needsTLSServer(c config.Config) bool {
+func needsTLSServer(c Config) bool {
 	return c.TLS.CertFile != "" ||
 		c.TLS.KeyFile != "" ||
 		c.Extensions.AutocertManager != nil ||
@@ -816,7 +820,7 @@ func needsTLSServer(c config.Config) bool {
 
 // createMetricsRegistry creates metrics registry if enabled.
 // Metrics are only enabled when explicitly set to true (not nil).
-func createMetricsRegistry(c config.Config) metrics.Registry {
+func createMetricsRegistry(c Config) metrics.Registry {
 	if c.Metrics.Enabled == nil || !*c.Metrics.Enabled {
 		return nil
 	}
@@ -825,7 +829,7 @@ func createMetricsRegistry(c config.Config) metrics.Registry {
 
 // createMetricsServer creates a separate metrics server if ServerAddr indicates a separate server.
 // Returns nil if ServerAddr is empty (metrics on main server) or metrics disabled.
-func createMetricsServer(c config.Config, registry metrics.Registry, logger log.Logger) *http.Server {
+func createMetricsServer(c Config, registry metrics.Registry, logger log.Logger) *http.Server {
 	if registry == nil {
 		return nil
 	}
@@ -856,7 +860,7 @@ func createMetricsServer(c config.Config, registry metrics.Registry, logger log.
 }
 
 // setupMiddleware configures the middleware chain on the server.
-func setupMiddleware(s *Server, c config.Config, registry metrics.Registry) {
+func setupMiddleware(s *Server, c Config, registry metrics.Registry) {
 	var middlewares []func(http.Handler) http.Handler
 
 	// Add metrics middleware first so it will be innermost after reverse,
@@ -868,9 +872,9 @@ func setupMiddleware(s *Server, c config.Config, registry metrics.Registry) {
 	if c.DisableDefaultMiddlewares {
 		middlewares = append(middlewares, c.DefaultMiddlewares...)
 	} else if c.DefaultMiddlewares == nil {
-		middlewares = append(middlewares, middleware.DefaultMiddlewares(c, s.logger)...)
+		middlewares = append(middlewares, DefaultMiddlewares(c, s.logger)...)
 	} else {
-		defaults := middleware.DefaultMiddlewares(c, s.logger)
+		defaults := DefaultMiddlewares(c, s.logger)
 		middlewares = append(middlewares, defaults...)
 		middlewares = append(middlewares, c.DefaultMiddlewares...)
 	}
@@ -898,7 +902,7 @@ func setupServerHandlers(s *Server, router Router) {
 }
 
 // registerMetricsEndpoint registers the metrics endpoint on the main router if needed.
-func registerMetricsEndpoint(s *Server, c config.Config, registry metrics.Registry) {
+func registerMetricsEndpoint(s *Server, c Config, registry metrics.Registry) {
 	// Register on main server only if ServerAddr is explicitly set to empty string
 	serverAddr := ""
 	if c.Metrics.ServerAddr != nil {

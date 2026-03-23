@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alexferl/zerohttp/config"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 )
 
@@ -69,14 +68,14 @@ type Middleware struct {
 
 // NewMiddleware creates a new metrics middleware.
 // Uses default config if none provided, or merges user config with defaults.
-func NewMiddleware(reg Registry, cfg ...config.MetricsConfig) func(http.Handler) http.Handler {
+func NewMiddleware(reg Registry, cfg ...Config) func(http.Handler) http.Handler {
 	if reg == nil {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
 	}
 
-	c := config.DefaultMetricsConfig
+	c := DefaultConfig
 	if len(cfg) > 0 {
 		zconfig.Merge(&c, cfg[0])
 	}

@@ -8,21 +8,22 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
+	zautocert "github.com/alexferl/zerohttp/extensions/autocert"
+	zhttp3 "github.com/alexferl/zerohttp/extensions/http3"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/crypto/acme/autocert"
 )
 
 var (
-	_ config.HTTP3Server             = (*http3AutocertServer)(nil)
-	_ config.HTTP3ServerWithAutocert = (*http3AutocertServer)(nil)
-	_ config.AutocertManager         = (*autocertManagerWrapper)(nil)
+	_ zhttp3.Server             = (*http3AutocertServer)(nil)
+	_ zhttp3.ServerWithAutocert = (*http3AutocertServer)(nil)
+	_ zautocert.Manager         = (*autocertManagerWrapper)(nil)
 )
 
-// autocertManagerWrapper wraps autocert.Manager to implement config.AutocertManager
+// autocertManagerWrapper wraps autocert.Manager to implement zautocert.Manager
 type autocertManagerWrapper struct {
-	*autocert.Manager
+	mgr       *autocert.Manager
 	hostnames []string
 }
 
@@ -30,8 +31,16 @@ func (a *autocertManagerWrapper) Hostnames() []string {
 	return a.hostnames
 }
 
+func (a *autocertManagerWrapper) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return a.mgr.GetCertificate(hello)
+}
+
+func (a *autocertManagerWrapper) HTTPHandler(fallback http.Handler) http.Handler {
+	return a.mgr.HTTPHandler(fallback)
+}
+
 // http3AutocertServer wraps quic-go's http3.Server to implement
-// config.HTTP3ServerWithAutocert interface
+// zhttp3.ServerWithAutocert interface
 type http3AutocertServer struct {
 	server *http3.Server
 }
@@ -48,7 +57,7 @@ func (h *http3AutocertServer) Close() error {
 	return nil
 }
 
-func (h *http3AutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+func (h *http3AutocertServer) ListenAndServeTLSWithAutocert(manager zautocert.Manager) error {
 	tlsConfig := &tls.Config{
 		GetCertificate: manager.GetCertificate,
 		NextProtos:     []string{"h3"},
@@ -77,20 +86,20 @@ func main() {
 		HostPolicy: autocert.HostWhitelist(*domain),
 	}
 
-	// Wrap the manager to implement config.AutocertManager
+	// Wrap the manager to implement zautocert.Manager
 	wrappedManager := &autocertManagerWrapper{
-		Manager:   manager,
+		mgr:       manager,
 		hostnames: []string{*domain},
 	}
 
 	// Create zerohttp server with autocert manager
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			Addr: ":80",
-			TLS: config.TLSConfig{
+			TLS: zh.TLSConfig{
 				Addr: ":443",
 			},
-			Extensions: config.ExtensionsConfig{
+			Extensions: zh.ExtensionsConfig{
 				AutocertManager: wrappedManager,
 			},
 		},

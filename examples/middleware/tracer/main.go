@@ -7,8 +7,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/tracer"
 	"github.com/alexferl/zerohttp/trace"
 )
 
@@ -36,13 +35,13 @@ func (s *SimpleSpan) RecordError(err error, opts ...trace.ErrorOption) {
 }
 
 func main() {
-	tracer := &SimpleTracer{}
+	t := &SimpleTracer{}
 
-	app := zh.New(config.Config{
-		Tracer: config.TracerConfig{TracerField: tracer},
+	app := zh.New(zh.Config{
+		Tracer: tracer.Config{TracerField: t},
 	})
 
-	app.Use(middleware.Tracer(tracer))
+	app.Use(tracer.New(t))
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, map[string]string{"message": "Hello!"})

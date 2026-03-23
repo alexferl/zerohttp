@@ -5,15 +5,14 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/basicauth"
 )
 
 func main() {
 	app := zh.New()
 
 	// Add basic auth middleware with credentials
-	app.Use(middleware.BasicAuth(config.BasicAuthConfig{
+	app.Use(basicauth.New(basicauth.Config{
 		Realm: "Protected Area",
 		Credentials: map[string]string{
 			"admin": "secret",

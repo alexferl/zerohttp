@@ -3,7 +3,7 @@ package zerohttp
 import (
 	"testing"
 
-	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/sse"
 )
 
 func TestServer_SSEProvider(t *testing.T) {
@@ -16,7 +16,7 @@ func TestServer_SSEProvider(t *testing.T) {
 
 	t.Run("SetSSEProvider stores provider", func(t *testing.T) {
 		s := New()
-		provider := NewDefaultProvider()
+		provider := sse.NewDefaultProvider()
 		s.SetSSEProvider(provider)
 
 		if s.SSEProvider() != provider {
@@ -25,8 +25,8 @@ func TestServer_SSEProvider(t *testing.T) {
 	})
 
 	t.Run("SSEProvider works with config option", func(t *testing.T) {
-		provider := NewDefaultProvider()
-		s := New(config.Config{Extensions: config.ExtensionsConfig{SSEProvider: provider}})
+		provider := sse.NewDefaultProvider()
+		s := New(Config{Extensions: ExtensionsConfig{SSEProvider: provider}})
 
 		if s.SSEProvider() != provider {
 			t.Error("expected SSEProvider from config option")

@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/extensions/http3"
+	"github.com/alexferl/zerohttp/extensions/webtransport"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -127,7 +128,7 @@ func (s *Server) StartTLS(certFile, keyFile string) error {
 //	    Prompt:     autocert.AcceptTOS,
 //	    HostPolicy: autocert.HostWhitelist("example.com"),
 //	}
-//	srv := zerohttp.New(config.WithAutocertManager(mgr))
+//	srv := zerohttp.New(WithAutocertManager(mgr))
 //	srv.StartAutoTLS()
 //
 // The HTTP server handles:
@@ -250,7 +251,7 @@ func (s *Server) StartAutoTLS() error {
 
 	// Start HTTP/3 server with autocert if supported (after cert is ready)
 	if s.http3Server != nil {
-		if h3Autocert, ok := s.http3Server.(config.HTTP3ServerWithAutocert); ok {
+		if h3Autocert, ok := s.http3Server.(http3.ServerWithAutocert); ok {
 			go func() {
 				s.logger.Info("Waiting for certificate before starting HTTP/3...")
 				<-certReady
@@ -262,7 +263,7 @@ func (s *Server) StartAutoTLS() error {
 
 	// Start WebTransport server with autocert if supported (after cert is ready)
 	if s.webTransportServer != nil {
-		if wtAutocert, ok := s.webTransportServer.(config.WebTransportServerWithAutocert); ok {
+		if wtAutocert, ok := s.webTransportServer.(webtransport.ServerWithAutocert); ok {
 			go func() {
 				s.logger.Info("Waiting for certificate before starting WebTransport...")
 				<-certReady
