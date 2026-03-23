@@ -22,7 +22,7 @@
 //	config := healthcheck.Config{
 //	    ReadinessHandler: func(w http.ResponseWriter, r *http.Request) error {
 //	        if !db.IsConnected() {
-//	            return zh.NewProblemDetail(http.StatusServiceUnavailable, "Database not ready")
+//	            return zh.NewProblemDetail(http.StatusServiceUnavailable, "Database not ready").Render(w)
 //	        }
 //	        return zh.Render.Plain(w, http.StatusOK, "ready")
 //	    },

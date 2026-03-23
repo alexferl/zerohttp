@@ -63,7 +63,7 @@ func init() {
 //	        return err // Returns 500
 //	    }
 //	    if user == nil {
-//	        return zh.NewProblemDetail(http.StatusNotFound, "User not found")
+//	        return zh.NewProblemDetail(http.StatusNotFound, "User not found").Render(w)
 //	    }
 //	    return zh.Render.JSON(w, http.StatusOK, user)
 //	}))

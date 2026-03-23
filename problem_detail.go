@@ -10,7 +10,7 @@ import (
 //
 // Example usage:
 //
-//	return zh.NewProblemDetail(http.StatusNotFound, "User not found")
+//	return zh.NewProblemDetail(http.StatusNotFound, "User not found").Render(w)
 //
 // Or return validation errors:
 //

@@ -171,7 +171,7 @@
 //	// Typed extraction (returns error if invalid)
 //	itemID, err := zh.ParamAs[int](r, "itemID")
 //	if err != nil {
-//	    return zh.NewProblemDetail(http.StatusBadRequest, "Invalid itemID")
+//	    return zh.NewProblemDetail(http.StatusBadRequest, "Invalid itemID").Render(w)
 //	}
 //
 //	// With default value
@@ -352,7 +352,7 @@
 // zerohttp converts errors to RFC 9457 Problem Details responses:
 //
 //	// Return custom problem detail
-//	return zh.NewProblemDetail(http.StatusNotFound, "User not found")
+//	return zh.NewProblemDetail(http.StatusNotFound, "User not found").Render(w)
 //
 //	// Return validation errors (422 Unprocessable Entity)
 //	return zh.Validate.Struct(&req)
