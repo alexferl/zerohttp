@@ -6,10 +6,8 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/tracer"
 	"github.com/alexferl/zerohttp/trace"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -95,10 +93,10 @@ func main() {
 	defer provider.Shutdown(context.Background())
 
 	otel.SetTracerProvider(provider)
-	tracer := NewOTelTracer(provider.Tracer("zerohttp"))
+	oTelTracer := NewOTelTracer(provider.Tracer("zerohttp"))
 
-	app := zh.New(config.Config{Tracer: config.TracerConfig{TracerField: tracer}})
-	app.Use(middleware.Tracer(tracer))
+	app := zh.New(zh.Config{Tracer: tracer.Config{TracerField: oTelTracer}})
+	app.Use(tracer.New(oTelTracer))
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return zh.R.JSON(w, http.StatusOK, map[string]string{"message": "Hello!"})

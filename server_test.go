@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -121,7 +120,7 @@ func TestNew_MiddlewareScenarios(t *testing.T) {
 		})
 	}
 
-	server := New(config.Config{
+	server := New(Config{
 		DisableDefaultMiddlewares: true,
 		DefaultMiddlewares:        []func(http.Handler) http.Handler{customMiddleware},
 	})
@@ -131,7 +130,7 @@ func TestNew_MiddlewareScenarios(t *testing.T) {
 	}
 
 	// Test with custom default middlewares combined with defaults
-	server2 := New(config.Config{
+	server2 := New(Config{
 		DefaultMiddlewares: []func(http.Handler) http.Handler{customMiddleware},
 	})
 
@@ -176,7 +175,7 @@ func TestServer_ListenerAddr(t *testing.T) {
 
 func TestServer_ListenAndServe_NoServer(t *testing.T) {
 	mockLogger := &mockServerLogger{}
-	server := New(config.Config{Logger: mockLogger})
+	server := New(Config{Logger: mockLogger})
 	server.server = nil
 
 	err := server.ListenAndServe()
@@ -551,7 +550,7 @@ func TestServer_Start(t *testing.T) {
 
 func TestServer_Logger(t *testing.T) {
 	mockLogger := &mockServerLogger{}
-	server := New(config.Config{Logger: mockLogger})
+	server := New(Config{Logger: mockLogger})
 
 	logger := server.Logger()
 	if logger == nil {
@@ -570,7 +569,7 @@ func TestServer_ListenerAddr_Empty(t *testing.T) {
 	}
 }
 
-// mockValidator is a mock implementation of config.Validator for testing.
+// mockValidator is a mock implementation of Validator for testing.
 type mockValidator struct {
 	structCalled   bool
 	registerCalled bool
@@ -624,7 +623,7 @@ func TestServerValidator(t *testing.T) {
 func TestServerWithValidator(t *testing.T) {
 	// Test that validator can be set via config option
 	mockVal := &mockValidator{}
-	app := New(config.Config{Validator: mockVal})
+	app := New(Config{Validator: mockVal})
 
 	if app.Validator() != mockVal {
 		t.Error("Validator should be set via config option")

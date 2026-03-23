@@ -44,7 +44,7 @@
 //
 //	// Route groups with middleware
 //	app.Group(func(api zh.Router) {
-//	    api.Use(middleware.BasicAuth(config.BasicAuthConfig{
+//	    api.Use(basicauth.New(basicauth.Config{
 //	        Credentials: map[string]string{"admin": "secret"},
 //	    }))
 //	    api.GET("/admin/dashboard", dashboardHandler)
@@ -362,18 +362,18 @@
 // Apply middleware at application, group, or route level:
 //
 //	// Application-level
-//	app.Use(middleware.CORS(config.DefaultCORSConfig))
-//	app.Use(middleware.RequestID(config.RequestIDConfig{}))
+//	app.Use(cors.New(cors.DefaultConfig))
+//	app.Use(requestid.New())
 //
 //	// Route-level
 //	app.GET("/admin", adminHandler,
-//	    middleware.BasicAuth(config.BasicAuthConfig{
+//	    basicauth.New(basicauth.Config{
 //	        Credentials: map[string]string{"admin": "secret"},
 //	    }),
 //	)
 //
-// Available middleware: CORS, BasicAuth, JWTAuth, RateLimit, Compress,
-// RequestLogger, CircuitBreaker, Timeout, and more.
+// Available middleware: cors, basicauth, jwtauth, ratelimit, compress,
+// requestlogger, circuitbreaker, timeout, and more in subpackages.
 // See package middleware for complete documentation.
 //
 // # Metrics

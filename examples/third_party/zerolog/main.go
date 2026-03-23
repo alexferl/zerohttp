@@ -6,7 +6,6 @@ import (
 	"os"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	"github.com/rs/zerolog"
 )
 
@@ -19,7 +18,7 @@ func main() {
 		Logger()
 	logger := NewZerologAdapter(zl)
 
-	app := zh.New(config.Config{
+	app := zh.New(zh.Config{
 		Logger: logger,
 	})
 

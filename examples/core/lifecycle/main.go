@@ -11,16 +11,15 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	zhlog "github.com/alexferl/zerohttp/log"
 )
 
 func main() {
 	app := zh.New(
-		config.Config{
-			Lifecycle: config.LifecycleConfig{
+		zh.Config{
+			Lifecycle: zh.LifecycleConfig{
 				// Pre-startup: run before servers start and before startup hooks
-				PreStartupHooks: []config.StartupHookConfig{
+				PreStartupHooks: []zh.StartupHookConfig{
 					{
 						Name: "validate-config",
 						Hook: func(ctx context.Context) error {
@@ -30,7 +29,7 @@ func main() {
 					},
 				},
 				// Startup: run concurrently with servers starting up
-				StartupHooks: []config.StartupHookConfig{
+				StartupHooks: []zh.StartupHookConfig{
 					{
 						Name: "warmup-cache",
 						Hook: func(ctx context.Context) error {
@@ -41,7 +40,7 @@ func main() {
 					},
 				},
 				// Post-startup: run after servers have started accepting connections
-				PostStartupHooks: []config.StartupHookConfig{
+				PostStartupHooks: []zh.StartupHookConfig{
 					{
 						Name: "announce-ready",
 						Hook: func(ctx context.Context) error {
@@ -51,7 +50,7 @@ func main() {
 					},
 				},
 				// Pre-shutdown: run before server shutdown begins, before servers stop
-				PreShutdownHooks: []config.ShutdownHookConfig{
+				PreShutdownHooks: []zh.ShutdownHookConfig{
 					{
 						Name: "health",
 						Hook: func(ctx context.Context) error {
@@ -61,7 +60,7 @@ func main() {
 					},
 				},
 				// Shutdown: run concurrently with server shutdown
-				ShutdownHooks: []config.ShutdownHookConfig{
+				ShutdownHooks: []zh.ShutdownHookConfig{
 					{
 						Name: "flush-logs",
 						Hook: func(ctx context.Context) error {
@@ -80,7 +79,7 @@ func main() {
 					},
 				},
 				// Post-shutdown: run after servers have shut down
-				PostShutdownHooks: []config.ShutdownHookConfig{
+				PostShutdownHooks: []zh.ShutdownHookConfig{
 					{
 						Name: "cleanup",
 						Hook: func(ctx context.Context) error {

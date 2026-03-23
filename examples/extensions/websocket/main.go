@@ -6,18 +6,17 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/gorilla/websocket"
-
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
+	zws "github.com/alexferl/zerohttp/extensions/websocket"
+	"github.com/gorilla/websocket"
 )
 
-// myUpgrader wraps gorilla/websocket to implement config.WebSocketUpgrader
+// myUpgrader wraps gorilla/websocket to implement zws.Upgrader
 type myUpgrader struct {
 	upgrader *websocket.Upgrader
 }
 
-func (m *myUpgrader) Upgrade(w http.ResponseWriter, r *http.Request) (config.WebSocketConn, error) {
+func (m *myUpgrader) Upgrade(w http.ResponseWriter, r *http.Request) (zws.Connection, error) {
 	conn, err := m.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return nil, err
@@ -25,7 +24,7 @@ func (m *myUpgrader) Upgrade(w http.ResponseWriter, r *http.Request) (config.Web
 	return &myConn{conn: conn}, nil
 }
 
-// myConn wraps gorilla/websocket.Conn to implement config.WebSocketConn
+// myConn wraps gorilla/websocket.Conn to implement zws.Connection
 type myConn struct {
 	conn *websocket.Conn
 }
@@ -56,9 +55,9 @@ func main() {
 	// Create zerohttp server with WebSocket support
 	// Disable default middlewares to avoid CSP blocking inline styles/scripts in the demo
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			DisableDefaultMiddlewares: true,
-			Extensions: config.ExtensionsConfig{
+			Extensions: zh.ExtensionsConfig{
 				WebSocketUpgrader: &myUpgrader{upgrader: gupgrader},
 			},
 		},

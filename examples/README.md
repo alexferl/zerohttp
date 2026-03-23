@@ -20,17 +20,13 @@ Basic functionality that doesn't require external dependencies beyond the standa
 - [**`file_upload/`**](core/file_upload/) - Multipart file uploads
 - [**`graceful/`**](core/graceful/) - Graceful shutdown handling
 - [**`hsts/`**](core/hsts/) - HTTP Strict Transport Security
-- [**`healthcheck/`**](core/healthcheck/) - Health check endpoints
 - [**`hello_world/`**](core/hello_world/) - Simplest possible server
 - [**`lifecycle/`**](core/lifecycle/) - Server lifecycle hooks
 - [**`logger/`**](core/logger/) - Log level filtering
-- [**`metrics/`**](core/metrics/) - Prometheus metrics endpoint
-- [**`pprof/`**](core/pprof/) - Performance profiling endpoints
 - [**`problem_detail/`**](core/problem_detail/) - RFC 7807 Problem Detail responses
 - [**`rendering/`**](core/rendering/) - Response rendering methods (JSON, HTML, text, blob, stream)
 - [**`request_tracing/`**](core/request_tracing/) - Request ID propagation for tracing
 - [**`route_groups/`**](core/route_groups/) - Route groups with nested middleware
-- [**`sse/`**](extensions/sse/) - Server-Sent Events
 - [**`static_spa/`**](core/static_spa/) - Single Page Application serving
 - [**`static_website/`**](core/static_website/) - Static website serving
 - [**`template/`**](core/template/) - HTML template rendering
@@ -46,43 +42,43 @@ Basic functionality that doesn't require external dependencies beyond the standa
 
 Demonstrations of built-in and custom middleware.
 
-- [**`basic_auth/`**](middleware/basic_auth/) - Basic authentication
+- [**`basicauth/`**](middleware/basic_auth/) - Basic authentication
 - [**`cache/`**](middleware/cache/) - HTTP caching middleware
 - [**`cache_redis/`**](middleware/cache_redis/) - Redis-backed HTTP caching (has go.mod)
-- [**`circuit_breaker/`**](middleware/circuit_breaker/) - Circuit breaker pattern
+- [**`circuitbreaker/`**](middleware/circuitbreaker/) - Circuit breaker pattern
 - [**`compress/`**](middleware/compress/) - Compression middleware (gzip/deflate)
 - [**`compress_brotli/`**](middleware/compress_brotli/) - Brotli compression (has go.mod)
 - [**`compress_zstd/`**](middleware/compress_zstd/) - Zstd compression (has go.mod)
-- [**`content_charset/`**](middleware/content_charset/) - Content charset validation
-- [**`content_encoding/`**](middleware/content_encoding/) - Content encoding validation
-- [**`content_type/`**](middleware/content_type/) - Content type validation/middleware
+- [**`contentcharset/`**](middleware/contentcharset/) - Content charset validation
+- [**`contentencoding/`**](middleware/contentencoding/) - Content encoding validation
+- [**`contenttype/`**](middleware/contenttype/) - Content type validation/middleware
 - [**`cors/`**](middleware/cors/) - CORS handling
 - [**`csrf/`**](middleware/csrf/) - CSRF protection
 - [**`etag/`**](middleware/etag/) - ETag generation
-- [**`hmac_auth/`**](middleware/hmac_auth/) - HMAC request signing
-- [**`host_validation/`**](middleware/host_validation/) - Host header validation
+- [**`hmacauth/`**](middleware/hmacauth/) - HMAC request signing
+- [**`hostvalidation/`**](middleware/host/) - Host header validation
 - [**`idempotency/`**](middleware/idempotency/) - Idempotent request handling
-- [**`jwt_auth/`**](middleware/jwt_auth/) - JWT authentication
-- [**`jwt_auth_golang_jwt/`**](middleware/jwt_auth_golang_jwt/) - golang-jwt integration (has go.mod)
-- [**`jwt_auth_lestrrat_jwx/`**](middleware/jwt_auth_lestrrat_jwx/) - lestrrat-go/jwx integration (has go.mod)
-- [**`jwt_auth_refresh/`**](middleware/jwt_auth_refresh/) - JWT refresh token flow (has go.mod)
-- [**`no_cache/`**](middleware/no_cache/) - Cache control headers
-- [**`rate_limit/`**](middleware/rate_limit/) - Rate limiting (in-memory)
-- [**`rate_limit_redis/`**](middleware/rate_limit_redis/) - Redis-backed rate limiting (has go.mod)
-- [**`real_ip/`**](middleware/real_ip/) - Real IP extraction
+- [**`jwtauth/`**](middleware/jwtauth/) - JWT authentication
+- [**`jwtauth_golang_jwt/`**](middleware/jwtauth_golang_jwt/) - golang-jwt integration (has go.mod)
+- [**`jwtauth_lestrrat_jwx/`**](middleware/jwtauth_lestrrat_jwx/) - lestrrat-go/jwx integration (has go.mod)
+- [**`jwtauth_refresh/`**](middleware/jwtauth_refresh/) - JWT refresh token flow (has go.mod)
+- [**`nocache/`**](middleware/nocache/) - Cache control headers
+- [**`ratelimit/`**](middleware/ratelimit/) - Rate limiting (in-memory)
+- [**`ratelimit_redis/`**](middleware/ratelimit_redis/) - Redis-backed rate limiting (has go.mod)
+- [**`realip/`**](middleware/realip/) - Real IP extraction
 - [**`recover/`**](middleware/recover/) - Panic recovery
-- [**`request_body_size/`**](middleware/request_body_size/) - Request body size limits
-- [**`request_id/`**](middleware/request_id/) - Request ID generation
-- [**`request_logger/`**](middleware/request_logger/) - Request logging
-- [**`reverse_proxy/`**](middleware/reverse_proxy/) - Reverse proxy setup
-- [**`security_headers/`**](middleware/security_headers/) - Security headers
-- [**`security_headers_nonce/`**](middleware/security_headers_nonce/) - CSP with nonces
-- [**`set_header/`**](middleware/set_header/) - Header manipulation
+- [**`requestbodysize/`**](middleware/requestbodysize/) - Request body size limits
+- [**`requestid/`**](middleware/requestid/) - Request ID generation
+- [**`requestlogger/`**](middleware/requestlogger/) - Request logging
+- [**`reverseproxy/`**](middleware/reverseproxy/) - Reverse proxy setup
+- [**`securityheaders/`**](middleware/securityheaders/) - Security headers
+- [**`securityheaders_nonce/`**](middleware/securityheaders_nonce/) - CSP with nonces
+- [**`setheader/`**](middleware/setheader/) - Header manipulation
 - [**`timeout/`**](middleware/timeout/) - Request timeouts
 - [**`tracer/`**](middleware/tracer/) - Distributed tracing
 - [**`tracer_jaeger/`**](middleware/tracer_jaeger/) - Jaeger tracing (has go.mod)
 - [**`tracer_otel/`**](middleware/tracer_otel/) - OpenTelemetry tracing (has go.mod)
-- [**`trailing_slash/`**](middleware/trailing_slash/) - Trailing slash handling
+- [**`trailingslash/`**](middleware/trailingslash/) - Trailing slash handling
 - [**`value/`**](middleware/value/) - Context value storage
 
 ### `extensions/` - Extension Points
@@ -104,7 +100,14 @@ Complete examples with their own `go.mod` files, demonstrating integration with 
 - [**`pongo2/`**](third_party/pongo2/) - Django-style template engine
 - [**`scs/`**](third_party/scs/) - Session management with SCS
 - [**`templ/`**](third_party/templ/) - Templ HTML templating
-- [**`zerolog/`**](third_party/zerolog/) - Structured logging with Zerolog
+- [**`zerolog/`**](third_party/zerolog/) - Structured logging with zerolog
+
+### Other Examples
+
+- [**`healthcheck/`**](healthcheck/) - Health check endpoints
+- [**`metrics/`**](metrics/) - Prometheus metrics endpoint
+- [**`pprof/`**](pprof/) - Performance profiling endpoints
+- [**`sse/`**](sse/) - Server-Sent Events
 
 ## Running Examples
 
@@ -146,9 +149,9 @@ log.Fatal(app.Start())
 
 ### With Configuration
 ```go
-app := zerohttp.New(config.Config{
+app := zerohttp.New(zh.Config{
     Addr: ":3000",
-    TLS: config.TLSConfig{
+    TLS: zh.TLSConfig{
         Addr: ":3443",
     },
 })
@@ -156,8 +159,8 @@ app := zerohttp.New(config.Config{
 
 ### Adding Middleware
 ```go
-app.Use(middleware.Compress())
-app.Use(middleware.RequestID())
+app.Use(compress.New())
+app.Use(requestid.New())
 ```
 
 See individual example directories for complete, runnable code.

@@ -7,13 +7,13 @@ import (
 
 	"github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/httpx"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/compress"
 )
 
 func main() {
 	app := zerohttp.New()
 
-	app.Use(middleware.Compress())
+	app.Use(compress.New())
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextHTML)

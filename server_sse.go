@@ -1,7 +1,7 @@
 // Package zerohttp provides SSE provider configuration. See [Server.SetSSEProvider] and [Server.SSEProvider].
 package zerohttp
 
-import "github.com/alexferl/zerohttp/config"
+import "github.com/alexferl/zerohttp/sse"
 
 // SetSSEProvider sets the SSE provider instance. This can be used to inject
 // an SSE implementation after creating the server.
@@ -22,8 +22,8 @@ import "github.com/alexferl/zerohttp/config"
 //	}))
 //
 // Parameters:
-//   - provider: An SSE provider instance implementing the config.SSEProvider interface
-func (s *Server) SetSSEProvider(provider config.SSEProvider) {
+//   - provider: An SSE provider instance implementing the SSEProvider interface
+func (s *Server) SetSSEProvider(provider sse.Provider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sseProvider = provider
@@ -31,7 +31,7 @@ func (s *Server) SetSSEProvider(provider config.SSEProvider) {
 
 // SSEProvider returns the configured SSE provider (if any).
 // Returns nil if no SSE provider has been configured.
-func (s *Server) SSEProvider() config.SSEProvider {
+func (s *Server) SSEProvider() sse.Provider {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.sseProvider

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 )
 
@@ -223,7 +222,7 @@ func BenchmarkStatic_ETagGeneration(b *testing.B) {
 	b.Run("WithETag", func(b *testing.B) {
 		router := NewRouter()
 		router.SetLogger(&noopLogger{})
-		cfg := config.DefaultConfig
+		cfg := DefaultConfig
 		cfg.RequestLogger.LogRequestBody = false
 		cfg.RequestLogger.LogResponseBody = false
 		router.SetConfig(cfg)

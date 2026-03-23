@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/middleware/securityheaders"
 )
 
 var csp = "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'unsafe-inline'; font-src 'self'; frame-ancestors 'self'; form-action 'self';"
@@ -21,8 +21,8 @@ func main() {
 	tm.RegisterComponent("home", ComponentFactory(HomePage))
 	tm.RegisterComponent("404", ComponentFactory(NotFoundPage))
 
-	app := zh.New(config.Config{
-		SecurityHeaders: config.SecurityHeadersConfig{
+	app := zh.New(zh.Config{
+		SecurityHeaders: securityheaders.Config{
 			ContentSecurityPolicy: csp,
 		},
 	})

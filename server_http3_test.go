@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/extensions/autocert"
 )
 
 // mockHTTP3Server is a mock implementation of HTTP3Server for testing
@@ -91,7 +91,7 @@ func TestServer_SetHTTP3Server(t *testing.T) {
 
 func TestServer_ListenAndServeHTTP3_NoServer(t *testing.T) {
 	mockLogger := &mockServerLogger{}
-	server := New(config.Config{Logger: mockLogger})
+	server := New(Config{Logger: mockLogger})
 	// http3Server is nil by default
 
 	err := server.ListenAndServeHTTP3("cert.pem", "key.pem")
@@ -272,10 +272,10 @@ type mockHTTP3ServerWithAutocert struct {
 	mockHTTP3Server
 	mu                                  sync.Mutex
 	listenAndServeTLSWithAutocertCalled bool
-	autocertManager                     config.AutocertManager
+	autocertManager                     autocert.Manager
 }
 
-func (m *mockHTTP3ServerWithAutocert) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+func (m *mockHTTP3ServerWithAutocert) ListenAndServeTLSWithAutocert(manager autocert.Manager) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.listenAndServeTLSWithAutocertCalled = true
@@ -289,7 +289,7 @@ func (m *mockHTTP3ServerWithAutocert) wasListenAndServeTLSWithAutocertCalled() b
 	return m.listenAndServeTLSWithAutocertCalled
 }
 
-func (m *mockHTTP3ServerWithAutocert) getAutocertManager() config.AutocertManager {
+func (m *mockHTTP3ServerWithAutocert) getAutocertManager() autocert.Manager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.autocertManager
@@ -300,9 +300,9 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 	h3Server := &mockHTTP3ServerWithAutocert{}
 
 	// Use unique port to avoid conflicts with other tests
-	server := New(config.Config{
-		TLS:        config.TLSConfig{Addr: "localhost:18443"},
-		Extensions: config.ExtensionsConfig{AutocertManager: mgr},
+	server := New(Config{
+		TLS:        TLSConfig{Addr: "localhost:18443"},
+		Extensions: ExtensionsConfig{AutocertManager: mgr},
 	})
 	server.SetHTTP3Server(h3Server)
 
@@ -342,7 +342,7 @@ func TestServer_StartAutoTLS_WithHTTP3NoAutocert(t *testing.T) {
 	mgr := &mockAutocertManager{}
 	h3Server := &mockHTTP3Server{} // This doesn't implement HTTP3ServerWithAutocert
 
-	server := New(config.Config{Extensions: config.ExtensionsConfig{AutocertManager: mgr}})
+	server := New(Config{Extensions: ExtensionsConfig{AutocertManager: mgr}})
 	server.SetHTTP3Server(h3Server)
 
 	// Run StartAutoTLS in a goroutine since it blocks

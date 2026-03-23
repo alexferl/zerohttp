@@ -83,7 +83,7 @@ func TestNewMiddleware_NilRegistry(t *testing.T) {
 
 func TestMiddleware_BasicRequest(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		Endpoint:        "/metrics",
 		DurationBuckets: []float64{0.001, 0.01, 0.1, 1},
 		SizeBuckets:     []float64{100, 1000, 10000},
@@ -132,7 +132,7 @@ func TestMiddleware_BasicRequest(t *testing.T) {
 
 func TestMiddleware_ExcludedPath(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		ExcludedPaths: []string{"/health", "/metrics"},
 		PathLabelFunc: func(p string) string { return p },
 	}
@@ -178,7 +178,7 @@ func TestMiddleware_ExcludedPath(t *testing.T) {
 
 func TestMiddleware_DifferentStatusCodes(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001, 0.01, 0.1},
 		SizeBuckets:     []float64{100, 1000},
 		PathLabelFunc:   func(p string) string { return p },
@@ -237,7 +237,7 @@ func TestMiddleware_DifferentStatusCodes(t *testing.T) {
 
 func TestMiddleware_RequestSize(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001, 0.01},
 		SizeBuckets:     []float64{10, 100, 1000},
 		PathLabelFunc:   func(p string) string { return p },
@@ -277,7 +277,7 @@ func TestMiddleware_RequestSize(t *testing.T) {
 
 func TestMiddleware_ResponseSize(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001, 0.01},
 		SizeBuckets:     []float64{10, 100, 1000},
 		PathLabelFunc:   func(p string) string { return p },
@@ -320,7 +320,7 @@ func TestMiddleware_ResponseSize(t *testing.T) {
 
 func TestMiddleware_InFlightGauge(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001},
 		SizeBuckets:     []float64{100},
 		PathLabelFunc:   func(p string) string { return p },
@@ -369,7 +369,7 @@ func TestMiddleware_InFlightGauge(t *testing.T) {
 
 func TestMiddleware_CustomPathLabelFunc(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001},
 		SizeBuckets:     []float64{100},
 		PathLabelFunc: func(p string) string {
@@ -424,7 +424,7 @@ func TestMiddleware_CustomPathLabelFunc(t *testing.T) {
 
 func TestMiddleware_DefaultStatusCode(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001},
 		SizeBuckets:     []float64{100},
 		PathLabelFunc:   func(p string) string { return p },
@@ -523,7 +523,7 @@ func TestResponseWriter_WriteSetsDefaultStatus(t *testing.T) {
 
 func TestMiddleware_MultipleMethods(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001},
 		SizeBuckets:     []float64{100},
 		PathLabelFunc:   func(p string) string { return p },
@@ -577,7 +577,7 @@ func TestMiddleware_MultipleMethods(t *testing.T) {
 func TestMiddleware_Router404And405(t *testing.T) {
 	// Create a real zerohttp router to test 404/405 handling
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001, 0.01, 0.1},
 		SizeBuckets:     []float64{100, 1000},
 		PathLabelFunc:   func(p string) string { return p },
@@ -661,7 +661,7 @@ func TestMiddleware_Router404And405(t *testing.T) {
 
 func TestMiddleware_NotFound(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001},
 		SizeBuckets:     []float64{100},
 		PathLabelFunc:   func(p string) string { return p },
@@ -722,7 +722,7 @@ func TestMiddleware_NotFound(t *testing.T) {
 
 func TestMiddleware_CustomLabels(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001},
 		SizeBuckets:     []float64{100},
 		PathLabelFunc:   func(p string) string { return p },
@@ -788,7 +788,7 @@ func TestMiddleware_CustomLabels(t *testing.T) {
 
 func TestMiddleware_PanicRecords500(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001, 0.01, 0.1},
 		SizeBuckets:     []float64{100, 1000},
 		PathLabelFunc:   func(p string) string { return p },
@@ -845,7 +845,7 @@ func TestMiddleware_PanicRecords500(t *testing.T) {
 
 func TestMiddleware_RegistryInContext(t *testing.T) {
 	reg := NewRegistry()
-	cfg := config.MetricsConfig{
+	cfg := Config{
 		DurationBuckets: []float64{0.001},
 		SizeBuckets:     []float64{100},
 		PathLabelFunc:   func(p string) string { return p },
@@ -927,7 +927,7 @@ func TestMiddleware_responseWriter_Flush_SupportsSSE(t *testing.T) {
 	rec := &flusherRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	reg := NewRegistry()
-	middleware := NewMiddleware(reg, config.MetricsConfig{
+	middleware := NewMiddleware(reg, Config{
 		Enabled:       config.Bool(true),
 		PathLabelFunc: func(p string) string { return p },
 	})

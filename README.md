@@ -90,7 +90,7 @@ app.POST("/users", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) e
 
 ```go
 app.Group(func(api zh.Router) {
-    api.Use(middleware.BasicAuth(config.BasicAuthConfig{
+    api.Use(basicauth.New(basicauth.Config{
         Credentials: map[string]string{"admin": "secret"},
     }))
     api.GET("/admin/dashboard", dashboardHandler)

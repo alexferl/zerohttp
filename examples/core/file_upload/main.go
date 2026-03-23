@@ -10,8 +10,8 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/middleware/requestbodysize"
 )
 
 const (
@@ -26,8 +26,8 @@ type UploadForm struct {
 }
 
 func main() {
-	app := zh.New(config.Config{
-		RequestBodySize: config.RequestBodySizeConfig{
+	app := zh.New(zh.Config{
+		RequestBodySize: requestbodysize.Config{
 			MaxBytes: maxFormSize,
 		},
 	})

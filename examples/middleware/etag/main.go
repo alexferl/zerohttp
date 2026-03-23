@@ -8,13 +8,13 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/httpx"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/etag"
 )
 
 func main() {
 	app := zh.New()
 
-	app.Use(middleware.ETag())
+	app.Use(etag.New())
 
 	if err := createSampleFiles(); err != nil {
 		log.Fatal(err)
@@ -61,15 +61,15 @@ func main() {
 		}
 
 		// Generate file-based ETag using modTime and size
-		etag := middleware.GenerateFileETag(stat.ModTime().Unix(), stat.Size(), true)
+		eTag := etag.GenerateFromFile(stat.ModTime().Unix(), stat.Size(), true)
 
-		// Check If-None-Match
-		if r.Header.Get(httpx.HeaderIfNoneMatch) == etag {
+		// Check If-None-Matc
+		if r.Header.Get(httpx.HeaderIfNoneMatch) == eTag {
 			w.WriteHeader(http.StatusNotModified)
 			return nil
 		}
 
-		w.Header().Set(httpx.HeaderETag, etag)
+		w.Header().Set(httpx.HeaderETag, eTag)
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 		http.ServeContent(w, r, fileName, stat.ModTime(), file)
 		return nil

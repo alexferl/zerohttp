@@ -2,7 +2,7 @@
 package zerohttp
 
 import (
-	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/extensions/http3"
 	"github.com/alexferl/zerohttp/log"
 )
 
@@ -53,8 +53,8 @@ func (s *Server) StartHTTP3(certFile, keyFile string) error {
 // is called. You don't need to call ListenAndServeTLS on the HTTP/3 server yourself.
 //
 // Parameters:
-//   - server: An HTTP/3 server instance implementing the config.HTTP3Server interface
-func (s *Server) SetHTTP3Server(server config.HTTP3Server) {
+//   - server: An HTTP/3 server instance implementing the HTTP3Server interface
+func (s *Server) SetHTTP3Server(server http3.Server) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.http3Server = server

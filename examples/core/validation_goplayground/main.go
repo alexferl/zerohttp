@@ -7,11 +7,10 @@ import (
 	"reflect"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	validator "github.com/go-playground/validator/v10"
+	"github.com/go-playground/validator/v10"
 )
 
-// goPlaygroundValidator wraps go-playground/validator to implement config.Validator
+// goPlaygroundValidator wraps go-playground/validator to implement zh.Validator
 type goPlaygroundValidator struct {
 	v *validator.Validate
 }
@@ -48,7 +47,7 @@ func main() {
 
 	customValidator := &goPlaygroundValidator{v: gpv}
 
-	app = zh.New(config.Config{
+	app = zh.New(zh.Config{
 		Validator: customValidator,
 	})
 

@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 )
 
 func httpsRedirectMiddleware(httpsPort string) func(http.Handler) http.Handler {
@@ -30,9 +29,9 @@ func httpsRedirectMiddleware(httpsPort string) func(http.Handler) http.Handler {
 
 func main() {
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			Addr: "localhost:8080",
-			TLS: config.TLSConfig{
+			TLS: zh.TLSConfig{
 				Addr:     "localhost:8443",
 				CertFile: "cert.pem",
 				KeyFile:  "key.pem",

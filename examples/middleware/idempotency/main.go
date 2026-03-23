@@ -7,8 +7,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/idempotency"
 )
 
 func main() {
@@ -28,7 +27,7 @@ func main() {
 			"createdAt": time.Now().Format(time.RFC3339),
 		})
 	}),
-		middleware.Idempotency(config.IdempotencyConfig{
+		idempotency.New(idempotency.Config{
 			TTL:         24 * time.Hour,
 			MaxBodySize: 1024 * 1024, // 1MB
 		}),
@@ -48,7 +47,7 @@ func main() {
 			"createdAt": time.Now().Format(time.RFC3339),
 		})
 	}),
-		middleware.Idempotency(config.IdempotencyConfig{
+		idempotency.New(idempotency.Config{
 			Required:    true, // Must provide Idempotency-Key header
 			TTL:         24 * time.Hour,
 			MaxBodySize: 1024 * 1024,
@@ -63,7 +62,7 @@ func main() {
 			"message": "Webhook processed",
 		})
 	}),
-		middleware.Idempotency(config.IdempotencyConfig{
+		idempotency.New(idempotency.Config{
 			TTL:           1 * time.Hour,
 			MaxBodySize:   1024 * 1024,
 			ExcludedPaths: []string{"/api/webhooks"}, // Skip idempotency for webhooks
@@ -78,7 +77,7 @@ func main() {
 			"recordCount": 10000,
 		})
 	}),
-		middleware.Idempotency(config.IdempotencyConfig{
+		idempotency.New(idempotency.Config{
 			TTL:         1 * time.Hour,
 			MaxBodySize: 1024, // Only cache small requests (1KB)
 		}),
@@ -90,7 +89,7 @@ func main() {
 			"status": "operational",
 		})
 	}),
-		middleware.Idempotency(config.IdempotencyConfig{
+		idempotency.New(idempotency.Config{
 			TTL: 1 * time.Hour,
 		}),
 	)

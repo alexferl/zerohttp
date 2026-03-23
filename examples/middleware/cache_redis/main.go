@@ -9,12 +9,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/alexferl/zerohttp/middleware/cache"
 	"github.com/redis/go-redis/v9"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
-	"github.com/alexferl/zerohttp/middleware"
 )
 
 // RedisCacheStore implements config.CacheStore using Redis as the backend.
@@ -23,7 +22,7 @@ type RedisCacheStore struct {
 	prefix string
 }
 
-// cacheRecord is a JSON-serializable representation of config.CacheRecord.
+// cacheRecord is a JSON-serializable representation of cache.Record.
 type cacheRecord struct {
 	StatusCode   int                 `json:"status_code"`
 	Headers      map[string][]string `json:"headers"`
@@ -50,21 +49,21 @@ func (c *RedisCacheStore) makeKey(key string) string {
 }
 
 // Get retrieves a cached response by key from Redis.
-func (c *RedisCacheStore) Get(ctx context.Context, key string) (config.CacheRecord, bool, error) {
+func (c *RedisCacheStore) Get(ctx context.Context, key string) (cache.Record, bool, error) {
 	data, err := c.client.Get(ctx, c.makeKey(key)).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return config.CacheRecord{}, false, nil
+		return cache.Record{}, false, nil
 	}
 	if err != nil {
-		return config.CacheRecord{}, false, err
+		return cache.Record{}, false, err
 	}
 
 	var record cacheRecord
 	if err := json.Unmarshal(data, &record); err != nil {
-		return config.CacheRecord{}, false, fmt.Errorf("failed to unmarshal cache record: %w", err)
+		return cache.Record{}, false, fmt.Errorf("failed to unmarshal cache record: %w", err)
 	}
 
-	return config.CacheRecord{
+	return cache.Record{
 		StatusCode:   record.StatusCode,
 		Headers:      record.Headers,
 		Body:         record.Body,
@@ -75,7 +74,7 @@ func (c *RedisCacheStore) Get(ctx context.Context, key string) (config.CacheReco
 }
 
 // Set stores a response in Redis with the given TTL.
-func (c *RedisCacheStore) Set(ctx context.Context, key string, record config.CacheRecord, ttl time.Duration) error {
+func (c *RedisCacheStore) Set(ctx context.Context, key string, record cache.Record, ttl time.Duration) error {
 	redisRecord := cacheRecord{
 		StatusCode:   record.StatusCode,
 		Headers:      record.Headers,
@@ -122,7 +121,7 @@ func main() {
 		}
 		return zh.R.JSON(w, http.StatusOK, data)
 	}),
-		middleware.Cache(config.CacheConfig{
+		cache.New(cache.Config{
 			CacheControl: "public, max-age=30",
 			DefaultTTL:   30 * time.Second,
 			ETag:         true,
@@ -143,7 +142,7 @@ func main() {
 		}
 		return zh.R.JSON(w, http.StatusOK, data)
 	}),
-		middleware.Cache(config.CacheConfig{
+		cache.New(cache.Config{
 			CacheControl: "private, max-age=60",
 			DefaultTTL:   time.Minute,
 			ETag:         true,
@@ -172,7 +171,7 @@ func main() {
 			"maintenance": false,
 		})
 	}),
-		middleware.Cache(config.CacheConfig{
+		cache.New(cache.Config{
 			CacheControl: "public, max-age=3600, immutable",
 			DefaultTTL:   time.Hour,
 			Store:        cacheStore,
@@ -192,7 +191,7 @@ func main() {
 </html>`, time.Now().Format(time.RFC3339))
 		return zh.R.HTML(w, http.StatusOK, html)
 	}),
-		middleware.Cache(config.CacheConfig{
+		cache.New(cache.Config{
 			CacheControl: "public, max-age=120",
 			DefaultTTL:   2 * time.Minute,
 			Store:        cacheStore,
@@ -208,7 +207,7 @@ func main() {
 			"updatedAt":   time.Now().Unix(),
 		})
 	}),
-		middleware.Cache(config.CacheConfig{
+		cache.New(cache.Config{
 			CacheControl: "public, max-age=10",
 			DefaultTTL:   10 * time.Second,
 			Store:        cacheStore,

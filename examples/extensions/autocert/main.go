@@ -1,11 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
 	"log"
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -14,14 +14,21 @@ var hosts = []string{
 	"www.example.com", // Additional domains
 }
 
-// autocertManagerWrapper wraps autocert.Manager to implement config.AutocertManager
+// autocertManagerWrapper wraps golangacme.Manager to implement autocert.Manager
 type autocertManagerWrapper struct {
-	*autocert.Manager
-	hostnames []string
+	mgr *autocert.Manager
 }
 
 func (a *autocertManagerWrapper) Hostnames() []string {
-	return a.hostnames
+	return hosts
+}
+
+func (a *autocertManagerWrapper) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return a.mgr.GetCertificate(hello)
+}
+
+func (a *autocertManagerWrapper) HTTPHandler(fallback http.Handler) http.Handler {
+	return a.mgr.HTTPHandler(fallback)
 }
 
 func main() {
@@ -33,19 +40,18 @@ func main() {
 		HostPolicy: autocert.HostWhitelist(hosts...),      // Allowed hosts
 	}
 
-	// Wrap the manager to implement config.AutocertManager
+	// Wrap the manager to implement autocert.Manager
 	wrappedManager := &autocertManagerWrapper{
-		Manager:   manager,
-		hostnames: hosts,
+		mgr: manager,
 	}
 
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			Addr: ":80", // HTTP port for ACME challenges
-			TLS: config.TLSConfig{
+			TLS: zh.TLSConfig{
 				Addr: ":443", // HTTPS port
 			},
-			Extensions: config.ExtensionsConfig{
+			Extensions: zh.ExtensionsConfig{
 				AutocertManager: wrappedManager, // Enable auto TLS
 			},
 		},

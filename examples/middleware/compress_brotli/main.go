@@ -6,11 +6,10 @@ import (
 	"net/http"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/middleware/compress"
 	"github.com/andybalholm/brotli"
 
 	"github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
-	"github.com/alexferl/zerohttp/middleware"
 )
 
 // BrotliEncoder implements config.CompressionEncoder
@@ -33,7 +32,7 @@ func (e BrotliEncoder) Encoding() string {
 // BrotliProvider implements config.CompressionProvider
 type BrotliProvider struct{}
 
-func (p BrotliProvider) GetEncoder(encoding string) config.CompressionEncoder {
+func (p BrotliProvider) GetEncoder(encoding string) compress.Encoder {
 	if encoding == "br" {
 		return BrotliEncoder{}
 	}
@@ -43,10 +42,10 @@ func (p BrotliProvider) GetEncoder(encoding string) config.CompressionEncoder {
 func main() {
 	app := zerohttp.New()
 
-	app.Use(middleware.Compress(config.CompressConfig{
+	app.Use(compress.New(compress.Config{
 		Level:      6,
-		Algorithms: []config.CompressionAlgorithm{"br", config.Gzip, config.Deflate},
-		Providers:  []config.CompressionProvider{BrotliProvider{}},
+		Algorithms: []compress.Algorithm{"br", compress.Gzip, compress.Deflate},
+		Providers:  []compress.Provider{BrotliProvider{}},
 	}))
 
 	app.GET("/", zerohttp.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

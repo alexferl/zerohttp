@@ -9,8 +9,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/alexferl/zerohttp/config"
 )
 
 func TestServer_RegisterPreShutdownHook(t *testing.T) {
@@ -262,21 +260,21 @@ func TestServer_Shutdown_HooksRespectContextCancellation(t *testing.T) {
 func TestServer_ConfigWithShutdownHooks(t *testing.T) {
 	var preCalled, shutdownCalled, postCalled bool
 
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			PreShutdownHooks: []config.ShutdownHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			PreShutdownHooks: []ShutdownHookConfig{
 				{Name: "pre", Hook: func(ctx context.Context) error {
 					preCalled = true
 					return nil
 				}},
 			},
-			ShutdownHooks: []config.ShutdownHookConfig{
+			ShutdownHooks: []ShutdownHookConfig{
 				{Name: "shutdown", Hook: func(ctx context.Context) error {
 					shutdownCalled = true
 					return nil
 				}},
 			},
-			PostShutdownHooks: []config.ShutdownHookConfig{
+			PostShutdownHooks: []ShutdownHookConfig{
 				{Name: "post", Hook: func(ctx context.Context) error {
 					postCalled = true
 					return nil
@@ -397,9 +395,9 @@ func TestServer_StartupHooks_RunInOrder(t *testing.T) {
 	var order []string
 	var mu sync.Mutex
 	hooksDone := make(chan struct{})
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			StartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			StartupHooks: []StartupHookConfig{
 				{Name: "hook-1", Hook: func(ctx context.Context) error {
 					mu.Lock()
 					order = append(order, "hook-1")
@@ -413,7 +411,7 @@ func TestServer_StartupHooks_RunInOrder(t *testing.T) {
 					return nil
 				}},
 			},
-			PostStartupHooks: []config.StartupHookConfig{
+			PostStartupHooks: []StartupHookConfig{
 				{Name: "done", Hook: func(ctx context.Context) error {
 					close(hooksDone)
 					return nil
@@ -456,9 +454,9 @@ func TestServer_StartupHooks_RunInOrder(t *testing.T) {
 
 func TestServer_StartupHook_FailsServerStart(t *testing.T) {
 	hookRan := make(chan bool, 1)
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			StartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			StartupHooks: []StartupHookConfig{
 				{Name: "failing-hook", Hook: func(ctx context.Context) error {
 					hookRan <- true
 					return errors.New("startup failed")
@@ -502,9 +500,9 @@ func TestServer_StartupHook_FailsServerStart(t *testing.T) {
 func TestServer_StartupHook_StopsOnFirstError(t *testing.T) {
 	var calls []string
 	var mu sync.Mutex
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			StartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			StartupHooks: []StartupHookConfig{
 				{Name: "first", Hook: func(ctx context.Context) error {
 					mu.Lock()
 					calls = append(calls, "first")
@@ -553,9 +551,9 @@ func TestServer_StartupHook_StopsOnFirstError(t *testing.T) {
 func TestServer_StartupHook_RespectsContextCancellation(t *testing.T) {
 	// Create a server with a startup hook that checks context
 	var hookCalled bool
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			StartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			StartupHooks: []StartupHookConfig{
 				{Name: "context-check", Hook: func(ctx context.Context) error {
 					hookCalled = true
 					select {
@@ -607,7 +605,7 @@ func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 	})
 
 	// Also add some via config (simulating what New() does with c.StartupHooks)
-	server.startupHooks = append(server.startupHooks, config.StartupHookConfig{
+	server.startupHooks = append(server.startupHooks, StartupHookConfig{
 		Name: "hook-config",
 		Hook: func(ctx context.Context) error {
 			mu.Lock()
@@ -618,7 +616,7 @@ func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 	})
 
 	// Add post-startup hook to signal completion
-	server.postStartupHooks = append(server.postStartupHooks, config.StartupHookConfig{
+	server.postStartupHooks = append(server.postStartupHooks, StartupHookConfig{
 		Name: "done",
 		Hook: func(ctx context.Context) error {
 			close(hooksDone)
@@ -657,9 +655,9 @@ func TestServer_StartupHookOrder(t *testing.T) {
 	var order []string
 	var mu sync.Mutex
 	hooksDone := make(chan struct{})
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			PreStartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			PreStartupHooks: []StartupHookConfig{
 				{Name: "pre", Hook: func(ctx context.Context) error {
 					mu.Lock()
 					order = append(order, "pre")
@@ -667,7 +665,7 @@ func TestServer_StartupHookOrder(t *testing.T) {
 					return nil
 				}},
 			},
-			StartupHooks: []config.StartupHookConfig{
+			StartupHooks: []StartupHookConfig{
 				{Name: "startup", Hook: func(ctx context.Context) error {
 					mu.Lock()
 					order = append(order, "startup")
@@ -675,7 +673,7 @@ func TestServer_StartupHookOrder(t *testing.T) {
 					return nil
 				}},
 			},
-			PostStartupHooks: []config.StartupHookConfig{
+			PostStartupHooks: []StartupHookConfig{
 				{Name: "post", Hook: func(ctx context.Context) error {
 					mu.Lock()
 					order = append(order, "post")
@@ -726,9 +724,9 @@ func TestServer_StartupHookOrder(t *testing.T) {
 }
 
 func TestServer_PreStartupHook_FailsServerStart(t *testing.T) {
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			PreStartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			PreStartupHooks: []StartupHookConfig{
 				{Name: "failing-hook", Hook: func(ctx context.Context) error {
 					return errors.New("pre-startup failed")
 				}},
@@ -752,9 +750,9 @@ func TestServer_PreStartupHook_FailsServerStart(t *testing.T) {
 
 func TestServer_StartupHook_FailsAndShutsDownServers(t *testing.T) {
 	hookRan := make(chan bool, 1)
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			StartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			StartupHooks: []StartupHookConfig{
 				{Name: "failing-hook", Hook: func(ctx context.Context) error {
 					hookRan <- true
 					return errors.New("startup failed")
@@ -800,9 +798,9 @@ func TestServer_PostStartupHook_RunsAfterStartupHookCompletes(t *testing.T) {
 	var startupComplete bool
 	var mu sync.Mutex
 
-	server := New(config.Config{
-		Lifecycle: config.LifecycleConfig{
-			StartupHooks: []config.StartupHookConfig{
+	server := New(Config{
+		Lifecycle: LifecycleConfig{
+			StartupHooks: []StartupHookConfig{
 				{Name: "slow-startup", Hook: func(ctx context.Context) error {
 					time.Sleep(100 * time.Millisecond)
 					mu.Lock()
@@ -812,7 +810,7 @@ func TestServer_PostStartupHook_RunsAfterStartupHookCompletes(t *testing.T) {
 					return nil
 				}},
 			},
-			PostStartupHooks: []config.StartupHookConfig{
+			PostStartupHooks: []StartupHookConfig{
 				{Name: "post", Hook: func(ctx context.Context) error {
 					mu.Lock()
 					defer mu.Unlock()

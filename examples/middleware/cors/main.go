@@ -5,16 +5,15 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
-	"github.com/alexferl/zerohttp/middleware"
+	"github.com/alexferl/zerohttp/middleware/cors"
 )
 
 func main() {
 	app := zh.New()
 
 	// Add CORS middleware with custom configuration
-	app.Use(middleware.CORS(config.CORSConfig{
+	app.Use(cors.New(cors.Config{
 		AllowedOrigins:   []string{"http://localhost:3000", "https://example.com"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{httpx.HeaderAccept, httpx.HeaderAuthorization, httpx.HeaderContentType, httpx.HeaderXCSRFToken},

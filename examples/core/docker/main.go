@@ -5,12 +5,11 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 )
 
 func main() {
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			// Use :8080 (all interfaces) not localhost:8080
 			// Required for Docker or the container won't be accessible
 			Addr: ":8080",

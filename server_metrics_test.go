@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/metrics"
 )
 
 // TestServer_MetricsDisabledByDefault verifies that metrics server does NOT start
 // when Enabled is nil (the default).
 func TestServer_MetricsDisabledByDefault(t *testing.T) {
-	srv := New(config.Config{
+	srv := New(Config{
 		// Enabled is nil by default - metrics should be disabled
 	})
 
@@ -45,9 +46,9 @@ func TestServer_MetricsServerAddrDefault(t *testing.T) {
 		t.Fatalf("failed to close main listener: %v", err)
 	}
 
-	srv := New(config.Config{
+	srv := New(Config{
 		Addr: mainAddr,
-		Metrics: config.MetricsConfig{
+		Metrics: metrics.Config{
 			Enabled: config.Bool(true), // Explicitly enable metrics
 			// ServerAddr not set (nil) - should default to localhost:9090
 		},
@@ -63,8 +64,8 @@ func TestServer_MetricsServerAddrDefault(t *testing.T) {
 // TestServer_MetricsExplicitEmptyServerAddr verifies that explicitly setting ServerAddr to empty
 // string (via config.String("")) serves metrics on the main server.
 func TestServer_MetricsExplicitEmptyServerAddr(t *testing.T) {
-	srv := New(config.Config{
-		Metrics: config.MetricsConfig{
+	srv := New(Config{
+		Metrics: metrics.Config{
 			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(""), // Explicitly empty - use main server
 		},
@@ -125,9 +126,9 @@ func TestServer_MetricsDedicatedServer(t *testing.T) {
 		t.Fatalf("failed to close metrics listener: %v", err)
 	}
 
-	srv := New(config.Config{
+	srv := New(Config{
 		Addr: mainAddr,
-		Metrics: config.MetricsConfig{
+		Metrics: metrics.Config{
 			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(metricsAddr),
 			Endpoint:   "/metrics",
@@ -186,8 +187,8 @@ func TestServer_MetricsDedicatedServer(t *testing.T) {
 
 // TestServer_MetricsAddr_NoServer verifies MetricsAddr returns empty string when no metrics server is configured.
 func TestServer_MetricsAddr_NoServer(t *testing.T) {
-	srv := New(config.Config{
-		Metrics: config.MetricsConfig{
+	srv := New(Config{
+		Metrics: metrics.Config{
 			Enabled: config.Bool(false),
 		},
 	})
@@ -220,9 +221,9 @@ func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
 		t.Fatalf("failed to close metrics listener: %v", err)
 	}
 
-	srv := New(config.Config{
+	srv := New(Config{
 		Addr: mainAddr,
-		Metrics: config.MetricsConfig{
+		Metrics: metrics.Config{
 			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(metricsAddr),
 			Endpoint:   "/metrics",
@@ -349,8 +350,8 @@ func TestServer_RequestContextCancellation(t *testing.T) {
 
 // TestServer_MetricsRecordsErrors verifies that 404 and 405 responses are recorded in metrics
 func TestServer_MetricsRecordsErrors(t *testing.T) {
-	app := New(config.Config{
-		Metrics: config.MetricsConfig{
+	app := New(Config{
+		Metrics: metrics.Config{
 			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(""), // Empty to use main server for metrics
 		},
@@ -443,8 +444,8 @@ func TestServer_MetricsRecordsErrors(t *testing.T) {
 // TestServer_MetricsRecordsPanic verifies that panic responses are recorded as 500 in metrics
 // and that the recover middleware records its panic counter
 func TestServer_MetricsRecordsPanic(t *testing.T) {
-	app := New(config.Config{
-		Metrics: config.MetricsConfig{
+	app := New(Config{
+		Metrics: metrics.Config{
 			Enabled:    config.Bool(true), // Explicitly enable metrics
 			ServerAddr: config.String(""), // Empty to use main server for metrics
 		},

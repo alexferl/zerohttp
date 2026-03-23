@@ -9,19 +9,18 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/quic-go/quic-go/http3"
-	webtransport "github.com/quic-go/webtransport-go"
+	"github.com/quic-go/webtransport-go"
 )
 
 func main() {
 	certFile, keyFile := "localhost+2.pem", "localhost+2-key.pem"
 
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			DisableDefaultMiddlewares: true,
-			TLS: config.TLSConfig{
+			TLS: zh.TLSConfig{
 				Addr:     ":8443",
 				CertFile: certFile,
 				KeyFile:  keyFile,

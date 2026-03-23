@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/quic-go/quic-go/http3"
 )
@@ -14,8 +13,8 @@ func main() {
 	certFile, keyFile := "localhost+2.pem", "localhost+2-key.pem"
 
 	app := zh.New(
-		config.Config{
-			TLS: config.TLSConfig{
+		zh.Config{
+			TLS: zh.TLSConfig{
 				Addr:     ":8443",
 				CertFile: certFile,
 				KeyFile:  keyFile,

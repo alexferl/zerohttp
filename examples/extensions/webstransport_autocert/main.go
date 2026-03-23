@@ -10,21 +10,22 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
-	"github.com/alexferl/zerohttp/config"
+	zautocert "github.com/alexferl/zerohttp/extensions/autocert"
+	zwebtransport "github.com/alexferl/zerohttp/extensions/webtransport"
 	"github.com/quic-go/quic-go/http3"
-	webtransport "github.com/quic-go/webtransport-go"
+	"github.com/quic-go/webtransport-go"
 	"golang.org/x/crypto/acme/autocert"
 )
 
 var (
-	_ config.WebTransportServer             = (*webtransportAutocertServer)(nil)
-	_ config.WebTransportServerWithAutocert = (*webtransportAutocertServer)(nil)
-	_ config.AutocertManager                = (*autocertManagerWrapper)(nil)
+	_ zwebtransport.Server             = (*webtransportAutocertServer)(nil)
+	_ zwebtransport.ServerWithAutocert = (*webtransportAutocertServer)(nil)
+	_ zautocert.Manager                = (*autocertManagerWrapper)(nil)
 )
 
-// autocertManagerWrapper wraps autocert.Manager to implement config.AutocertManager
+// autocertManagerWrapper wraps golangacme.Manager to implement zautocert.Manager
 type autocertManagerWrapper struct {
-	*autocert.Manager
+	mgr       *autocert.Manager
 	hostnames []string
 }
 
@@ -32,8 +33,16 @@ func (a *autocertManagerWrapper) Hostnames() []string {
 	return a.hostnames
 }
 
+func (a *autocertManagerWrapper) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return a.mgr.GetCertificate(hello)
+}
+
+func (a *autocertManagerWrapper) HTTPHandler(fallback http.Handler) http.Handler {
+	return a.mgr.HTTPHandler(fallback)
+}
+
 // webtransportAutocertServer wraps quic-go's webtransport.Server to implement
-// config.WebTransportServerWithAutocert interface
+// zwebtransport.ServerWithAutocert interface
 type webtransportAutocertServer struct {
 	server *webtransport.Server
 }
@@ -46,7 +55,7 @@ func (w *webtransportAutocertServer) Close() error {
 	return w.server.Close()
 }
 
-func (w *webtransportAutocertServer) ListenAndServeTLSWithAutocert(manager config.AutocertManager) error {
+func (w *webtransportAutocertServer) ListenAndServeTLSWithAutocert(manager zautocert.Manager) error {
 	// Configure TLS with autocert on the underlying HTTP/3 server
 	w.server.H3.TLSConfig = &tls.Config{
 		GetCertificate: manager.GetCertificate,
@@ -76,21 +85,21 @@ func main() {
 		HostPolicy: autocert.HostWhitelist(*domain),
 	}
 
-	// Wrap the manager to implement config.AutocertManager
+	// Wrap the manager to implement zautocert.Manager
 	wrappedMgr := &autocertManagerWrapper{
-		Manager:   mgr,
+		mgr:       mgr,
 		hostnames: []string{*domain},
 	}
 
 	// Create zerohttp app with autocert manager
 	app := zh.New(
-		config.Config{
+		zh.Config{
 			DisableDefaultMiddlewares: true,
 			Addr:                      ":80", // HTTP port for ACME challenges
-			TLS: config.TLSConfig{
+			TLS: zh.TLSConfig{
 				Addr: ":443", // HTTPS port
 			},
-			Extensions: config.ExtensionsConfig{
+			Extensions: zh.ExtensionsConfig{
 				AutocertManager: wrappedMgr,
 			},
 		},

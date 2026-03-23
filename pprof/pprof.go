@@ -126,31 +126,7 @@ var DefaultConfig = Config{
 // Uses DefaultConfig if no config is provided, or merges user config with defaults.
 // Returns a PProf struct containing the configuration and actual auth credentials used.
 //
-// Examples:
-//
-//	// Use defaults
-//	pp := pprof.New(app)
-//	// Access auto-generated credentials:
-//	// pp.Auth.Username, pp.Auth.Password
-//
-//	// Override specific fields
-//	pp := pprof.New(app, pprof.Config{
-//	    Prefix: "/admin/pprof",
-//	})
-//
-//	// Full custom config
-//	pp := pprof.New(app, pprof.Config{
-//	    Prefix:             "/debug/pprof",
-//	    EnableIndex:        true,
-//	    EnableCmdline:      true,
-//	    Auth:               &pprof.AuthConfig{Username: "admin", Password: "secret"},
-//	    AllowedIPs:         []string{"127.0.0.1/8", "::1/128"},
-//	})
-//
-//	// Disable authentication
-//	pp := pprof.New(app, pprof.Config{
-//	    Auth: &pprof.AuthConfig{},  // empty = no auth
-//	})
+// See package documentation for usage examples.
 func New(app *zh.Server, cfg ...Config) *PProf {
 	c := DefaultConfig
 	if len(cfg) > 0 {
