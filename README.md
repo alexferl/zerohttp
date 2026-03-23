@@ -121,7 +121,8 @@ app.GET("/users/{id}", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Reques
     id := zh.Param(r, "id")
     user, err := db.GetUser(id)
     if err != nil {
-        return zh.NewProblemDetail(http.StatusNotFound, "user not found").Render(w)
+        problem := zh.NewProblemDetail(http.StatusNotFound, "user not found")
+        return zh.R.ProblemDetail(w, problem)
     }
     return zh.R.JSON(w, http.StatusOK, user)
 }))
