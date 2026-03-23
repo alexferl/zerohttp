@@ -40,7 +40,7 @@ func TestTimeout_Scenarios(t *testing.T) {
 				}
 			})
 
-			cfg := Config{Timeout: tt.timeout}
+			cfg := Config{Duration: tt.timeout}
 			if tt.statusCode != 0 {
 				cfg.StatusCode = tt.statusCode
 			}
@@ -79,7 +79,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 	}{
 		{
 			"zero timeout uses default",
-			Config{Timeout: 0},
+			Config{Duration: 0},
 			10 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
 				zhtest.AssertWith(t, w).Status(http.StatusOK)
@@ -87,7 +87,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 		},
 		{
 			"zero status code uses default",
-			Config{Timeout: 50 * time.Millisecond, StatusCode: 0},
+			Config{Duration: 50 * time.Millisecond, StatusCode: 0},
 			100 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
 				zhtest.AssertWith(t, w).Status(http.StatusGatewayTimeout)
@@ -95,7 +95,7 @@ func TestTimeout_DefaultValues(t *testing.T) {
 		},
 		{
 			"nil excluded paths uses default",
-			Config{Timeout: 50 * time.Millisecond, ExcludedPaths: nil},
+			Config{Duration: 50 * time.Millisecond, ExcludedPaths: nil},
 			100 * time.Millisecond,
 			func(t *testing.T, w *httptest.ResponseRecorder) {
 				zhtest.AssertWith(t, w).Status(http.StatusGatewayTimeout)
@@ -141,7 +141,7 @@ func TestTimeout_ExcludedPaths(t *testing.T) {
 		_, _ = w.Write([]byte("done"))
 	})
 	middleware := New(Config{
-		Timeout:       50 * time.Millisecond,
+		Duration:      50 * time.Millisecond,
 		ExcludedPaths: []string{"/health"},
 	})(handler)
 
@@ -197,7 +197,7 @@ func TestTimeout_NoRaceCondition(t *testing.T) {
 				}
 			}
 		})
-		middleware := New(Config{Timeout: 50 * time.Millisecond})(handler)
+		middleware := New(Config{Duration: 50 * time.Millisecond})(handler)
 
 		req := zhtest.NewRequest(http.MethodGet, "/").Build()
 		w := zhtest.Serve(middleware, req)
@@ -228,7 +228,7 @@ func TestTimeout_Metrics(t *testing.T) {
 		Enabled:       config.Bool(true),
 		PathLabelFunc: func(p string) string { return p },
 	})
-	timeoutMw := New(Config{Timeout: 50 * time.Millisecond})
+	timeoutMw := New(Config{Duration: 50 * time.Millisecond})
 
 	// Chain: metrics -> timeout -> handler
 	wrapped := metricsMw(timeoutMw(handler))
@@ -354,7 +354,7 @@ func TestTimeout_IncludedPaths(t *testing.T) {
 	})
 
 	middleware := New(Config{
-		Timeout:       50 * time.Millisecond,
+		Duration:      50 * time.Millisecond,
 		IncludedPaths: []string{"/api/", "/admin"},
 	})(handler)
 
@@ -393,7 +393,7 @@ func TestTimeout_BothExcludedAndIncludedPathsPanics(t *testing.T) {
 	}()
 
 	_ = New(Config{
-		Timeout:       50 * time.Millisecond,
+		Duration:      50 * time.Millisecond,
 		ExcludedPaths: []string{"/health"},
 		IncludedPaths: []string{"/api"},
 	})

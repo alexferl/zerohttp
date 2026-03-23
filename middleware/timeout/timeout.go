@@ -39,7 +39,7 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx, cancel := context.WithTimeout(r.Context(), c.Timeout)
+			ctx, cancel := context.WithTimeout(r.Context(), c.Duration)
 			defer cancel()
 
 			done := make(chan struct{})

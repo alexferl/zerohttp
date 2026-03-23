@@ -14,8 +14,8 @@ func main() {
 	app := zh.New()
 
 	app.Use(timeout.New(timeout.Config{
-		Timeout: 2 * time.Second,
-		Message: "Request timeout",
+		Duration: 2 * time.Second,
+		Message:  "Request timeout",
 	}))
 
 	app.GET("/fast", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

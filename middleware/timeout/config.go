@@ -7,10 +7,10 @@ import (
 
 // Config allows customization of request timeout behavior
 type Config struct {
-	// Timeout duration for the request (defaults to 30 seconds)
-	Timeout time.Duration
+	// Duration for the request (defaults to 30 seconds)
+	Duration time.Duration
 
-	// StatusCode to return on timeout (defaults to 504 Gateway Timeout)
+	// StatusCode to return on timeout (defaults to 504 Gateway Duration)
 	StatusCode int
 
 	// Message to write on timeout (optional)
@@ -33,7 +33,7 @@ type Config struct {
 
 // DefaultConfig contains the default values for timeout configuration.
 var DefaultConfig = Config{
-	Timeout:       30 * time.Second,
+	Duration:      30 * time.Second,
 	StatusCode:    http.StatusGatewayTimeout,
 	Message:       "",
 	ExcludedPaths: []string{},
