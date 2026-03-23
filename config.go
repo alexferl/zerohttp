@@ -9,8 +9,6 @@
 //
 //	app := zh.New(zh.Config
 //	    Addr: ":8080",
-//	    ReadTimeout:  10 * time.Second,
-//	    WriteTimeout: 15 * time.Second,
 //	    Logger: myLogger,
 //	})
 //
