@@ -18,7 +18,7 @@ go run .
 The `RequestID` middleware is enabled by default and adds an `X-Request-ID` header to all responses. Access the request ID in handlers using:
 
 ```go
-requestID := middleware.GetRequestID(r.Context())
+requestID := requestid.Get(r.Context())
 ```
 
 Use the request ID for:

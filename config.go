@@ -1,170 +1,23 @@
-// Package zerohttp provides configuration structs for zerohttp servers and middleware.
+// Package zerohttp provides configuration structs for zerohttp servers.
 //
-// This package contains all configuration types used to customize zerohttp behavior,
-// from server settings to individual middleware options.
+// The main [Config] struct holds server configuration including address,
+// TLS settings, lifecycle hooks, and middleware configuration.
 //
-// # Server Configuration
+// # Basic Usage
 //
-// The main [Config] struct holds all server and middleware configuration:
-//
-//	app := zh.New(zh.Config
+//	app := zerohttp.New(zerohttp.Config{
 //	    Addr: ":8080",
-//	    ReadTimeout:  10 * time.Second,
-//	    WriteTimeout: 15 * time.Second,
-//	    Logger: myLogger,
 //	})
-//
-// # Middleware Configuration
-//
-// Each middleware has its own configuration struct:
-//
-// # CORS
-//
-//	app.Use(cors.New(cors.Config{
-//	    AllowedOrigins: []string{"https://example.com"},
-//	    AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
-//	    AllowCredentials: true,
-//	    MaxAge: 86400,
-//	}))
-//
-// Or use [cors.DefaultConfig] as a starting point.
-//
-// # Basic Authentication
-//
-//	app.Use(basicauth.New(basicauth.Config{
-//	    Credentials: map[string]string{
-//	        "admin": "secret-password",
-//	    },
-//	    Realm: "Restricted Area",
-//	    ExcludedPaths: []string{"/health"},
-//	}))
-//
-// # JWT Authentication
-//
-//	cfg := jwtauth.Config{
-//	    TokenStore:     myTokenStore,
-//	    RequiredClaims: []string{"sub"},
-//	    ExcludedPaths:    []string{"/login", "/register"},
-//	}
-//	app.Use(jwtauth.New(cfg))
-//
-// For a zero-dependency JWT solution, use the built-in HS256:
-//
-//	store := jwtauth.NewHS256Store(secret, jwtauth.HS256Config{
-//	    Issuer: "my-app",
-//	    AccessTokenTTL:  15 * time.Minute,
-//	    RefreshTokenTTL: 7 * 24 * time.Hour,
-//	})
-//
-// # Rate Limiting
-//
-//	app.Use(ratelimit.New(ratelimit.Config{
-//	    Rate:      100,
-//	    Window:    time.Minute,
-//	    Algorithm: ratelimit.TokenBucket,
-//	}))
-//
-// Algorithms: [ratelimit.TokenBucket] or [ratelimit.SlidingWindow].
-//
-// # Compression
-//
-//	app.Use(compress.New(compress.Config{
-//	    Level:     6,
-//	    Types:     []string{"text/html", "application/json"},
-//	    MinLength: 1024,
-//	}))
-//
-// # Security Headers
-//
-//	app.Use(securityheaders.New(securityheaders.Config{
-//	    CSP:           "default-src 'self'; script-src 'self'",
-//	    XFrameOptions: "DENY",
-//	    HSTS: config.HSTSConfig{
-//	        MaxAge: 31536000,
-//	        Preload: true,
-//	    },
-//	}))
-//
-// # Request Logging
-//
-//	app.Use(requestlogger.New(logger, requestlogger.Config{
-//	    Fields: []string{"method", "path", "status", "duration", "ip"},
-//	}))
-//
-// # Circuit Breaker
-//
-//	app.Use(circuitbreaker.New(circuitbreaker.Config{
-//	    FailureThreshold: 5,
-//	    RecoveryTimeout:  30 * time.Second,
-//	    SuccessThreshold: 3,
-//	}))
-//
-// # Request Body Size Limit
-//
-//	app.Use(requestbodysize.New(requestbodysize.Config{
-//	    MaxBytes: 1024 * 1024, // 1MB
-//	}))
-//
-// # Request ID
-//
-//	app.Use(requestid.New(requestid.Config{
-//	    Header: "X-Request-ID",
-//	}))
-//
-// # Timeout
-//
-//	app.Use(timeout.New(timeout.Config{
-//	    Duration: 30 * time.Second,
-//	}))
-//
-// # CSRF
-//
-//	app.Use(csrf.New(csrf.Config{
-//	    TokenLength: 32,
-//	    CookieName:  "csrf_token",
-//	    HeaderName:  "X-CSRF-Token",
-//	}))
 //
 // # TLS Configuration
 //
-//	app := zh.New(zh.Config
-//	    TLS: zh.TLSConfig{
+//	app := zerohttp.New(zerohttp.Config{
+//	    TLS: zerohttp.TLSConfig{
 //	        Addr:     ":8443",
 //	        CertFile: "server.crt",
 //	        KeyFile:  "server.key",
 //	    },
 //	})
-//
-// # Metrics Configuration
-//
-//	app := zh.New(zh.Config
-//	    Metrics: metrics.Config{
-//	        Enabled:  true,
-//	        Endpoint: "/metrics",
-//	        ExcludedPaths: []string{"/health", "/readyz"},
-//	    },
-//	})
-//
-// # Custom Validator
-//
-// Bring your own struct validator:
-//
-//	app := zh.New(zh.Config
-//	    Validator: myCustomValidator, // implements Validator interface
-//	})
-//
-// # Default Configurations
-//
-// Most middlewares provide a DefaultConfig variable with sensible defaults.
-// These can be used as-is or as a base for customization:
-//
-//	// Use defaults
-//	app.Use(cors.New(cors.DefaultConfig))
-//
-//	// Customize from defaults
-//	cfg := cors.DefaultConfig
-//	cfg.AllowedOrigins = []string{"https://example.com"}
-//	app.Use(cors.New(cfg))
 package zerohttp
 
 import (

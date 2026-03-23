@@ -12,19 +12,19 @@
 //
 //	// Custom timeout
 //	app.Use(timeout.New(timeout.Config{
-//	    Timeout: 10 * time.Second,
+//	    Duration: 10 * time.Second,
 //	}))
 //
 // # Per-Route Timeouts
 //
 //	// Different timeouts for different routes
 //	api := app.Group(func(api zh.Router) {
-//	    api.Use(timeout.New(timeout.Config{Timeout: 5 * time.Second}))
+//	    api.Use(timeout.New(timeout.Config{Duration: 5 * time.Second}))
 //	    api.GET("/fast", fastHandler)
 //	})
 //
 //	upload := app.Group(func(upload zh.Router) {
-//	    upload.Use(timeout.New(timeout.Config{Timeout: 5 * time.Minute}))
+//	    upload.Use(timeout.New(timeout.Config{Duration: 5 * time.Minute}))
 //	    upload.POST("/files", uploadHandler)
 //	})
 package timeout

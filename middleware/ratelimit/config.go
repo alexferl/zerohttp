@@ -75,12 +75,12 @@ type Config struct {
 }
 
 // DefaultConfig contains the default values for rate limit configuration.
-// The default KeyExtractor is IP-based (via middleware.IPKeyExtractor).
+// The default KeyExtractor is IP-based (via ratelimit.IPKeyExtractor).
 var DefaultConfig = Config{
 	Rate:           100,
 	Window:         time.Minute,
 	Algorithm:      TokenBucket,
-	KeyExtractor:   nil, // Uses middleware.IPKeyExtractor() by default
+	KeyExtractor:   nil, // Uses ratelimit.IPKeyExtractor() by default
 	StatusCode:     http.StatusTooManyRequests,
 	Message:        "Rate limit exceeded",
 	IncludeHeaders: true,

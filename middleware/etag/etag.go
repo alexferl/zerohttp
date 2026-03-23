@@ -80,7 +80,7 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 //
 //	file, _ := os.Open("largefile.zip")
 //	stat, _ := file.Stat()
-//	etag := middleware.GenerateFileETag(stat, true) // weak ETag
+//	etag := etag.GenerateFromFile(stat.ModTime().Unix(), stat.Size(), true) // weak ETag
 //	w.Header().Set(httpx.HeaderETag, etag)
 func GenerateFromFile(modTime int64, size int64, weak bool) string {
 	tag := strconv.FormatInt(modTime, 10) + "-" + strconv.FormatInt(size, 10)
@@ -97,7 +97,7 @@ func GenerateFromFile(modTime int64, size int64, weak bool) string {
 //
 //	file, _ := os.Open("largefile.zip")
 //	stat, _ := file.Stat()
-//	etag := middleware.GenerateFileETagFromInfo(stat, true)
+//	etag := etag.GenerateFromFileInfo(stat, true)
 //	w.Header().Set(httpx.HeaderETag, etag)
 func GenerateFromFileInfo(info interface {
 	ModTime() time.Time

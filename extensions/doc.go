@@ -23,16 +23,18 @@
 // Extensions are configured via Config options:
 //
 //	import (
-//	    "github.com/alexferl/zerohttp"
+//	    zh "github.com/alexferl/zerohttp"
 //	    "github.com/alexferl/zerohttp/extensions/autocert"
 //	    "github.com/alexferl/zerohttp/extensions/http3"
 //	)
 //
 //	// HTTP/3 with autocert
 //	mgr := &autocert.Manager{...}
-//	app := zerohttp.New(config.Config{
-//	    AutocertManager: mgr,
-//	    HTTP3Server:     &http3.Server{...},
+//	app := zh.New(zh.Config{
+//	    Extensions: zh.ExtensionsConfig{
+//	        AutocertManager: mgr,
+//	        HTTP3Server:     &http3.Server{...},
+//	    },
 //	})
 //
 // Each extension package defines interfaces that third-party libraries can

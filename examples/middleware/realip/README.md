@@ -86,12 +86,12 @@ Traefik automatically sets `X-Forwarded-For` and `X-Real-Ip` headers.
 Cloudflare sends `CF-Connecting-IP` header. Use a custom extractor:
 
 ```go
-middleware.RealIP(config.RealIPConfig{
+realip.New(realip.Config{
     IPExtractor: func(r *http.Request) string {
         if cf := r.Header.Get("CF-Connecting-IP"); cf != "" {
             return cf
         }
-        return config.DefaultIPExtractor(r)
+        return realip.DefaultIPExtractor(r)
     },
 })
 ```

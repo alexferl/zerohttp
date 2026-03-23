@@ -217,9 +217,9 @@ func GetError(r *http.Request) *AuthError {
 //
 // Example:
 //
-//	jwt := middleware.GetJWTClaims(r)
-//	subject := jwt.Subject()
-//	scopes := jwt.Scopes()
+//	claims := jwtauth.GetClaims(r)
+//	subject := claims.Subject()
+//	scopes := claims.Scopes()
 type Claims struct {
 	claims JWTClaims
 }
@@ -229,9 +229,9 @@ type Claims struct {
 //
 // Example:
 //
-//	jwt := middleware.GetJWTClaims(r)
-//	subject := jwt.Subject()
-//	if jwt.HasScope("admin") { ... }
+//	claims := jwtauth.GetClaims(r)
+//	subject := claims.Subject()
+//	if claims.HasScope("admin") { ... }
 func GetClaims(r *http.Request) Claims {
 	if claims, ok := r.Context().Value(ClaimsContextKey).(JWTClaims); ok {
 		return Claims{claims: claims}
@@ -347,7 +347,7 @@ func (j Claims) HasScope(scope string) bool {
 //
 // Example with lestrrat-go/jwx:
 //
-//	token := middleware.GetJWTClaims(r).Raw().(jwt.Token)
+//	token := jwtauth.GetClaims(r).Raw().(jwt.Token)
 //	subject := token.Subject()
 func (j Claims) Raw() JWTClaims {
 	return j.claims
@@ -486,7 +486,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg Config) (JW
 // RefreshTokenHandler returns an http.HandlerFunc that handles token refresh.
 // Accepts: { "refresh_token": "..." }
 // Returns: { "access_token": "...", "refresh_token": "...", "token_type": httpx.AuthSchemeBearer, "expires_in": 900 }
-// Users mount this at their chosen path: app.Post("/auth/refresh", middleware.RefreshTokenHandler(cfg))
+// Users mount this at their chosen path: app.POST("/auth/refresh", jwtauth.RefreshTokenHandler(cfg))
 func RefreshTokenHandler(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := tokenHandlerRequest(w, r, cfg)
@@ -525,7 +525,7 @@ func RefreshTokenHandler(cfg Config) http.HandlerFunc {
 // LogoutTokenHandler returns an http.HandlerFunc that handles token revocation (logout).
 // Accepts: { "refresh_token": "..." }
 // Returns: { "message": "logged out successfully" }
-// Users mount this at their chosen path: app.Post("/auth/logout", middleware.LogoutTokenHandler(cfg))
+// Users mount this at their chosen path: app.POST("/auth/logout", jwtauth.LogoutTokenHandler(cfg))
 // Requires Store to be configured in Config.
 func LogoutTokenHandler(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

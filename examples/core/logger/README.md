@@ -57,7 +57,7 @@ Expected output in console:
 logger := log.NewDefaultLogger()
 logger.SetLevel(log.DebugLevel)  // Show all messages
 
-app := zh.New(config.Config{
+app := zh.New(zh.Config{
     Logger: logger,
 })
 ```

@@ -21,7 +21,7 @@ func TestRateLimitConfig_DefaultValues(t *testing.T) {
 		t.Errorf("expected default algorithm = %s, got %s", TokenBucket, cfg.Algorithm)
 	}
 	if cfg.KeyExtractor != nil {
-		t.Error("expected default key extractor to be nil (falls back to middleware.IPKeyExtractor)")
+		t.Error("expected default key extractor to be nil (falls back to ratelimit.IPKeyExtractor)")
 	}
 	if cfg.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("expected default status code = %d, got %d", http.StatusTooManyRequests, cfg.StatusCode)

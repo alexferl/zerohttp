@@ -14,7 +14,7 @@
 //
 // Provide your own logger implementation:
 //
-//	app := zh.New(config.Config{
+//	app := zh.New(zh.Config{
 //	    Logger: myLogger,
 //	})
 //

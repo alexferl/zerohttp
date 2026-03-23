@@ -9,8 +9,8 @@ import (
 
 func TestTimeoutConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Timeout != 30*time.Second {
-		t.Errorf("expected default timeout = 30s, got %v", cfg.Timeout)
+	if cfg.Duration != 30*time.Second {
+		t.Errorf("expected default timeout = 30s, got %v", cfg.Duration)
 	}
 	if cfg.StatusCode != http.StatusGatewayTimeout {
 		t.Errorf("expected default status code = %d, got %d", http.StatusGatewayTimeout, cfg.StatusCode)
@@ -38,16 +38,16 @@ func TestTimeoutConfig_DefaultValues(t *testing.T) {
 func TestTimeoutConfig_StructAssignment(t *testing.T) {
 	t.Run("duration assignment", func(t *testing.T) {
 		cfg := Config{
-			Timeout: 60 * time.Second,
+			Duration: 60 * time.Second,
 		}
-		if cfg.Timeout != 60*time.Second {
-			t.Errorf("expected timeout = 60s, got %v", cfg.Timeout)
+		if cfg.Duration != 60*time.Second {
+			t.Errorf("expected timeout = 60s, got %v", cfg.Duration)
 		}
 	})
 
 	t.Run("status code assignment", func(t *testing.T) {
 		cfg := Config{
-			Timeout:    DefaultConfig.Timeout,
+			Duration:   DefaultConfig.Duration,
 			StatusCode: http.StatusRequestTimeout,
 		}
 		if cfg.StatusCode != http.StatusRequestTimeout {
@@ -58,8 +58,8 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 	t.Run("message assignment", func(t *testing.T) {
 		message := "Request timed out, please try again later"
 		cfg := Config{
-			Timeout: DefaultConfig.Timeout,
-			Message: message,
+			Duration: DefaultConfig.Duration,
+			Message:  message,
 		}
 		if cfg.Message != message {
 			t.Errorf("expected message = %s, got %s", message, cfg.Message)
@@ -69,7 +69,7 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 	t.Run("excluded paths assignment", func(t *testing.T) {
 		excludedPaths := []string{"/api/long-running", "/upload", "/stream", "/websocket"}
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
 		if len(cfg.ExcludedPaths) != 4 {
@@ -83,7 +83,7 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 	t.Run("included paths assignment", func(t *testing.T) {
 		includedPaths := []string{"/api/public", "/health"}
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			IncludedPaths: includedPaths,
 		}
 		if len(cfg.IncludedPaths) != 2 {
@@ -98,15 +98,15 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 		excludedPaths := []string{"/long-process", "/upload"}
 		includedPaths := []string{"/api/public"}
 		cfg := Config{
-			Timeout:       2 * time.Minute,
+			Duration:      2 * time.Minute,
 			StatusCode:    http.StatusServiceUnavailable,
 			Message:       "Service unavailable due to timeout",
 			ExcludedPaths: excludedPaths,
 			IncludedPaths: includedPaths,
 		}
 
-		if cfg.Timeout != 2*time.Minute {
-			t.Errorf("expected timeout = 2m, got %v", cfg.Timeout)
+		if cfg.Duration != 2*time.Minute {
+			t.Errorf("expected timeout = 2m, got %v", cfg.Duration)
 		}
 		if cfg.StatusCode != http.StatusServiceUnavailable {
 			t.Errorf("expected status code = %d, got %d", http.StatusServiceUnavailable, cfg.StatusCode)
@@ -150,10 +150,10 @@ func TestTimeoutConfig_DurationVariations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{
-				Timeout: tt.duration,
+				Duration: tt.duration,
 			}
-			if cfg.Timeout != tt.duration {
-				t.Errorf("expected timeout = %v, got %v", tt.duration, cfg.Timeout)
+			if cfg.Duration != tt.duration {
+				t.Errorf("expected timeout = %v, got %v", tt.duration, cfg.Duration)
 			}
 		})
 	}
@@ -177,7 +177,7 @@ func TestTimeoutConfig_StatusCodeVariations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{
-				Timeout:    DefaultConfig.Timeout,
+				Duration:   DefaultConfig.Duration,
 				StatusCode: tt.statusCode,
 			}
 			if cfg.StatusCode != tt.expected {
@@ -205,8 +205,8 @@ func TestTimeoutConfig_MessageVariations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{
-				Timeout: DefaultConfig.Timeout,
-				Message: tt.message,
+				Duration: DefaultConfig.Duration,
+				Message:  tt.message,
 			}
 			if cfg.Message != tt.message {
 				t.Errorf("expected message = %q, got %q", tt.message, cfg.Message)
@@ -218,7 +218,7 @@ func TestTimeoutConfig_MessageVariations(t *testing.T) {
 func TestTimeoutConfig_EdgeCases(t *testing.T) {
 	t.Run("empty excluded paths", func(t *testing.T) {
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: []string{},
 		}
 		if cfg.ExcludedPaths == nil {
@@ -231,7 +231,7 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 
 	t.Run("nil excluded paths", func(t *testing.T) {
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: nil,
 		}
 		if cfg.ExcludedPaths != nil {
@@ -242,7 +242,7 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 	t.Run("empty string paths", func(t *testing.T) {
 		excludedPaths := []string{"", "/upload", ""}
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
 		if len(cfg.ExcludedPaths) != 3 {
@@ -255,7 +255,7 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 
 	t.Run("empty included paths", func(t *testing.T) {
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			IncludedPaths: []string{},
 		}
 		if cfg.IncludedPaths == nil {
@@ -268,7 +268,7 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 
 	t.Run("nil included paths", func(t *testing.T) {
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			IncludedPaths: nil,
 		}
 		if cfg.IncludedPaths != nil {
@@ -279,7 +279,7 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 	t.Run("custom included paths", func(t *testing.T) {
 		includedPaths := []string{"/api/public", "/health"}
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			IncludedPaths: includedPaths,
 		}
 		if len(cfg.IncludedPaths) != 2 {
@@ -298,7 +298,7 @@ func TestTimeoutConfig_PathPatterns(t *testing.T) {
 			"*.upload", "/admin/backup/*", "/reports/generate", "/sse/*",
 		}
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
 		if len(cfg.ExcludedPaths) != len(excludedPaths) {
@@ -315,7 +315,7 @@ func TestTimeoutConfig_PathPatterns(t *testing.T) {
 			"/process (background)", "/path with spaces", "/path/with/unicode-ñ", "/files/test@example.com",
 		}
 		cfg := Config{
-			Timeout:       DefaultConfig.Timeout,
+			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
 		if len(cfg.ExcludedPaths) != len(excludedPaths) {

@@ -59,8 +59,8 @@ Response:
 Configure via server config (affects the default middleware):
 
 ```go
-app := zh.New(config.Config{
-    RequestBodySize: config.RequestBodySizeConfig{
+app := zh.New(zh.Config{
+    RequestBodySize: requestbodysize.Config{
         MaxBytes: 100 * 1024, // 100KB
     },
 })
@@ -69,8 +69,8 @@ app := zh.New(config.Config{
 ### Excluding Paths
 
 ```go
-app := zh.New(config.Config{
-    RequestBodySize: config.RequestBodySizeConfig{
+app := zh.New(zh.Config{
+    RequestBodySize: requestbodysize.Config{
         MaxBytes:    1 * 1024 * 1024, // 1MB
         ExcludedPaths: []string{"/api/webhook", "/health"},
     },

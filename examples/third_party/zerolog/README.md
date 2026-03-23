@@ -61,9 +61,9 @@ zl := zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).
     Timestamp().
     Caller().
     Logger()
-logger := NewzerologAdapter(zl)
+logger := NewZerologAdapter(zl)
 
-app := zh.New(config.Config{
+app := zh.New(zh.Config{
     Logger: logger,
 })
 ```
