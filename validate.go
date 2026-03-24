@@ -145,7 +145,8 @@ func IsValidationError(err error) bool {
 func RenderAndValidate(w http.ResponseWriter, status int, data any) error {
 	if err := V.Struct(data); err != nil {
 		// Log error for developers - this is a server-side bug
-		return fmt.Errorf("invalid response data: %w", err)
+		// Use %v (not %w) to prevent errors.As from matching ValidationErrorer
+		return fmt.Errorf("invalid response data: %v", err)
 	}
 	return R.JSON(w, status, data)
 }

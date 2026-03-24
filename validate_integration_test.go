@@ -358,3 +358,37 @@ func TestValidationWithAndWithoutRecoverMiddleware(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderAndValidate_Returns500 tests that RenderAndValidate returns 500 (not 422)
+// when response validation fails. This is a server-side bug, not a client error.
+func TestRenderAndValidate_Returns500(t *testing.T) {
+	type TestResponse struct {
+		Name  string `json:"name" validate:"required,min=2"`
+		Email string `json:"email" validate:"required,email"`
+	}
+
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		// Create invalid response data (simulating a server bug)
+		data := TestResponse{Name: "J", Email: "not-an-email"}
+		return RenderAndValidate(w, http.StatusOK, data)
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	resp, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Should return 500, NOT 422 - this is a server bug, not client error
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected status %d (Internal Server Error), got %d", http.StatusInternalServerError, resp.StatusCode)
+	}
+
+	// Verify it's not returning 422 Unprocessable Entity
+	if resp.StatusCode == http.StatusUnprocessableEntity {
+		t.Error("RenderAndValidate incorrectly returned 422 Unprocessable Entity - should be 500 for server-side bugs")
+	}
+}
