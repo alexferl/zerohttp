@@ -2,8 +2,10 @@ package zhtest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -549,4 +551,335 @@ func (a *Assertions) ProblemDetail(v any) *Assertions {
 		a.fail("failed to decode Problem Detail JSON: %v", err)
 	}
 	return a
+}
+
+// AssertNoError fails if err is not nil.
+//
+// Example:
+//
+//	err := someFunction()
+//	zhtest.AssertNoError(t, err)
+func AssertNoError(t testing.TB, err error) {
+	t.Helper()
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+// AssertError fails if err is nil.
+//
+// Example:
+//
+//	err := someFunctionThatShouldFail()
+//	zhtest.AssertError(t, err)
+func AssertError(t testing.TB, err error) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("expected an error, got nil")
+	}
+}
+
+// AssertErrorIs fails if err does not match the target error using errors.Is().
+//
+// Example:
+//
+//	err := os.Open("nonexistent")
+//	zhtest.AssertErrorIs(t, err, os.ErrNotExist)
+func AssertErrorIs(t testing.TB, err error, target error) {
+	t.Helper()
+	if !errors.Is(err, target) {
+		t.Errorf("expected error to be %v, got %v", target, err)
+	}
+}
+
+// AssertErrorContains fails if err is nil or its message does not contain the substring.
+//
+// Example:
+//
+//	err := errors.New("connection refused")
+//	zhtest.AssertErrorContains(t, err, "refused")
+func AssertErrorContains(t testing.TB, err error, substring string) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("expected an error containing %q, got nil", substring)
+		return
+	}
+	if !strings.Contains(err.Error(), substring) {
+		t.Errorf("expected error to contain %q, got %q", substring, err.Error())
+	}
+}
+
+// AssertNil fails if v is not nil.
+//
+// Example:
+//
+//	var ptr *MyStruct
+//	zhtest.AssertNil(t, ptr)
+func AssertNil(t testing.TB, v any) {
+	t.Helper()
+	if v != nil {
+		// Handle wrapped nil values (typed nil pointers, interfaces, etc.)
+		rv := reflect.ValueOf(v)
+		switch rv.Kind() {
+		case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
+			if !rv.IsNil() {
+				t.Errorf("expected nil, got %v", v)
+			}
+		default:
+			t.Errorf("expected nil, got %v", v)
+		}
+	}
+}
+
+// AssertNotNil fails if v is nil.
+//
+// Example:
+//
+//	result := someFunction()
+//	zhtest.AssertNotNil(t, result)
+func AssertNotNil(t testing.TB, v any) {
+	t.Helper()
+	if v == nil {
+		t.Errorf("expected non-nil value, got nil")
+		return
+	}
+	// Handle wrapped nil values (typed nil pointers, interfaces, etc.)
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
+		if rv.IsNil() {
+			t.Errorf("expected non-nil value, got nil")
+		}
+	}
+}
+
+// AssertEqual fails if expected != actual using == comparison.
+// Works for comparable types.
+//
+// Example:
+//
+//	zhtest.AssertEqual(t, 42, result)
+func AssertEqual(t testing.TB, expected, actual any) {
+	t.Helper()
+	if expected != actual {
+		t.Errorf("expected %v, got %v", expected, actual)
+	}
+}
+
+// AssertNotEqual fails if unexpected == actual using != comparison.
+//
+// Example:
+//
+//	zhtest.AssertNotEqual(t, "old", result)
+func AssertNotEqual(t testing.TB, unexpected, actual any) {
+	t.Helper()
+	if unexpected == actual {
+		t.Errorf("expected value not to be %v", unexpected)
+	}
+}
+
+// AssertDeepEqual fails if expected and actual are not deeply equal using reflect.DeepEqual.
+// Use this for slices, maps, and structs.
+//
+// Example:
+//
+//	expected := []int{1, 2, 3}
+//	zhtest.AssertDeepEqual(t, expected, result)
+func AssertDeepEqual(t testing.TB, expected, actual any) {
+	t.Helper()
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("expected %v, got %v", expected, actual)
+	}
+}
+
+// AssertTrue fails if condition is false.
+//
+// Example:
+//
+//	zhtest.AssertTrue(t, len(items) > 0)
+func AssertTrue(t testing.TB, condition bool) {
+	t.Helper()
+	if !condition {
+		t.Errorf("expected condition to be true")
+	}
+}
+
+// AssertFalse fails if condition is true.
+//
+// Example:
+//
+//	zhtest.AssertFalse(t, len(items) == 0)
+func AssertFalse(t testing.TB, condition bool) {
+	t.Helper()
+	if condition {
+		t.Errorf("expected condition to be false")
+	}
+}
+
+// AssertEmpty fails if s is not empty.
+// Works with strings, slices, maps, and arrays.
+//
+// Example:
+//
+//	zhtest.AssertEmpty(t, "")
+//	zhtest.AssertEmpty(t, []int{})
+func AssertEmpty(t testing.TB, s any) {
+	t.Helper()
+	if !isEmpty(s) {
+		t.Errorf("expected empty value, got %v", s)
+	}
+}
+
+// AssertNotEmpty fails if s is empty.
+// Works with strings, slices, maps, and arrays.
+//
+// Example:
+//
+//	zhtest.AssertNotEmpty(t, "hello")
+//	zhtest.AssertNotEmpty(t, []int{1, 2, 3})
+func AssertNotEmpty(t testing.TB, s any) {
+	t.Helper()
+	if isEmpty(s) {
+		t.Errorf("expected non-empty value")
+	}
+}
+
+// isEmpty checks if a value is empty.
+func isEmpty(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.String, reflect.Slice, reflect.Map, reflect.Array, reflect.Chan:
+		return rv.Len() == 0
+	case reflect.Ptr, reflect.Interface:
+		if rv.IsNil() {
+			return true
+		}
+		// Dereference and check again
+		return isEmpty(rv.Elem().Interface())
+	}
+	return false
+}
+
+// AssertLen fails if collection does not have the expected length.
+// Works with strings, slices, maps, arrays, and channels.
+//
+// Example:
+//
+//	zhtest.AssertLen(t, []int{1, 2, 3}, 3)
+func AssertLen(t testing.TB, collection any, expectedLen int) {
+	t.Helper()
+	rv := reflect.ValueOf(collection)
+	switch rv.Kind() {
+	case reflect.String, reflect.Slice, reflect.Map, reflect.Array, reflect.Chan:
+		actualLen := rv.Len()
+		if actualLen != expectedLen {
+			t.Errorf("expected length %d, got %d", expectedLen, actualLen)
+		}
+	default:
+		t.Errorf("AssertLen requires a collection type, got %T", collection)
+	}
+}
+
+// AssertContains fails if slice does not contain the element.
+// Uses reflect.DeepEqual for comparison.
+//
+// Example:
+//
+//	zhtest.AssertContains(t, []int{1, 2, 3}, 2)
+func AssertContains(t testing.TB, slice any, element any) {
+	t.Helper()
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		t.Errorf("AssertContains requires a slice or array, got %T", slice)
+		return
+	}
+
+	for i := 0; i < rv.Len(); i++ {
+		if reflect.DeepEqual(rv.Index(i).Interface(), element) {
+			return
+		}
+	}
+	t.Errorf("expected slice to contain %v", element)
+}
+
+// AssertNotContains fails if slice contains the element.
+// Uses reflect.DeepEqual for comparison.
+//
+// Example:
+//
+//	zhtest.AssertNotContains(t, []int{1, 2, 3}, 4)
+func AssertNotContains(t testing.TB, slice any, element any) {
+	t.Helper()
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		t.Errorf("AssertNotContains requires a slice or array, got %T", slice)
+		return
+	}
+
+	for i := 0; i < rv.Len(); i++ {
+		if reflect.DeepEqual(rv.Index(i).Interface(), element) {
+			t.Errorf("expected slice to not contain %v", element)
+			return
+		}
+	}
+}
+
+// AssertIsType fails if actual is not of the expected type.
+//
+// Example:
+//
+//	zhtest.AssertIsType(t, (*MyError)(nil), err)
+func AssertIsType(t testing.TB, expectedType any, actual any) {
+	t.Helper()
+	expectedReflectType := reflect.TypeOf(expectedType)
+	actualReflectType := reflect.TypeOf(actual)
+
+	// Handle nil pointer types for expected (e.g., (*MyType)(nil))
+	if expectedReflectType != nil && expectedReflectType.Kind() == reflect.Ptr && actualReflectType != nil {
+		// If expected is a pointer type but actual is not, compare the underlying type
+		if actualReflectType.Kind() != reflect.Ptr {
+			expectedReflectType = expectedReflectType.Elem()
+		}
+	}
+
+	if expectedReflectType != actualReflectType {
+		if expectedReflectType == nil {
+			t.Errorf("expected type nil, got %v", actualReflectType)
+		} else if actualReflectType == nil {
+			t.Errorf("expected type %v, got nil", expectedReflectType)
+		} else {
+			t.Errorf("expected type %v, got %v", expectedReflectType, actualReflectType)
+		}
+	}
+}
+
+// AssertImplements fails if actual does not implement the interfaceType.
+// The interfaceType should be a pointer to an interface (e.g., (*io.Reader)(nil)).
+//
+// Example:
+//
+//	zhtest.AssertImplements(t, (*io.Reader)(nil), myReader)
+func AssertImplements(t testing.TB, interfaceType any, actual any) {
+	t.Helper()
+	interfaceReflectType := reflect.TypeOf(interfaceType)
+
+	if interfaceReflectType == nil || interfaceReflectType.Kind() != reflect.Ptr || interfaceReflectType.Elem().Kind() != reflect.Interface {
+		t.Errorf("AssertImplements requires a pointer to an interface as the first argument (e.g., (*io.Reader)(nil)), got %T", interfaceType)
+		return
+	}
+
+	iface := interfaceReflectType.Elem()
+	actualReflectType := reflect.TypeOf(actual)
+
+	if actualReflectType == nil {
+		t.Errorf("expected type to implement %v, but got nil", iface)
+		return
+	}
+
+	if !actualReflectType.Implements(iface) {
+		t.Errorf("expected type %v to implement %v", actualReflectType, iface)
+	}
 }
