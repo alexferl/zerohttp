@@ -28,7 +28,7 @@ type testPtrStruct struct {
 
 type testCollectionStruct struct {
 	Items     []string         `validate:"each,min=1"`
-	Array     [3]int           `validate:"dive"`
+	Array     [3]int           `validate:"each"`
 	Map       map[string]int   `validate:"omitempty"`
 	Nested    testSimpleStruct `validate:"-"`
 	NestedPtr *testSimpleStruct
