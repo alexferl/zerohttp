@@ -191,11 +191,11 @@ func BenchmarkValidator_SliceValidation(b *testing.B) {
 
 	type Post struct {
 		Title string `validate:"required"`
-		Tags  []Tag  `validate:"dive"`
+		Tags  []Tag  `validate:"each"`
 	}
 
 	type Blog struct {
-		Posts []Post `validate:"dive"`
+		Posts []Post `validate:"each"`
 	}
 
 	b.Run("SmallSlice_5Items", func(b *testing.B) {
