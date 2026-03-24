@@ -1255,13 +1255,11 @@ func TestAssertDeepEqual(t *testing.T) {
 
 func TestAssertTrue(t *testing.T) {
 	AssertTrue(t, true)
-	AssertTrue(t, 1 == 1)
 	AssertTrue(t, len([]int{1, 2, 3}) > 0)
 }
 
 func TestAssertFalse(t *testing.T) {
 	AssertFalse(t, false)
-	AssertFalse(t, 1 == 2)
 	AssertFalse(t, len([]int{}) > 0)
 }
 
