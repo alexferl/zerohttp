@@ -1356,3 +1356,107 @@ func TestAssertImplements(t *testing.T) {
 		AssertImplements(t, (*io.Writer)(nil), &buf)
 	})
 }
+
+func TestGeneralAssert_FailurePaths(t *testing.T) {
+	t.Run("AssertNoError fails", func(t *testing.T) {
+		AssertNoError(nil, errors.New("some error"))
+	})
+
+	t.Run("AssertError fails", func(t *testing.T) {
+		AssertError(nil, nil)
+	})
+
+	t.Run("AssertErrorIs fails", func(t *testing.T) {
+		AssertErrorIs(nil, errors.New("wrong error"), os.ErrNotExist)
+	})
+
+	t.Run("AssertErrorContains with nil", func(t *testing.T) {
+		AssertErrorContains(nil, nil, "anything")
+	})
+
+	t.Run("AssertErrorContains wrong substring", func(t *testing.T) {
+		AssertErrorContains(nil, errors.New("hello"), "world")
+	})
+
+	t.Run("AssertNil fails with non-nil", func(t *testing.T) {
+		AssertNil(nil, "not nil")
+	})
+
+	t.Run("AssertNil fails with non-nil pointer", func(t *testing.T) {
+		val := 42
+		AssertNil(nil, &val)
+	})
+
+	t.Run("AssertNotNil fails with nil", func(t *testing.T) {
+		AssertNotNil(nil, nil)
+	})
+
+	t.Run("AssertNotNil fails with nil pointer", func(t *testing.T) {
+		var ptr *int
+		AssertNotNil(nil, ptr)
+	})
+
+	t.Run("AssertEqual fails", func(t *testing.T) {
+		AssertEqual(nil, 42, 43)
+	})
+
+	t.Run("AssertNotEqual fails", func(t *testing.T) {
+		AssertNotEqual(nil, 42, 42)
+	})
+
+	t.Run("AssertDeepEqual fails", func(t *testing.T) {
+		AssertDeepEqual(nil, []int{1, 2}, []int{1, 3})
+	})
+
+	t.Run("AssertTrue fails", func(t *testing.T) {
+		AssertTrue(nil, false)
+	})
+
+	t.Run("AssertFalse fails", func(t *testing.T) {
+		AssertFalse(nil, true)
+	})
+
+	t.Run("AssertEmpty fails", func(t *testing.T) {
+		AssertEmpty(nil, "not empty")
+	})
+
+	t.Run("AssertNotEmpty fails", func(t *testing.T) {
+		AssertNotEmpty(nil, "")
+	})
+
+	t.Run("AssertLen fails", func(t *testing.T) {
+		AssertLen(nil, []int{1, 2, 3}, 2)
+	})
+
+	t.Run("AssertLen with non-collection", func(t *testing.T) {
+		AssertLen(nil, 42, 1)
+	})
+
+	t.Run("AssertContains fails", func(t *testing.T) {
+		AssertContains(nil, []int{1, 2, 3}, 4)
+	})
+
+	t.Run("AssertContains with non-slice", func(t *testing.T) {
+		AssertContains(nil, 42, 1)
+	})
+
+	t.Run("AssertNotContains fails", func(t *testing.T) {
+		AssertNotContains(nil, []int{1, 2, 3}, 2)
+	})
+
+	t.Run("AssertNotContains with non-slice", func(t *testing.T) {
+		AssertNotContains(nil, 42, 1)
+	})
+
+	t.Run("AssertIsType fails", func(t *testing.T) {
+		AssertIsType(nil, 0, "string")
+	})
+
+	t.Run("AssertImplements fails", func(t *testing.T) {
+		AssertImplements(nil, (*io.Reader)(nil), 42)
+	})
+
+	t.Run("AssertImplements with invalid interfaceType", func(t *testing.T) {
+		AssertImplements(nil, 42, "test")
+	})
+}
