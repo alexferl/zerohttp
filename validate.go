@@ -7,18 +7,8 @@ import (
 	"strings"
 
 	"github.com/alexferl/zerohttp/httpx"
-	zerrors "github.com/alexferl/zerohttp/internal/errors"
-	"github.com/alexferl/zerohttp/internal/validator"
+	"github.com/alexferl/zerohttp/validator"
 )
-
-// NewValidator creates a new Validator instance with built-in validation rules.
-// This is an alias to internal/validator.NewValidator for convenience.
-var NewValidator = validator.NewValidator
-
-// ValidationErrors holds all validation errors for a struct.
-// The key is the field path (e.g., "Name", "Address.City", "Items[0].Name").
-// This is an alias to internal/validator.ValidationErrors.
-type ValidationErrors = validator.ValidationErrors
 
 // Validate is the default [Validator] instance used by the package.
 // Use it to validate structs using struct tags:
@@ -34,7 +24,7 @@ type ValidationErrors = validator.ValidationErrors
 //	}
 //
 // For convenience, use the [V] alias or [BindAndValidate] for combined binding and validation.
-var Validate = validator.NewValidator()
+var Validate = validator.New()
 
 // V is a short alias for [Validate].
 //
@@ -42,17 +32,6 @@ var Validate = validator.NewValidator()
 //	    return err
 //	}
 var V = Validate
-
-// ValidationErrorer is implemented by validation error types.
-// The default error handler uses this to detect validation errors
-// and return 422 Unprocessable Entity with proper formatting.
-type ValidationErrorer interface {
-	error
-	ValidationErrors() map[string][]string
-}
-
-// Ensure ValidationErrors implements ValidationErrorer
-var _ ValidationErrorer = (ValidationErrors)(nil)
 
 // DefaultMultipartMaxMemory is the default max memory for multipart form parsing in BindAndValidate.
 // This can be changed globally. Default is 32MB.
@@ -106,7 +85,7 @@ func BindAndValidate(r *http.Request, dst any) error {
 
 	if bindErr != nil {
 		// Wrap as binding error (400)
-		return &zerrors.BindError{Err: bindErr}
+		return &validator.BindError{Err: bindErr}
 	}
 
 	if valErr := V.Struct(dst); valErr != nil {
@@ -116,17 +95,14 @@ func BindAndValidate(r *http.Request, dst any) error {
 	return nil
 }
 
-// BindError is an alias for internal/errors.BindError
-type BindError = zerrors.BindError
-
 // IsBindError checks if an error is a binding error (should return 400).
 func IsBindError(err error) bool {
-	return zerrors.IsBindError(err)
+	return validator.IsBindError(err)
 }
 
 // IsValidationError checks if an error is a validation error (should return 422).
 func IsValidationError(err error) bool {
-	var validationErrorer ValidationErrorer
+	var validationErrorer validator.ValidationErrorer
 	ok := errors.As(err, &validationErrorer)
 	return ok
 }

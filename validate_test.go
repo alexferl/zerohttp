@@ -2,490 +2,18 @@ package zerohttp
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/validator"
 )
-
-// Test structs
-type TestUser struct {
-	Name  string `validate:"required,min=2,max=50"`
-	Email string `validate:"required,email"`
-	Age   int    `validate:"min=13,max=120"`
-}
-
-type TestOptional struct {
-	Name  string `validate:"omitempty,min=2"`
-	Email string `validate:"omitempty,email"`
-}
-
-type TestPointers struct {
-	Name *string `validate:"required,min=2"`
-	Age  *int    `validate:"omitempty,min=13"`
-}
-
-type TestNested struct {
-	User    TestUser `validate:"required"`
-	Address struct {
-		Street string `validate:"required"`
-		City   string `validate:"required"`
-	}
-}
-
-type TestSlice struct {
-	Tags  []string `validate:"min=1,max=5"`
-	Items []struct {
-		Name  string `validate:"required"`
-		Price int    `validate:"min=0"`
-	}
-}
-
-// Custom validator test
-type TestCustom struct {
-	Code string `validate:"custom_code"`
-}
-
-func TestValidationErrors_ValidUser(t *testing.T) {
-	input := TestUser{Name: "John", Email: "john@example.com", Age: 25}
-	err := V.Struct(&input)
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-}
-
-func TestValidationErrors_MissingRequired(t *testing.T) {
-	input := TestUser{}
-	err := V.Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
-	var ve ValidationErrors
-	ok := errors.As(err, &ve)
-	if !ok {
-		t.Errorf("expected ValidationErrors, got %T", err)
-		return
-	}
-	if len(ve.FieldErrors("Name")) == 0 {
-		t.Errorf("expected Name error, got none")
-	}
-	if len(ve.FieldErrors("Email")) == 0 {
-		t.Errorf("expected Email error, got none")
-	}
-}
-
-func TestValidationErrors_InvalidEmail(t *testing.T) {
-	input := TestUser{Name: "John", Email: "not-an-email", Age: 25}
-	err := V.Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
-	var ve ValidationErrors
-	errors.As(err, &ve)
-	errs := ve.FieldErrors("Email")
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e, "invalid email") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected invalid email error, got %v", errs)
-	}
-}
-
-func TestValidationErrors_MinLength(t *testing.T) {
-	input := TestUser{Name: "J", Email: "john@example.com", Age: 25}
-	err := V.Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
-	var ve ValidationErrors
-	errors.As(err, &ve)
-	errs := ve.FieldErrors("Name")
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e, "at least 2") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected min length error, got %v", errs)
-	}
-}
-
-func TestValidationErrors_MaxLength(t *testing.T) {
-	input := TestUser{Name: strings.Repeat("a", 51), Email: "john@example.com", Age: 25}
-	err := V.Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
-	var ve ValidationErrors
-	errors.As(err, &ve)
-	errs := ve.FieldErrors("Name")
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e, "at most 50") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected max length error, got %v", errs)
-	}
-}
-
-func TestValidationErrors_Multiple(t *testing.T) {
-	input := TestUser{Name: "", Email: "bad", Age: 5}
-	err := V.Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
-	var ve ValidationErrors
-	errors.As(err, &ve)
-	if len(ve.FieldErrors("Name")) == 0 {
-		t.Errorf("expected Name error")
-	}
-	if len(ve.FieldErrors("Email")) == 0 {
-		t.Errorf("expected Email error")
-	}
-	if len(ve.FieldErrors("Age")) == 0 {
-		t.Errorf("expected Age error")
-	}
-}
-
-func TestOmitempty(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   TestOptional
-		wantErr bool
-	}{
-		{
-			name:    "empty is valid",
-			input:   TestOptional{},
-			wantErr: false,
-		},
-		{
-			name:    "valid name",
-			input:   TestOptional{Name: "John"},
-			wantErr: false,
-		},
-		{
-			name:    "valid email",
-			input:   TestOptional{Email: "john@example.com"},
-			wantErr: false,
-		},
-		{
-			name:    "short name fails",
-			input:   TestOptional{Name: "J"},
-			wantErr: true,
-		},
-		{
-			name:    "bad email fails",
-			input:   TestOptional{Email: "not-an-email"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error, got nil")
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("expected no error, got %v", err)
-			}
-		})
-	}
-}
-
-func TestPointerFields(t *testing.T) {
-	name := "John"
-	shortName := "J"
-	age := 25
-
-	tests := []struct {
-		name    string
-		input   TestPointers
-		wantErr bool
-		errors  map[string][]string
-	}{
-		{
-			name:    "nil required pointer fails",
-			input:   TestPointers{},
-			wantErr: true,
-			errors: map[string][]string{
-				"Name": {"required"},
-			},
-		},
-		{
-			name:    "valid required pointer",
-			input:   TestPointers{Name: &name},
-			wantErr: false,
-		},
-		{
-			name:    "short required pointer fails",
-			input:   TestPointers{Name: &shortName},
-			wantErr: true,
-			errors: map[string][]string{
-				"Name": {"must be at least 2 characters"},
-			},
-		},
-		{
-			name:    "nil optional pointer is ok",
-			input:   TestPointers{Name: &name, Age: nil},
-			wantErr: false,
-		},
-		{
-			name:    "valid optional pointer",
-			input:   TestPointers{Name: &name, Age: &age},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
-				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
-				for field, expectedErrs := range tt.errors {
-					actualErrs := ve.FieldErrors(field)
-					for _, expected := range expectedErrs {
-						found := false
-						for _, actual := range actualErrs {
-							if strings.Contains(actual, expected) {
-								found = true
-								break
-							}
-						}
-						if !found {
-							t.Errorf("expected error containing %q for field %s, got %v", expected, field, actualErrs)
-						}
-					}
-				}
-			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
-			}
-		})
-	}
-}
-
-func TestNestedStructs(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   TestNested
-		wantErr bool
-		errors  map[string][]string
-	}{
-		{
-			name: "valid nested",
-			input: TestNested{
-				User: TestUser{Name: "John", Email: "john@example.com", Age: 25},
-				Address: struct {
-					Street string `validate:"required"`
-					City   string `validate:"required"`
-				}{Street: "123 Main St", City: "NYC"},
-			},
-			wantErr: false,
-		},
-		{
-			name:    "missing nested fields",
-			input:   TestNested{},
-			wantErr: true,
-			errors: map[string][]string{
-				"User.Name":      {"required"},
-				"User.Email":     {"required"},
-				"Address.Street": {"required"},
-				"Address.City":   {"required"},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
-				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
-				for field, expectedErrs := range tt.errors {
-					actualErrs := ve.FieldErrors(field)
-					if len(actualErrs) == 0 {
-						t.Errorf("expected errors for field %s, got none. All errors: %v", field, ve)
-						continue
-					}
-					for _, expected := range expectedErrs {
-						found := false
-						for _, actual := range actualErrs {
-							if strings.Contains(actual, expected) {
-								found = true
-								break
-							}
-						}
-						if !found {
-							t.Errorf("expected error containing %q for field %s, got %v", expected, field, actualErrs)
-						}
-					}
-				}
-			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
-			}
-		})
-	}
-}
-
-func TestSliceValidation(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   TestSlice
-		wantErr bool
-		errors  map[string][]string
-	}{
-		{
-			name:    "empty slice fails min",
-			input:   TestSlice{},
-			wantErr: true,
-			errors: map[string][]string{
-				"Tags": {"must have at least 1 items"},
-			},
-		},
-		{
-			name: "valid slice",
-			input: TestSlice{
-				Tags: []string{"a", "b"},
-			},
-			wantErr: false,
-		},
-		{
-			name: "too many tags",
-			input: TestSlice{
-				Tags: []string{"a", "b", "c", "d", "e", "f"},
-			},
-			wantErr: true,
-			errors: map[string][]string{
-				"Tags": {"must have at most 5 items"},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
-				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
-				for field, expectedErrs := range tt.errors {
-					actualErrs := ve.FieldErrors(field)
-					if len(actualErrs) == 0 {
-						t.Errorf("expected errors for field %s, got none. All errors: %v", field, ve)
-						continue
-					}
-					for _, expected := range expectedErrs {
-						found := false
-						for _, actual := range actualErrs {
-							if strings.Contains(actual, expected) {
-								found = true
-								break
-							}
-						}
-						if !found {
-							t.Errorf("expected error containing %q for field %s, got %v", expected, field, actualErrs)
-						}
-					}
-				}
-			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
-			}
-		})
-	}
-}
-
-func TestCustomValidator(t *testing.T) {
-	// Register custom validator
-	V.Register("custom_code", func(value reflect.Value, param string) error {
-		if value.Kind() != reflect.String {
-			return errors.New("custom_code only supports strings")
-		}
-		code := value.String()
-		if len(code) != 5 {
-			return errors.New("code must be 5 characters")
-		}
-		return nil
-	})
-
-	tests := []struct {
-		name    string
-		input   TestCustom
-		wantErr bool
-	}{
-		{
-			name:    "valid code",
-			input:   TestCustom{Code: "ABC12"},
-			wantErr: false,
-		},
-		{
-			name:    "invalid code length",
-			input:   TestCustom{Code: "ABC1"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error, got nil")
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("expected no error, got %v", err)
-			}
-		})
-	}
-}
 
 func TestBindAndValidate(t *testing.T) {
 	type TestRequest struct {
@@ -615,33 +143,7 @@ func TestRenderAndValidate(t *testing.T) {
 	})
 }
 
-func TestValidationErrors_HasErrors(t *testing.T) {
-	ve := ValidationErrors{}
-	if ve.HasErrors() {
-		t.Error("expected HasErrors to be false for empty errors")
-	}
-	ve.Add("field", "error")
-	if !ve.HasErrors() {
-		t.Error("expected HasErrors to be true when errors exist")
-	}
-}
-
-func TestValidationErrors_ValidationErrors(t *testing.T) {
-	ve := ValidationErrors{
-		"Name": {"required"},
-		"Age":  {"min"},
-	}
-	errs := ve.ValidationErrors()
-	if len(errs["Name"]) != 1 || errs["Name"][0] != "required" {
-		t.Errorf("expected Name error, got %v", errs["Name"])
-	}
-	if len(errs["Age"]) != 1 || errs["Age"][0] != "min" {
-		t.Errorf("expected Age error, got %v", errs["Age"])
-	}
-}
-
 func TestBindError_Unwrap(t *testing.T) {
-	inner := errors.New("inner error")
 	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader("{invalid"))
 	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	var dst struct{ Name string }
@@ -654,7 +156,7 @@ func TestBindError_Unwrap(t *testing.T) {
 		t.Error("expected IsBindError(nil) to be false")
 	}
 	// Test errors.As works with wrapped error
-	var bindErr *BindError
+	var bindErr *validator.BindError
 	if !errors.As(err, &bindErr) {
 		t.Error("expected error to be BindError")
 	}
@@ -662,7 +164,6 @@ func TestBindError_Unwrap(t *testing.T) {
 	if bindErr.Unwrap() == nil {
 		t.Error("expected Unwrap to return the inner error")
 	}
-	_ = inner // suppress unused warning
 }
 
 func TestBindAndValidate_MultipartForm(t *testing.T) {
@@ -786,458 +287,380 @@ func TestBindAndValidate_ContentTypeWithCharset(t *testing.T) {
 	}
 }
 
-// rootValidatableOrder is used to test root struct validation
-type rootValidatableOrder struct {
-	Items    []string `validate:"required,min=1"`
-	Total    float64  `validate:"gte=0"`
-	Discount float64  `validate:"gte=0"`
+func TestValidationHTTPResponse(t *testing.T) {
+	type CreateUserRequest struct {
+		Name  string `json:"name" validate:"required,min=2,max=50"`
+		Email string `json:"email" validate:"required,email"`
+		Age   int    `json:"age" validate:"min=13,max=120"`
+	}
+
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		var req CreateUserRequest
+		if err := BindAndValidate(r, &req); err != nil {
+			return err
+		}
+		return R.JSON(w, http.StatusCreated, M{"name": req.Name, "email": req.Email})
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantErrors map[string]bool // field names that should have errors
+	}{
+		{
+			name:       "valid request",
+			body:       `{"name":"John Doe","email":"john@example.com","age":25}`,
+			wantStatus: http.StatusCreated,
+			wantErrors: nil,
+		},
+		{
+			name:       "validation errors",
+			body:       `{"name":"J","email":"bad","age":5}`,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantErrors: map[string]bool{"name": true, "email": true, "age": true},
+		},
+		{
+			name:       "missing required fields",
+			body:       `{}`,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantErrors: map[string]bool{"name": true, "email": true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(tt.body)))
+			if err != nil {
+				t.Fatalf("failed to make request: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
+			}
+
+			// Check content type for error responses
+			if tt.wantStatus >= 400 {
+				contentType := resp.Header.Get(httpx.HeaderContentType)
+				if contentType != httpx.MIMEApplicationProblemJSON {
+					t.Errorf("expected application/problem+json, got %s", contentType)
+				}
+
+				var result map[string]any
+				if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+					t.Fatalf("failed to decode response: %v", err)
+				}
+
+				// Check RFC 7807 format
+				if _, ok := result["title"]; !ok {
+					t.Error("expected title field in error response")
+				}
+				if _, ok := result["status"]; !ok {
+					t.Error("expected status field in error response")
+				}
+				if _, ok := result["detail"]; !ok {
+					t.Error("expected detail field in error response")
+				}
+
+				// Check specific errors
+				e, ok := result["errors"].(map[string]any)
+				if !ok {
+					t.Fatalf("expected errors object, got %T", result["errors"])
+				}
+
+				for field := range tt.wantErrors {
+					if _, ok := e[field]; !ok {
+						t.Errorf("expected error for field %s, got errors: %v", field, e)
+					}
+				}
+			}
+		})
+	}
 }
 
-// Validate implements custom cross-field validation on the root struct
-func (o rootValidatableOrder) Validate() error {
-	var sum float64
-	for range o.Items {
-		sum += 10.0 // simplified pricing
+func TestBindingHTTPResponse(t *testing.T) {
+	type TestRequest struct {
+		Name string `json:"name" validate:"required"`
 	}
-	if o.Total != sum {
-		return fmt.Errorf("total must equal sum of items")
+
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		var req TestRequest
+		if err := BindAndValidate(r, &req); err != nil {
+			return err
+		}
+		return R.JSON(w, http.StatusOK, M{"name": req.Name})
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "invalid json",
+			body:       `{"name":}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "wrong json type",
+			body:       `[]`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "not json",
+			body:       `not json at all`,
+			wantStatus: http.StatusBadRequest,
+		},
 	}
-	if o.Discount > o.Total {
-		return fmt.Errorf("discount cannot exceed total")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(tt.body)))
+			if err != nil {
+				t.Fatalf("failed to make request: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
+			}
+		})
+	}
+}
+
+// crossFieldOrder for testing cross-field validation
+type crossFieldOrder struct {
+	Items []string `json:"items" validate:"required,min=1"`
+	Total float64  `json:"total" validate:"gte=0"`
+}
+
+// Validate checks that total matches number of items
+func (o crossFieldOrder) Validate() error {
+	expected := float64(len(o.Items)) * 10.0
+	if o.Total != expected {
+		return fmt.Errorf("total must equal %.2f (based on %d items)", expected, len(o.Items))
 	}
 	return nil
 }
 
-// TestRootStructValidate tests that Validate() is called on the root struct itself
-func TestRootStructValidate(t *testing.T) {
-	t.Run("valid order", func(t *testing.T) {
-		input := rootValidatableOrder{
-			Items:    []string{"item1", "item2"},
-			Total:    20.0,
-			Discount: 5.0,
+func TestCrossFieldValidationHTTP(t *testing.T) {
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		var req crossFieldOrder
+		if err := BindAndValidate(r, &req); err != nil {
+			return err
 		}
-		err := V.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		return R.JSON(w, http.StatusCreated, M{"total": req.Total})
 	})
 
-	t.Run("invalid total - cross field validation fails", func(t *testing.T) {
-		input := rootValidatableOrder{
-			Items: []string{"item1", "item2"},
-			Total: 100.0, // Wrong total
-		}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Error("expected error for mismatched total")
-		}
-		var ve ValidationErrors
-		errors.As(err, &ve)
-		// Root-level validation errors use the struct type name
-		if errs := ve.FieldErrors("rootValidatableOrder"); len(errs) == 0 {
-			t.Errorf("expected root validation error, got %v", ve)
-		}
-	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
 
-	t.Run("discount exceeds total", func(t *testing.T) {
-		input := rootValidatableOrder{
-			Items:    []string{"item1"},
-			Total:    10.0,
-			Discount: 20.0, // More than total
-		}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Error("expected error for discount exceeding total")
-		}
-	})
-}
-
-func TestEmbeddedStruct(t *testing.T) {
-	type Embedded struct {
-		Name string `validate:"required"`
+	// Request with mismatched total
+	body := `{"items":["item1","item2"],"total":100.00}`
+	resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(body)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
 	}
-	type TestEmbedded struct {
-		Embedded
-		Age int `validate:"min=0"`
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("expected 422 for cross-field validation error, got %d", resp.StatusCode)
 	}
 
-	t.Run("valid embedded", func(t *testing.T) {
-		input := TestEmbedded{Embedded: Embedded{Name: "John"}, Age: 25}
-		err := V.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("invalid embedded field", func(t *testing.T) {
-		input := TestEmbedded{Age: 25}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Error("expected error for missing Name in embedded struct")
-		}
-		var ve ValidationErrors
-		errors.As(err, &ve)
-		if errs := ve.FieldErrors("Name"); len(errs) == 0 {
-			t.Errorf("expected Name error, got %v", ve)
-		}
-	})
-}
-
-func TestNestedPointerValidation(t *testing.T) {
-	type Inner struct {
-		Name string `validate:"required"`
-	}
-	type TestNestedPtr struct {
-		Inner *Inner `validate:"required"`
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	t.Run("nil required pointer", func(t *testing.T) {
-		input := TestNestedPtr{Inner: nil}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Error("expected error for nil required pointer")
-		}
-	})
-
-	t.Run("valid pointer", func(t *testing.T) {
-		input := TestNestedPtr{Inner: &Inner{Name: "John"}}
-		err := V.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("invalid inner struct", func(t *testing.T) {
-		input := TestNestedPtr{Inner: &Inner{Name: ""}}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Error("expected error for invalid inner struct")
-		}
-	})
-}
-
-func TestPointerWithOmitEmpty(t *testing.T) {
-	type TestPtrOmit struct {
-		Name  *string `validate:"omitempty,min=2"`
-		Email *string `validate:"omitempty,email"`
+	e, ok := result["errors"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected errors object, got %T", result["errors"])
 	}
 
-	t.Run("nil pointer with omitempty is valid", func(t *testing.T) {
-		input := TestPtrOmit{}
-		err := V.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("valid pointer with omitempty", func(t *testing.T) {
-		name := "John"
-		email := "john@example.com"
-		input := TestPtrOmit{Name: &name, Email: &email}
-		err := V.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("invalid short name with omitempty", func(t *testing.T) {
-		name := "J"
-		input := TestPtrOmit{Name: &name}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Error("expected error for short name")
-		}
-	})
-}
-
-func TestValidationErrors_Empty(t *testing.T) {
-	// Test empty ValidationErrors.Error() returns simple message
-	ve := ValidationErrors{}
-	msg := ve.Error()
-	if msg != "validation failed" {
-		t.Errorf("expected 'validation failed', got %q", msg)
+	// Error should be on crossFieldOrder (the struct type name)
+	if _, ok := e["crossFieldOrder"]; !ok {
+		t.Errorf("expected crossFieldOrder error, got errors: %v", e)
 	}
 }
 
-// TestJSONFieldNameInErrors verifies that validation errors use json tag names
-func TestJSONFieldNameInErrors(t *testing.T) {
+func TestEachValidationHTTP(t *testing.T) {
+	type BulkRequest struct {
+		Tags []string `json:"tags" validate:"each,min=3,max=10"`
+	}
+
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		var req BulkRequest
+		if err := BindAndValidate(r, &req); err != nil {
+			return err
+		}
+		return R.JSON(w, http.StatusCreated, M{"tags": req.Tags})
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Request with invalid tags
+	body := `{"tags":["a","way-too-long"]}`
+	resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(body)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("expected 422, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	e, ok := result["errors"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected errors object, got %T", result["errors"])
+	}
+
+	// Check each validation errors use JSON field names with index
+	if _, ok := e["tags[0]"]; !ok {
+		t.Errorf("expected tags[0] error, got errors: %v", e)
+	}
+	if _, ok := e["tags[1]"]; !ok {
+		t.Errorf("expected tags[1] error, got errors: %v", e)
+	}
+}
+
+// TestValidationWithAndWithoutRecoverMiddleware verifies that validation errors
+// are handled the same way whether or not the Recover middleware is enabled.
+func TestValidationWithAndWithoutRecoverMiddleware(t *testing.T) {
 	type TestRequest struct {
-		UserName string `json:"user_name" validate:"required,min=5"`
-		Email    string `json:"email_address" validate:"required,email"`
+		Name  string `json:"name" validate:"required,min=3"`
+		Email string `json:"email" validate:"required,email"`
 	}
 
-	input := TestRequest{
-		UserName: "ab",  // too short
-		Email:    "bad", // invalid email
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		var req TestRequest
+		if err := BindAndValidate(r, &req); err != nil {
+			return err
+		}
+		return R.JSON(w, http.StatusOK, M{"name": req.Name, "email": req.Email})
+	})
+
+	// Test without Recover middleware (direct handler)
+	handlerServer := httptest.NewServer(handler)
+	defer handlerServer.Close()
+
+	// Test with Recover middleware (via App)
+	app := New()
+	app.POST("/", handler)
+	appServer := httptest.NewServer(app)
+	defer appServer.Close()
+
+	body := `{"name":"Jo","email":"not-an-email"}`
+
+	// Make requests to both servers
+	handlerResp, err := http.Post(handlerServer.URL, "application/json", bytes.NewReader([]byte(body)))
+	if err != nil {
+		t.Fatalf("failed to make request to handler: %v", err)
+	}
+	defer func() { _ = handlerResp.Body.Close() }()
+
+	appResp, err := http.Post(appServer.URL+"/", "application/json", bytes.NewReader([]byte(body)))
+	if err != nil {
+		t.Fatalf("failed to make request to app: %v", err)
+	}
+	defer func() { _ = appResp.Body.Close() }()
+
+	// Compare status codes
+	if handlerResp.StatusCode != appResp.StatusCode {
+		t.Errorf("status codes differ: handler=%d, app=%d", handlerResp.StatusCode, appResp.StatusCode)
+	}
+	if handlerResp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("expected 422, got handler=%d, app=%d", handlerResp.StatusCode, appResp.StatusCode)
 	}
 
-	err := V.Struct(&input)
-	if err == nil {
-		t.Fatal("expected error")
+	// Compare content types
+	if handlerResp.Header.Get(httpx.HeaderContentType) != appResp.Header.Get(httpx.HeaderContentType) {
+		t.Errorf("content types differ: handler=%s, app=%s",
+			handlerResp.Header.Get(httpx.HeaderContentType), appResp.Header.Get(httpx.HeaderContentType))
 	}
 
-	var ve ValidationErrors
-	ok := errors.As(err, &ve)
-	if !ok {
-		t.Fatalf("expected ValidationErrors, got %T", err)
+	// Compare response bodies
+	var handlerResult, appResult map[string]any
+	if err := json.NewDecoder(handlerResp.Body).Decode(&handlerResult); err != nil {
+		t.Fatalf("failed to decode handler response: %v", err)
+	}
+	if err := json.NewDecoder(appResp.Body).Decode(&appResult); err != nil {
+		t.Fatalf("failed to decode app response: %v", err)
 	}
 
-	// Errors should use json tag names, not Go field names
-	if errs := ve.FieldErrors("user_name"); len(errs) == 0 {
-		t.Errorf("expected error on 'user_name' (json tag), got errors: %v", ve)
-	}
-	if errs := ve.FieldErrors("Username"); len(errs) > 0 {
-		t.Errorf("should not have error on 'Username' (Go field name), got: %v", errs)
+	// Compare title
+	if handlerResult["title"] != appResult["title"] {
+		t.Errorf("titles differ: handler=%v, app=%v", handlerResult["title"], appResult["title"])
 	}
 
-	if errs := ve.FieldErrors("email_address"); len(errs) == 0 {
-		t.Errorf("expected error on 'email_address' (json tag), got errors: %v", ve)
+	// Compare status
+	if handlerResult["status"] != appResult["status"] {
+		t.Errorf("statuses differ: handler=%v, app=%v", handlerResult["status"], appResult["status"])
 	}
-	if errs := ve.FieldErrors("Email"); len(errs) > 0 {
-		t.Errorf("should not have error on 'Email' (Go field name), got: %v", errs)
+
+	// Compare detail
+	if handlerResult["detail"] != appResult["detail"] {
+		t.Errorf("details differ: handler=%v, app=%v", handlerResult["detail"], appResult["detail"])
+	}
+
+	// Compare errors
+	handlerErrors, _ := handlerResult["errors"].(map[string]any)
+	appErrors, _ := appResult["errors"].(map[string]any)
+
+	if len(handlerErrors) != len(appErrors) {
+		t.Errorf("error counts differ: handler=%d, app=%d", len(handlerErrors), len(appErrors))
+	}
+
+	for field := range handlerErrors {
+		if _, ok := appErrors[field]; !ok {
+			t.Errorf("app response missing error for field %s", field)
+		}
 	}
 }
 
-// TestJSONFieldNameInNestedErrors verifies json tag names in nested structs
-func TestJSONFieldNameInNestedErrors(t *testing.T) {
-	type Address struct {
-		Street string `json:"street_address" validate:"required"`
-		City   string `json:"city_name" validate:"required"`
-	}
-	type Person struct {
-		Name    string  `json:"full_name" validate:"required"`
-		Address Address `json:"home_address"`
+// TestRenderAndValidate_Returns500 tests that RenderAndValidate returns 500 (not 422)
+// when response validation fails. This is a server-side bug, not a client error.
+func TestRenderAndValidate_Returns500(t *testing.T) {
+	type TestResponse struct {
+		Name  string `json:"name" validate:"required,min=2"`
+		Email string `json:"email" validate:"required,email"`
 	}
 
-	input := Person{
-		Name:    "",
-		Address: Address{Street: "", City: "NYC"},
-	}
-
-	err := V.Struct(&input)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	var ve ValidationErrors
-	ok := errors.As(err, &ve)
-	if !ok {
-		t.Fatalf("expected ValidationErrors, got %T", err)
-	}
-
-	// Check nested paths use json tag names
-	if errs := ve.FieldErrors("full_name"); len(errs) == 0 {
-		t.Errorf("expected error on 'full_name', got errors: %v", ve)
-	}
-	if errs := ve.FieldErrors("home_address.street_address"); len(errs) == 0 {
-		t.Errorf("expected error on 'home_address.street_address', got errors: %v", ve)
-	}
-}
-
-// TestAnonymousEmbeddedStruct tests validation of anonymous embedded structs
-func TestAnonymousEmbeddedStruct(t *testing.T) {
-	type Embedded struct {
-		Value string `validate:"required"`
-	}
-
-	type TestAnonymous struct {
-		Embedded
-		Name string `validate:"required"`
-	}
-
-	tests := []struct {
-		name     string
-		input    TestAnonymous
-		wantErr  bool
-		errField string
-	}{
-		{
-			name:    "all valid",
-			input:   TestAnonymous{Embedded: Embedded{Value: "embedded"}, Name: "test"},
-			wantErr: false,
-		},
-		{
-			name:     "embedded field invalid",
-			input:    TestAnonymous{Embedded: Embedded{Value: ""}, Name: "test"},
-			wantErr:  true,
-			errField: "Value",
-		},
-		{
-			name:     "regular field invalid",
-			input:    TestAnonymous{Embedded: Embedded{Value: "embedded"}, Name: ""},
-			wantErr:  true,
-			errField: "Name",
-		},
-		{
-			name:     "both invalid",
-			input:    TestAnonymous{Embedded: Embedded{Value: ""}, Name: ""},
-			wantErr:  true,
-			errField: "Value",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
-				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
-				errs := ve.FieldErrors(tt.errField)
-				if len(errs) == 0 {
-					t.Errorf("expected error for field %s, got none", tt.errField)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
-			}
-		})
-	}
-}
-
-// TestAnonymousEmbeddedStructWithJSONTags tests anonymous embedded structs with json tags
-func TestAnonymousEmbeddedStructWithJSONTags(t *testing.T) {
-	type Embedded struct {
-		Value string `json:"embedded_value" validate:"required"`
-	}
-
-	type TestAnonymous struct {
-		Embedded
-		Name string `json:"name" validate:"required"`
-	}
-
-	tests := []struct {
-		name     string
-		input    TestAnonymous
-		wantErr  bool
-		errField string
-	}{
-		{
-			name:    "all valid",
-			input:   TestAnonymous{Embedded: Embedded{Value: "embedded"}, Name: "test"},
-			wantErr: false,
-		},
-		{
-			name:     "embedded field uses json tag",
-			input:    TestAnonymous{Embedded: Embedded{Value: ""}, Name: "test"},
-			wantErr:  true,
-			errField: "embedded_value",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := V.Struct(&tt.input)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
-				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
-				errs := ve.FieldErrors(tt.errField)
-				if len(errs) == 0 {
-					t.Errorf("expected error for field %s, got none", tt.errField)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
-			}
-		})
-	}
-}
-
-// TestValidationErrorsMethods tests ValidationErrors helper methods
-func TestValidationErrorsMethods(t *testing.T) {
-	t.Run("HasErrors with errors", func(t *testing.T) {
-		type Test struct {
-			Value string `validate:"required"`
-		}
-		input := Test{Value: ""}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		var ve ValidationErrors
-		errors.As(err, &ve)
-		if !ve.HasErrors() {
-			t.Error("HasErrors should return true when there are errors")
-		}
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		// Create invalid response data (simulating a server bug)
+		data := TestResponse{Name: "J", Email: "not-an-email"}
+		return RenderAndValidate(w, http.StatusOK, data)
 	})
 
-	t.Run("FieldErrors for non-existent field", func(t *testing.T) {
-		type Test struct {
-			Value string `validate:"required"`
-		}
-		input := Test{Value: ""}
-		err := V.Struct(&input)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		var ve ValidationErrors
-		errors.As(err, &ve)
-		errs := ve.FieldErrors("nonexistent")
-		if len(errs) != 0 {
-			t.Errorf("expected empty slice for non-existent field, got: %v", errs)
-		}
-	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
 
-	t.Run("Add error manually", func(t *testing.T) {
-		ve := make(ValidationErrors)
-		ve.Add("field1", "error 1")
-		ve.Add("field1", "error 2")
-		ve.Add("field2", "error 3")
+	resp, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
 
-		if len(ve["field1"]) != 2 {
-			t.Errorf("expected 2 errors for field1, got: %d", len(ve["field1"]))
-		}
-		if len(ve["field2"]) != 1 {
-			t.Errorf("expected 1 error for field2, got: %d", len(ve["field2"]))
-		}
-	})
+	// Should return 500, NOT 422 - this is a server bug, not client error
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected status %d (Internal Server Error), got %d", http.StatusInternalServerError, resp.StatusCode)
+	}
 
-	t.Run("Error string format", func(t *testing.T) {
-		ve := make(ValidationErrors)
-		ve.Add("field1", "error 1")
-		ve.Add("field2", "error 2")
-
-		msg := ve.Error()
-		if msg == "" {
-			t.Error("Error() should return non-empty string")
-		}
-		if msg == "validation failed" {
-			t.Error("Error() should include field details when there are errors")
-		}
-	})
-
-	t.Run("Error on empty ValidationErrors", func(t *testing.T) {
-		ve := ValidationErrors{}
-		msg := ve.Error()
-		if msg != "validation failed" {
-			t.Errorf("expected 'validation failed', got: %s", msg)
-		}
-	})
-
-	t.Run("ValidationErrors map accessor", func(t *testing.T) {
-		ve := make(ValidationErrors)
-		ve.Add("field", "error")
-
-		m := ve.ValidationErrors()
-		if len(m["field"]) != 1 {
-			t.Errorf("expected 1 error, got: %d", len(m["field"]))
-		}
-	})
+	// Verify it's not returning 422 Unprocessable Entity
+	if resp.StatusCode == http.StatusUnprocessableEntity {
+		t.Error("RenderAndValidate incorrectly returned 422 Unprocessable Entity - should be 500 for server-side bugs")
+	}
 }

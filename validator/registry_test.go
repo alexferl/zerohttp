@@ -70,7 +70,7 @@ func (e *testEmbeddedValue) Validate() error {
 // TestGetTypeInfo_CacheHit tests the fast path when type is already cached
 func TestGetTypeInfo_CacheHit(t *testing.T) {
 	// Create a fresh registry for isolation
-	freshRegistry := &validatorTypeRegistry{}
+	freshRegistry := &typeRegistry{}
 
 	typ := reflect.TypeOf(testSimpleStruct{})
 
@@ -90,11 +90,11 @@ func TestGetTypeInfo_CacheHit(t *testing.T) {
 // TestGetTypeInfo_LoadOrStoreRace tests the LoadOrStore path when another goroutine stores first
 func TestGetTypeInfo_LoadOrStoreRace(t *testing.T) {
 	// Create a fresh registry
-	freshRegistry := &validatorTypeRegistry{}
+	freshRegistry := &typeRegistry{}
 	typ := reflect.TypeOf(testSimpleStruct{})
 
 	// Pre-populate the cache directly
-	prePopulatedInfo := &validatorTypeInfo{
+	prePopulatedInfo := &typeInfo{
 		fields:            []validatedFieldInfo{},
 		hasCustomValidate: false,
 	}
@@ -110,7 +110,7 @@ func TestGetTypeInfo_LoadOrStoreRace(t *testing.T) {
 // TestGetTypeInfo_ConcurrentAccess tests concurrent access to the registry
 func TestGetTypeInfo_ConcurrentAccess(t *testing.T) {
 	// Clear cache
-	ValidatorRegistry.cache = sync.Map{}
+	Registry.cache = sync.Map{}
 
 	typ := reflect.TypeOf(testSimpleStruct{})
 	const numGoroutines = 100
@@ -118,12 +118,12 @@ func TestGetTypeInfo_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	results := make(chan *validatorTypeInfo, numGoroutines)
+	results := make(chan *typeInfo, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			info := ValidatorRegistry.GetTypeInfo(typ)
+			info := Registry.GetTypeInfo(typ)
 			results <- info
 		}()
 	}
@@ -131,7 +131,7 @@ func TestGetTypeInfo_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 	close(results)
 
-	var firstInfo *validatorTypeInfo
+	var firstInfo *typeInfo
 	for info := range results {
 		if firstInfo == nil {
 			firstInfo = info
@@ -144,7 +144,7 @@ func TestGetTypeInfo_ConcurrentAccess(t *testing.T) {
 // TestAnalyzeType_SimpleStruct tests analysis of a simple struct
 func TestAnalyzeType_SimpleStruct(t *testing.T) {
 	typ := reflect.TypeOf(testSimpleStruct{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if info.hasCustomValidate {
 		t.Error("expected no custom validate")
@@ -188,7 +188,7 @@ func TestAnalyzeType_SimpleStruct(t *testing.T) {
 // TestAnalyzeType_EmbeddedStruct tests analysis of embedded structs
 func TestAnalyzeType_EmbeddedStruct(t *testing.T) {
 	typ := reflect.TypeOf(testEmbeddedStruct{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 2 {
 		t.Fatalf("expected 2 fields, got %d", len(info.fields))
@@ -219,7 +219,7 @@ func TestAnalyzeType_EmbeddedStruct(t *testing.T) {
 // TestAnalyzeType_PointerFields tests pointer field handling
 func TestAnalyzeType_PointerFields(t *testing.T) {
 	typ := reflect.TypeOf(testPtrStruct{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 1 {
 		t.Fatalf("expected 1 field, got %d", len(info.fields))
@@ -237,7 +237,7 @@ func TestAnalyzeType_PointerFields(t *testing.T) {
 // TestAnalyzeType_CollectionFields tests slice, array, and map fields
 func TestAnalyzeType_CollectionFields(t *testing.T) {
 	typ := reflect.TypeOf(testCollectionStruct{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 4 {
 		t.Fatalf("expected 4 fields, got %d", len(info.fields))
@@ -280,7 +280,7 @@ func TestAnalyzeType_CollectionFields(t *testing.T) {
 // TestAnalyzeType_TimeField tests time.Time field handling
 func TestAnalyzeType_TimeField(t *testing.T) {
 	typ := reflect.TypeOf(testTimeStruct{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 1 {
 		t.Fatalf("expected 1 field, got %d", len(info.fields))
@@ -298,7 +298,7 @@ func TestAnalyzeType_TimeField(t *testing.T) {
 // TestAnalyzeType_MixedTags tests various JSON tag combinations
 func TestAnalyzeType_MixedTags(t *testing.T) {
 	typ := reflect.TypeOf(testMixedTags{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 4 {
 		t.Fatalf("expected 4 fields, got %d", len(info.fields))
@@ -338,7 +338,7 @@ func TestAnalyzeType_MixedTags(t *testing.T) {
 // TestAnalyzeType_UnexportedFields tests that unexported fields are skipped
 func TestAnalyzeType_UnexportedFields(t *testing.T) {
 	typ := reflect.TypeOf(testUnexportedFields{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 1 {
 		t.Fatalf("expected 1 field (unexported skipped), got %d", len(info.fields))
@@ -352,7 +352,7 @@ func TestAnalyzeType_UnexportedFields(t *testing.T) {
 // TestAnalyzeType_SkipField tests that fields with "-" validate tag are skipped
 func TestAnalyzeType_SkipField(t *testing.T) {
 	typ := reflect.TypeOf(testSkipField{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 1 {
 		t.Fatalf("expected 1 field (skipped field omitted), got %d", len(info.fields))
@@ -367,14 +367,14 @@ func TestAnalyzeType_SkipField(t *testing.T) {
 func TestAnalyzeType_HasCustomValidate(t *testing.T) {
 	// Struct without Validate()
 	simpleTyp := reflect.TypeOf(testSimpleStruct{})
-	simpleInfo := ValidatorRegistry.GetTypeInfo(simpleTyp)
+	simpleInfo := Registry.GetTypeInfo(simpleTyp)
 	if simpleInfo.hasCustomValidate {
 		t.Error("expected no custom validate for simple struct")
 	}
 
 	// Struct with Validate()
 	customTyp := reflect.TypeOf(testEmbeddedValue{})
-	customInfo := ValidatorRegistry.GetTypeInfo(customTyp)
+	customInfo := Registry.GetTypeInfo(customTyp)
 	if !customInfo.hasCustomValidate {
 		t.Error("expected hasCustomValidate true for struct with Validate()")
 	}
@@ -383,7 +383,7 @@ func TestAnalyzeType_HasCustomValidate(t *testing.T) {
 // TestEachIndex_Default tests that eachIndex defaults to -1
 func TestEachIndex_Default(t *testing.T) {
 	typ := reflect.TypeOf(testSimpleStruct{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	for _, field := range info.fields {
 		if field.eachIndex != -1 {
@@ -397,7 +397,7 @@ func TestEmptyStruct(t *testing.T) {
 	type emptyStruct struct{}
 
 	typ := reflect.TypeOf(emptyStruct{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 0 {
 		t.Errorf("expected 0 fields for empty struct, got %d", len(info.fields))
@@ -415,7 +415,7 @@ func TestStructWithOnlyUnexportedFields(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(onlyUnexported{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 0 {
 		t.Errorf("expected 0 fields (all unexported), got %d", len(info.fields))
@@ -430,7 +430,7 @@ func TestStructWithOnlySkippedFields(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(onlySkipped{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 0 {
 		t.Errorf("expected 0 fields (all skipped), got %d", len(info.fields))
@@ -444,7 +444,7 @@ func TestNestedPointerStruct(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(nestedPtr{})
-	info := ValidatorRegistry.GetTypeInfo(typ)
+	info := Registry.GetTypeInfo(typ)
 
 	if len(info.fields) != 1 {
 		t.Fatalf("expected 1 field, got %d", len(info.fields))

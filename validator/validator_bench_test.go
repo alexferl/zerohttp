@@ -1,4 +1,4 @@
-package zerohttp
+package validator
 
 import (
 	"fmt"
@@ -20,13 +20,13 @@ func BenchmarkValidator_SimpleStruct(b *testing.B) {
 		Age:   30,
 	}
 
-	validator := NewValidator()
+	val := New()
 
 	b.Run("Valid", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(validUser)
+			_ = val.Struct(validUser)
 		}
 	})
 
@@ -40,7 +40,7 @@ func BenchmarkValidator_SimpleStruct(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(invalidUser)
+			_ = val.Struct(invalidUser)
 		}
 	})
 }
@@ -64,12 +64,12 @@ func BenchmarkValidator_FieldCount(b *testing.B) {
 			F5: "test@example.com",
 		}
 
-		validator := NewValidator()
+		v := New()
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -104,12 +104,12 @@ func BenchmarkValidator_FieldCount(b *testing.B) {
 			F16: "http://a.com", F17: "http://b.com", F18: "http://c.com", F19: "http://d.com", F20: "http://e.com",
 		}
 
-		validator := NewValidator()
+		v := New()
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 }
@@ -162,7 +162,7 @@ func BenchmarkValidator_NestedStruct(b *testing.B) {
 		},
 	}
 
-	validator := NewValidator()
+	v := New()
 
 	b.Run("Shallow_1Level", func(b *testing.B) {
 		person := company.CEO
@@ -170,7 +170,7 @@ func BenchmarkValidator_NestedStruct(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(person)
+			_ = v.Struct(person)
 		}
 	})
 
@@ -178,7 +178,7 @@ func BenchmarkValidator_NestedStruct(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(company)
+			_ = v.Struct(company)
 		}
 	})
 }
@@ -205,12 +205,12 @@ func BenchmarkValidator_SliceValidation(b *testing.B) {
 		}
 		post := Post{Title: "Test Post", Tags: tags}
 
-		validator := NewValidator()
+		v := New()
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(post)
+			_ = v.Struct(post)
 		}
 	})
 
@@ -221,12 +221,12 @@ func BenchmarkValidator_SliceValidation(b *testing.B) {
 		}
 		post := Post{Title: "Test Post", Tags: tags}
 
-		validator := NewValidator()
+		v := New()
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(post)
+			_ = v.Struct(post)
 		}
 	})
 
@@ -241,19 +241,19 @@ func BenchmarkValidator_SliceValidation(b *testing.B) {
 		}
 		blog := Blog{Posts: posts}
 
-		validator := NewValidator()
+		v := New()
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(blog)
+			_ = v.Struct(blog)
 		}
 	})
 }
 
 // BenchmarkValidator_IndividualValidators measures specific validator performance.
 func BenchmarkValidator_IndividualValidators(b *testing.B) {
-	validator := NewValidator()
+	v := New()
 
 	type RequiredField struct {
 		Value string `validate:"required"`
@@ -307,7 +307,7 @@ func BenchmarkValidator_IndividualValidators(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				_ = validator.Struct(tc.value)
+				_ = v.Struct(tc.value)
 			}
 		})
 	}
@@ -326,12 +326,12 @@ func BenchmarkValidator_MapValidation(b *testing.B) {
 		}
 		cfg := Config{Settings: settings}
 
-		validator := NewValidator()
+		v := New()
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(cfg)
+			_ = v.Struct(cfg)
 		}
 	})
 
@@ -342,12 +342,12 @@ func BenchmarkValidator_MapValidation(b *testing.B) {
 		}
 		cfg := Config{Settings: settings}
 
-		validator := NewValidator()
+		v := New()
 
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(cfg)
+			_ = v.Struct(cfg)
 		}
 	})
 }
@@ -366,14 +366,14 @@ func BenchmarkValidator_Concurrent(b *testing.B) {
 		Age:   30,
 	}
 
-	validator := NewValidator()
+	v := New()
 
 	b.Run("SharedValidator", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				_ = validator.Struct(user)
+				_ = v.Struct(user)
 			}
 		})
 	})
@@ -382,7 +382,7 @@ func BenchmarkValidator_Concurrent(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
-			v := NewValidator()
+			v := New()
 			for pb.Next() {
 				_ = v.Struct(user)
 			}
@@ -396,8 +396,8 @@ func BenchmarkValidator_CustomValidator(b *testing.B) {
 		Value string `validate:"customRule"`
 	}
 
-	validator := NewValidator()
-	validator.Register("customRule", func(value reflect.Value, param string) error {
+	v := New()
+	v.Register("customRule", func(value reflect.Value, param string) error {
 		if value.String() == "forbidden" {
 			return fmt.Errorf("value is forbidden")
 		}
@@ -409,7 +409,7 @@ func BenchmarkValidator_CustomValidator(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		_ = validator.Struct(s)
+		_ = v.Struct(s)
 	}
 }
 
@@ -419,7 +419,7 @@ func BenchmarkValidator_OneOf(b *testing.B) {
 		Status string `validate:"oneof=active inactive pending"`
 	}
 
-	validator := NewValidator()
+	v := New()
 
 	b.Run("MatchFirst", func(b *testing.B) {
 		s := StatusField{Status: "active"}
@@ -427,7 +427,7 @@ func BenchmarkValidator_OneOf(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -437,7 +437,7 @@ func BenchmarkValidator_OneOf(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 }
@@ -460,18 +460,18 @@ func BenchmarkValidator_PointerValidation(b *testing.B) {
 		Age:   &age,
 	}
 
-	validator := NewValidator()
+	v := New()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		_ = validator.Struct(s)
+		_ = v.Struct(s)
 	}
 }
 
 // BenchmarkValidator_StringValidation measures various string validators.
 func BenchmarkValidator_StringValidation(b *testing.B) {
-	validator := NewValidator()
+	v := New()
 
 	b.Run("Lowercase", func(b *testing.B) {
 		type S struct {
@@ -481,7 +481,7 @@ func BenchmarkValidator_StringValidation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -493,7 +493,7 @@ func BenchmarkValidator_StringValidation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -505,7 +505,7 @@ func BenchmarkValidator_StringValidation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -517,7 +517,7 @@ func BenchmarkValidator_StringValidation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -529,7 +529,7 @@ func BenchmarkValidator_StringValidation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -541,7 +541,7 @@ func BenchmarkValidator_StringValidation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 
@@ -553,7 +553,7 @@ func BenchmarkValidator_StringValidation(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = validator.Struct(s)
+			_ = v.Struct(s)
 		}
 	})
 }

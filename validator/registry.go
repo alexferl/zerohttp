@@ -24,27 +24,27 @@ type validatedFieldInfo struct {
 	isMap      bool
 }
 
-// validatorTypeInfo stores cached reflection information for a struct type.
-type validatorTypeInfo struct {
+// typeInfo stores cached reflection information for a struct type.
+type typeInfo struct {
 	fields            []validatedFieldInfo
 	hasCustomValidate bool
 }
 
-// validatorTypeRegistry caches reflection information for struct types using sync.Map.
+// typeRegistry caches reflection information for struct types using sync.Map.
 // This avoids repeated reflection overhead during struct validation.
-type validatorTypeRegistry struct {
-	cache sync.Map // map[reflect.Type]*validatorTypeInfo
+type typeRegistry struct {
+	cache sync.Map // map[reflect.Type]*typeInfo
 }
 
-// ValidatorRegistry is the package-level type registry instance.
-var ValidatorRegistry = &validatorTypeRegistry{}
+// Registry is the package-level type registry instance.
+var Registry = &typeRegistry{}
 
 // GetTypeInfo retrieves cached type information for the given type.
 // If the type hasn't been analyzed yet, it analyzes and caches it.
-func (tr *validatorTypeRegistry) GetTypeInfo(t reflect.Type) *validatorTypeInfo {
+func (tr *typeRegistry) GetTypeInfo(t reflect.Type) *typeInfo {
 	// Fast path: sync.Map Load
 	if info, ok := tr.cache.Load(t); ok {
-		return info.(*validatorTypeInfo)
+		return info.(*typeInfo)
 	}
 
 	// Slow path: create type info
@@ -52,7 +52,7 @@ func (tr *validatorTypeRegistry) GetTypeInfo(t reflect.Type) *validatorTypeInfo 
 
 	// Store in cache (if another goroutine stored first, use that)
 	if existing, loaded := tr.cache.LoadOrStore(t, info); loaded {
-		return existing.(*validatorTypeInfo)
+		return existing.(*typeInfo)
 	}
 	return info
 }
@@ -64,8 +64,8 @@ var validateInterface = reflect.TypeFor[interface{ Validate() error }]()
 var timeType = reflect.TypeOf(time.Time{})
 
 // analyzeType analyzes a struct type and extracts all field information.
-func (tr *validatorTypeRegistry) analyzeType(t reflect.Type) *validatorTypeInfo {
-	info := &validatorTypeInfo{
+func (tr *typeRegistry) analyzeType(t reflect.Type) *typeInfo {
+	info := &typeInfo{
 		fields: make([]validatedFieldInfo, 0, t.NumField()),
 	}
 

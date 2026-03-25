@@ -17,6 +17,7 @@ import (
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware/requestlogger"
+	"github.com/alexferl/zerohttp/validator"
 )
 
 var (
@@ -91,7 +92,7 @@ func (h HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Returns appropriate HTTP responses for different error types.
 func handleHandlerError(w http.ResponseWriter, err error) {
 	// Check for validation errors (422)
-	var verr ValidationErrorer
+	var verr validator.ValidationErrorer
 	if errors.As(err, &verr) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 		w.WriteHeader(http.StatusUnprocessableEntity)
