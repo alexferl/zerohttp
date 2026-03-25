@@ -745,6 +745,90 @@ func TestAssert_FailurePaths(t *testing.T) {
 		}
 	})
 
+	t.Run("JSONPathNotEqual failure", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
+			t.Errorf("failed to write: %v", err)
+		}
+
+		result := Assert(w).JSONPathNotEqual("user.name", "John")
+		if result == nil {
+			t.Error("expected chain to continue after failure")
+		}
+	})
+
+	t.Run("JSONPathNotEqual invalid JSON", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("failed to write: %v", err)
+		}
+
+		result := Assert(w).JSONPathNotEqual("user", "value")
+		if result == nil {
+			t.Error("expected chain to continue after failure")
+		}
+	})
+
+	t.Run("JSONPathNotEqual missing key", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		if _, err := w.Write([]byte(`{"user": {}}`)); err != nil {
+			t.Errorf("failed to write: %v", err)
+		}
+
+		result := Assert(w).JSONPathNotEqual("user.name", "John")
+		if result == nil {
+			t.Error("expected chain to continue after failure")
+		}
+	})
+
+	t.Run("JSONPathExists failure", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		if _, err := w.Write([]byte(`{"user": {}}`)); err != nil {
+			t.Errorf("failed to write: %v", err)
+		}
+
+		result := Assert(w).JSONPathExists("user.name")
+		if result == nil {
+			t.Error("expected chain to continue after failure")
+		}
+	})
+
+	t.Run("JSONPathExists invalid JSON", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("failed to write: %v", err)
+		}
+
+		result := Assert(w).JSONPathExists("user")
+		if result == nil {
+			t.Error("expected chain to continue after failure")
+		}
+	})
+
+	t.Run("JSONPathNotExists failure", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
+			t.Errorf("failed to write: %v", err)
+		}
+
+		result := Assert(w).JSONPathNotExists("user.name")
+		if result == nil {
+			t.Error("expected chain to continue after failure")
+		}
+	})
+
+	t.Run("JSONPathNotExists invalid JSON", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("failed to write: %v", err)
+		}
+
+		result := Assert(w).JSONPathNotExists("user")
+		if result == nil {
+			t.Error("expected chain to continue after failure")
+		}
+	})
+
 	t.Run("Cookie wrong value", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.SetCookie(w, &http.Cookie{Name: "session", Value: "wrong"})
