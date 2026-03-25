@@ -298,6 +298,71 @@ func (a *Assertions) JSONPathEqual(path string, expected any) *Assertions {
 	return a
 }
 
+// JSONPathNotEqual asserts that the value at the given JSON path is not equal to the unexpected value.
+// Uses simple dot notation (e.g., "user.name", "items.0.id").
+//
+// Example:
+//
+//	zhtest.AssertWith(t, w).JSONPathNotEqual("user.name", "Jane")
+func (a *Assertions) JSONPathNotEqual(path string, unexpected any) *Assertions {
+	var data map[string]any
+	if err := json.Unmarshal(a.resp.Body.Bytes(), &data); err != nil {
+		a.fail("failed to decode JSON: %v\nbody: %s", err, a.resp.Body.String())
+		return a
+	}
+
+	value, err := getJSONPath(data, path)
+	if err != nil {
+		a.fail("JSON path error: %v", err)
+		return a
+	}
+
+	if fmt.Sprintf("%v", value) == fmt.Sprintf("%v", unexpected) {
+		a.fail("expected JSON path %q to not be %v", path, unexpected)
+	}
+	return a
+}
+
+// JSONPathExists asserts that the given JSON path exists in the response.
+// Uses simple dot notation (e.g., "user.name", "items.0.id").
+//
+// Example:
+//
+//	zhtest.AssertWith(t, w).JSONPathExists("user.name")
+func (a *Assertions) JSONPathExists(path string) *Assertions {
+	var data map[string]any
+	if err := json.Unmarshal(a.resp.Body.Bytes(), &data); err != nil {
+		a.fail("failed to decode JSON: %v\nbody: %s", err, a.resp.Body.String())
+		return a
+	}
+
+	_, err := getJSONPath(data, path)
+	if err != nil {
+		a.fail("expected JSON path %q to exist, but it was not found", path)
+	}
+	return a
+}
+
+// JSONPathNotExists asserts that the given JSON path does not exist in the response.
+// Uses simple dot notation (e.g., "user.password", "items.0.secret").
+//
+// Example:
+//
+//	zhtest.AssertWith(t, w).JSONPathNotExists("user.password")
+func (a *Assertions) JSONPathNotExists(path string) *Assertions {
+	var data map[string]any
+	if err := json.Unmarshal(a.resp.Body.Bytes(), &data); err != nil {
+		a.fail("failed to decode JSON: %v\nbody: %s", err, a.resp.Body.String())
+		return a
+	}
+
+	_, err := getJSONPath(data, path)
+	if err == nil {
+		a.fail("expected JSON path %q to not exist, but it was found", path)
+	}
+	return a
+}
+
 // getJSONPath retrieves a value from a JSON structure using dot notation.
 func getJSONPath(data map[string]any, path string) (any, error) {
 	parts := strings.Split(path, ".")
