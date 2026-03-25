@@ -33,7 +33,10 @@
 //	    Status(http.StatusCreated).
 //	    Header(httpx.HeaderContentType, "application/json").
 //	    JSONPathEqual("name", "John").
-//	    JSONPathEqual("email", "john@example.com")
+//	    JSONPathEqual("email", "john@example.com").
+//	    JSONPathNotEqual("status", "inactive").
+//	    JSONPathExists("id").
+//	    JSONPathNotExists("password")
 //
 // # General Assertions
 //

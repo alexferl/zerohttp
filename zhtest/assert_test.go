@@ -261,6 +261,157 @@ func TestAssert_JSONPathEqual(t *testing.T) {
 	})
 }
 
+func TestAssert_JSONPathNotEqual(t *testing.T) {
+	t.Run("value is not equal", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathNotEqual("user.name", "Jane")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+
+	t.Run("works with array index", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"items": [{"id": 1}, {"id": 2}]}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathNotEqual("items.0.id", "999")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+}
+
+func TestAssert_JSONPathExists(t *testing.T) {
+	t.Run("path exists", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathExists("user.name")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+
+	t.Run("nested path exists", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"user": {"profile": {"name": "John"}}}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathExists("user.profile.name")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+
+	t.Run("array index exists", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"items": [{"id": 1}]}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathExists("items.0.id")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+}
+
+func TestAssert_JSONPathNotExists(t *testing.T) {
+	t.Run("path does not exist", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathNotExists("user.password")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+
+	t.Run("nested path does not exist", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"user": {"profile": {"name": "John"}}}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathNotExists("user.profile.email")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+
+	t.Run("array index out of bounds", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`{"items": [{"id": 1}]}`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		result := Assert(w).JSONPathNotExists("items.5.id")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+			if _, err := w.Write([]byte(`not json`)); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
+		})
+		req := NewRequest(http.MethodGet, "/").Build()
+		w := Serve(handler, req)
+
+		// This will fail to decode JSON, but we still return the assertion
+		result := Assert(w).JSONPathNotExists("any.path")
+		if result == nil {
+			t.Error("expected result to not be nil")
+		}
+	})
+}
+
 func TestAssert_Cookie(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: "abc123"})
