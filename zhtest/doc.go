@@ -35,6 +35,51 @@
 //	    JSONPathEqual("name", "John").
 //	    JSONPathEqual("email", "john@example.com")
 //
+// # General Assertions
+//
+// Use standalone assertion functions for general test assertions:
+//
+// Error Assertions:
+//
+//	zhtest.AssertNoError(t, err)
+//	zhtest.AssertError(t, err)
+//	zhtest.AssertErrorIs(t, err, os.ErrNotExist)
+//	zhtest.AssertErrorContains(t, err, "connection refused")
+//
+// Nil/NotNil Assertions:
+//
+//	zhtest.AssertNil(t, ptr)
+//	zhtest.AssertNotNil(t, result)
+//
+// Equality Assertions:
+//
+//	zhtest.AssertEqual(t, 42, result)
+//	zhtest.AssertNotEqual(t, "old", result)
+//	zhtest.AssertDeepEqual(t, []int{1, 2, 3}, result)
+//
+// Boolean Assertions:
+//
+//	zhtest.AssertTrue(t, len(items) > 0)
+//	zhtest.AssertFalse(t, len(items) == 0)
+//
+// Empty/NotEmpty Assertions:
+//
+//	zhtest.AssertEmpty(t, "")
+//	zhtest.AssertEmpty(t, []int{})
+//	zhtest.AssertNotEmpty(t, "hello")
+//	zhtest.AssertNotEmpty(t, []int{1, 2, 3})
+//
+// Collection Assertions:
+//
+//	zhtest.AssertLen(t, []int{1, 2, 3}, 3)
+//	zhtest.AssertContains(t, []int{1, 2, 3}, 2)
+//	zhtest.AssertNotContains(t, []int{1, 2, 3}, 4)
+//
+// Type Assertions:
+//
+//	zhtest.AssertIsType(t, (*MyError)(nil), err)
+//	zhtest.AssertImplements(t, (*io.Reader)(nil), myReader)
+//
 // # Testing Problem Details
 //
 // Assert RFC 9457 Problem Detail responses:
