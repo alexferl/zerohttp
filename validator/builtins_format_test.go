@@ -23,7 +23,7 @@ func TestBase64Validator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := NewValidator().Struct(&TestBase64{Value: tt.value})
+			err := New().Struct(&TestBase64{Value: tt.value})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -39,7 +39,7 @@ func TestBase64OnNonString(t *testing.T) {
 		Value int `validate:"base64"`
 	}
 	input := Test{Value: 123}
-	if err := NewValidator().Struct(&input); err == nil {
+	if err := New().Struct(&input); err == nil {
 		t.Error("expected error for base64 on non-string")
 	}
 }
@@ -64,7 +64,7 @@ func TestHexadecimalValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := NewValidator().Struct(&TestHex{Value: tt.value})
+			err := New().Struct(&TestHex{Value: tt.value})
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.value)
 			}
@@ -80,7 +80,7 @@ func TestHexadecimalOnNonString(t *testing.T) {
 		Value int `validate:"hexadecimal"`
 	}
 	input := Test{Value: 123}
-	if err := NewValidator().Struct(&input); err == nil {
+	if err := New().Struct(&input); err == nil {
 		t.Error("expected error for hexadecimal on non-string")
 	}
 }
@@ -110,7 +110,7 @@ func TestHexColorValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestHexColor{Color: tt.color}
-			err := NewValidator().Struct(&input)
+			err := New().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.color)
 			}
@@ -126,7 +126,7 @@ func TestHexColorOnNonString(t *testing.T) {
 		Value int `validate:"hexcolor"`
 	}
 	input := Test{Value: 123}
-	if err := NewValidator().Struct(&input); err == nil {
+	if err := New().Struct(&input); err == nil {
 		t.Error("expected error for hexcolor on non-string")
 	}
 }
@@ -153,7 +153,7 @@ func TestE164Validator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestE164{Phone: tt.phone}
-			err := NewValidator().Struct(&input)
+			err := New().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.phone)
 			}
@@ -169,7 +169,7 @@ func TestE164OnNonString(t *testing.T) {
 		Value int `validate:"e164"`
 	}
 	input := Test{Value: 123}
-	if err := NewValidator().Struct(&input); err == nil {
+	if err := New().Struct(&input); err == nil {
 		t.Error("expected error for e164 on non-string")
 	}
 }
@@ -198,7 +198,7 @@ func TestSemverValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestSemver{Version: tt.version}
-			err := NewValidator().Struct(&input)
+			err := New().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.version)
 			}
@@ -214,7 +214,7 @@ func TestSemverOnNonString(t *testing.T) {
 		Value int `validate:"semver"`
 	}
 	input := Test{Value: 123}
-	if err := NewValidator().Struct(&input); err == nil {
+	if err := New().Struct(&input); err == nil {
 		t.Error("expected error for semver on non-string")
 	}
 }
@@ -238,7 +238,7 @@ func TestJWTValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestJWT{Token: tt.token}
-			err := NewValidator().Struct(&input)
+			err := New().Struct(&input)
 			if tt.wantErr && err == nil {
 				t.Errorf("expected error for %q", tt.token)
 			}
@@ -254,7 +254,7 @@ func TestJWTOnNonString(t *testing.T) {
 		Value int `validate:"jwt"`
 	}
 	input := Test{Value: 123}
-	if err := NewValidator().Struct(&input); err == nil {
+	if err := New().Struct(&input); err == nil {
 		t.Error("expected error for jwt on non-string")
 	}
 }

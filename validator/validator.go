@@ -1,81 +1,3 @@
-// Package validator provides struct tag-based validation with no external dependencies.
-//
-// # Built-in Validators
-//
-// Core validators:
-//
-//	required  - Field must not be empty/zero value
-//	omitempty - Skip validation if field is empty
-//	eq        - Equal to value
-//	ne        - Not equal to value
-//
-// String validators:
-//
-//	min        - Minimum length (runes)
-//	max        - Maximum length (runes)
-//	len        - Exact length
-//	contains   - Contains substring
-//	startswith - Starts with prefix
-//	endswith   - Ends with suffix
-//	excludes   - Excludes substring
-//	alpha      - Letters only (Unicode)
-//	alphanum   - Letters and numbers only
-//	lowercase  - All lowercase
-//	uppercase  - All uppercase
-//	ascii      - ASCII characters only
-//	printascii - Printable ASCII only
-//	numeric    - Numeric digits only
-//	oneof      - One of allowed values (space-separated)
-//
-// Numeric validators:
-//
-//	min  - Minimum value
-//	max  - Maximum value
-//	gt   - Greater than
-//	lt   - Less than
-//	gte  - Greater than or equal
-//	lte  - Less than or equal
-//
-// Format validators:
-//
-//	email       - Email address format
-//	uuid        - UUID format
-//	datetime    - Custom datetime format
-//	base64      - Base64 encoded
-//	hexadecimal - Hex string
-//	hexcolor    - Hex color (#RGB, #RGBA, #RRGGBB, #RRGGBBAA)
-//	e164        - E.164 phone number
-//	semver      - Semantic version
-//	jwt         - JWT format (3 base64 parts)
-//	boolean     - Boolean string (true/false/yes/no/on/off/1/0)
-//	json        - Valid JSON
-//
-// Network validators:
-//
-//	ip       - IP address (v4 or v6)
-//	ipv4     - IPv4 address
-//	ipv6     - IPv6 address
-//	cidr     - CIDR notation
-//	hostname - RFC 952 hostname
-//	uri      - Absolute URI
-//	url      - HTTP/HTTPS URL
-//
-// Collection validators:
-//
-//	unique - Unique elements in slice
-//	each   - Validate each element
-//
-// # Usage
-//
-//	type User struct {
-//	    Name  string `validate:"required,min=2,max=50"`
-//	    Email string `validate:"required,email"`
-//	    Age   int    `validate:"min=13,max=120"`
-//	}
-//
-//	if err := validator.Struct(&user); err != nil {
-//	    // Handle ValidationErrors
-//	}
 package validator
 
 import (
@@ -118,50 +40,13 @@ type Validator interface {
 // Ensure defaultValidator implements Validator
 var _ Validator = (*defaultValidator)(nil)
 
-// ValidationErrors holds all validation errors for a struct.
-// The key is the field path (e.g., "Name", "Address.City", "Items[0].Name").
-type ValidationErrors map[string][]string
-
-// Error implements the error interface.
-func (ve ValidationErrors) Error() string {
-	if len(ve) == 0 {
-		return "validation failed"
-	}
-
-	var parts []string
-	for field, errs := range ve {
-		parts = append(parts, fmt.Sprintf("%s: %s", field, strings.Join(errs, ", ")))
-	}
-	return "validation failed: " + strings.Join(parts, "; ")
-}
-
-// HasErrors returns true if there are any validation errors.
-func (ve ValidationErrors) HasErrors() bool {
-	return len(ve) > 0
-}
-
-// FieldErrors returns all errors for a specific field.
-func (ve ValidationErrors) FieldErrors(field string) []string {
-	return ve[field]
-}
-
-// Add adds an error for a specific field.
-func (ve ValidationErrors) Add(field, err string) {
-	ve[field] = append(ve[field], err)
-}
-
-// ValidationErrors returns the errors map (implements ValidationErrorer interface).
-func (ve ValidationErrors) ValidationErrors() map[string][]string {
-	return ve
-}
-
 // defaultValidator implements the Validator interface
 type defaultValidator struct {
 	validators atomic.Value // stores map[string]ValidationFunc
 }
 
-// NewValidator creates a new validator instance with built-in validation rules.
-func NewValidator() Validator {
+// New creates a new validator instance with built-in validation rules.
+func New() Validator {
 	v := &defaultValidator{}
 	v.validators.Store(make(map[string]ValidationFunc))
 	v.registerBuiltins()
@@ -198,7 +83,7 @@ func (v *defaultValidator) Struct(dst any) error {
 // validateStruct recursively validates a struct and its fields.
 func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, errors ValidationErrors) {
 	// Get cached type info
-	info := ValidatorRegistry.GetTypeInfo(val.Type())
+	info := Registry.GetTypeInfo(val.Type())
 
 	// Check if the struct itself implements Validate() error
 	// This allows custom validation methods on the struct type

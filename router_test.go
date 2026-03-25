@@ -13,6 +13,7 @@ import (
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware/requestlogger"
+	"github.com/alexferl/zerohttp/validator"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -264,7 +265,7 @@ func TestJSONEncodingErrorLogged(t *testing.T) {
 		{
 			name:           "binding error encoding failure",
 			errorType:      "binding",
-			handlerError:   &BindError{Err: fmt.Errorf("invalid JSON")},
+			handlerError:   &validator.BindError{Err: fmt.Errorf("invalid JSON")},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
