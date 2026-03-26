@@ -135,9 +135,20 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 		}
 
 		// Recursively validate nested structs
+		// Skip zero-value structs when they have no validation rules or have omitempty.
+		// If a struct is populated (non-zero), always validate it to check its fields.
 		switch {
-		case fi.isStruct && !fi.isTimeTime:
-			v.validateStruct(field, fieldName, errors)
+		case (fi.isStruct || field.Kind() == reflect.Struct) && !fi.isTimeTime:
+			isZero := isZeroValue(field)
+			hasRules := len(fi.rules) > 0
+			if !isZero {
+				// Non-zero structs are always validated to check their internal fields
+				v.validateStruct(field, fieldName, errors)
+			} else if hasRules && !fi.omitempty {
+				// Zero-value structs with validation rules (but not omitempty) are validated
+				v.validateStruct(field, fieldName, errors)
+			}
+			// Zero-value structs with omitempty or no rules are skipped
 		case fi.isSlice, fi.isArray:
 			for j := 0; j < field.Len(); j++ {
 				elem := field.Index(j)

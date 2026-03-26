@@ -549,10 +549,7 @@ func TestNestedStructs(t *testing.T) {
 			input:   testNested{},
 			wantErr: true,
 			errors: map[string][]string{
-				"User.Name":      {"required"},
-				"User.Email":     {"required"},
-				"Address.Street": {"required"},
-				"Address.City":   {"required"},
+				"User": {"required"},
 			},
 		},
 	}
@@ -1200,7 +1197,7 @@ func TestDeepNesting(t *testing.T) {
 		input := Root{
 			Level1: Level1{
 				Level2: Level2{
-					Level3: Level3{Name: ""},
+					Level3: Level3{Name: ""}, // Level3 is not zero (it's a populated struct), so Name should be validated
 				},
 			},
 		}
@@ -1237,6 +1234,109 @@ func TestDeepNesting(t *testing.T) {
 		err := New().Struct(&input)
 		if err == nil {
 			t.Error("expected error for nested slice validation failure")
+		}
+	})
+}
+
+// TestZeroValueNestedStructSkipping tests that zero-value nested structs are skipped
+// when they have no validation rules, but still validated when they contain required fields
+func TestZeroValueNestedStructSkipping(t *testing.T) {
+	t.Run("zero value struct without rules is skipped", func(t *testing.T) {
+		type Inner struct {
+			Name string `validate:"required"`
+		}
+		type Outer struct {
+			Inner Inner // no validation tag, so zero value should be skipped
+		}
+
+		input := Outer{} // Inner is zero value
+		err := New().Struct(&input)
+		if err != nil {
+			t.Errorf("expected no error for zero-value optional struct, got: %v", err)
+		}
+	})
+
+	t.Run("zero value struct with omitempty is skipped", func(t *testing.T) {
+		type Inner struct {
+			Name string `validate:"required"`
+		}
+		type Outer struct {
+			Inner Inner `validate:"omitempty"`
+		}
+
+		input := Outer{} // Inner is zero value with omitempty
+		err := New().Struct(&input)
+		if err != nil {
+			t.Errorf("expected no error for zero-value struct with omitempty, got: %v", err)
+		}
+	})
+
+	t.Run("populated struct is validated even without tags", func(t *testing.T) {
+		type Inner struct {
+			Name string `validate:"required"`
+			ID   int    // extra field to make struct non-zero when populated
+		}
+		type Outer struct {
+			Inner Inner // no validation tag, but Inner is populated
+		}
+
+		input := Outer{
+			Inner: Inner{Name: "", ID: 1}, // Inner is non-zero (ID=1) but Name is empty
+		}
+		err := New().Struct(&input)
+		if err == nil {
+			t.Error("expected error for populated struct with invalid fields")
+		}
+		var ve ValidationErrors
+		if errors.As(err, &ve) {
+			errs := ve.FieldErrors("Inner.Name")
+			if len(errs) == 0 {
+				t.Errorf("expected error for Inner.Name, got: %v", ve)
+			}
+		}
+	})
+
+	t.Run("required nested struct validates even when zero", func(t *testing.T) {
+		type Inner struct {
+			Name string `validate:"required"`
+		}
+		type Outer struct {
+			Inner Inner `validate:"required"` // required tag means validate even if zero
+		}
+
+		input := Outer{} // Inner is zero value but field is required
+		err := New().Struct(&input)
+		if err == nil {
+			t.Error("expected error for required nested struct")
+		}
+		var ve ValidationErrors
+		if errors.As(err, &ve) {
+			// Should have both the "required" error on Inner and field errors
+			errs := ve.FieldErrors("Inner")
+			if len(errs) == 0 {
+				t.Errorf("expected error for Inner field, got: %v", ve)
+			}
+		}
+	})
+
+	t.Run("deeply nested zero structs are skipped at each level", func(t *testing.T) {
+		type Level3 struct {
+			Value string `validate:"required"`
+		}
+		type Level2 struct {
+			Level3 Level3 // no tags
+		}
+		type Level1 struct {
+			Level2 Level2 // no tags
+		}
+		type Root struct {
+			Level1 Level1 // no tags
+		}
+
+		input := Root{} // All levels are zero value, should be skipped entirely
+		err := New().Struct(&input)
+		if err != nil {
+			t.Errorf("expected no error when all nested structs are zero and untagged, got: %v", err)
 		}
 	})
 }
