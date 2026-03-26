@@ -18,7 +18,11 @@ func (ve ValidationErrors) Error() string {
 
 	var parts []string
 	for field, errs := range ve {
-		parts = append(parts, fmt.Sprintf("%s: %s", field, strings.Join(errs, ", ")))
+		if field == "" {
+			parts = append(parts, strings.Join(errs, ", "))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s: %s", field, strings.Join(errs, ", ")))
+		}
 	}
 	return "validation failed: " + strings.Join(parts, "; ")
 }

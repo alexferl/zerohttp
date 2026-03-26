@@ -140,6 +140,9 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 	}
 
 	// For all other errors, return 500 Internal Server Error
+	// Log the actual error for debugging
+	log.GetGlobalLogger().Error("Handler error", log.E(err))
+
 	w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 	w.WriteHeader(http.StatusInternalServerError)
 	response := map[string]any{
