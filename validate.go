@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/alexferl/zerohttp/httpx"
@@ -119,10 +120,35 @@ func IsValidationError(err error) bool {
 //	    return zh.RenderAndValidate(w, http.StatusOK, user)
 //	}
 func RenderAndValidate(w http.ResponseWriter, status int, data any) error {
-	if err := V.Struct(data); err != nil {
+	if err := validateResponseData(data); err != nil {
 		// Log error for developers - this is a server-side bug
 		// Use %v (not %w) to prevent errors.As from matching ValidationErrorer
 		return fmt.Errorf("invalid response data: %v", err)
 	}
 	return R.JSON(w, status, data)
+}
+
+// validateResponseData validates data for response rendering.
+// It handles both structs and slices of structs.
+func validateResponseData(data any) error {
+	v := reflect.ValueOf(data)
+
+	// Handle pointer
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	// Handle slices - validate each element
+	if v.Kind() == reflect.Slice || v.Kind() == reflect.Array {
+		for i := 0; i < v.Len(); i++ {
+			elem := v.Index(i).Interface()
+			if err := V.Struct(elem); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Handle structs
+	return V.Struct(data)
 }

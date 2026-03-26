@@ -141,6 +141,83 @@ func TestRenderAndValidate(t *testing.T) {
 			t.Errorf("expected error to contain 'invalid response data', got %v", err)
 		}
 	})
+
+	t.Run("valid slice of structs", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		data := []TestResponse{
+			{Name: "John", Email: "john@example.com"},
+			{Name: "Jane", Email: "jane@example.com"},
+		}
+		err := RenderAndValidate(w, http.StatusOK, data)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+			return
+		}
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("invalid slice of structs", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		data := []TestResponse{
+			{Name: "John", Email: "john@example.com"},
+			{Name: "J", Email: "invalid"}, // invalid entry
+		}
+		err := RenderAndValidate(w, http.StatusOK, data)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+			return
+		}
+		if !strings.Contains(err.Error(), "invalid response data") {
+			t.Errorf("expected error to contain 'invalid response data', got %v", err)
+		}
+	})
+
+	t.Run("valid pointer to slice of structs", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		data := &[]TestResponse{
+			{Name: "John", Email: "john@example.com"},
+			{Name: "Jane", Email: "jane@example.com"},
+		}
+		err := RenderAndValidate(w, http.StatusOK, data)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+			return
+		}
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("valid array of structs", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		data := [2]TestResponse{
+			{Name: "John", Email: "john@example.com"},
+			{Name: "Jane", Email: "jane@example.com"},
+		}
+		err := RenderAndValidate(w, http.StatusOK, data)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+			return
+		}
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
+
+	t.Run("empty slice", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		data := []TestResponse{}
+		err := RenderAndValidate(w, http.StatusOK, data)
+		if err != nil {
+			t.Errorf("expected no error for empty slice, got %v", err)
+			return
+		}
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+		}
+	})
 }
 
 func TestBindError_Unwrap(t *testing.T) {
