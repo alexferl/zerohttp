@@ -10,6 +10,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware/idempotency"
 	"github.com/redis/go-redis/v9"
 )
@@ -164,7 +165,7 @@ func main() {
 		idempotency.New(idempotency.Config{
 			Store:      store,
 			TTL:        time.Hour,
-			HeaderName: "Idempotency-Key",
+			HeaderName: httpx.HeaderIdempotencyKey,
 		}),
 	)
 

@@ -50,10 +50,10 @@ The server starts on `http://localhost:8080`.
 
 ## Endpoints
 
-| Endpoint            | Idempotency | Description                          |
-|---------------------|-------------|--------------------------------------|
-| `POST /api/payments`| Yes         | Payment processing with idempotency  |
-| `POST /api/regular` | No          | Regular endpoint (for comparison)    |
+| Endpoint             | Idempotency | Description                         |
+|----------------------|-------------|-------------------------------------|
+| `POST /api/payments` | Yes         | Payment processing with idempotency |
+| `POST /api/regular`  | No          | Regular endpoint (for comparison)   |
 
 ## Test Commands
 
@@ -110,11 +110,11 @@ Each request returns a different timestamp (not idempotent).
 ### 5. Inspect Redis directly
 
 ```bash
-# List all idempotency keys
+# List all idempotency keys (key format is idempotencyKey:Method:Path:BodyHash)
 redis-cli keys 'zerohttp:idempotency:*'
 
-# Get a specific cached response
-redis-cli get 'zerohttp:idempotency:payment-123'
+# Get a specific cached response (use the full key from the keys command)
+redis-cli get 'zerohttp:idempotency:payment-123:POST:/api/payments:HASH'
 
 # Check for active locks (should be empty unless processing)
 redis-cli keys 'zerohttp:idempotency:*:lock'
@@ -138,6 +138,10 @@ type Store interface {
 - **Set**: Stores responses with TTL for automatic expiration
 - **Lock/Unlock**: Distributed locking using Redis SETNX to prevent concurrent processing
 - Records are JSON-serialized before storage
+
+**Key Format**: The idempotency key combines the header value, HTTP method, request path, and body hash:
+`{prefix}:{idempotencyKey}:{Method}:{Path}:{BodyHash}`
+This ensures that requests with the same idempotency key but different bodies are treated as separate operations.
 
 ## Cleanup
 
