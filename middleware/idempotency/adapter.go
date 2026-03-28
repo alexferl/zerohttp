@@ -5,19 +5,37 @@ import (
 	"encoding/json"
 	"time"
 
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/storage"
 )
+
+// Codec handles serialization and deserialization of records.
+type Codec interface {
+	Marshal(v any) ([]byte, error)
+	Unmarshal(data []byte, v any) error
+}
+
+// JSONCodec is the default codec using encoding/json.
+type JSONCodec struct{}
+
+func (JSONCodec) Marshal(v any) ([]byte, error)      { return json.Marshal(v) }
+func (JSONCodec) Unmarshal(data []byte, v any) error { return json.Unmarshal(data, v) }
 
 // StorageAdapterConfig configures the StorageAdapter.
 type StorageAdapterConfig struct {
 	// LockTTL is the TTL for distributed locks.
 	// Default: 30s
 	LockTTL time.Duration
+
+	// Codec is the serialization codec for records.
+	// Default: JSONCodec
+	Codec Codec
 }
 
 // DefaultStorageAdapterConfig is the default configuration for StorageAdapter.
 var DefaultStorageAdapterConfig = StorageAdapterConfig{
 	LockTTL: 30 * time.Second,
+	Codec:   JSONCodec{},
 }
 
 // StorageAdapter wraps a storage.Storage to implement the idempotency.Store interface.
@@ -25,6 +43,7 @@ type StorageAdapter struct {
 	store   storage.Storage
 	locker  storage.Locker
 	lockTTL time.Duration
+	codec   Codec
 }
 
 // NewStorageAdapter creates an idempotency.Store from a storage.Storage.
@@ -37,13 +56,14 @@ func NewStorageAdapter(s storage.Storage, cfg ...StorageAdapterConfig) (Store, e
 
 	c := DefaultStorageAdapterConfig
 	if len(cfg) > 0 {
-		c = cfg[0]
+		zconfig.Merge(&c, cfg[0])
 	}
 
 	return &StorageAdapter{
 		store:   s,
 		locker:  locker,
 		lockTTL: c.LockTTL,
+		codec:   c.Codec,
 	}, nil
 }
 
@@ -55,7 +75,7 @@ func (a *StorageAdapter) Get(ctx context.Context, key string) (Record, bool, err
 	}
 
 	var rec Record
-	if err := json.Unmarshal(data, &rec); err != nil {
+	if err := a.codec.Unmarshal(data, &rec); err != nil {
 		return Record{}, false, err
 	}
 
@@ -64,7 +84,7 @@ func (a *StorageAdapter) Get(ctx context.Context, key string) (Record, bool, err
 
 // Set stores a response in the cache with the given TTL.
 func (a *StorageAdapter) Set(ctx context.Context, key string, rec Record, ttl time.Duration) error {
-	data, err := json.Marshal(rec)
+	data, err := a.codec.Marshal(rec)
 	if err != nil {
 		return err
 	}

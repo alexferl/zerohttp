@@ -128,6 +128,95 @@ func TestNewStorageAdapter_WithLockTTL(t *testing.T) {
 	// TTL verification would require checking the mock
 }
 
+func TestNewStorageAdapter_PartialConfig(t *testing.T) {
+	// Test that partial config merges with defaults
+	s := newMockStorageWithLocker()
+
+	// Empty config should use defaults
+	adapter, err := NewStorageAdapter(s, StorageAdapterConfig{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Type assert to check lockTTL was set to default
+	sa, ok := adapter.(*StorageAdapter)
+	if !ok {
+		t.Fatal("adapter should be *StorageAdapter")
+	}
+
+	if sa.lockTTL != DefaultStorageAdapterConfig.LockTTL {
+		t.Errorf("lockTTL = %v, want default %v", sa.lockTTL, DefaultStorageAdapterConfig.LockTTL)
+	}
+}
+
+// mockCodec is a test codec that prepends a prefix
+type mockCodec struct{}
+
+func (m mockCodec) Marshal(v any) ([]byte, error) {
+	return []byte("MOCK:"), nil
+}
+
+func (m mockCodec) Unmarshal(data []byte, v any) error {
+	if rec, ok := v.(*Record); ok && len(data) >= 5 {
+		rec.StatusCode = 999
+	}
+	return nil
+}
+
+func TestNewStorageAdapter_WithCodec(t *testing.T) {
+	s := newMockStorageWithLocker()
+	cfg := StorageAdapterConfig{
+		Codec: mockCodec{},
+	}
+	adapter, err := NewStorageAdapter(s, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Type assert to check codec was set
+	sa, ok := adapter.(*StorageAdapter)
+	if !ok {
+		t.Fatal("adapter should be *StorageAdapter")
+	}
+
+	if _, ok := sa.codec.(mockCodec); !ok {
+		t.Error("codec should be mockCodec")
+	}
+}
+
+func TestStorageAdapter_CustomCodec(t *testing.T) {
+	ctx := context.Background()
+	s := newMockStorageWithLocker()
+	cfg := StorageAdapterConfig{
+		Codec: mockCodec{},
+	}
+	adapter, err := NewStorageAdapter(s, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Store via adapter - should use custom codec
+	rec := Record{StatusCode: 200, Body: []byte("test")}
+	if err := adapter.Set(ctx, "key", rec, time.Hour); err != nil {
+		t.Fatalf("set failed: %v", err)
+	}
+
+	// Check that custom codec was used (prepends "MOCK:")
+	data := s.data["key"]
+	if string(data) != "MOCK:" {
+		t.Errorf("expected MOCK: prefix, got %s", string(data))
+	}
+
+	// Get via adapter - should use custom codec
+	gotRec, _, err := adapter.Get(ctx, "key")
+	if err != nil {
+		t.Fatalf("get failed: %v", err)
+	}
+	if gotRec.StatusCode != 999 {
+		t.Errorf("StatusCode = %d, want 999 (custom codec marker)", gotRec.StatusCode)
+	}
+}
+
 func TestStorageAdapter_Get(t *testing.T) {
 	ctx := context.Background()
 	s := newMockStorageWithLocker()

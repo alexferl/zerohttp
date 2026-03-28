@@ -5,17 +5,50 @@ import (
 	"encoding/json"
 	"time"
 
+	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/storage"
 )
+
+// Codec handles serialization and deserialization of cache records.
+type Codec interface {
+	Marshal(v any) ([]byte, error)
+	Unmarshal(data []byte, v any) error
+}
+
+// JSONCodec is the default codec using encoding/json.
+type JSONCodec struct{}
+
+func (JSONCodec) Marshal(v any) ([]byte, error)      { return json.Marshal(v) }
+func (JSONCodec) Unmarshal(data []byte, v any) error { return json.Unmarshal(data, v) }
+
+// StorageAdapterConfig configures the StorageAdapter.
+type StorageAdapterConfig struct {
+	// Codec is the serialization codec for cache records.
+	// Default: JSONCodec
+	Codec Codec
+}
+
+// DefaultStorageAdapterConfig is the default configuration for StorageAdapter.
+var DefaultStorageAdapterConfig = StorageAdapterConfig{
+	Codec: JSONCodec{},
+}
 
 // StorageAdapter wraps a storage.Storage to implement the cache.Store interface.
 type StorageAdapter struct {
 	store storage.Storage
+	codec Codec
 }
 
 // NewStorageAdapter creates a cache.Store from a storage.Storage.
-func NewStorageAdapter(s storage.Storage) Store {
-	return &StorageAdapter{store: s}
+func NewStorageAdapter(s storage.Storage, cfg ...StorageAdapterConfig) Store {
+	c := DefaultStorageAdapterConfig
+	if len(cfg) > 0 {
+		zconfig.Merge(&c, cfg[0])
+	}
+	return &StorageAdapter{
+		store: s,
+		codec: c.Codec,
+	}
 }
 
 // Get retrieves a cached record by key.
@@ -26,7 +59,7 @@ func (a *StorageAdapter) Get(ctx context.Context, key string) (Record, bool, err
 	}
 
 	var rec Record
-	if err := json.Unmarshal(data, &rec); err != nil {
+	if err := a.codec.Unmarshal(data, &rec); err != nil {
 		return Record{}, false, err
 	}
 
@@ -35,7 +68,7 @@ func (a *StorageAdapter) Get(ctx context.Context, key string) (Record, bool, err
 
 // Set stores a record in the cache with the given TTL.
 func (a *StorageAdapter) Set(ctx context.Context, key string, rec Record, ttl time.Duration) error {
-	data, err := json.Marshal(rec)
+	data, err := a.codec.Marshal(rec)
 	if err != nil {
 		return err
 	}

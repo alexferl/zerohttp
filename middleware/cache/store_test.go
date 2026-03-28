@@ -172,6 +172,42 @@ func TestCacheMemoryStore(t *testing.T) {
 	})
 }
 
+func TestCacheMemoryStore_Delete(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore(100)
+
+	// Set a value first
+	record := Record{
+		StatusCode: 200,
+		Body:       []byte("test"),
+	}
+	if err := store.Set(ctx, "key1", record, time.Minute); err != nil {
+		t.Fatalf("Unexpected error setting key: %v", err)
+	}
+
+	// Verify it exists
+	_, found, _ := store.Get(ctx, "key1")
+	if !found {
+		t.Error("Expected key1 to exist before delete")
+	}
+
+	// Delete it
+	if err := store.Delete(ctx, "key1"); err != nil {
+		t.Errorf("Unexpected error deleting key: %v", err)
+	}
+
+	// Verify it's gone
+	_, found, _ = store.Get(ctx, "key1")
+	if found {
+		t.Error("Expected key1 to be deleted")
+	}
+
+	// Deleting non-existent key should not error
+	if err := store.Delete(ctx, "nonexistent"); err != nil {
+		t.Errorf("Unexpected error deleting non-existent key: %v", err)
+	}
+}
+
 func TestCacheMemoryStore_Close(t *testing.T) {
 	store := NewMemoryStore(100)
 
