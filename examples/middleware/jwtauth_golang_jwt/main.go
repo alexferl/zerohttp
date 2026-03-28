@@ -116,6 +116,12 @@ func (s *GolangJWTTokenStore) IsRevoked(ctx context.Context, claims map[string]a
 	return false, nil
 }
 
+// Close releases resources associated with the store.
+// For GolangJWTTokenStore, this is a no-op.
+func (s *GolangJWTTokenStore) Close() error {
+	return nil
+}
+
 func main() {
 	app := zh.New()
 

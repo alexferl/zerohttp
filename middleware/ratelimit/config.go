@@ -11,6 +11,10 @@ type Store interface {
 	// CheckAndRecord checks if the request is allowed and records the attempt.
 	// Returns (allowed, remainingRequests, resetTime).
 	CheckAndRecord(ctx context.Context, key string, now time.Time) (bool, int, time.Time)
+
+	// Close releases resources associated with the store.
+	// Returns an error if the close operation fails.
+	Close() error
 }
 
 // Algorithm defines the rate limiting algorithm

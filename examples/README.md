@@ -58,6 +58,7 @@ Demonstrations of built-in and custom middleware.
 - [**`hmacauth/`**](middleware/hmacauth/) - HMAC request signing
 - [**`hostvalidation/`**](middleware/host/) - Host header validation
 - [**`idempotency/`**](middleware/idempotency/) - Idempotent request handling
+- [**`idempotency_redis/`**](middleware/idempotency_redis/) - Redis-backed idempotent request handling (has go.mod)
 - [**`jwtauth/`**](middleware/jwtauth/) - JWT authentication
 - [**`jwtauth_golang_jwt/`**](middleware/jwtauth_golang_jwt/) - golang-jwt integration (has go.mod)
 - [**`jwtauth_lestrrat_jwx/`**](middleware/jwtauth_lestrrat_jwx/) - lestrrat-go/jwx integration (has go.mod)

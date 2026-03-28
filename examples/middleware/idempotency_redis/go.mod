@@ -1,4 +1,4 @@
-module github.com/alexferl/zerohttp/examples/cache_redis
+module github.com/alexferl/zerohttp/examples/idempotency_redis
 
 go 1.25.0
 

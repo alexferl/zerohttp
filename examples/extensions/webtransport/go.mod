@@ -3,7 +3,7 @@ module github.com/alexferl/zerohttp/examples/webtransport
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.58.0
+	github.com/alexferl/zerohttp v0.68.0
 	github.com/quic-go/quic-go v0.59.0
 	github.com/quic-go/webtransport-go v0.10.0
 )

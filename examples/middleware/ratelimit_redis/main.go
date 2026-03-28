@@ -79,6 +79,11 @@ func (s *RedisStore) CheckAndRecord(ctx context.Context, key string, now time.Ti
 	return true, remaining, resetTime
 }
 
+// Close releases resources associated with the store.
+func (s *RedisStore) Close() error {
+	return s.client.Close()
+}
+
 func main() {
 	// Create Redis client
 	client := redis.NewClient(&redis.Options{

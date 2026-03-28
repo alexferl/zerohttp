@@ -54,6 +54,10 @@ type Store interface {
 	//
 	// Note: claims is always passed as map[string]any for consistency.
 	IsRevoked(ctx context.Context, claims map[string]any) (bool, error)
+
+	// Close releases resources associated with the store.
+	// Returns an error if the close operation fails.
+	Close() error
 }
 
 // Config configures JWT authentication middleware

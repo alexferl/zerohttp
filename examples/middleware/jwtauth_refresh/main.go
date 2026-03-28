@@ -64,6 +64,12 @@ func (s *JWTTokenStore) IsRevoked(_ context.Context, claims map[string]any) (boo
 	return s.revoked[jti], nil
 }
 
+// Close releases resources associated with the store.
+// For JWTTokenStore, this is a no-op.
+func (s *JWTTokenStore) Close() error {
+	return nil
+}
+
 // getJTI extracts the jti claim from claims
 func getJTI(claims map[string]any) string {
 	if jti, ok := claims["jti"].(string); ok {

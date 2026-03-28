@@ -170,6 +170,38 @@ These middlewares are applied automatically:
 
 Disable or customize via `zh.Config`.
 
+## Storage
+
+The `storage` package provides a shared interface for middleware storage backends. Implement `storage.Storage` once (for Redis, PostgreSQL, etc.) and reuse it across multiple middlewares via adapters:
+
+```go
+import (
+    "github.com/alexferl/zerohttp/middleware/cache"
+    "github.com/alexferl/zerohttp/middleware/idempotency"
+    "github.com/alexferl/zerohttp/storage"
+)
+
+// Implement storage.Storage and storage.Locker in your own package
+type MyRedis struct { /* ... */ }
+func (r *MyRedis) Get(ctx context.Context, key string) ([]byte, bool, error) { /* ... */ }
+func (r *MyRedis) Set(ctx context.Context, key string, val []byte, ttl time.Duration) error { /* ... */ }
+func (r *MyRedis) Delete(ctx context.Context, key string) error { /* ... */ }
+func (r *MyRedis) Lock(ctx context.Context, key string, ttl time.Duration) (bool, error) { /* ... */ }
+func (r *MyRedis) Unlock(ctx context.Context, key string) error { /* ... */ }
+
+// One backend, multiple middlewares
+redis := &MyRedis{}
+
+app.Use(cache.New(cache.Config{
+    Store: cache.NewStorageAdapter(redis),
+}))
+
+idempotencyStore, _ := idempotency.NewStorageAdapter(redis)
+app.Use(idempotency.New(idempotency.Config{
+    Store: idempotencyStore,
+}))
+```
+
 ## Testing
 
 The `zhtest` package provides fluent test helpers:

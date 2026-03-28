@@ -103,3 +103,22 @@ func (c *MemoryStore) evictOldest() {
 		c.removeEntry(entry)
 	}
 }
+
+// Delete removes a cached entry by key.
+// Returns nil error on success.
+// The context is accepted for interface compatibility but not used by the in-memory store.
+func (c *MemoryStore) Delete(_ context.Context, key string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if entry, exists := c.entries[key]; exists {
+		c.removeEntry(entry)
+	}
+	return nil
+}
+
+// Close releases resources associated with the store.
+// For MemoryStore, this is a no-op.
+func (c *MemoryStore) Close() error {
+	return nil
+}

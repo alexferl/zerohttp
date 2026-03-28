@@ -219,3 +219,11 @@ func (m *mockCacheStore) Get(ctx context.Context, key string) (Record, bool, err
 func (m *mockCacheStore) Set(ctx context.Context, key string, record Record, ttl time.Duration) error {
 	return nil
 }
+
+func (m *mockCacheStore) Delete(ctx context.Context, key string) error {
+	return nil
+}
+
+func (m *mockCacheStore) Close() error {
+	return nil
+}

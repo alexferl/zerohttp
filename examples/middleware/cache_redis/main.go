@@ -92,6 +92,16 @@ func (c *RedisCacheStore) Set(ctx context.Context, key string, record cache.Reco
 	return c.client.Set(ctx, c.makeKey(key), data, ttl).Err()
 }
 
+// Delete removes a cached response from Redis.
+func (c *RedisCacheStore) Delete(ctx context.Context, key string) error {
+	return c.client.Del(ctx, c.makeKey(key)).Err()
+}
+
+// Close releases resources associated with the store.
+func (c *RedisCacheStore) Close() error {
+	return c.client.Close()
+}
+
 func main() {
 	// Create Redis client
 	client := redis.NewClient(&redis.Options{

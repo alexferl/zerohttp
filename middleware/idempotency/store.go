@@ -120,3 +120,9 @@ func (s *MemoryStore) Unlock(_ context.Context, key string) error {
 	delete(s.locks, key)
 	return nil
 }
+
+// Close releases resources associated with the store.
+// For MemoryStore, this is a no-op.
+func (s *MemoryStore) Close() error {
+	return nil
+}

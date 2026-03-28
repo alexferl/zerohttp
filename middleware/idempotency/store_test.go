@@ -70,3 +70,11 @@ func TestIdempotencyMemoryStore(t *testing.T) {
 		}
 	})
 }
+
+func TestIdempotencyMemoryStore_Close(t *testing.T) {
+	store := NewMemoryStore(100)
+
+	if err := store.Close(); err != nil {
+		t.Errorf("Unexpected error closing store: %v", err)
+	}
+}

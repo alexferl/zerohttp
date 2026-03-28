@@ -3,7 +3,7 @@ module github.com/alexferl/zerohttp/examples/autocert
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.58.0
+	github.com/alexferl/zerohttp v0.68.0
 	golang.org/x/crypto v0.49.0
 )
 
