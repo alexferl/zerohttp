@@ -250,3 +250,9 @@ func evictOldest[M ~map[string]E, E entryWithLastAccess](m M) {
 func (s *MemoryStore) evictOldestBucket()  { evictOldest(s.buckets) }
 func (s *MemoryStore) evictOldestCounter() { evictOldest(s.counters) }
 func (s *MemoryStore) evictOldestWindow()  { evictOldest(s.windows) }
+
+// Close releases resources associated with the store.
+// For MemoryStore, this is a no-op.
+func (s *MemoryStore) Close() error {
+	return nil
+}

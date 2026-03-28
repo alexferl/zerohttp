@@ -202,6 +202,10 @@ func (m *mockStore) CheckAndRecord(ctx context.Context, key string, now time.Tim
 	return m.checkFunc(ctx, key, now)
 }
 
+func (m *mockStore) Close() error {
+	return nil
+}
+
 // TestCustomStore tests using a custom store implementation
 func TestCustomStore(t *testing.T) {
 	resetTime := time.Now().Add(time.Minute)
@@ -358,5 +362,13 @@ func TestInMemoryStore_MaxKeysEviction_SlidingWindow(t *testing.T) {
 	allowed, _, _ := store.CheckAndRecord(ctx, "b", now.Add(20*time.Millisecond))
 	if !allowed {
 		t.Error("key 'b' should have been evicted and treated as new")
+	}
+}
+
+func TestInMemoryStore_Close(t *testing.T) {
+	store := NewMemoryStore(TokenBucket, time.Second, 10, 100)
+
+	if err := store.Close(); err != nil {
+		t.Errorf("Unexpected error closing store: %v", err)
 	}
 }

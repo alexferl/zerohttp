@@ -67,6 +67,12 @@ func (s *HS256Store) IsRevoked(_ context.Context, claims map[string]any) (bool, 
 	return false, nil
 }
 
+// Close releases resources associated with the store.
+// For HS256Store, this is a no-op.
+func (s *HS256Store) Close() error {
+	return nil
+}
+
 // HS256Config configures the built-in HS256 JWT implementation.
 //
 // Security Note: This implementation uses HMAC-SHA256 symmetric signing. It is suitable

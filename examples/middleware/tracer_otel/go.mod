@@ -3,7 +3,7 @@ module github.com/alexferl/zerohttp/examples/tracing_otel
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.58.0
+	github.com/alexferl/zerohttp v0.68.0
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.42.0
 	go.opentelemetry.io/otel/sdk v1.42.0

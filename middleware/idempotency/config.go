@@ -8,6 +8,9 @@ import (
 // Store is the interface for idempotency storage backends.
 // Users can implement this interface to provide their own storage
 // (e.g., Redis, database, or distributed cache).
+// Implement this if you only need idempotency storage.
+// For a backend shared with other middlewares, implement storage.Storage
+// and storage.Locker, then use idempotency.NewStorageAdapter instead.
 type Store interface {
 	// Get retrieves a cached response by key.
 	// Returns the cached record, true if found, and any error.
@@ -28,6 +31,10 @@ type Store interface {
 	// Unlock releases the lock for the given key.
 	// Returns an error if the unlock operation fails.
 	Unlock(ctx context.Context, key string) error
+
+	// Close releases resources associated with the store.
+	// Returns an error if the close operation fails.
+	Close() error
 }
 
 // Record represents a cached idempotent response.

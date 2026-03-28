@@ -10,6 +10,9 @@ import (
 // Store is the interface for cache storage backends.
 // Users can implement this interface to provide their own storage
 // (e.g., Redis, database, or distributed cache).
+// Implement this if you only need cache storage.
+// For a backend shared with other middlewares, implement storage.Storage
+// and use cache.NewStorageAdapter instead.
 type Store interface {
 	// Get retrieves a cached response by key.
 	// Returns the cached record, true if found, and any error.
@@ -20,6 +23,14 @@ type Store interface {
 	// Set stores a response in the cache with the given TTL.
 	// Returns an error if the operation fails (e.g., network error for external stores).
 	Set(ctx context.Context, key string, record Record, ttl time.Duration) error
+
+	// Delete removes a cached response by key.
+	// Returns an error if the operation fails.
+	Delete(ctx context.Context, key string) error
+
+	// Close releases resources associated with the store.
+	// Returns an error if the close operation fails.
+	Close() error
 }
 
 // Record represents a cached HTTP response.

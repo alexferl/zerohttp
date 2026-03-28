@@ -799,6 +799,10 @@ func (e *errorStore) Unlock(ctx context.Context, key string) error {
 	return nil
 }
 
+func (e *errorStore) Close() error {
+	return nil
+}
+
 func TestIdempotency_StoreErrors(t *testing.T) {
 	t.Run("continues to handler when store Get fails", func(t *testing.T) {
 		callCount := 0

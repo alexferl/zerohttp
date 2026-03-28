@@ -217,6 +217,12 @@ func (s *LestrratTokenStore) IsRevoked(_ context.Context, claims map[string]any)
 	return false, nil
 }
 
+// Close releases resources associated with the store.
+// For LestrratTokenStore, this is a no-op.
+func (s *LestrratTokenStore) Close() error {
+	return nil
+}
+
 func main() {
 	app := zh.New()
 

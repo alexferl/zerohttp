@@ -3,7 +3,7 @@ module github.com/alexferl/zerohttp/examples/validation_goplayground
 go 1.25.0
 
 require (
-	github.com/alexferl/zerohttp v0.58.0
+	github.com/alexferl/zerohttp v0.68.0
 	github.com/go-playground/validator/v10 v10.30.1
 )
 

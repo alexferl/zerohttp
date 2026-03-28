@@ -66,6 +66,10 @@ func (m *mockTokenStore) IsRevoked(ctx context.Context, claims map[string]any) (
 	return m.isRevoked, nil
 }
 
+func (m *mockTokenStore) Close() error {
+	return nil
+}
+
 func TestJWTAuth_MissingToken(t *testing.T) {
 	store := &mockTokenStore{
 		validateFunc: func(ctx context.Context, token string) (JWTClaims, error) {

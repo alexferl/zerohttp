@@ -807,3 +807,14 @@ func TestGetHS256Expiration_Missing(t *testing.T) {
 		t.Errorf("expected zero time, got %v", exp)
 	}
 }
+
+func TestHS256Store_Close(t *testing.T) {
+	secret := []byte("my-secret-key-that-is-32-bytes-for-jwt!")
+	opts := HS256Config{}
+	store := NewHS256Store(secret, opts)
+
+	err := store.Close()
+	if err != nil {
+		t.Errorf("unexpected error closing store: %v", err)
+	}
+}

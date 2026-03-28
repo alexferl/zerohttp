@@ -24,4 +24,18 @@
 //	app.Use(cache.New(cache.Config{
 //	    Store: myRedisStore,
 //	}))
+//
+// # Storage Adapter
+//
+// Use [NewStorageAdapter] to wrap a [storage.Storage] implementation:
+//
+//	import (
+//	    "github.com/alexferl/zerohttp/middleware/cache"
+//	    "github.com/alexferl/zerohttp/storage"
+//	)
+//
+//	myStore := redis.New("localhost:6379") // implements storage.Storage
+//	app.Use(cache.New(cache.Config{
+//	    Store: cache.NewStorageAdapter(myStore),
+//	}))
 package cache

@@ -186,3 +186,7 @@ func (m *mockIdempotencyStore) Lock(ctx context.Context, key string) (bool, erro
 func (m *mockIdempotencyStore) Unlock(ctx context.Context, key string) error {
 	return nil
 }
+
+func (m *mockIdempotencyStore) Close() error {
+	return nil
+}
