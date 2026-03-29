@@ -599,3 +599,137 @@ func TestCounter_CardinalityUnlimited(t *testing.T) {
 		}
 	}
 }
+
+// Test SafeRegistry with nil registry
+func TestSafeRegistry_Nil(t *testing.T) {
+	reg := SafeRegistry(nil)
+	zhtest.AssertNotNil(t, reg)
+
+	// All operations should be no-ops and not panic
+	c := reg.Counter("test_counter", "label")
+	c.WithLabelValues("a").Inc()
+	c.Add(5)
+
+	g := reg.Gauge("test_gauge", "label")
+	g.WithLabelValues("a").Inc()
+	g.Dec()
+	g.Set(10)
+	g.Add(5)
+	g.Sub(2)
+
+	h := reg.Histogram("test_histogram", []float64{0.1, 0.5, 1.0}, "method")
+	h.WithLabelValues("GET").Observe(0.5)
+
+	reg.RegisterCollector(&testCollector{})
+	reg.UnregisterCollector(&testCollector{})
+
+	families := reg.Gather()
+	zhtest.AssertNil(t, families)
+}
+
+// Test SafeRegistry with real registry
+func TestSafeRegistry_Real(t *testing.T) {
+	realReg := NewRegistry()
+	reg := SafeRegistry(realReg)
+
+	// Should return the same registry
+	zhtest.AssertEqual(t, realReg, reg)
+
+	// Operations should work normally
+	c := reg.Counter("test_counter")
+	c.Inc()
+
+	families := reg.Gather()
+	zhtest.AssertGreater(t, len(families), 0)
+}
+
+// Test nopRegistry methods
+func TestNopRegistry(t *testing.T) {
+	var reg Registry = nopRegistry{}
+
+	// Counter should return nopCounter that can be used without panic
+	c := reg.Counter("test", "label")
+	c.WithLabelValues("a").Inc()
+	c.Add(5)
+
+	// Gauge should return nopGauge
+	g := reg.Gauge("test", "label")
+	g.WithLabelValues("a").Inc()
+	g.Dec()
+	g.Set(10)
+	g.Add(5)
+	g.Sub(2)
+
+	// Histogram should return nopHistogram
+	h := reg.Histogram("test", []float64{0.1}, "label")
+	h.WithLabelValues("a").Observe(0.5)
+
+	// Collector methods should not panic
+	reg.RegisterCollector(&testCollector{})
+	reg.UnregisterCollector(&testCollector{})
+
+	// Gather should return nil
+	families := reg.Gather()
+	zhtest.AssertNil(t, families)
+}
+
+// Test MetricType String method
+func TestMetricTypeString(t *testing.T) {
+	zhtest.AssertEqual(t, "counter", CounterType.String())
+	zhtest.AssertEqual(t, "gauge", GaugeType.String())
+	zhtest.AssertEqual(t, "histogram", HistogramType.String())
+	zhtest.AssertEqual(t, "unknown", MetricType(999).String())
+}
+
+// Test gaugeVec Sub method (for completeness)
+func TestGaugeVecSub(t *testing.T) {
+	reg := NewRegistry().(*registry)
+	gv := reg.Gauge("test_gauge", "label").(*gaugeVec)
+
+	// Test Sub on gaugeVec
+	gv.Sub(5.0)
+}
+
+// Test gauge without labels (gaugeVec with default metric)
+func TestGaugeWithoutLabels(t *testing.T) {
+	reg := NewRegistry()
+	g := reg.Gauge("simple_gauge")
+
+	// Operations on gauge without labels
+	g.Inc()
+	g.Dec()
+	g.Set(42)
+	g.Add(8)
+	g.Sub(10)
+
+	families := reg.Gather()
+	var found bool
+	for _, f := range families {
+		if f.Name == "simple_gauge" {
+			found = true
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, 40.0, f.Metrics[0].Gauge)
+		}
+	}
+	zhtest.AssertTrue(t, found)
+}
+
+// Test histogram without labels
+func TestHistogramWithoutLabels(t *testing.T) {
+	reg := NewRegistry()
+	h := reg.Histogram("simple_histogram", []float64{0.1, 0.5, 1.0})
+
+	h.Observe(0.3)
+	h.Observe(0.7)
+
+	families := reg.Gather()
+	var found bool
+	for _, f := range families {
+		if f.Name == "simple_histogram" {
+			found = true
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, uint64(2), f.Metrics[0].Histogram.Count)
+		}
+	}
+	zhtest.AssertTrue(t, found)
+}

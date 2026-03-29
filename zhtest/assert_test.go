@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
@@ -1652,6 +1653,128 @@ func TestAssertPanicContains(t *testing.T) {
 			panic(fmt.Sprintf("error code: %d, message: %s", 500, "internal server error"))
 		}, "error code: 500")
 	})
+
+	t.Run("non-string panic value", func(t *testing.T) {
+		AssertPanicContains(t, func() {
+			panic(42)
+		}, "42")
+	})
+
+	t.Run("panic with struct that has String() method", func(t *testing.T) {
+		type stringer struct {
+			msg string
+		}
+		AssertPanicContains(t, func() {
+			panic(stringer{msg: "custom message"})
+		}, "custom message")
+	})
+}
+
+// Test non-int64 numeric types for toInt64
+func TestAssertEqual_NonInt64Types(t *testing.T) {
+	t.Run("non-numeric type comparison", func(t *testing.T) {
+		// Compare strings (should use DeepEqual)
+		AssertEqual(t, "hello", "hello")
+		AssertNotEqual(t, "hello", "world")
+	})
+
+	t.Run("mixed numeric comparisons", func(t *testing.T) {
+		AssertGreater(t, int16(100), int8(50))
+		AssertLess(t, uint32(100), uint64(200))
+	})
+}
+
+// Test AssertContains with non-string non-slice types
+func TestAssertContains_TypeCoverage(t *testing.T) {
+	t.Run("slice contains int", func(t *testing.T) {
+		AssertContains(t, []int{1, 2, 3}, 2)
+	})
+
+	t.Run("slice contains string", func(t *testing.T) {
+		AssertContains(t, []string{"a", "b", "c"}, "b")
+	})
+
+	t.Run("slice does not contain", func(t *testing.T) {
+		AssertNotContains(t, []int{1, 2, 3}, 4)
+	})
+
+	t.Run("string does not contain substring", func(t *testing.T) {
+		AssertNotContains(t, "hello world", "foo")
+	})
+}
+
+// Test AssertImplements with different interface types
+func TestAssertImplements_Coverage(t *testing.T) {
+	t.Run("strings.Reader implements io.Reader", func(t *testing.T) {
+		AssertImplements(t, (*io.Reader)(nil), &strings.Reader{})
+	})
+
+	t.Run("bytes.Buffer implements io.Writer", func(t *testing.T) {
+		AssertImplements(t, (*io.Writer)(nil), &bytes.Buffer{})
+	})
+}
+
+// Test AssertIsType with pointer types
+func TestAssertIsType_Pointers(t *testing.T) {
+	t.Run("pointer type", func(t *testing.T) {
+		var ptr *int
+		AssertIsType(t, ptr, new(int))
+	})
+
+	t.Run("slice type", func(t *testing.T) {
+		AssertIsType(t, []int{}, []int{1, 2, 3})
+	})
+
+	t.Run("map type", func(t *testing.T) {
+		AssertIsType(t, map[string]int{}, map[string]int{"a": 1})
+	})
+}
+
+// Test AssertLen with different collection types
+func TestAssertLen_Types(t *testing.T) {
+	t.Run("array length", func(t *testing.T) {
+		var arr [5]int
+		AssertLen(t, arr, 5)
+	})
+
+	t.Run("channel length", func(t *testing.T) {
+		ch := make(chan int, 3)
+		ch <- 1
+		ch <- 2
+		AssertLen(t, ch, 2)
+	})
+
+	t.Run("string length", func(t *testing.T) {
+		AssertLen(t, "hello", 5)
+	})
+}
+
+// Test isEmpty with channels
+func TestAssertEmpty_Channels(t *testing.T) {
+	t.Run("empty channel", func(t *testing.T) {
+		ch := make(chan int)
+		AssertEmpty(t, ch)
+	})
+
+	t.Run("non-empty channel", func(t *testing.T) {
+		ch := make(chan int, 1)
+		ch <- 1
+		AssertNotEmpty(t, ch)
+	})
+}
+
+// Test non-numeric type in toFloat64Generic
+func TestAssertEqual_NonNumericFallback(t *testing.T) {
+	t.Run("struct comparison", func(t *testing.T) {
+		type User struct {
+			Name string
+			Age  int
+		}
+		u1 := User{Name: "John", Age: 30}
+		u2 := User{Name: "John", Age: 30}
+		AssertEqual(t, u1, u2)
+		AssertNotEqual(t, u1, User{Name: "Jane", Age: 25})
+	})
 }
 
 // Test AssertFail and AssertFailf - these can't test the failure case
@@ -1672,4 +1795,135 @@ func TestAssertFailf(t *testing.T) {
 	if shouldFail {
 		AssertFailf(t, "formatted message: %s, %d", "test", 42)
 	}
+}
+
+// Test additional numeric types for toFloat64Generic and toInt64
+func TestAssertEqual_NumericTypeCoverage(t *testing.T) {
+	t.Run("int8", func(t *testing.T) {
+		var a int8 = 5
+		var b int8 = 5
+		AssertEqual(t, a, b)
+	})
+
+	t.Run("int16", func(t *testing.T) {
+		var a int16 = 100
+		var b int16 = 100
+		AssertEqual(t, a, b)
+	})
+
+	t.Run("int32", func(t *testing.T) {
+		var a int32 = 1000
+		var b int32 = 1000
+		AssertEqual(t, a, b)
+	})
+
+	t.Run("uint8", func(t *testing.T) {
+		var a uint8 = 255
+		var b uint8 = 255
+		AssertEqual(t, a, b)
+	})
+
+	t.Run("uint16", func(t *testing.T) {
+		var a uint16 = 65535
+		var b uint16 = 65535
+		AssertEqual(t, a, b)
+	})
+
+	t.Run("uint32", func(t *testing.T) {
+		var a uint32 = 100000
+		var b uint32 = 100000
+		AssertEqual(t, a, b)
+	})
+
+	t.Run("uint64", func(t *testing.T) {
+		var a uint64 = 1000000
+		var b uint64 = 1000000
+		AssertEqual(t, a, b)
+	})
+
+	t.Run("float32", func(t *testing.T) {
+		var a float32 = 3.14
+		var b float32 = 3.14
+		AssertEqual(t, a, b)
+	})
+}
+
+func TestAssertNotEqual_NumericTypeCoverage(t *testing.T) {
+	t.Run("int8 vs int8 different", func(t *testing.T) {
+		var a int8 = 5
+		var b int8 = 6
+		AssertNotEqual(t, a, b)
+	})
+
+	t.Run("int16 vs int16 different", func(t *testing.T) {
+		var a int16 = 100
+		var b int16 = 101
+		AssertNotEqual(t, a, b)
+	})
+
+	t.Run("uint8 vs uint8 different", func(t *testing.T) {
+		var a uint8 = 255
+		var b uint8 = 254
+		AssertNotEqual(t, a, b)
+	})
+
+	t.Run("mixed numeric types", func(t *testing.T) {
+		AssertNotEqual(t, int8(5), int16(6))
+		AssertNotEqual(t, uint8(5), uint16(6))
+		AssertNotEqual(t, float32(5.0), float64(6.0))
+	})
+}
+
+func TestAssertGreater_NumericTypeCoverage(t *testing.T) {
+	t.Run("int8 greater", func(t *testing.T) {
+		AssertGreater(t, int8(10), int8(5))
+	})
+
+	t.Run("int16 greater", func(t *testing.T) {
+		AssertGreater(t, int16(100), int16(50))
+	})
+
+	t.Run("uint8 greater", func(t *testing.T) {
+		AssertGreater(t, uint8(255), uint8(128))
+	})
+
+	t.Run("float32 greater", func(t *testing.T) {
+		AssertGreater(t, float32(10.5), float32(5.2))
+	})
+}
+
+func TestAssertLess_NumericTypeCoverage(t *testing.T) {
+	t.Run("int8 less", func(t *testing.T) {
+		AssertLess(t, int8(5), int8(10))
+	})
+
+	t.Run("int16 less", func(t *testing.T) {
+		AssertLess(t, int16(50), int16(100))
+	})
+
+	t.Run("uint8 less", func(t *testing.T) {
+		AssertLess(t, uint8(128), uint8(255))
+	})
+
+	t.Run("float32 less", func(t *testing.T) {
+		AssertLess(t, float32(5.2), float32(10.5))
+	})
+}
+
+// Test isEmpty with pointer types
+func TestAssertEmpty_WithPointers(t *testing.T) {
+	t.Run("nil pointer is empty", func(t *testing.T) {
+		var ptr *int
+		AssertEmpty(t, ptr)
+	})
+
+	t.Run("non-nil pointer to empty string", func(t *testing.T) {
+		s := ""
+		AssertEmpty(t, &s)
+	})
+
+	t.Run("non-nil pointer to non-empty string", func(t *testing.T) {
+		s := "hello"
+		AssertNotEmpty(t, &s)
+	})
 }

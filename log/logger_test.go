@@ -238,7 +238,35 @@ func TestShouldColorize_NO_COLOR(t *testing.T) {
 }
 
 func TestShouldColorize_CI(t *testing.T) {
-	tests := []string{"CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "TRAVIS"}
+	// Generic CI environment variables
+	tests := []string{
+		"CI",
+		"CONTINUOUS_INTEGRATION",
+		"BUILD_ID",
+		"BUILD_NUMBER",
+	}
+
+	for _, envVar := range tests {
+		t.Run(envVar, func(t *testing.T) {
+			t.Setenv(envVar, "true")
+			result := shouldColorize()
+			zhtest.AssertFalse(t, result)
+		})
+	}
+}
+
+func TestShouldColorize_CIServices(t *testing.T) {
+	// Specific CI services
+	tests := []string{
+		"GITHUB_ACTIONS",
+		"GITLAB_CI",
+		"CIRCLECI",
+		"TRAVIS",
+		"JENKINS_URL",
+		"BUILDKITE",
+		"DRONE",
+		"TEAMCITY_VERSION",
+	}
 
 	for _, envVar := range tests {
 		t.Run(envVar, func(t *testing.T) {

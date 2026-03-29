@@ -378,3 +378,94 @@ func TestIPAllowlistIPv6(t *testing.T) {
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "2001:db9::1", "", "")
 	zhtest.AssertEqual(t, http.StatusForbidden, rec.Code)
 }
+
+// Test parseAllowedIPs with invalid IP
+func TestParseAllowedIPs_InvalidIP(t *testing.T) {
+	_, err := parseAllowedIPs([]string{"not-an-ip"})
+	zhtest.AssertError(t, err)
+}
+
+// Test parseAllowedIPs with empty/whitespace IPs
+func TestParseAllowedIPs_EmptyAndWhitespace(t *testing.T) {
+	nets, err := parseAllowedIPs([]string{"", "  ", "127.0.0.1"})
+	zhtest.AssertNoError(t, err)
+	// Should skip empty entries and return only valid ones
+	zhtest.AssertEqual(t, 1, len(nets))
+}
+
+// Test isIPAllowed with invalid IP
+func TestIsIPAllowed_InvalidIP(t *testing.T) {
+	nets, _ := parseAllowedIPs([]string{"127.0.0.1/32"})
+	result := isIPAllowed("not-an-ip", nets)
+	zhtest.AssertFalse(t, result)
+}
+
+// Test extractClientIP with trust proxy and X-Forwarded-For header
+func TestExtractClientIP_WithXForwardedFor(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
+	req.RemoteAddr = "127.0.0.1:1234"
+
+	ip := extractClientIP(req, true)
+	zhtest.AssertEqual(t, "10.0.0.1", ip)
+}
+
+// Test extractClientIP with trust proxy and X-Real-IP header
+func TestExtractClientIP_WithXRealIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Real-IP", "192.168.1.100")
+	req.RemoteAddr = "127.0.0.1:1234"
+
+	ip := extractClientIP(req, true)
+	zhtest.AssertEqual(t, "192.168.1.100", ip)
+}
+
+// Test extractClientIP without trust proxy (falls back to RemoteAddr)
+func TestExtractClientIP_WithoutTrustProxy(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+	req.RemoteAddr = "192.168.1.50:1234"
+
+	ip := extractClientIP(req, false)
+	zhtest.AssertEqual(t, "192.168.1.50", ip)
+}
+
+// Test extractClientIP with RemoteAddr without port
+func TestExtractClientIP_RemoteAddrNoPort(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.50"
+
+	ip := extractClientIP(req, false)
+	zhtest.AssertEqual(t, "192.168.1.50", ip)
+}
+
+// Test extractClientIP X-Forwarded-For with single IP
+func TestExtractClientIP_SingleXForwardedFor(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-For", "10.0.0.5")
+	req.RemoteAddr = "127.0.0.1:1234"
+
+	ip := extractClientIP(req, true)
+	zhtest.AssertEqual(t, "10.0.0.5", ip)
+}
+
+// Test extractClientIP with empty X-Forwarded-For falls back to X-Real-IP
+func TestExtractClientIP_EmptyXForwardedFor(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-For", "")
+	req.Header.Set("X-Real-IP", "10.0.0.10")
+	req.RemoteAddr = "127.0.0.1:1234"
+
+	ip := extractClientIP(req, true)
+	zhtest.AssertEqual(t, "10.0.0.10", ip)
+}
+
+// Test generateRandomPassword generates non-empty password
+func TestGenerateRandomPassword(t *testing.T) {
+	pw1 := generateRandomPassword()
+	zhtest.AssertNotEmpty(t, pw1)
+
+	// Should generate different passwords each time
+	pw2 := generateRandomPassword()
+	zhtest.AssertNotEqual(t, pw1, pw2)
+}
