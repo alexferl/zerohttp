@@ -23,6 +23,10 @@ func (JSONCodec) Unmarshal(data []byte, v any) error { return json.Unmarshal(dat
 
 // StorageAdapterConfig configures the StorageAdapter.
 type StorageAdapterConfig struct {
+	// KeyPrefix is the prefix for cache keys.
+	// Default: "cache:"
+	KeyPrefix string
+
 	// Codec is the serialization codec for cache records.
 	// Default: JSONCodec
 	Codec Codec
@@ -30,13 +34,15 @@ type StorageAdapterConfig struct {
 
 // DefaultStorageAdapterConfig is the default configuration for StorageAdapter.
 var DefaultStorageAdapterConfig = StorageAdapterConfig{
-	Codec: JSONCodec{},
+	KeyPrefix: "cache:",
+	Codec:     JSONCodec{},
 }
 
 // StorageAdapter wraps a storage.Storage to implement the cache.Store interface.
 type StorageAdapter struct {
-	store storage.Storage
-	codec Codec
+	store     storage.Storage
+	keyPrefix string
+	codec     Codec
 }
 
 // NewStorageAdapter creates a cache.Store from a storage.Storage.
@@ -46,14 +52,19 @@ func NewStorageAdapter(s storage.Storage, cfg ...StorageAdapterConfig) Store {
 		zconfig.Merge(&c, cfg[0])
 	}
 	return &StorageAdapter{
-		store: s,
-		codec: c.Codec,
+		store:     s,
+		keyPrefix: c.KeyPrefix,
+		codec:     c.Codec,
 	}
+}
+
+func (a *StorageAdapter) prefixKey(key string) string {
+	return a.keyPrefix + key
 }
 
 // Get retrieves a cached record by key.
 func (a *StorageAdapter) Get(ctx context.Context, key string) (Record, bool, error) {
-	data, found, err := a.store.Get(ctx, key)
+	data, found, err := a.store.Get(ctx, a.prefixKey(key))
 	if !found || err != nil {
 		return Record{}, false, err
 	}
@@ -73,12 +84,12 @@ func (a *StorageAdapter) Set(ctx context.Context, key string, rec Record, ttl ti
 		return err
 	}
 
-	return a.store.Set(ctx, key, data, ttl)
+	return a.store.Set(ctx, a.prefixKey(key), data, ttl)
 }
 
 // Delete removes a cached record by key.
 func (a *StorageAdapter) Delete(ctx context.Context, key string) error {
-	return a.store.Delete(ctx, key)
+	return a.store.Delete(ctx, a.prefixKey(key))
 }
 
 // Close releases resources associated with the underlying storage.

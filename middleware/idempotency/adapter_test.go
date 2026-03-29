@@ -174,7 +174,7 @@ func TestStorageAdapter_CustomCodec(t *testing.T) {
 	zhtest.AssertNoError(t, err)
 
 	// Check that custom codec was used (prepends "MOCK:")
-	data := s.data["key"]
+	data := s.data["idemp:key"]
 	zhtest.AssertEqual(t, "MOCK:", string(data))
 
 	// Get via adapter - should use custom codec
@@ -228,9 +228,9 @@ func TestStorageAdapter_Set(t *testing.T) {
 	err := adapter.Set(ctx, "key", rec, ttl)
 	zhtest.AssertNoError(t, err)
 
-	_, ok := s.data["key"]
+	_, ok := s.data["idemp:key"]
 	zhtest.AssertTrue(t, ok)
-	zhtest.AssertEqual(t, ttl, s.ttlVals["key"])
+	zhtest.AssertEqual(t, ttl, s.ttlVals["idemp:key"])
 }
 
 func TestStorageAdapter_Lock(t *testing.T) {
