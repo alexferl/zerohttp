@@ -8,7 +8,7 @@
 //	import "github.com/alexferl/zerohttp/middleware/jwtauth"
 //
 //	app.Use(jwtauth.New(jwtauth.Config{
-//	    TokenStore: myTokenStore,
+//	    Store: myStore,
 //	    RequiredClaims: []string{"sub"},
 //	}))
 //
@@ -17,8 +17,20 @@
 // For a zero-dependency option, use the built-in HS256 implementation:
 //
 //	app.Use(jwtauth.New(jwtauth.Config{
-//	    TokenStore: jwtauth.NewHS256TokenStore(secret, opts),
+//	    Store: jwtauth.NewHS256Store(secret, opts),
 //	}))
+//
+// # Token Revocation
+//
+// For token revocation (logout/refresh), implement Revoke and IsRevoked on your Store,
+// or use the StorageAdapter with a shared storage backend:
+//
+//	// Share storage between idempotency, cache, and jwtauth
+//	redisStorage := storage.NewRedisStorage(redisClient, storage.RedisStorageConfig{})
+//	revocationStore := jwtauth.NewStorageAdapter(redisStorage)
+//
+//	// Use with your custom Store
+//	myStore := &myStoreImpl{RevocationStore: revocationStore}
 //
 // # Accessing Claims
 //
