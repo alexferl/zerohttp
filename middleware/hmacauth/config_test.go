@@ -4,41 +4,21 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestHMACAuthConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
 
-	if cfg.Algorithm != SHA256 {
-		t.Errorf("expected default algorithm to be HMACSHA256, got %s", cfg.Algorithm)
-	}
-
-	if cfg.MaxSkew != 5*time.Minute {
-		t.Errorf("expected default MaxSkew to be 5 minutes, got %v", cfg.MaxSkew)
-	}
-
-	if cfg.ClockSkewGrace != 1*time.Minute {
-		t.Errorf("expected default ClockSkewGrace to be 1 minute, got %v", cfg.ClockSkewGrace)
-	}
-
-	if cfg.AuthHeaderName != "Authorization" {
-		t.Errorf("expected default AuthHeaderName to be 'Authorization', got %s", cfg.AuthHeaderName)
-	}
-
-	if cfg.TimestampHeader != "X-Timestamp" {
-		t.Errorf("expected default TimestampHeader to be 'X-Timestamp', got %s", cfg.TimestampHeader)
-	}
-
-	if cfg.AllowUnsignedPayload != false {
-		t.Error("expected default AllowUnsignedPayload to be false")
-	}
-
-	if cfg.CredentialStore != nil {
-		t.Error("expected default CredentialStore to be nil")
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default IncludedPaths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, SHA256, cfg.Algorithm)
+	zhtest.AssertEqual(t, 5*time.Minute, cfg.MaxSkew)
+	zhtest.AssertEqual(t, 1*time.Minute, cfg.ClockSkewGrace)
+	zhtest.AssertEqual(t, "Authorization", cfg.AuthHeaderName)
+	zhtest.AssertEqual(t, "X-Timestamp", cfg.TimestampHeader)
+	zhtest.AssertFalse(t, cfg.AllowUnsignedPayload)
+	zhtest.AssertNil(t, cfg.CredentialStore)
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 }
 
 func TestHMACHashAlgorithm_String(t *testing.T) {
@@ -53,9 +33,7 @@ func TestHMACHashAlgorithm_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.algo), func(t *testing.T) {
-			if string(tt.algo) != tt.want {
-				t.Errorf("got %s, want %s", tt.algo, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, string(tt.algo))
 		})
 	}
 }
@@ -81,55 +59,23 @@ func TestHMACAuthConfig_CustomValues(t *testing.T) {
 		AllowUnsignedPayload: true,
 	}
 
-	if cfg.Algorithm != SHA512 {
-		t.Errorf("expected algorithm to be HMACSHA512, got %s", cfg.Algorithm)
-	}
-
-	if cfg.MaxSkew != 10*time.Minute {
-		t.Errorf("expected MaxSkew to be 10 minutes, got %v", cfg.MaxSkew)
-	}
-
-	if cfg.ClockSkewGrace != 2*time.Minute {
-		t.Errorf("expected ClockSkewGrace to be 2 minutes, got %v", cfg.ClockSkewGrace)
-	}
-
-	if cfg.AuthHeaderName != "X-Authorization" {
-		t.Errorf("expected AuthHeaderName to be 'X-Authorization', got %s", cfg.AuthHeaderName)
-	}
-
-	if cfg.TimestampHeader != "X-Date" {
-		t.Errorf("expected TimestampHeader to be 'X-Date', got %s", cfg.TimestampHeader)
-	}
-
-	if !cfg.AllowUnsignedPayload {
-		t.Error("expected AllowUnsignedPayload to be true")
-	}
-
-	if cfg.CredentialStore == nil {
-		t.Error("expected CredentialStore to be set")
-	}
+	zhtest.AssertEqual(t, SHA512, cfg.Algorithm)
+	zhtest.AssertEqual(t, 10*time.Minute, cfg.MaxSkew)
+	zhtest.AssertEqual(t, 2*time.Minute, cfg.ClockSkewGrace)
+	zhtest.AssertEqual(t, "X-Authorization", cfg.AuthHeaderName)
+	zhtest.AssertEqual(t, "X-Date", cfg.TimestampHeader)
+	zhtest.AssertTrue(t, cfg.AllowUnsignedPayload)
+	zhtest.AssertNotNil(t, cfg.CredentialStore)
 
 	// Test CredentialStore works
 	secrets := cfg.CredentialStore("test-key")
-	if len(secrets) != 1 || secrets[0] != "secret" {
-		t.Errorf("expected CredentialStore to return ['secret'], got %v", secrets)
-	}
+	zhtest.AssertEqual(t, 1, len(secrets))
+	zhtest.AssertEqual(t, "secret", secrets[0])
 
-	if cfg.ErrorHandler == nil {
-		t.Error("expected ErrorHandler to be set")
-	}
-
-	if len(cfg.ExcludedPaths) != 2 {
-		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
-	}
-
-	if len(cfg.IncludedPaths) != 1 {
-		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
-	}
-
-	if len(cfg.RequiredHeaders) != 3 {
-		t.Errorf("expected 3 required headers, got %d", len(cfg.RequiredHeaders))
-	}
+	zhtest.AssertNotNil(t, cfg.ErrorHandler)
+	zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
+	zhtest.AssertEqual(t, 3, len(cfg.RequiredHeaders))
 }
 
 func TestHMACAuthConfig_EmptySlices(t *testing.T) {
@@ -141,21 +87,10 @@ func TestHMACAuthConfig_EmptySlices(t *testing.T) {
 		IncludedPaths:   []string{},
 	}
 
-	if cfg.RequiredHeaders == nil {
-		t.Error("RequiredHeaders should not be nil, should be empty slice")
-	}
-
-	if cfg.OptionalHeaders == nil {
-		t.Error("OptionalHeaders should not be nil, should be empty slice")
-	}
-
-	if cfg.ExcludedPaths == nil {
-		t.Error("ExcludedPaths should not be nil, should be empty slice")
-	}
-
-	if cfg.IncludedPaths == nil {
-		t.Error("IncludedPaths should not be nil, should be empty slice")
-	}
+	zhtest.AssertNotNil(t, cfg.RequiredHeaders)
+	zhtest.AssertNotNil(t, cfg.OptionalHeaders)
+	zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+	zhtest.AssertNotNil(t, cfg.IncludedPaths)
 }
 
 func TestHMACAuthConfig_AllAlgorithms(t *testing.T) {
@@ -168,9 +103,7 @@ func TestHMACAuthConfig_AllAlgorithms(t *testing.T) {
 				Algorithm:       algo,
 			}
 
-			if cfg.Algorithm != algo {
-				t.Errorf("expected algorithm %s, got %s", algo, cfg.Algorithm)
-			}
+			zhtest.AssertEqual(t, algo, cfg.Algorithm)
 		})
 	}
 }
@@ -183,11 +116,6 @@ func TestHMACAuthConfig_ZeroDuration(t *testing.T) {
 	}
 
 	// Zero durations should be overwritten by defaults in middleware
-	if cfg.MaxSkew != 0 {
-		t.Error("MaxSkew should be 0")
-	}
-
-	if cfg.ClockSkewGrace != 0 {
-		t.Error("ClockSkewGrace should be 0")
-	}
+	zhtest.AssertEqual(t, time.Duration(0), cfg.MaxSkew)
+	zhtest.AssertEqual(t, time.Duration(0), cfg.ClockSkewGrace)
 }

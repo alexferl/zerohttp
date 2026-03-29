@@ -15,9 +15,7 @@ var testTemplates embed.FS
 
 func TestNewTemplateManager(t *testing.T) {
 	tm := NewTemplateManager(testTemplates, "testdata/templates/*.html")
-	if tm == nil {
-		t.Fatal("expected TemplateRenderer to be created")
-	}
+	zhtest.AssertNotNil(t, tm)
 }
 
 func TestTemplateManager_Render(t *testing.T) {
@@ -28,9 +26,7 @@ func TestTemplateManager_Render(t *testing.T) {
 		data := map[string]string{"Title": "Test Page"}
 
 		err := tm.Render(w, http.StatusOK, "test.html", data)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusOK).
@@ -42,19 +38,14 @@ func TestTemplateManager_Render(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		err := tm.Render(w, http.StatusOK, "missing.html", nil)
-
-		if err == nil {
-			t.Fatal("expected error for missing template")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("sets correct status code", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		err := tm.Render(w, http.StatusCreated, "test.html", nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).Status(http.StatusCreated)
 	})

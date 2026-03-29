@@ -2,6 +2,8 @@ package validator
 
 import (
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestIPValidator(t *testing.T) {
@@ -28,11 +30,10 @@ func TestIPValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestIP{IP: tt.ip})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.ip)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.ip, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -43,9 +44,7 @@ func TestIPOnNonString(t *testing.T) {
 		Value int `validate:"ip"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for ip on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestIPv4Validator(t *testing.T) {
@@ -76,11 +75,10 @@ func TestIPv4Validator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestIPv4{IPv4: tt.ip})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.ip)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.ip, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -91,9 +89,7 @@ func TestIPv4OnNonString(t *testing.T) {
 		Value int `validate:"ipv4"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for ipv4 on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestIPv6Validator(t *testing.T) {
@@ -125,11 +121,10 @@ func TestIPv6Validator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestIPv6{IPv6: tt.ip})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.ip)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.ip, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -140,9 +135,7 @@ func TestIPv6OnNonString(t *testing.T) {
 		Value int `validate:"ipv6"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for ipv6 on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestCIDRValidator(t *testing.T) {
@@ -174,11 +167,10 @@ func TestCIDRValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestCIDR{CIDR: tt.cidr})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.cidr)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.cidr, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -189,9 +181,7 @@ func TestCIDROnNonString(t *testing.T) {
 		Value int `validate:"cidr"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for cidr on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestHostnameValidator(t *testing.T) {
@@ -224,11 +214,10 @@ func TestHostnameValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestHostname{Hostname: tt.hostname})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.hostname)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.hostname, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -239,9 +228,7 @@ func TestHostnameOnNonString(t *testing.T) {
 		Value int `validate:"hostname"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for hostname on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestURIValidator(t *testing.T) {
@@ -274,11 +261,10 @@ func TestURIValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestURI{URI: tt.uri})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.uri)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.uri, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -289,9 +275,7 @@ func TestURIOnNonString(t *testing.T) {
 		Value int `validate:"uri"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for uri on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestURLValidator(t *testing.T) {
@@ -332,11 +316,10 @@ func TestURLValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestURL{Website: tt.url}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.url)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.url, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -348,7 +331,5 @@ func TestURLOnNonString(t *testing.T) {
 	}
 	input := TestURLInt{Value: 123}
 	err := New().Struct(&input)
-	if err == nil {
-		t.Error("expected error for url validator on non-string type")
-	}
+	zhtest.AssertError(t, err)
 }

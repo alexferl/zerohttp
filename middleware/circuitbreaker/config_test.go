@@ -4,31 +4,19 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestCircuitBreakerConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.FailureThreshold != 5 {
-		t.Errorf("expected default failure threshold = 5, got %d", cfg.FailureThreshold)
-	}
-	if cfg.RecoveryTimeout != 30*time.Second {
-		t.Errorf("expected default recovery timeout = 30s, got %v", cfg.RecoveryTimeout)
-	}
-	if cfg.SuccessThreshold != 3 {
-		t.Errorf("expected default success threshold = 3, got %d", cfg.SuccessThreshold)
-	}
-	if cfg.IsFailure == nil {
-		t.Error("expected default IsFailure function to be set")
-	}
-	if cfg.KeyExtractor == nil {
-		t.Error("expected default KeyExtractor function to be set")
-	}
-	if cfg.OpenStatusCode != http.StatusServiceUnavailable {
-		t.Errorf("expected default open status code = %d, got %d", http.StatusServiceUnavailable, cfg.OpenStatusCode)
-	}
-	if cfg.OpenMessage != "Service temporarily unavailable" {
-		t.Errorf("expected default open message = 'Service temporarily unavailable', got %s", cfg.OpenMessage)
-	}
+	zhtest.AssertEqual(t, 5, cfg.FailureThreshold)
+	zhtest.AssertEqual(t, 30*time.Second, cfg.RecoveryTimeout)
+	zhtest.AssertEqual(t, 3, cfg.SuccessThreshold)
+	zhtest.AssertNotNil(t, cfg.IsFailure)
+	zhtest.AssertNotNil(t, cfg.KeyExtractor)
+	zhtest.AssertEqual(t, http.StatusServiceUnavailable, cfg.OpenStatusCode)
+	zhtest.AssertEqual(t, "Service temporarily unavailable", cfg.OpenMessage)
 }
 
 func TestCircuitBreakerConfig_DefaultFunctions(t *testing.T) {
@@ -53,9 +41,7 @@ func TestCircuitBreakerConfig_DefaultFunctions(t *testing.T) {
 		}
 		for _, tt := range tests {
 			result := cfg.IsFailure(req, tt.statusCode)
-			if result != tt.expected {
-				t.Errorf("IsFailure(req, %d) = %v, expected %v", tt.statusCode, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		}
 	})
 
@@ -72,9 +58,7 @@ func TestCircuitBreakerConfig_DefaultFunctions(t *testing.T) {
 		for _, tt := range tests {
 			req, _ := http.NewRequest(http.MethodGet, tt.path, nil)
 			result := cfg.KeyExtractor(req)
-			if result != tt.expected {
-				t.Errorf("KeyExtractor(req with path %s) = %s, expected %s", tt.path, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		}
 	})
 }
@@ -84,9 +68,7 @@ func TestCircuitBreakerConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			FailureThreshold: 10,
 		}
-		if cfg.FailureThreshold != 10 {
-			t.Errorf("expected failure threshold = 10, got %d", cfg.FailureThreshold)
-		}
+		zhtest.AssertEqual(t, 10, cfg.FailureThreshold)
 	})
 
 	t.Run("recovery timeout", func(t *testing.T) {
@@ -94,27 +76,21 @@ func TestCircuitBreakerConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			RecoveryTimeout: timeout,
 		}
-		if cfg.RecoveryTimeout != timeout {
-			t.Errorf("expected recovery timeout = %v, got %v", timeout, cfg.RecoveryTimeout)
-		}
+		zhtest.AssertEqual(t, timeout, cfg.RecoveryTimeout)
 	})
 
 	t.Run("success threshold", func(t *testing.T) {
 		cfg := Config{
 			SuccessThreshold: 5,
 		}
-		if cfg.SuccessThreshold != 5 {
-			t.Errorf("expected success threshold = 5, got %d", cfg.SuccessThreshold)
-		}
+		zhtest.AssertEqual(t, 5, cfg.SuccessThreshold)
 	})
 
 	t.Run("open status code", func(t *testing.T) {
 		cfg := Config{
 			OpenStatusCode: http.StatusTooManyRequests,
 		}
-		if cfg.OpenStatusCode != http.StatusTooManyRequests {
-			t.Errorf("expected open status code = %d, got %d", http.StatusTooManyRequests, cfg.OpenStatusCode)
-		}
+		zhtest.AssertEqual(t, http.StatusTooManyRequests, cfg.OpenStatusCode)
 	})
 
 	t.Run("open message", func(t *testing.T) {
@@ -122,9 +98,7 @@ func TestCircuitBreakerConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			OpenMessage: message,
 		}
-		if cfg.OpenMessage != message {
-			t.Errorf("expected open message = %s, got %s", message, cfg.OpenMessage)
-		}
+		zhtest.AssertEqual(t, message, cfg.OpenMessage)
 	})
 }
 
@@ -136,9 +110,7 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 		cfg := Config{
 			IsFailure: customIsFailure,
 		}
-		if cfg.IsFailure == nil {
-			t.Error("expected IsFailure function to be set")
-		}
+		zhtest.AssertNotNil(t, cfg.IsFailure)
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		tests := []struct {
 			statusCode int
@@ -153,9 +125,7 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 		}
 		for _, tt := range tests {
 			result := cfg.IsFailure(req, tt.statusCode)
-			if result != tt.expected {
-				t.Errorf("custom IsFailure(req, %d) = %v, expected %v", tt.statusCode, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		}
 	})
 
@@ -166,9 +136,7 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 		cfg := Config{
 			KeyExtractor: customKeyExtractor,
 		}
-		if cfg.KeyExtractor == nil {
-			t.Error("expected KeyExtractor function to be set")
-		}
+		zhtest.AssertNotNil(t, cfg.KeyExtractor)
 		tests := []struct {
 			method, path, expected string
 		}{
@@ -179,9 +147,7 @@ func TestCircuitBreakerConfig_CustomFunctions(t *testing.T) {
 		for _, tt := range tests {
 			req, _ := http.NewRequest(tt.method, tt.path, nil)
 			result := cfg.KeyExtractor(req)
-			if result != tt.expected {
-				t.Errorf("custom KeyExtractor(%s %s) = %s, expected %s", tt.method, tt.path, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		}
 	})
 }
@@ -205,34 +171,17 @@ func TestCircuitBreakerConfig_MultipleFields(t *testing.T) {
 		OpenMessage:      "Service overloaded",
 	}
 
-	if cfg.FailureThreshold != 8 {
-		t.Errorf("expected failure threshold = 8, got %d", cfg.FailureThreshold)
-	}
-	if cfg.RecoveryTimeout != timeout {
-		t.Errorf("expected recovery timeout = %v, got %v", timeout, cfg.RecoveryTimeout)
-	}
-	if cfg.SuccessThreshold != 4 {
-		t.Errorf("expected success threshold = 4, got %d", cfg.SuccessThreshold)
-	}
-	if cfg.OpenStatusCode != http.StatusTooManyRequests {
-		t.Errorf("expected open status code = %d, got %d", http.StatusTooManyRequests, cfg.OpenStatusCode)
-	}
-	if cfg.OpenMessage != "Service overloaded" {
-		t.Errorf("expected open message = 'Service overloaded', got %s", cfg.OpenMessage)
-	}
+	zhtest.AssertEqual(t, 8, cfg.FailureThreshold)
+	zhtest.AssertEqual(t, timeout, cfg.RecoveryTimeout)
+	zhtest.AssertEqual(t, 4, cfg.SuccessThreshold)
+	zhtest.AssertEqual(t, http.StatusTooManyRequests, cfg.OpenStatusCode)
+	zhtest.AssertEqual(t, "Service overloaded", cfg.OpenMessage)
 
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	req.Host = "example.com"
-	if !cfg.IsFailure(req, http.StatusBadRequest) {
-		t.Error("expected custom IsFailure to return true for 400")
-	}
-	if cfg.IsFailure(req, http.StatusOK) {
-		t.Error("expected custom IsFailure to return false for 200")
-	}
-	expectedKey := "example.com/test"
-	if cfg.KeyExtractor(req) != expectedKey {
-		t.Errorf("expected custom KeyExtractor to return %s, got %s", expectedKey, cfg.KeyExtractor(req))
-	}
+	zhtest.AssertTrue(t, cfg.IsFailure(req, http.StatusBadRequest))
+	zhtest.AssertFalse(t, cfg.IsFailure(req, http.StatusOK))
+	zhtest.AssertEqual(t, "example.com/test", cfg.KeyExtractor(req))
 }
 
 func TestCircuitBreakerConfig_EdgeCases(t *testing.T) {
@@ -242,15 +191,9 @@ func TestCircuitBreakerConfig_EdgeCases(t *testing.T) {
 			RecoveryTimeout:  0,
 			SuccessThreshold: 0,
 		}
-		if cfg.FailureThreshold != 0 {
-			t.Errorf("expected failure threshold = 0, got %d", cfg.FailureThreshold)
-		}
-		if cfg.RecoveryTimeout != 0 {
-			t.Errorf("expected recovery timeout = 0, got %v", cfg.RecoveryTimeout)
-		}
-		if cfg.SuccessThreshold != 0 {
-			t.Errorf("expected success threshold = 0, got %d", cfg.SuccessThreshold)
-		}
+		zhtest.AssertEqual(t, 0, cfg.FailureThreshold)
+		zhtest.AssertEqual(t, time.Duration(0), cfg.RecoveryTimeout)
+		zhtest.AssertEqual(t, 0, cfg.SuccessThreshold)
 	})
 
 	t.Run("nil functions", func(t *testing.T) {
@@ -258,12 +201,8 @@ func TestCircuitBreakerConfig_EdgeCases(t *testing.T) {
 			IsFailure:    nil,
 			KeyExtractor: nil,
 		}
-		if cfg.IsFailure != nil {
-			t.Error("expected IsFailure to be nil when nil is passed")
-		}
-		if cfg.KeyExtractor != nil {
-			t.Error("expected KeyExtractor to be nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IsFailure)
+		zhtest.AssertNil(t, cfg.KeyExtractor)
 	})
 }
 
@@ -295,9 +234,7 @@ func TestCircuitBreakerConfig_ComplexFunctionality(t *testing.T) {
 		for _, tt := range tests {
 			req, _ := http.NewRequest(http.MethodGet, tt.path, nil)
 			result := cfg.IsFailure(req, tt.statusCode)
-			if result != tt.expected {
-				t.Errorf("custom IsFailure(req with path %s, %d) = %v, expected %v", tt.path, tt.statusCode, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		}
 	})
 
@@ -326,9 +263,7 @@ func TestCircuitBreakerConfig_ComplexFunctionality(t *testing.T) {
 				req.Header.Set("X-User-ID", tt.userID)
 			}
 			result := cfg.KeyExtractor(req)
-			if result != tt.expected {
-				t.Errorf("custom KeyExtractor(req with path %s, userID %s) = %s, expected %s", tt.path, tt.userID, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		}
 	})
 }

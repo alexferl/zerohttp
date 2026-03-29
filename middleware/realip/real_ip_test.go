@@ -28,9 +28,7 @@ func TestRealIPMiddleware(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.RemoteAddr != tt.expectedRemote {
-					t.Errorf("expected RemoteAddr '%s', got '%s'", tt.expectedRemote, r.RemoteAddr)
-				}
+				zhtest.AssertEqual(t, tt.expectedRemote, r.RemoteAddr)
 				w.WriteHeader(http.StatusOK)
 			})
 			zhtest.TestMiddlewareWithHandler(middleware, next, req)
@@ -43,9 +41,7 @@ func TestRealIPMiddlewareNoPort(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "203.0.113.1").Build()
 	req.RemoteAddr = "192.168.1.1"
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.RemoteAddr != "203.0.113.1" {
-			t.Errorf("expected RemoteAddr '203.0.113.1', got '%s'", r.RemoteAddr)
-		}
+		zhtest.AssertEqual(t, "203.0.113.1", r.RemoteAddr)
 		w.WriteHeader(http.StatusOK)
 	})
 	zhtest.TestMiddlewareWithHandler(middleware, next, req)
@@ -60,9 +56,7 @@ func TestRealIPCustomExtractor(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "192.168.1.1:12345"
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.RemoteAddr != "custom.ip.address:12345" {
-			t.Errorf("expected RemoteAddr 'custom.ip.address:12345', got '%s'", r.RemoteAddr)
-		}
+		zhtest.AssertEqual(t, "custom.ip.address:12345", r.RemoteAddr)
 		w.WriteHeader(http.StatusOK)
 	})
 	zhtest.TestMiddlewareWithHandler(middleware, next, req)
@@ -75,9 +69,7 @@ func TestRealIPNilExtractor(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "203.0.113.1").Build()
 	req.RemoteAddr = "192.168.1.1:12345"
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.RemoteAddr != "203.0.113.1:12345" {
-			t.Errorf("expected RemoteAddr '203.0.113.1:12345', got '%s'", r.RemoteAddr)
-		}
+		zhtest.AssertEqual(t, "203.0.113.1:12345", r.RemoteAddr)
 		w.WriteHeader(http.StatusOK)
 	})
 	zhtest.TestMiddlewareWithHandler(middleware, next, req)
@@ -99,9 +91,7 @@ func TestRemoteAddrIPExtractor(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
 			ip := RemoteAddrIPExtractor(req)
-			if ip != tt.expectedIP {
-				t.Errorf("expected IP '%s', got '%s'", tt.expectedIP, ip)
-			}
+			zhtest.AssertEqual(t, tt.expectedIP, ip)
 		})
 	}
 }
@@ -123,9 +113,7 @@ func TestXForwardedForIPExtractor(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
 			ip := XForwardedForIPExtractor(req)
-			if ip != tt.expectedIP {
-				t.Errorf("expected IP '%s', got '%s'", tt.expectedIP, ip)
-			}
+			zhtest.AssertEqual(t, tt.expectedIP, ip)
 		})
 	}
 }
@@ -146,9 +134,7 @@ func TestXRealIPExtractor(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = tt.remoteAddr
 			ip := XRealIPExtractor(req)
-			if ip != tt.expectedIP {
-				t.Errorf("expected IP '%s', got '%s'", tt.expectedIP, ip)
-			}
+			zhtest.AssertEqual(t, tt.expectedIP, ip)
 		})
 	}
 }
@@ -187,9 +173,7 @@ func TestRealIPWithDifferentExtractors(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(tt.headers).Build()
 			req.RemoteAddr = "192.168.1.1:12345"
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.RemoteAddr != tt.expected {
-					t.Errorf("expected RemoteAddr '%s', got '%s'", tt.expected, r.RemoteAddr)
-				}
+				zhtest.AssertEqual(t, tt.expected, r.RemoteAddr)
 				w.WriteHeader(http.StatusOK)
 			})
 			zhtest.TestMiddlewareWithHandler(middleware, next, req)
@@ -203,9 +187,7 @@ func TestRealIPEdgeCases(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "").Build()
 		req.RemoteAddr = "192.168.1.1:12345"
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.RemoteAddr != "192.168.1.1:12345" {
-				t.Errorf("expected RemoteAddr '192.168.1.1:12345', got '%s'", r.RemoteAddr)
-			}
+			zhtest.AssertEqual(t, "192.168.1.1:12345", r.RemoteAddr)
 			w.WriteHeader(http.StatusOK)
 		})
 		zhtest.TestMiddlewareWithHandler(middleware, next, req)
@@ -214,9 +196,7 @@ func TestRealIPEdgeCases(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Forwarded", "invalid-format").Build()
 		req.RemoteAddr = "192.168.1.1:12345"
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.RemoteAddr != "192.168.1.1:12345" {
-				t.Errorf("expected RemoteAddr '192.168.1.1:12345', got '%s'", r.RemoteAddr)
-			}
+			zhtest.AssertEqual(t, "192.168.1.1:12345", r.RemoteAddr)
 			w.WriteHeader(http.StatusOK)
 		})
 		zhtest.TestMiddlewareWithHandler(middleware, next, req)

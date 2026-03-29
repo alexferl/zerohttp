@@ -8,56 +8,42 @@ import (
 func TestServe(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("hello")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello"))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 
 	w := Serve(handler, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if w.Body.String() != "hello" {
-		t.Errorf("expected body 'hello', got %s", w.Body.String())
-	}
+	AssertEqual(t, http.StatusOK, w.Code)
+	AssertEqual(t, "hello", w.Body.String())
 }
 
 func TestServeWithRecorder(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Custom", "value")
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("hello")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello"))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 
 	w := ServeWithRecorder(handler, req)
 
-	if !w.IsSuccess() {
-		t.Error("expected IsSuccess to be true")
-	}
-	if w.HeaderValue("X-Custom") != "value" {
-		t.Error("expected X-Custom header")
-	}
+	AssertTrue(t, w.IsSuccess())
+	AssertEqual(t, "value", w.HeaderValue("X-Custom"))
 }
 
 func TestTestHandler(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST method, got %s", r.Method)
-		}
+		AssertEqual(t, http.MethodPost, r.Method)
 		w.WriteHeader(http.StatusCreated)
 	})
 	req := NewRequest(http.MethodPost, "/").Build()
 
 	w := TestHandler(handler, req)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected status 201, got %d", w.Code)
-	}
+	AssertEqual(t, http.StatusCreated, w.Code)
 }
 
 func TestTestMiddleware(t *testing.T) {
@@ -72,12 +58,8 @@ func TestTestMiddleware(t *testing.T) {
 
 		w := TestMiddleware(mw, req)
 
-		if w.Header().Get("X-Middleware") != "applied" {
-			t.Error("expected X-Middleware header to be set")
-		}
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
+		AssertEqual(t, "applied", w.Header().Get("X-Middleware"))
+		AssertEqual(t, http.StatusOK, w.Code)
 	})
 
 	t.Run("middleware that intercepts request", func(t *testing.T) {
@@ -91,9 +73,7 @@ func TestTestMiddleware(t *testing.T) {
 
 		w := TestMiddleware(mw, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("expected status 401, got %d", w.Code)
-		}
+		AssertEqual(t, http.StatusUnauthorized, w.Code)
 	})
 }
 
@@ -107,26 +87,17 @@ func TestTestMiddlewareWithHandler(t *testing.T) {
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		if _, err := w.Write([]byte("created")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("created"))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodPost, "/").Build()
 
 	w := TestMiddlewareWithHandler(mw, handler, req)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected status 201, got %d", w.Code)
-	}
-	if w.Header().Get("X-Before") != "true" {
-		t.Error("expected X-Before header to be set")
-	}
-	if w.Header().Get("X-After") != "true" {
-		t.Error("expected X-After header to be set")
-	}
-	if w.Body.String() != "created" {
-		t.Errorf("expected body 'created', got %s", w.Body.String())
-	}
+	AssertEqual(t, http.StatusCreated, w.Code)
+	AssertEqual(t, "true", w.Header().Get("X-Before"))
+	AssertEqual(t, "true", w.Header().Get("X-After"))
+	AssertEqual(t, "created", w.Body.String())
 }
 
 func TestTestMiddlewareChain(t *testing.T) {
@@ -150,17 +121,11 @@ func TestTestMiddlewareChain(t *testing.T) {
 
 	w := TestMiddlewareChain([]func(http.Handler) http.Handler{mw1, mw2}, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
+	AssertEqual(t, http.StatusOK, w.Code)
 
 	expectedOrder := []string{"mw1-before", "mw2-before", "mw2-after", "mw1-after"}
-	if len(order) != len(expectedOrder) {
-		t.Fatalf("expected order %v, got %v", expectedOrder, order)
-	}
+	AssertEqual(t, len(expectedOrder), len(order))
 	for i, expected := range expectedOrder {
-		if order[i] != expected {
-			t.Errorf("expected order[%d] to be %q, got %q", i, expected, order[i])
-		}
+		AssertEqual(t, expected, order[i])
 	}
 }

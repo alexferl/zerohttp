@@ -3,28 +3,19 @@ package trailingslash
 import (
 	"net/http"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestTrailingSlashConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Action != RedirectAction {
-		t.Errorf("expected default action = %s, got %s", RedirectAction, cfg.Action)
-	}
-	if cfg.PreferTrailingSlash != false {
-		t.Errorf("expected default prefer trailing slash = false, got %t", cfg.PreferTrailingSlash)
-	}
-	if cfg.RedirectCode != http.StatusMovedPermanently {
-		t.Errorf("expected default redirect code = %d, got %d", http.StatusMovedPermanently, cfg.RedirectCode)
-	}
+	zhtest.AssertEqual(t, RedirectAction, cfg.Action)
+	zhtest.AssertFalse(t, cfg.PreferTrailingSlash)
+	zhtest.AssertEqual(t, http.StatusMovedPermanently, cfg.RedirectCode)
 
 	// Test default redirect code specifically
-	expectedCode := 301 // Moved Permanently
-	if cfg.RedirectCode != expectedCode {
-		t.Errorf("expected default redirect code = %d (Moved Permanently), got %d", expectedCode, cfg.RedirectCode)
-	}
-	if cfg.RedirectCode != http.StatusMovedPermanently {
-		t.Errorf("expected redirect code to equal http.StatusMovedPermanently (%d), got %d", http.StatusMovedPermanently, cfg.RedirectCode)
-	}
+	zhtest.AssertEqual(t, 301, cfg.RedirectCode)
+	zhtest.AssertEqual(t, http.StatusMovedPermanently, cfg.RedirectCode)
 }
 
 func TestTrailingSlashConfig_ActionConstants(t *testing.T) {
@@ -39,9 +30,7 @@ func TestTrailingSlashConfig_ActionConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.action), func(t *testing.T) {
-			if string(tt.action) != tt.expected {
-				t.Errorf("expected action string = %s, got %s", tt.expected, string(tt.action))
-			}
+			zhtest.AssertEqual(t, tt.expected, string(tt.action))
 		})
 	}
 }
@@ -51,32 +40,24 @@ func TestTrailingSlashConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			Action: StripAction,
 		}
-		if cfg.Action != StripAction {
-			t.Errorf("expected action = %s, got %s", StripAction, cfg.Action)
-		}
+		zhtest.AssertEqual(t, StripAction, cfg.Action)
 	})
 
 	t.Run("preference assignment", func(t *testing.T) {
 		cfg := Config{
 			PreferTrailingSlash: true,
 		}
-		if cfg.PreferTrailingSlash != true {
-			t.Errorf("expected prefer trailing slash = true, got %t", cfg.PreferTrailingSlash)
-		}
+		zhtest.AssertTrue(t, cfg.PreferTrailingSlash)
 		// Test setting back to false
 		cfg.PreferTrailingSlash = false
-		if cfg.PreferTrailingSlash != false {
-			t.Errorf("expected prefer trailing slash = false, got %t", cfg.PreferTrailingSlash)
-		}
+		zhtest.AssertFalse(t, cfg.PreferTrailingSlash)
 	})
 
 	t.Run("redirect code assignment", func(t *testing.T) {
 		cfg := Config{
 			RedirectCode: http.StatusFound,
 		}
-		if cfg.RedirectCode != http.StatusFound {
-			t.Errorf("expected redirect code = %d, got %d", http.StatusFound, cfg.RedirectCode)
-		}
+		zhtest.AssertEqual(t, http.StatusFound, cfg.RedirectCode)
 	})
 
 	t.Run("multiple fields", func(t *testing.T) {
@@ -86,15 +67,9 @@ func TestTrailingSlashConfig_StructAssignment(t *testing.T) {
 			RedirectCode:        http.StatusFound,
 		}
 
-		if cfg.Action != AppendAction {
-			t.Errorf("expected action = %s, got %s", AppendAction, cfg.Action)
-		}
-		if cfg.PreferTrailingSlash != true {
-			t.Errorf("expected prefer trailing slash = true, got %t", cfg.PreferTrailingSlash)
-		}
-		if cfg.RedirectCode != http.StatusFound {
-			t.Errorf("expected redirect code = %d, got %d", http.StatusFound, cfg.RedirectCode)
-		}
+		zhtest.AssertEqual(t, AppendAction, cfg.Action)
+		zhtest.AssertTrue(t, cfg.PreferTrailingSlash)
+		zhtest.AssertEqual(t, http.StatusFound, cfg.RedirectCode)
 	})
 }
 
@@ -105,9 +80,7 @@ func TestTrailingSlashConfig_AllActions(t *testing.T) {
 			cfg := Config{
 				Action: action,
 			}
-			if cfg.Action != action {
-				t.Errorf("expected action = %s, got %s", action, cfg.Action)
-			}
+			zhtest.AssertEqual(t, action, cfg.Action)
 		})
 	}
 }
@@ -133,12 +106,8 @@ func TestTrailingSlashConfig_RedirectCodes(t *testing.T) {
 			cfg := Config{
 				RedirectCode: tt.redirectCode,
 			}
-			if cfg.RedirectCode != tt.httpConst {
-				t.Errorf("expected %s redirect code = %d, got %d", tt.description, tt.httpConst, cfg.RedirectCode)
-			}
-			if cfg.RedirectCode != tt.redirectCode {
-				t.Errorf("expected redirect code to match constant %d, got %d", tt.redirectCode, cfg.RedirectCode)
-			}
+			zhtest.AssertEqual(t, tt.httpConst, cfg.RedirectCode)
+			zhtest.AssertEqual(t, tt.redirectCode, cfg.RedirectCode)
 		})
 	}
 }
@@ -163,12 +132,8 @@ func TestTrailingSlashConfig_UsageScenarios(t *testing.T) {
 				Action:              tt.action,
 			}
 
-			if cfg.PreferTrailingSlash != tt.preferTrailingSlash {
-				t.Errorf("%s: expected prefer trailing slash = %t, got %t", tt.description, tt.preferTrailingSlash, cfg.PreferTrailingSlash)
-			}
-			if cfg.Action != tt.action {
-				t.Errorf("%s: expected action = %s, got %s", tt.description, tt.action, cfg.Action)
-			}
+			zhtest.AssertEqual(t, tt.preferTrailingSlash, cfg.PreferTrailingSlash)
+			zhtest.AssertEqual(t, tt.action, cfg.Action)
 		})
 	}
 }
@@ -177,47 +142,29 @@ func TestTrailingSlashConfig_EdgeCases(t *testing.T) {
 	t.Run("boolean toggling", func(t *testing.T) {
 		cfg := DefaultConfig
 		// Start with default (false)
-		if cfg.PreferTrailingSlash != false {
-			t.Error("expected initial PreferTrailingSlash = false")
-		}
+		zhtest.AssertFalse(t, cfg.PreferTrailingSlash)
 		// Toggle to true
 		cfg.PreferTrailingSlash = true
-		if cfg.PreferTrailingSlash != true {
-			t.Error("expected PreferTrailingSlash = true after toggle")
-		}
+		zhtest.AssertTrue(t, cfg.PreferTrailingSlash)
 		// Toggle back to false
 		cfg.PreferTrailingSlash = false
-		if cfg.PreferTrailingSlash != false {
-			t.Error("expected PreferTrailingSlash = false after toggle back")
-		}
+		zhtest.AssertFalse(t, cfg.PreferTrailingSlash)
 	})
 
 	t.Run("default behavior validation", func(t *testing.T) {
 		cfg := DefaultConfig
 		// Should redirect by default
-		if cfg.Action != RedirectAction {
-			t.Error("expected default to redirect")
-		}
+		zhtest.AssertEqual(t, RedirectAction, cfg.Action)
 		// Should prefer no trailing slash (API style)
-		if cfg.PreferTrailingSlash != false {
-			t.Error("expected default to prefer no trailing slash")
-		}
+		zhtest.AssertFalse(t, cfg.PreferTrailingSlash)
 		// Should use permanent redirect
-		if cfg.RedirectCode != http.StatusMovedPermanently {
-			t.Error("expected default to use permanent redirect")
-		}
+		zhtest.AssertEqual(t, http.StatusMovedPermanently, cfg.RedirectCode)
 	})
 
 	t.Run("zero values", func(t *testing.T) {
 		cfg := Config{} // Zero values
-		if cfg.Action != "" {
-			t.Errorf("expected zero action = '', got %s", cfg.Action)
-		}
-		if cfg.PreferTrailingSlash != false {
-			t.Errorf("expected zero prefer trailing slash = false, got %t", cfg.PreferTrailingSlash)
-		}
-		if cfg.RedirectCode != 0 {
-			t.Errorf("expected zero redirect code = 0, got %d", cfg.RedirectCode)
-		}
+		zhtest.AssertEqual(t, Action(""), cfg.Action)
+		zhtest.AssertFalse(t, cfg.PreferTrailingSlash)
+		zhtest.AssertEqual(t, 0, cfg.RedirectCode)
 	})
 }

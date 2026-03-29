@@ -53,9 +53,7 @@ func TestRecover_NoPanic(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	w := zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 0 {
-		t.Errorf("Expected no error logs, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 0, len(logger.errorLogs))
 	zhtest.AssertWith(t, w).Status(http.StatusOK).Body("OK")
 }
 
@@ -66,13 +64,10 @@ func TestRecover_WithPanic(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("X-Request-Id", "test-req-123").Build()
 	w := zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 1 {
-		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-	}
-	if logger.errorLogs[0] != "Recovered from panic" {
-		t.Errorf("Expected message 'Recovered from panic', got %s", logger.errorLogs[0])
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+	zhtest.AssertEqual(t, "Recovered from panic", logger.errorLogs[0])
 	zhtest.AssertWith(t, w).Status(http.StatusInternalServerError)
+
 	fields := logger.errorFields[0]
 	foundPanic, foundRequestID, foundStack := false, false, false
 	for _, field := range fields {
@@ -91,15 +86,9 @@ func TestRecover_WithPanic(t *testing.T) {
 			}
 		}
 	}
-	if !foundPanic {
-		t.Error("Expected panic value to be logged")
-	}
-	if !foundRequestID {
-		t.Error("Expected request ID to be logged")
-	}
-	if !foundStack {
-		t.Error("Expected stack trace to be logged")
-	}
+	zhtest.AssertTrue(t, foundPanic)
+	zhtest.AssertTrue(t, foundRequestID)
+	zhtest.AssertTrue(t, foundStack)
 }
 
 func TestRecover_HTTPAbortHandler(t *testing.T) {
@@ -107,12 +96,11 @@ func TestRecover_HTTPAbortHandler(t *testing.T) {
 	handler := New(logger)(panicHandler(http.ErrAbortHandler))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	defer func() {
-		if r := recover(); r != http.ErrAbortHandler {
-			t.Errorf("Expected http.ErrAbortHandler to be re-panicked, got %v", r)
-		}
+		r := recover()
+		zhtest.AssertEqual(t, http.ErrAbortHandler, r)
 	}()
 	zhtest.Serve(handler, req)
-	t.Error("Expected panic to be re-raised")
+	zhtest.AssertFail(t, "Expected panic to be re-raised")
 }
 
 func TestRecover_UpgradeConnection(t *testing.T) {
@@ -121,12 +109,8 @@ func TestRecover_UpgradeConnection(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").WithHeader("Connection", "Upgrade").Build()
 	w := zhtest.Serve(handler, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected no status code change for upgrade connection, got %d", w.Code)
-	}
-	if len(logger.errorLogs) != 1 {
-		t.Errorf("Expected panic to be logged even for upgrade connections")
-	}
+	zhtest.AssertEqual(t, http.StatusOK, w.Code)
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
 }
 
 func TestRecover_CustomConfig(t *testing.T) {
@@ -138,9 +122,8 @@ func TestRecover_CustomConfig(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 1 {
-		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+
 	fields := logger.errorFields[0]
 	foundStack := false
 	for _, field := range fields {
@@ -150,9 +133,7 @@ func TestRecover_CustomConfig(t *testing.T) {
 			}
 		}
 	}
-	if !foundStack {
-		t.Error("Expected stack trace to be present with custom config")
-	}
+	zhtest.AssertTrue(t, foundStack)
 }
 
 func TestRecover_DisabledStackTrace(t *testing.T) {
@@ -164,13 +145,12 @@ func TestRecover_DisabledStackTrace(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 1 {
-		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+
 	fields := logger.errorFields[0]
 	for _, field := range fields {
 		if field.Key == "stack" {
-			t.Error("Did not expect stack trace to be logged when disabled")
+			zhtest.AssertFail(t, "Did not expect stack trace to be logged when disabled")
 		}
 	}
 }
@@ -184,9 +164,8 @@ func TestRecover_InvalidStackSize(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 1 {
-		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+
 	fields := logger.errorFields[0]
 	foundStack := false
 	for _, field := range fields {
@@ -196,9 +175,7 @@ func TestRecover_InvalidStackSize(t *testing.T) {
 			}
 		}
 	}
-	if !foundStack {
-		t.Error("Expected stack trace to be present even with invalid config")
-	}
+	zhtest.AssertTrue(t, foundStack)
 }
 
 func TestRecover_ErrorValue(t *testing.T) {
@@ -208,9 +185,8 @@ func TestRecover_ErrorValue(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 1 {
-		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+
 	fields := logger.errorFields[0]
 	foundError := false
 	for _, field := range fields {
@@ -218,9 +194,7 @@ func TestRecover_ErrorValue(t *testing.T) {
 			foundError = true
 		}
 	}
-	if !foundError {
-		t.Error("Expected error value to be logged correctly")
-	}
+	zhtest.AssertTrue(t, foundError)
 }
 
 func TestRecover_StringPanic(t *testing.T) {
@@ -230,9 +204,8 @@ func TestRecover_StringPanic(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 1 {
-		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+
 	fields := logger.errorFields[0]
 	foundPanic := false
 	for _, field := range fields {
@@ -240,20 +213,14 @@ func TestRecover_StringPanic(t *testing.T) {
 			foundPanic = true
 		}
 	}
-	if !foundPanic {
-		t.Error("Expected string panic value to be logged")
-	}
+	zhtest.AssertTrue(t, foundPanic)
 }
 
 func TestDefaultRecoverConfig(t *testing.T) {
 	cfg := DefaultConfig
 	expectedStackSize := int64(4 << 10)
-	if cfg.StackSize != expectedStackSize {
-		t.Errorf("Expected default stack size %d, got %d", expectedStackSize, cfg.StackSize)
-	}
-	if !cfg.EnableStackTrace {
-		t.Error("Expected default EnableStackTrace to be true")
-	}
+	zhtest.AssertEqual(t, expectedStackSize, cfg.StackSize)
+	zhtest.AssertTrue(t, cfg.EnableStackTrace)
 }
 
 func TestRecover_MultipleOptions(t *testing.T) {
@@ -265,9 +232,8 @@ func TestRecover_MultipleOptions(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
-	if len(logger.errorLogs) != 1 {
-		t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+
 	fields := logger.errorFields[0]
 	foundStack := false
 	for _, field := range fields {
@@ -275,9 +241,7 @@ func TestRecover_MultipleOptions(t *testing.T) {
 			foundStack = true
 		}
 	}
-	if !foundStack {
-		t.Error("Expected stack trace to be present (should use options)")
-	}
+	zhtest.AssertTrue(t, foundStack)
 }
 
 func TestRecover_PanicFieldLogging(t *testing.T) {
@@ -287,9 +251,8 @@ func TestRecover_PanicFieldLogging(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
 
-	if len(logger.errorFields) == 0 {
-		t.Fatal("Expected error fields to be captured")
-	}
+	zhtest.AssertTrue(t, len(logger.errorFields) > 0)
+
 	fields := logger.errorFields[0]
 	foundPanicField := false
 	for _, field := range fields {
@@ -298,9 +261,7 @@ func TestRecover_PanicFieldLogging(t *testing.T) {
 			break
 		}
 	}
-	if !foundPanicField {
-		t.Error("Expected panic field to be logged using log.P() helper")
-	}
+	zhtest.AssertTrue(t, foundPanicField)
 }
 
 func TestRecover_NonHandlerError(t *testing.T) {
@@ -313,27 +274,18 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	w := zhtest.Serve(handler, req)
 
 	// Should return 500
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("Expected 500 Internal Server Error, got %d", w.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusInternalServerError, w.Code)
 
 	// Should log as error with stack trace
-	if len(logger.errorLogs) != 1 {
-		t.Errorf("Expected 1 error log for panics, got %d", len(logger.errorLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.errorLogs))
 
 	// Should return problem detail response body
 	contentType := w.Header().Get(httpx.HeaderContentType)
-	if !strings.Contains(contentType, "application/problem+json") {
-		t.Errorf("Expected Content-Type to contain application/problem+json, got %s", contentType)
-	}
+	zhtest.AssertTrue(t, strings.Contains(contentType, "application/problem+json"))
+
 	body := w.Body.String()
-	if !strings.Contains(body, `"status":500`) {
-		t.Errorf("Expected body to contain status 500, got %s", body)
-	}
-	if !strings.Contains(body, `"title":"Internal Server Error"`) {
-		t.Errorf("Expected body to contain title 'Internal Server Error', got %s", body)
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, `"status":500`))
+	zhtest.AssertTrue(t, strings.Contains(body, `"title":"Internal Server Error"`))
 
 	// Test plain text response without Accept header
 	logger = &mockLogger{} // Reset logger
@@ -342,9 +294,7 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	w = zhtest.Serve(handler, req)
 
 	contentType = w.Header().Get(httpx.HeaderContentType)
-	if !strings.Contains(contentType, "text/plain") {
-		t.Errorf("Expected Content-Type to contain text/plain, got %s", contentType)
-	}
+	zhtest.AssertTrue(t, strings.Contains(contentType, "text/plain"))
 }
 
 func TestRecover_Metrics(t *testing.T) {
@@ -363,9 +313,7 @@ func TestRecover_Metrics(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusInternalServerError, rr.Code)
 
 	// Check metrics
 	families := reg.Gather()
@@ -376,12 +324,8 @@ func TestRecover_Metrics(t *testing.T) {
 			break
 		}
 	}
-	if counter == nil {
-		t.Fatal("expected recover_panics_total metric")
-	}
-	if len(counter.Metrics) != 1 {
-		t.Errorf("expected 1 panic metric, got %d", len(counter.Metrics))
-	}
+	zhtest.AssertNotNil(t, counter)
+	zhtest.AssertEqual(t, 1, len(counter.Metrics))
 }
 
 func TestRecover_CustomRequestIDHeader(t *testing.T) {
@@ -399,9 +343,7 @@ func TestRecover_CustomRequestIDHeader(t *testing.T) {
 	req1 := zhtest.NewRequest(http.MethodGet, "/").WithHeader(customHeader, "custom-req-456").Build()
 	w1 := zhtest.Serve(handler, req1)
 
-	if w1.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w1.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusInternalServerError, w1.Code)
 
 	foundCustomID := false
 	for _, fields := range logger.errorFields {
@@ -412,9 +354,7 @@ func TestRecover_CustomRequestIDHeader(t *testing.T) {
 			}
 		}
 	}
-	if !foundCustomID {
-		t.Error("expected custom request ID to be logged")
-	}
+	zhtest.AssertTrue(t, foundCustomID)
 
 	// Reset logger for next test
 	logger.errorFields = nil
@@ -424,9 +364,7 @@ func TestRecover_CustomRequestIDHeader(t *testing.T) {
 	req2 := zhtest.NewRequest(http.MethodGet, "/").WithHeader("X-Request-Id", "should-be-ignored").Build()
 	w2 := zhtest.Serve(handler, req2)
 
-	if w2.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusInternalServerError, w2.Code)
 
 	foundDefaultID := false
 	for _, fields := range logger.errorFields {
@@ -437,7 +375,5 @@ func TestRecover_CustomRequestIDHeader(t *testing.T) {
 			}
 		}
 	}
-	if foundDefaultID {
-		t.Error("expected default X-Request-Id header to be ignored when custom header is configured")
-	}
+	zhtest.AssertFalse(t, foundDefaultID)
 }

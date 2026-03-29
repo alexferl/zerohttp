@@ -3,41 +3,23 @@ package reverseproxy
 import (
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestDefaultReverseProxyConfig(t *testing.T) {
 	cfg := DefaultConfig
 
-	if cfg.LoadBalancer != RoundRobin {
-		t.Errorf("expected LoadBalancer to be RoundRobin, got %s", cfg.LoadBalancer)
-	}
-	if cfg.HealthCheckPath != "/" {
-		t.Errorf("expected HealthCheckPath to be /, got %s", cfg.HealthCheckPath)
-	}
-	if cfg.StripPrefix != "" {
-		t.Errorf("expected StripPrefix to be empty, got %s", cfg.StripPrefix)
-	}
-	if cfg.AddPrefix != "" {
-		t.Errorf("expected AddPrefix to be empty, got %s", cfg.AddPrefix)
-	}
-	if len(cfg.Rewrites) != 0 {
-		t.Errorf("expected Rewrites to be empty, got %d items", len(cfg.Rewrites))
-	}
-	if len(cfg.SetHeaders) != 0 {
-		t.Errorf("expected SetHeaders to be empty, got %d items", len(cfg.SetHeaders))
-	}
-	if len(cfg.RemoveHeaders) != 0 {
-		t.Errorf("expected RemoveHeaders to be empty, got %d items", len(cfg.RemoveHeaders))
-	}
-	if !cfg.ForwardHeaders {
-		t.Error("expected ForwardHeaders to be true")
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected ExcludedPaths to be empty, got %d items", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected IncludedPaths to be empty, got %d items", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, RoundRobin, cfg.LoadBalancer)
+	zhtest.AssertEqual(t, "/", cfg.HealthCheckPath)
+	zhtest.AssertEqual(t, "", cfg.StripPrefix)
+	zhtest.AssertEqual(t, "", cfg.AddPrefix)
+	zhtest.AssertEqual(t, 0, len(cfg.Rewrites))
+	zhtest.AssertEqual(t, 0, len(cfg.SetHeaders))
+	zhtest.AssertEqual(t, 0, len(cfg.RemoveHeaders))
+	zhtest.AssertTrue(t, cfg.ForwardHeaders)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 }
 
 func TestLoadBalancerAlgorithm(t *testing.T) {
@@ -48,9 +30,7 @@ func TestLoadBalancerAlgorithm(t *testing.T) {
 	}
 
 	for _, algo := range algorithms {
-		if algo == "" {
-			t.Error("algorithm should not be empty")
-		}
+		zhtest.AssertNotEmpty(t, string(algo))
 	}
 }
 
@@ -61,15 +41,9 @@ func TestBackend(t *testing.T) {
 		Healthy: true,
 	}
 
-	if b.Target != "http://localhost:8081" {
-		t.Errorf("expected Target to be http://localhost:8081, got %s", b.Target)
-	}
-	if b.Weight != 3 {
-		t.Errorf("expected Weight to be 3, got %d", b.Weight)
-	}
-	if !b.Healthy {
-		t.Error("expected Healthy to be true")
-	}
+	zhtest.AssertEqual(t, "http://localhost:8081", b.Target)
+	zhtest.AssertEqual(t, 3, b.Weight)
+	zhtest.AssertTrue(t, b.Healthy)
 }
 
 func TestRewriteRule(t *testing.T) {
@@ -78,12 +52,8 @@ func TestRewriteRule(t *testing.T) {
 		Replacement: "/api/v2/$1",
 	}
 
-	if rule.Pattern != "/api/v1/*" {
-		t.Errorf("expected Pattern to be /api/v1/*, got %s", rule.Pattern)
-	}
-	if rule.Replacement != "/api/v2/$1" {
-		t.Errorf("expected Replacement to be /api/v2/$1, got %s", rule.Replacement)
-	}
+	zhtest.AssertEqual(t, "/api/v1/*", rule.Pattern)
+	zhtest.AssertEqual(t, "/api/v2/$1", rule.Replacement)
 }
 
 func TestReverseProxyConfig(t *testing.T) {
@@ -107,51 +77,21 @@ func TestReverseProxyConfig(t *testing.T) {
 		IncludedPaths:  []string{"/api/public"},
 	}
 
-	if cfg.Target != "http://localhost:8081" {
-		t.Errorf("expected Target to be http://localhost:8081, got %s", cfg.Target)
-	}
-	if cfg.HealthCheckInterval != 10*time.Second {
-		t.Errorf("expected HealthCheckInterval to be 10s, got %v", cfg.HealthCheckInterval)
-	}
-	if cfg.HealthCheckTimeout != 5*time.Second {
-		t.Errorf("expected HealthCheckTimeout to be 5s, got %v", cfg.HealthCheckTimeout)
-	}
-	if cfg.HealthCheckPath != "/health" {
-		t.Errorf("expected HealthCheckPath to be /health, got %s", cfg.HealthCheckPath)
-	}
-	if cfg.StripPrefix != "/api" {
-		t.Errorf("expected StripPrefix to be /api, got %s", cfg.StripPrefix)
-	}
-	if cfg.AddPrefix != "/v2" {
-		t.Errorf("expected AddPrefix to be /v2, got %s", cfg.AddPrefix)
-	}
-	if len(cfg.Rewrites) != 1 {
-		t.Errorf("expected 1 RewriteRule, got %d", len(cfg.Rewrites))
-	} else {
-		if cfg.Rewrites[0].Pattern != "/old/*" {
-			t.Errorf("expected Pattern to be /old/*, got %s", cfg.Rewrites[0].Pattern)
-		}
-		if cfg.Rewrites[0].Replacement != "/new/$1" {
-			t.Errorf("expected Replacement to be /new/$1, got %s", cfg.Rewrites[0].Replacement)
-		}
-	}
-	if cfg.SetHeaders["X-Custom"] != "value" {
-		t.Errorf("expected X-Custom header to be value, got %s", cfg.SetHeaders["X-Custom"])
-	}
-	if len(cfg.RemoveHeaders) != 1 {
-		t.Errorf("expected 1 RemoveHeader, got %d", len(cfg.RemoveHeaders))
-	} else if cfg.RemoveHeaders[0] != "X-Internal" {
-		t.Errorf("expected RemoveHeaders[0] to be X-Internal, got %s", cfg.RemoveHeaders[0])
-	}
-	if !cfg.ForwardHeaders {
-		t.Error("expected ForwardHeaders to be true")
-	}
-	if len(cfg.ExcludedPaths) != 2 {
-		t.Errorf("expected 2 ExcludedPaths, got %d", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 1 {
-		t.Errorf("expected 1 AllowedPath, got %d", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, "http://localhost:8081", cfg.Target)
+	zhtest.AssertEqual(t, 10*time.Second, cfg.HealthCheckInterval)
+	zhtest.AssertEqual(t, 5*time.Second, cfg.HealthCheckTimeout)
+	zhtest.AssertEqual(t, "/health", cfg.HealthCheckPath)
+	zhtest.AssertEqual(t, "/api", cfg.StripPrefix)
+	zhtest.AssertEqual(t, "/v2", cfg.AddPrefix)
+	zhtest.AssertEqual(t, 1, len(cfg.Rewrites))
+	zhtest.AssertEqual(t, "/old/*", cfg.Rewrites[0].Pattern)
+	zhtest.AssertEqual(t, "/new/$1", cfg.Rewrites[0].Replacement)
+	zhtest.AssertEqual(t, "value", cfg.SetHeaders["X-Custom"])
+	zhtest.AssertEqual(t, 1, len(cfg.RemoveHeaders))
+	zhtest.AssertEqual(t, "X-Internal", cfg.RemoveHeaders[0])
+	zhtest.AssertTrue(t, cfg.ForwardHeaders)
+	zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
 }
 
 func TestReverseProxyConfig_IncludedPaths(t *testing.T) {
@@ -160,33 +100,23 @@ func TestReverseProxyConfig_IncludedPaths(t *testing.T) {
 			Target:        "http://localhost:8081",
 			IncludedPaths: []string{"/api/public", "/health"},
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if cfg.IncludedPaths[0] != "/api/public" {
-			t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertEqual(t, "/api/public", cfg.IncludedPaths[0])
 	})
 
 	t.Run("empty included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: []string{},
 		}
-		if cfg.IncludedPaths == nil {
-			t.Error("expected included paths slice to be initialized, not nil")
-		}
-		if len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: nil,
 		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 }
 
@@ -200,19 +130,9 @@ func TestReverseProxyConfigWithTargets(t *testing.T) {
 		LoadBalancer: LeastConnections,
 	}
 
-	if len(cfg.Targets) != 3 {
-		t.Errorf("expected 3 Targets, got %d", len(cfg.Targets))
-	}
-	if cfg.Targets[0].Target != "http://backend1:8081" {
-		t.Errorf("expected Targets[0].Target to be http://backend1:8081, got %s", cfg.Targets[0].Target)
-	}
-	if cfg.Targets[0].Weight != 1 {
-		t.Errorf("expected Targets[0].Weight to be 1, got %d", cfg.Targets[0].Weight)
-	}
-	if !cfg.Targets[0].Healthy {
-		t.Error("expected Targets[0].Healthy to be true")
-	}
-	if cfg.LoadBalancer != LeastConnections {
-		t.Errorf("expected LoadBalancer to be LeastConnections, got %s", cfg.LoadBalancer)
-	}
+	zhtest.AssertEqual(t, 3, len(cfg.Targets))
+	zhtest.AssertEqual(t, "http://backend1:8081", cfg.Targets[0].Target)
+	zhtest.AssertEqual(t, 1, cfg.Targets[0].Weight)
+	zhtest.AssertTrue(t, cfg.Targets[0].Healthy)
+	zhtest.AssertEqual(t, LeastConnections, cfg.LoadBalancer)
 }

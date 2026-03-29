@@ -68,9 +68,7 @@ func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 		Status(http.StatusServiceUnavailable).
 		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 
-	if handler.getCallCount() != 3 {
-		t.Errorf("Expected handler to be called 3 times, got %d", handler.getCallCount())
-	}
+	zhtest.AssertEqual(t, 3, handler.getCallCount())
 }
 
 func TestCircuitBreaker_RecoveryTimeout(t *testing.T) {
@@ -264,9 +262,7 @@ func TestCircuitBreaker_ConcurrentRequests(t *testing.T) {
 	}
 
 	wg.Wait()
-	if successCount != 100 {
-		t.Errorf("Expected 100 successful requests, got %d", successCount)
-	}
+	zhtest.AssertEqual(t, 100, successCount)
 }
 
 func TestCircuitBreaker_MultipleEndpoints(t *testing.T) {
@@ -311,12 +307,10 @@ func TestCircuitBreaker_StateTransitions(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	handler.statusCode = http.StatusOK
 
-	for i := range 2 {
+	for range 2 {
 		req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 		w = zhtest.Serve(middleware, req)
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected success in half-open state, iteration %d", i)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
 	}
 
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -375,9 +369,7 @@ func TestCircuitBreaker_MultipleOptions(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w := zhtest.Serve(middleware, req)
 
-	if w.Code == http.StatusServiceUnavailable {
-		t.Error("Expected circuit to use last option's threshold (not be open yet)")
-	}
+	zhtest.AssertNotEqual(t, http.StatusServiceUnavailable, w.Code)
 }
 
 func TestCircuitBreaker_EdgeCases(t *testing.T) {
@@ -468,9 +460,7 @@ func TestCircuitBreaker_ConcurrentReset(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		key := fmt.Sprintf("test-%d", i)
 		c := cbm.getCircuit(key)
-		if c.getState() != StateClosed {
-			t.Errorf("expected circuit %s to be closed, got %v", key, c.getState())
-		}
+		zhtest.AssertEqual(t, StateClosed, c.getState())
 	}
 }
 
@@ -484,9 +474,7 @@ func TestCircuitBreaker_GetState(t *testing.T) {
 	}
 
 	// Test initial state (circuit doesn't exist yet)
-	if state := cbm.GetState("/test"); state != StateClosed {
-		t.Errorf("expected StateClosed for non-existent circuit, got %v", state)
-	}
+	zhtest.AssertEqual(t, StateClosed, cbm.GetState("/test"))
 
 	// Create and open a circuit
 	c := cbm.getCircuit("/test")
@@ -496,18 +484,14 @@ func TestCircuitBreaker_GetState(t *testing.T) {
 	c.mu.Unlock()
 
 	// Circuit should be open now
-	if state := cbm.GetState("/test"); state != StateOpen {
-		t.Errorf("expected StateOpen, got %v", state)
-	}
+	zhtest.AssertEqual(t, StateOpen, cbm.GetState("/test"))
 
 	// Reset circuit to closed
 	c.mu.Lock()
 	c.state = StateClosed
 	c.mu.Unlock()
 
-	if state := cbm.GetState("/test"); state != StateClosed {
-		t.Errorf("expected StateClosed after reset, got %v", state)
-	}
+	zhtest.AssertEqual(t, StateClosed, cbm.GetState("/test"))
 }
 
 func TestCircuitBreaker_HalfOpenRequestLimit(t *testing.T) {
@@ -531,19 +515,13 @@ func TestCircuitBreaker_HalfOpenRequestLimit(t *testing.T) {
 	c.mu.Unlock()
 
 	// First request should be allowed
-	if c.isOpen() {
-		t.Error("first request should be allowed in half-open state")
-	}
+	zhtest.AssertFalse(t, c.isOpen())
 
 	// Second request should be allowed
-	if c.isOpen() {
-		t.Error("second request should be allowed in half-open state")
-	}
+	zhtest.AssertFalse(t, c.isOpen())
 
 	// Third request should be blocked (MaxHalfOpenRequests=2)
-	if !c.isOpen() {
-		t.Error("third request should be blocked when MaxHalfOpenRequests=2")
-	}
+	zhtest.AssertTrue(t, c.isOpen())
 
 	// Simulate one request completing
 	c.mu.Lock()
@@ -551,9 +529,7 @@ func TestCircuitBreaker_HalfOpenRequestLimit(t *testing.T) {
 	c.mu.Unlock()
 
 	// Now another request should be allowed
-	if c.isOpen() {
-		t.Error("request should be allowed after one in-flight completes")
-	}
+	zhtest.AssertFalse(t, c.isOpen())
 }
 
 func TestCircuitBreaker_HalfOpenRequestLimit_Default(t *testing.T) {
@@ -577,14 +553,10 @@ func TestCircuitBreaker_HalfOpenRequestLimit_Default(t *testing.T) {
 	c.mu.Unlock()
 
 	// First request should be allowed
-	if c.isOpen() {
-		t.Error("first request should be allowed in half-open state with default limit")
-	}
+	zhtest.AssertFalse(t, c.isOpen())
 
 	// Second request should be blocked (default MaxHalfOpenRequests=1)
-	if !c.isOpen() {
-		t.Error("second request should be blocked when MaxHalfOpenRequests=1")
-	}
+	zhtest.AssertTrue(t, c.isOpen())
 
 	// Simulate request completing
 	c.mu.Lock()
@@ -592,7 +564,5 @@ func TestCircuitBreaker_HalfOpenRequestLimit_Default(t *testing.T) {
 	c.mu.Unlock()
 
 	// Now another request should be allowed
-	if c.isOpen() {
-		t.Error("request should be allowed after in-flight completes")
-	}
+	zhtest.AssertFalse(t, c.isOpen())
 }

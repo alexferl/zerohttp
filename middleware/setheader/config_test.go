@@ -1,18 +1,15 @@
 package setheader
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestSetHeaderConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Headers == nil {
-		t.Error("expected default headers to be initialized, not nil")
-	}
-	if len(cfg.Headers) != 0 {
-		t.Errorf("expected default headers to be empty, got %d headers", len(cfg.Headers))
-	}
+	zhtest.AssertNotNil(t, cfg.Headers)
+	zhtest.AssertEqual(t, 0, len(cfg.Headers))
 }
 
 func TestSetHeaderConfig_StructAssignment(t *testing.T) {
@@ -26,23 +23,13 @@ func TestSetHeaderConfig_StructAssignment(t *testing.T) {
 			Headers: headers,
 		}
 
-		if len(cfg.Headers) != 3 {
-			t.Errorf("expected 3 headers, got %d", len(cfg.Headers))
-		}
-		if !reflect.DeepEqual(cfg.Headers, headers) {
-			t.Errorf("expected headers = %v, got %v", headers, cfg.Headers)
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Headers))
+		zhtest.AssertDeepEqual(t, headers, cfg.Headers)
 
 		// Test individual header values
-		if cfg.Headers["X-Custom-Header"] != "custom-value" {
-			t.Errorf("expected X-Custom-Header = 'custom-value', got %s", cfg.Headers["X-Custom-Header"])
-		}
-		if cfg.Headers["X-API-Version"] != "v1.0" {
-			t.Errorf("expected X-API-Version = 'v1.0', got %s", cfg.Headers["X-API-Version"])
-		}
-		if cfg.Headers["X-Request-Source"] != "api-gateway" {
-			t.Errorf("expected X-Request-Source = 'api-gateway', got %s", cfg.Headers["X-Request-Source"])
-		}
+		zhtest.AssertEqual(t, "custom-value", cfg.Headers["X-Custom-Header"])
+		zhtest.AssertEqual(t, "v1.0", cfg.Headers["X-API-Version"])
+		zhtest.AssertEqual(t, "api-gateway", cfg.Headers["X-Request-Source"])
 	})
 
 	t.Run("single header", func(t *testing.T) {
@@ -51,12 +38,8 @@ func TestSetHeaderConfig_StructAssignment(t *testing.T) {
 			Headers: headers,
 		}
 
-		if len(cfg.Headers) != 1 {
-			t.Errorf("expected 1 header, got %d", len(cfg.Headers))
-		}
-		if cfg.Headers["X-Single-Header"] != "single-value" {
-			t.Errorf("expected X-Single-Header = 'single-value', got %s", cfg.Headers["X-Single-Header"])
-		}
+		zhtest.AssertEqual(t, 1, len(cfg.Headers))
+		zhtest.AssertEqual(t, "single-value", cfg.Headers["X-Single-Header"])
 	})
 
 	t.Run("overwrite headers", func(t *testing.T) {
@@ -76,19 +59,12 @@ func TestSetHeaderConfig_StructAssignment(t *testing.T) {
 		cfg.Headers = secondHeaders
 
 		// Should only have the second set of headers
-		if len(cfg.Headers) != 2 {
-			t.Errorf("expected 2 headers after overwrite, got %d", len(cfg.Headers))
-		}
-		if cfg.Headers["X-Test-Header"] != "second-value" {
-			t.Errorf("expected X-Test-Header = 'second-value', got %s", cfg.Headers["X-Test-Header"])
-		}
-		if cfg.Headers["X-New-Header"] != "new-value" {
-			t.Errorf("expected X-New-Header = 'new-value', got %s", cfg.Headers["X-New-Header"])
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.Headers))
+		zhtest.AssertEqual(t, "second-value", cfg.Headers["X-Test-Header"])
+		zhtest.AssertEqual(t, "new-value", cfg.Headers["X-New-Header"])
 		// First header should be gone
-		if _, exists := cfg.Headers["X-Other"]; exists {
-			t.Error("expected X-Other header to be overwritten and not exist")
-		}
+		_, exists := cfg.Headers["X-Other"]
+		zhtest.AssertFalse(t, exists)
 	})
 }
 
@@ -99,21 +75,15 @@ func TestSetHeaderConfig_EdgeCases(t *testing.T) {
 			Headers: emptyHeaders,
 		}
 
-		if cfg.Headers == nil {
-			t.Error("expected headers map to be initialized, not nil")
-		}
-		if len(cfg.Headers) != 0 {
-			t.Errorf("expected empty headers map, got %d entries", len(cfg.Headers))
-		}
+		zhtest.AssertNotNil(t, cfg.Headers)
+		zhtest.AssertEqual(t, 0, len(cfg.Headers))
 	})
 
 	t.Run("nil headers", func(t *testing.T) {
 		cfg := Config{
 			Headers: nil,
 		}
-		if cfg.Headers != nil {
-			t.Error("expected headers to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.Headers)
 	})
 
 	t.Run("case sensitive keys", func(t *testing.T) {
@@ -126,19 +96,11 @@ func TestSetHeaderConfig_EdgeCases(t *testing.T) {
 			Headers: headers,
 		}
 
-		if len(cfg.Headers) != 3 {
-			t.Errorf("expected 3 headers (case-sensitive keys), got %d", len(cfg.Headers))
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Headers))
 		// Test that all case variations are preserved
-		if cfg.Headers["x-custom-header"] != "lowercase" {
-			t.Error("expected lowercase header key to be preserved")
-		}
-		if cfg.Headers["X-Custom-Header"] != "titlecase" {
-			t.Error("expected title-case header key to be preserved")
-		}
-		if cfg.Headers["X-CUSTOM-HEADER"] != "uppercase" {
-			t.Error("expected uppercase header key to be preserved")
-		}
+		zhtest.AssertEqual(t, "lowercase", cfg.Headers["x-custom-header"])
+		zhtest.AssertEqual(t, "titlecase", cfg.Headers["X-Custom-Header"])
+		zhtest.AssertEqual(t, "uppercase", cfg.Headers["X-CUSTOM-HEADER"])
 	})
 
 	t.Run("empty string values", func(t *testing.T) {
@@ -151,25 +113,15 @@ func TestSetHeaderConfig_EdgeCases(t *testing.T) {
 			Headers: headers,
 		}
 
-		if len(cfg.Headers) != 3 {
-			t.Errorf("expected 3 headers, got %d", len(cfg.Headers))
-		}
-		if cfg.Headers["X-Empty-Header"] != "" {
-			t.Errorf("expected X-Empty-Header = '', got %s", cfg.Headers["X-Empty-Header"])
-		}
-		if cfg.Headers["X-Normal-Header"] != "value" {
-			t.Errorf("expected X-Normal-Header = 'value', got %s", cfg.Headers["X-Normal-Header"])
-		}
-		if cfg.Headers["X-Another-Empty"] != "" {
-			t.Errorf("expected X-Another-Empty = '', got %s", cfg.Headers["X-Another-Empty"])
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Headers))
+		zhtest.AssertEqual(t, "", cfg.Headers["X-Empty-Header"])
+		zhtest.AssertEqual(t, "value", cfg.Headers["X-Normal-Header"])
+		zhtest.AssertEqual(t, "", cfg.Headers["X-Another-Empty"])
 	})
 
 	t.Run("zero values", func(t *testing.T) {
 		cfg := Config{} // Zero values
-		if cfg.Headers != nil {
-			t.Errorf("expected zero headers = nil, got %v", cfg.Headers)
-		}
+		zhtest.AssertNil(t, cfg.Headers)
 	})
 }
 
@@ -186,13 +138,9 @@ func TestSetHeaderConfig_SpecialValues(t *testing.T) {
 			Headers: headers,
 		}
 
-		if len(cfg.Headers) != 5 {
-			t.Errorf("expected 5 headers, got %d", len(cfg.Headers))
-		}
+		zhtest.AssertEqual(t, 5, len(cfg.Headers))
 		for key, expectedValue := range headers {
-			if cfg.Headers[key] != expectedValue {
-				t.Errorf("expected header %s = %s, got %s", key, expectedValue, cfg.Headers[key])
-			}
+			zhtest.AssertEqual(t, expectedValue, cfg.Headers[key])
 		}
 	})
 
@@ -206,12 +154,8 @@ func TestSetHeaderConfig_SpecialValues(t *testing.T) {
 			Headers: headers,
 		}
 
-		if cfg.Headers["X-Long-Header"] != longValue {
-			t.Error("expected long header value to be preserved exactly")
-		}
-		if cfg.Headers["X-Short"] != "short" {
-			t.Error("expected short header value to be preserved")
-		}
+		zhtest.AssertEqual(t, longValue, cfg.Headers["X-Long-Header"])
+		zhtest.AssertEqual(t, "short", cfg.Headers["X-Short"])
 	})
 
 	t.Run("whitespace handling", func(t *testing.T) {
@@ -227,14 +171,10 @@ func TestSetHeaderConfig_SpecialValues(t *testing.T) {
 			Headers: headers,
 		}
 
-		if len(cfg.Headers) != 6 {
-			t.Errorf("expected 6 whitespace headers, got %d", len(cfg.Headers))
-		}
+		zhtest.AssertEqual(t, 6, len(cfg.Headers))
 		// Test that whitespace is preserved exactly as provided
 		for key, expectedValue := range headers {
-			if cfg.Headers[key] != expectedValue {
-				t.Errorf("expected whitespace header %s = %q, got %q", key, expectedValue, cfg.Headers[key])
-			}
+			zhtest.AssertEqual(t, expectedValue, cfg.Headers[key])
 		}
 	})
 }

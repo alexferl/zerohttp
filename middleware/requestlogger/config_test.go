@@ -3,23 +3,17 @@ package requestlogger
 import (
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRequestLoggerConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.LogErrors != true {
-		t.Errorf("expected default log errors = true, got %t", cfg.LogErrors)
-	}
-	if len(cfg.Fields) != 13 {
-		t.Errorf("expected 13 default fields, got %d", len(cfg.Fields))
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
+	zhtest.AssertTrue(t, cfg.LogErrors)
+	zhtest.AssertEqual(t, 13, len(cfg.Fields))
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 
 	// Test default field values
 	expectedFields := []LogField{
@@ -27,9 +21,7 @@ func TestRequestLoggerConfig_DefaultValues(t *testing.T) {
 		FieldReferer, FieldUserAgent, FieldStatus, FieldDurationNS,
 		FieldDurationHuman, FieldRemoteAddr, FieldClientIP, FieldRequestID,
 	}
-	if !reflect.DeepEqual(cfg.Fields, expectedFields) {
-		t.Errorf("expected default fields = %v, got %v", expectedFields, cfg.Fields)
-	}
+	zhtest.AssertEqual(t, expectedFields, cfg.Fields)
 }
 
 func TestRequestLoggerConfig_FieldConstants(t *testing.T) {
@@ -53,9 +45,7 @@ func TestRequestLoggerConfig_FieldConstants(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if string(tt.field) != tt.expected {
-			t.Errorf("expected field %s = %s, got %s", tt.expected, tt.expected, string(tt.field))
-		}
+		zhtest.AssertEqual(t, tt.expected, string(tt.field))
 	}
 }
 
@@ -66,14 +56,10 @@ func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 			Fields:        DefaultConfig.Fields,
 			ExcludedPaths: []string{},
 		}
-		if cfg.LogErrors != false {
-			t.Errorf("expected log errors = false, got %t", cfg.LogErrors)
-		}
+		zhtest.AssertFalse(t, cfg.LogErrors)
 		// Test setting back to true
 		cfg.LogErrors = true
-		if cfg.LogErrors != true {
-			t.Errorf("expected log errors = true, got %t", cfg.LogErrors)
-		}
+		zhtest.AssertTrue(t, cfg.LogErrors)
 	})
 
 	t.Run("fields assignment", func(t *testing.T) {
@@ -83,12 +69,8 @@ func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 			Fields:        fields,
 			ExcludedPaths: []string{},
 		}
-		if len(cfg.Fields) != 4 {
-			t.Errorf("expected 4 fields, got %d", len(cfg.Fields))
-		}
-		if !reflect.DeepEqual(cfg.Fields, fields) {
-			t.Errorf("expected fields = %v, got %v", fields, cfg.Fields)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.Fields))
+		zhtest.AssertEqual(t, fields, cfg.Fields)
 	})
 
 	t.Run("excluded paths assignment", func(t *testing.T) {
@@ -98,12 +80,8 @@ func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 			Fields:        DefaultConfig.Fields,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 4 {
-			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("multiple fields assignment", func(t *testing.T) {
@@ -115,15 +93,9 @@ func TestRequestLoggerConfig_StructAssignment(t *testing.T) {
 			ExcludedPaths: excludedPaths,
 		}
 
-		if cfg.LogErrors != false {
-			t.Errorf("expected log errors = false, got %t", cfg.LogErrors)
-		}
-		if !reflect.DeepEqual(cfg.Fields, fields) {
-			t.Error("expected fields to be set correctly")
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Error("expected excluded paths to be set correctly")
-		}
+		zhtest.AssertFalse(t, cfg.LogErrors)
+		zhtest.AssertEqual(t, fields, cfg.Fields)
+		zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 }
 
@@ -135,12 +107,8 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 			Fields:        fields,
 			ExcludedPaths: []string{},
 		}
-		if len(cfg.Fields) != 3 {
-			t.Errorf("expected 3 minimal fields, got %d", len(cfg.Fields))
-		}
-		if !reflect.DeepEqual(cfg.Fields, fields) {
-			t.Errorf("expected fields = %v, got %v", fields, cfg.Fields)
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Fields))
+		zhtest.AssertEqual(t, fields, cfg.Fields)
 	})
 
 	t.Run("single field variations", func(t *testing.T) {
@@ -157,12 +125,8 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 					Fields:        []LogField{field},
 					ExcludedPaths: []string{},
 				}
-				if len(cfg.Fields) != 1 {
-					t.Errorf("expected 1 field, got %d", len(cfg.Fields))
-				}
-				if cfg.Fields[0] != field {
-					t.Errorf("expected field = %s, got %s", field, cfg.Fields[0])
-				}
+				zhtest.AssertEqual(t, 1, len(cfg.Fields))
+				zhtest.AssertEqual(t, field, cfg.Fields[0])
 			})
 		}
 	})
@@ -174,12 +138,8 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 			Fields:        durationFields,
 			ExcludedPaths: []string{},
 		}
-		if len(cfg.Fields) != 2 {
-			t.Errorf("expected 2 duration fields, got %d", len(cfg.Fields))
-		}
-		if !reflect.DeepEqual(cfg.Fields, durationFields) {
-			t.Errorf("expected duration fields = %v, got %v", durationFields, cfg.Fields)
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.Fields))
+		zhtest.AssertEqual(t, durationFields, cfg.Fields)
 	})
 
 	t.Run("security fields", func(t *testing.T) {
@@ -189,12 +149,8 @@ func TestRequestLoggerConfig_FieldScenarios(t *testing.T) {
 			Fields:        securityFields,
 			ExcludedPaths: []string{},
 		}
-		if len(cfg.Fields) != 4 {
-			t.Errorf("expected 4 security fields, got %d", len(cfg.Fields))
-		}
-		if !reflect.DeepEqual(cfg.Fields, securityFields) {
-			t.Errorf("expected security fields = %v, got %v", securityFields, cfg.Fields)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.Fields))
+		zhtest.AssertEqual(t, securityFields, cfg.Fields)
 	})
 }
 
@@ -205,12 +161,8 @@ func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 			Fields:        []LogField{},
 			ExcludedPaths: []string{},
 		}
-		if cfg.Fields == nil {
-			t.Error("expected fields slice to be initialized, not nil")
-		}
-		if len(cfg.Fields) != 0 {
-			t.Errorf("expected empty fields slice, got %d entries", len(cfg.Fields))
-		}
+		zhtest.AssertNotNil(t, cfg.Fields)
+		zhtest.AssertEqual(t, 0, len(cfg.Fields))
 	})
 
 	t.Run("nil fields", func(t *testing.T) {
@@ -219,9 +171,7 @@ func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 			Fields:        nil,
 			ExcludedPaths: []string{},
 		}
-		if cfg.Fields != nil {
-			t.Error("expected fields to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.Fields)
 	})
 
 	t.Run("empty excluded paths", func(t *testing.T) {
@@ -230,12 +180,8 @@ func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 			Fields:        DefaultConfig.Fields,
 			ExcludedPaths: []string{},
 		}
-		if cfg.ExcludedPaths == nil {
-			t.Error("expected excluded paths slice to be initialized, not nil")
-		}
-		if len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 	})
 
 	t.Run("nil excluded paths", func(t *testing.T) {
@@ -244,9 +190,7 @@ func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 			Fields:        DefaultConfig.Fields,
 			ExcludedPaths: nil,
 		}
-		if cfg.ExcludedPaths != nil {
-			t.Error("expected excluded paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
 	})
 
 	t.Run("empty string paths", func(t *testing.T) {
@@ -256,25 +200,15 @@ func TestRequestLoggerConfig_EdgeCases(t *testing.T) {
 			Fields:        DefaultConfig.Fields,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 3 {
-			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("zero values", func(t *testing.T) {
 		cfg := Config{} // Zero values
-		if cfg.LogErrors != false {
-			t.Errorf("expected zero log errors = false, got %t", cfg.LogErrors)
-		}
-		if cfg.Fields != nil {
-			t.Errorf("expected zero fields = nil, got %v", cfg.Fields)
-		}
-		if cfg.ExcludedPaths != nil {
-			t.Errorf("expected zero excluded paths = nil, got %v", cfg.ExcludedPaths)
-		}
+		zhtest.AssertFalse(t, cfg.LogErrors)
+		zhtest.AssertNil(t, cfg.Fields)
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
 	})
 }
 
@@ -289,12 +223,8 @@ func TestRequestLoggerConfig_PathPatterns(t *testing.T) {
 			Fields:        DefaultConfig.Fields,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != len(excludedPaths) {
-			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, len(excludedPaths), len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("special character paths", func(t *testing.T) {
@@ -307,12 +237,8 @@ func TestRequestLoggerConfig_PathPatterns(t *testing.T) {
 			Fields:        DefaultConfig.Fields,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != len(excludedPaths) {
-			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, len(excludedPaths), len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 }
 
@@ -324,29 +250,17 @@ func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 			ExcludedPaths: []string{"/health", "/metrics"},
 		}
 
-		if cfg.LogErrors != false {
-			t.Errorf("expected log errors = false, got %t", cfg.LogErrors)
-		}
-		if !reflect.DeepEqual(cfg.Fields, []LogField{FieldMethod, FieldStatus}) {
-			t.Errorf("expected fields = [method status], got %v", cfg.Fields)
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, []string{"/health", "/metrics"}) {
-			t.Errorf("expected excluded paths = [/health /metrics], got %v", cfg.ExcludedPaths)
-		}
+		zhtest.AssertFalse(t, cfg.LogErrors)
+		zhtest.AssertEqual(t, []LogField{FieldMethod, FieldStatus}, cfg.Fields)
+		zhtest.AssertEqual(t, []string{"/health", "/metrics"}, cfg.ExcludedPaths)
 	})
 
 	t.Run("default values copy", func(t *testing.T) {
 		cfg := DefaultConfig
 
-		if cfg.LogErrors != DefaultConfig.LogErrors {
-			t.Errorf("expected log errors = %t, got %t", DefaultConfig.LogErrors, cfg.LogErrors)
-		}
-		if !reflect.DeepEqual(cfg.Fields, DefaultConfig.Fields) {
-			t.Errorf("expected fields to match default")
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, DefaultConfig.ExcludedPaths) {
-			t.Errorf("expected excluded paths to match default")
-		}
+		zhtest.AssertEqual(t, DefaultConfig.LogErrors, cfg.LogErrors)
+		zhtest.AssertEqual(t, DefaultConfig.Fields, cfg.Fields)
+		zhtest.AssertEqual(t, DefaultConfig.ExcludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("logging scenarios", func(t *testing.T) {
@@ -370,15 +284,9 @@ func TestRequestLoggerConfig_StructCreation(t *testing.T) {
 					ExcludedPaths: tt.excludedPaths,
 				}
 
-				if cfg.LogErrors != tt.logErrors {
-					t.Errorf("expected log errors = %t, got %t", tt.logErrors, cfg.LogErrors)
-				}
-				if !reflect.DeepEqual(cfg.Fields, tt.fields) {
-					t.Errorf("expected fields = %v, got %v", tt.fields, cfg.Fields)
-				}
-				if !reflect.DeepEqual(cfg.ExcludedPaths, tt.excludedPaths) {
-					t.Errorf("expected excluded paths = %v, got %v", tt.excludedPaths, cfg.ExcludedPaths)
-				}
+				zhtest.AssertEqual(t, tt.logErrors, cfg.LogErrors)
+				zhtest.AssertEqual(t, tt.fields, cfg.Fields)
+				zhtest.AssertEqual(t, tt.excludedPaths, cfg.ExcludedPaths)
 			})
 		}
 	})
@@ -393,24 +301,16 @@ func TestRequestLoggerConfig_CustomFields(t *testing.T) {
 			CustomFields: customFunc,
 		}
 
-		if cfg.CustomFields == nil {
-			t.Error("expected CustomFields to be set")
-		}
+		zhtest.AssertNotNil(t, cfg.CustomFields)
 
 		// Verify it works
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.Header.Set("X-API-Key", "test-key")
 		fields := cfg.CustomFields(req)
 
-		if len(fields) != 1 {
-			t.Fatalf("expected 1 field, got %d", len(fields))
-		}
-		if fields[0].Key != "api_key" {
-			t.Errorf("expected key 'api_key', got %s", fields[0].Key)
-		}
-		if fields[0].Value != "test-key" {
-			t.Errorf("expected value 'test-key', got %v", fields[0].Value)
-		}
+		zhtest.AssertEqual(t, 1, len(fields))
+		zhtest.AssertEqual(t, "api_key", fields[0].Key)
+		zhtest.AssertEqual(t, "test-key", fields[0].Value)
 	})
 
 	t.Run("custom fields can be nil", func(t *testing.T) {
@@ -418,8 +318,6 @@ func TestRequestLoggerConfig_CustomFields(t *testing.T) {
 			CustomFields: nil,
 		}
 
-		if cfg.CustomFields != nil {
-			t.Error("expected CustomFields to be nil")
-		}
+		zhtest.AssertNil(t, cfg.CustomFields)
 	})
 }

@@ -49,18 +49,11 @@ func TestRequestBodySize_Limits(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodPost, "/").WithBody(body).Build()
 			zhtest.Serve(middleware, req)
 
-			if !handler.called {
-				t.Error("Expected handler to be called")
-			}
+			zhtest.AssertTrue(t, handler.called)
 			hasError := handler.bodyError != nil
-			if tt.expectError && !hasError {
-				t.Error("Expected error when body exceeds limit")
-			}
-			if !tt.expectError && hasError {
-				t.Errorf("Expected no error, got %v", handler.bodyError)
-			}
-			if tt.expectError && hasError && !strings.Contains(handler.bodyError.Error(), "too large") {
-				t.Errorf("Expected 'too large' error, got: %v", handler.bodyError)
+			zhtest.AssertEqual(t, tt.expectError, hasError)
+			if tt.expectError && hasError {
+				zhtest.AssertTrue(t, strings.Contains(handler.bodyError.Error(), "too large"))
 			}
 		})
 	}
@@ -89,15 +82,13 @@ func TestRequestBodySize_ExcludedPaths(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodPost, tt.path).WithBody(largeBody).Build()
 			zhtest.Serve(middleware, req)
 
-			if !handler.called {
-				t.Errorf("Expected handler to be called for path %s", tt.path)
-			}
+			zhtest.AssertTrue(t, handler.called)
 			hasError := handler.bodyError != nil
 			if !tt.expectError && hasError {
-				t.Errorf("Expected no error for excluded path %s, got %v", tt.path, handler.bodyError)
+				zhtest.AssertFailf(t, "Expected no error for excluded path %s, got %v", tt.path, handler.bodyError)
 			}
 			if tt.expectError && !hasError {
-				t.Errorf("Expected error for non-excluded path %s, got none", tt.path)
+				zhtest.AssertFailf(t, "Expected error for non-excluded path %s, got none", tt.path)
 			}
 		})
 	}
@@ -113,12 +104,8 @@ func TestRequestBodySize_EmptyExcludedPaths(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodPost, "/any-path").WithBody(largeBody).Build()
 	zhtest.Serve(middleware, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
-	if handler.bodyError == nil {
-		t.Error("Expected error when no paths are excluded")
-	}
+	zhtest.AssertTrue(t, handler.called)
+	zhtest.AssertError(t, handler.bodyError)
 }
 
 func TestRequestBodySize_ConfigFallbacks(t *testing.T) {
@@ -138,12 +125,8 @@ func TestRequestBodySize_ConfigFallbacks(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodPost, "/").WithBody(smallBody).Build()
 			zhtest.Serve(middleware, req)
 
-			if !handler.called {
-				t.Error("Expected handler to be called")
-			}
-			if handler.bodyError != nil {
-				t.Errorf("Expected no error with default config, got %v", handler.bodyError)
-			}
+			zhtest.AssertTrue(t, handler.called)
+			zhtest.AssertNoError(t, handler.bodyError)
 		})
 	}
 }
@@ -158,12 +141,8 @@ func TestRequestBodySize_NilExcludedPaths(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(smallBody).Build()
 	zhtest.Serve(middleware, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
-	if handler.bodyError != nil {
-		t.Errorf("Expected no error with nil excluded paths, got %v", handler.bodyError)
-	}
+	zhtest.AssertTrue(t, handler.called)
+	zhtest.AssertNoError(t, handler.bodyError)
 }
 
 func TestRequestBodySize_MultipleOptions(t *testing.T) {
@@ -176,26 +155,16 @@ func TestRequestBodySize_MultipleOptions(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodPost, "/").WithBody(largeBody).Build()
 	zhtest.Serve(middleware, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
-	if handler.bodyError == nil {
-		t.Error("Expected error with 10 byte limit")
-	}
+	zhtest.AssertTrue(t, handler.called)
+	zhtest.AssertError(t, handler.bodyError)
 }
 
 func TestDefaultRequestBodySizeConfig(t *testing.T) {
 	cfg := DefaultConfig
 	expectedMaxBytes := int64(1 << 20)
-	if cfg.MaxBytes != expectedMaxBytes {
-		t.Errorf("Expected default max bytes %d, got %d", expectedMaxBytes, cfg.MaxBytes)
-	}
-	if cfg.ExcludedPaths == nil {
-		t.Error("Expected default excluded paths to be empty slice, got nil")
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("Expected default excluded paths to be empty, got %d items", len(cfg.ExcludedPaths))
-	}
+	zhtest.AssertEqual(t, expectedMaxBytes, cfg.MaxBytes)
+	zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 }
 
 func TestRequestBodySize_GetRequest(t *testing.T) {
@@ -204,12 +173,8 @@ func TestRequestBodySize_GetRequest(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(middleware, req)
 
-	if !handler.called {
-		t.Error("Expected handler to be called")
-	}
-	if handler.bodyError != nil {
-		t.Errorf("Expected no error for GET request, got %v", handler.bodyError)
-	}
+	zhtest.AssertTrue(t, handler.called)
+	zhtest.AssertNoError(t, handler.bodyError)
 }
 
 func TestRequestBodySize_Metrics(t *testing.T) {
@@ -250,17 +215,13 @@ func TestRequestBodySize_Metrics(t *testing.T) {
 		}
 	}
 
-	if rejectedCounter == nil {
-		t.Fatal("expected request_body_size_rejected_total metric")
-	}
+	zhtest.AssertNotNil(t, rejectedCounter)
 
 	rejected := 0
 	for _, m := range rejectedCounter.Metrics {
 		rejected = int(m.Counter)
 	}
-	if rejected != 1 {
-		t.Errorf("expected 1 rejected request, got %d", rejected)
-	}
+	zhtest.AssertEqual(t, 1, rejected)
 }
 
 type flusherRecorder struct {
@@ -313,9 +274,7 @@ func TestRequestBodySize_Flush(t *testing.T) {
 			// Call Flush
 			lrw.Flush()
 
-			if *flushCalled != tt.expectFlushCalled {
-				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectFlushCalled, *flushCalled)
 		})
 	}
 }
@@ -328,10 +287,7 @@ func TestRequestBodySize_Flush_SupportsSSE(t *testing.T) {
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try to get a Flusher from the writer
 		f, ok := w.(http.Flusher)
-		if !ok {
-			t.Error("expected ResponseWriter to implement http.Flusher")
-			return
-		}
+		zhtest.AssertTrue(t, ok)
 
 		// Write and flush like SSE would
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)
@@ -343,13 +299,8 @@ func TestRequestBodySize_Flush_SupportsSSE(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	handler.ServeHTTP(rec, req)
 
-	if !rec.flushed {
-		t.Error("expected Flush to be called on underlying ResponseWriter")
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertTrue(t, rec.flushed)
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestRequestBodySize_IncludedPaths(t *testing.T) {
@@ -376,15 +327,13 @@ func TestRequestBodySize_IncludedPaths(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodPost, tt.path).WithBody(largeBody).Build()
 			zhtest.Serve(middleware, req)
 
-			if !handler.called {
-				t.Errorf("Expected handler to be called for path %s", tt.path)
-			}
+			zhtest.AssertTrue(t, handler.called)
 			hasError := handler.bodyError != nil
 			if !tt.expectError && hasError {
-				t.Errorf("Expected no error for non-allowed path %s, got %v", tt.path, handler.bodyError)
+				zhtest.AssertFailf(t, "Expected no error for non-allowed path %s, got %v", tt.path, handler.bodyError)
 			}
 			if tt.expectError && !hasError {
-				t.Errorf("Expected error for allowed path %s, got none", tt.path)
+				zhtest.AssertFailf(t, "Expected error for allowed path %s, got none", tt.path)
 			}
 		})
 	}
@@ -393,7 +342,7 @@ func TestRequestBodySize_IncludedPaths(t *testing.T) {
 func TestRequestBodySize_BothExcludedAndIncludedPathsPanics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+			zhtest.AssertFail(t, "expected panic when both ExcludedPaths and IncludedPaths are set")
 		}
 	}()
 

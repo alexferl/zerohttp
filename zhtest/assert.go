@@ -628,6 +628,32 @@ func fail(t testing.TB, format string, args ...any) {
 	}
 }
 
+// AssertFail fails the test immediately with the given message.
+// This is useful for timeout cases or unrecoverable test failures.
+//
+// Example:
+//
+//	select {
+//	case <-done:
+//	case <-time.After(time.Second):
+//		zhtest.AssertFail(t, "timeout waiting for operation")
+//	}
+func AssertFail(t testing.TB, msg string) {
+	t.Helper()
+	t.Fatal(msg)
+}
+
+// AssertFailf fails the test immediately with a formatted message.
+// This is useful for timeout cases or unrecoverable test failures with dynamic values.
+//
+// Example:
+//
+//	zhtest.AssertFailf(t, "timeout after %v waiting for %s", duration, name)
+func AssertFailf(t testing.TB, format string, args ...any) {
+	t.Helper()
+	t.Fatalf(format, args...)
+}
+
 // AssertNoError fails if err is not nil.
 // For automatic test failures, pass a non-nil testing.TB.
 //
@@ -728,27 +754,97 @@ func AssertNotNil(t testing.TB, v any) {
 	}
 }
 
-// AssertEqual fails if expected != actual using == comparison.
-// Works for comparable types.
+// AssertEqual fails if expected and actual are not equal.
+// Uses reflect.DeepEqual for proper comparison of slices, maps, and structs.
+// For numeric types, performs value-based comparison allowing mixed int/float types.
 // For automatic test failures, pass a non-nil testing.TB.
 //
 // Example:
 //
 //	zhtest.AssertEqual(t, 42, result)
+//	zhtest.AssertEqual(t, []int{1, 2, 3}, result)
 func AssertEqual(t testing.TB, expected, actual any) {
-	if expected != actual {
+	// Try numeric comparison first for mixed numeric types
+	if isNumeric(expected) && isNumeric(actual) {
+		if !numericEqual(expected, actual) {
+			fail(t, "expected %v, got %v", expected, actual)
+		}
+		return
+	}
+	if !reflect.DeepEqual(expected, actual) {
 		fail(t, "expected %v, got %v", expected, actual)
 	}
 }
 
-// AssertNotEqual fails if unexpected == actual using != comparison.
+// isNumeric returns true if v is a numeric type.
+func isNumeric(v any) bool {
+	switch v.(type) {
+	case int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+		return true
+	default:
+		return false
+	}
+}
+
+// numericEqual compares two numeric values for equality.
+// Converts both to float64 for comparison to handle mixed types.
+func numericEqual(a, b any) bool {
+	aFloat := toFloat64Generic(a)
+	bFloat := toFloat64Generic(b)
+	return aFloat == bFloat
+}
+
+// toFloat64Generic converts any numeric value to float64.
+func toFloat64Generic(v any) float64 {
+	switch val := v.(type) {
+	case int:
+		return float64(val)
+	case int8:
+		return float64(val)
+	case int16:
+		return float64(val)
+	case int32:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case uint:
+		return float64(val)
+	case uint8:
+		return float64(val)
+	case uint16:
+		return float64(val)
+	case uint32:
+		return float64(val)
+	case uint64:
+		return float64(val)
+	case float32:
+		return float64(val)
+	case float64:
+		return val
+	default:
+		return 0
+	}
+}
+
+// AssertNotEqual fails if unexpected and actual are equal.
+// Uses reflect.DeepEqual for proper comparison of slices, maps, and structs.
+// For numeric types, performs value-based comparison allowing mixed int/float types.
 // For automatic test failures, pass a non-nil testing.TB.
 //
 // Example:
 //
 //	zhtest.AssertNotEqual(t, "old", result)
 func AssertNotEqual(t testing.TB, unexpected, actual any) {
-	if unexpected == actual {
+	// Try numeric comparison first for mixed numeric types
+	if isNumeric(unexpected) && isNumeric(actual) {
+		if numericEqual(unexpected, actual) {
+			fail(t, "expected value not to be %v", unexpected)
+		}
+		return
+	}
+	if reflect.DeepEqual(unexpected, actual) {
 		fail(t, "expected value not to be %v", unexpected)
 	}
 }
@@ -764,6 +860,128 @@ func AssertNotEqual(t testing.TB, unexpected, actual any) {
 func AssertDeepEqual(t testing.TB, expected, actual any) {
 	if !reflect.DeepEqual(expected, actual) {
 		fail(t, "expected %v, got %v", expected, actual)
+	}
+}
+
+// AssertGreater fails if actual <= expected.
+// For automatic test failures, pass a non-nil testing.TB.
+//
+// Example:
+//
+//	zhtest.AssertGreater(t, 10, 5)
+func AssertGreater(t testing.TB, actual, expected any) {
+	// Try to compare as int64
+	aInt, aIsInt := toInt64(actual)
+	bInt, bIsInt := toInt64(expected)
+	if aIsInt && bIsInt {
+		if aInt <= bInt {
+			fail(t, "expected %v to be greater than %v", actual, expected)
+		}
+		return
+	}
+
+	// Try to compare as float64 (handles float/float and mixed int/float)
+	aFloat, aIsFloat := toFloat64(actual)
+	bFloat, bIsFloat := toFloat64(expected)
+
+	// Convert ints to floats for mixed comparisons
+	if aIsInt {
+		aFloat = float64(aInt)
+		aIsFloat = true
+	}
+	if bIsInt {
+		bFloat = float64(bInt)
+		bIsFloat = true
+	}
+
+	if aIsFloat && bIsFloat {
+		if aFloat <= bFloat {
+			fail(t, "expected %v to be greater than %v", actual, expected)
+		}
+		return
+	}
+
+	fail(t, "AssertGreater requires comparable numeric types, got %T and %T", actual, expected)
+}
+
+// AssertLess fails if actual >= expected.
+// For automatic test failures, pass a non-nil testing.TB.
+//
+// Example:
+//
+//	zhtest.AssertLess(t, 5, 10)
+func AssertLess(t testing.TB, actual, expected any) {
+	// Try to compare as int64
+	aInt, aIsInt := toInt64(actual)
+	bInt, bIsInt := toInt64(expected)
+	if aIsInt && bIsInt {
+		if aInt >= bInt {
+			fail(t, "expected %v to be less than %v", actual, expected)
+		}
+		return
+	}
+
+	// Try to compare as float64 (handles float/float and mixed int/float)
+	aFloat, aIsFloat := toFloat64(actual)
+	bFloat, bIsFloat := toFloat64(expected)
+
+	// Convert ints to floats for mixed comparisons
+	if aIsInt {
+		aFloat = float64(aInt)
+		aIsFloat = true
+	}
+	if bIsInt {
+		bFloat = float64(bInt)
+		bIsFloat = true
+	}
+
+	if aIsFloat && bIsFloat {
+		if aFloat >= bFloat {
+			fail(t, "expected %v to be less than %v", actual, expected)
+		}
+		return
+	}
+
+	fail(t, "AssertLess requires comparable numeric types, got %T and %T", actual, expected)
+}
+
+// toInt64 attempts to convert a value to int64.
+func toInt64(v any) (int64, bool) {
+	switch val := v.(type) {
+	case int:
+		return int64(val), true
+	case int8:
+		return int64(val), true
+	case int16:
+		return int64(val), true
+	case int32:
+		return int64(val), true
+	case int64:
+		return val, true
+	case uint:
+		return int64(val), true
+	case uint8:
+		return int64(val), true
+	case uint16:
+		return int64(val), true
+	case uint32:
+		return int64(val), true
+	case uint64:
+		return int64(val), true
+	default:
+		return 0, false
+	}
+}
+
+// toFloat64 attempts to convert a value to float64.
+func toFloat64(v any) (float64, bool) {
+	switch val := v.(type) {
+	case float32:
+		return float64(val), true
+	case float64:
+		return val, true
+	default:
+		return 0, false
 	}
 }
 
@@ -858,17 +1076,33 @@ func AssertLen(t testing.TB, collection any, expectedLen int) {
 	}
 }
 
-// AssertContains fails if slice does not contain the element.
-// Uses reflect.DeepEqual for comparison.
+// AssertContains fails if slice does not contain the element, or if s does not contain substring.
+// For slices, uses reflect.DeepEqual for comparison.
+// For strings, uses strings.Contains.
 // For automatic test failures, pass a non-nil testing.TB.
 //
 // Example:
 //
 //	zhtest.AssertContains(t, []int{1, 2, 3}, 2)
-func AssertContains(t testing.TB, slice any, element any) {
-	rv := reflect.ValueOf(slice)
+//	zhtest.AssertContains(t, "hello world", "world")
+func AssertContains(t testing.TB, s any, element any) {
+	// Handle string containment
+	str, isString := s.(string)
+	if isString {
+		substr, isSubstr := element.(string)
+		if !isSubstr {
+			fail(t, "AssertContains requires substring to be a string when s is a string, got %T", element)
+			return
+		}
+		if !strings.Contains(str, substr) {
+			fail(t, "expected %q to contain %q", str, substr)
+		}
+		return
+	}
+
+	rv := reflect.ValueOf(s)
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		fail(t, "AssertContains requires a slice or array, got %T", slice)
+		fail(t, "AssertContains requires a slice, array, or string, got %T", s)
 		return
 	}
 
@@ -880,17 +1114,33 @@ func AssertContains(t testing.TB, slice any, element any) {
 	fail(t, "expected slice to contain %v", element)
 }
 
-// AssertNotContains fails if slice contains the element.
-// Uses reflect.DeepEqual for comparison.
+// AssertNotContains fails if slice contains the element, or if s contains substring.
+// For slices, uses reflect.DeepEqual for comparison.
+// For strings, uses strings.Contains.
 // For automatic test failures, pass a non-nil testing.TB.
 //
 // Example:
 //
 //	zhtest.AssertNotContains(t, []int{1, 2, 3}, 4)
-func AssertNotContains(t testing.TB, slice any, element any) {
-	rv := reflect.ValueOf(slice)
+//	zhtest.AssertNotContains(t, "hello world", "goodbye")
+func AssertNotContains(t testing.TB, s any, element any) {
+	// Handle string containment
+	str, isString := s.(string)
+	if isString {
+		substr, isSubstr := element.(string)
+		if !isSubstr {
+			fail(t, "AssertNotContains requires substring to be a string when s is a string, got %T", element)
+			return
+		}
+		if strings.Contains(str, substr) {
+			fail(t, "expected %q to not contain %q", str, substr)
+		}
+		return
+	}
+
+	rv := reflect.ValueOf(s)
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		fail(t, "AssertNotContains requires a slice or array, got %T", slice)
+		fail(t, "AssertNotContains requires a slice, array, or string, got %T", s)
 		return
 	}
 
@@ -956,5 +1206,83 @@ func AssertImplements(t testing.TB, interfaceType any, actual any) {
 
 	if !actualReflectType.Implements(iface) {
 		fail(t, "expected type %v to implement %v", actualReflectType, iface)
+	}
+}
+
+// AssertPanic fails if f does not panic.
+// For automatic test failures, pass a non-nil testing.TB.
+//
+// Example:
+//
+//	zhtest.AssertPanic(t, func() {
+//	    someFunctionThatPanics()
+//	})
+func AssertPanic(t testing.TB, f func()) {
+	panicked := false
+	func() {
+		defer func() {
+			if recover() != nil {
+				panicked = true
+			}
+		}()
+		f()
+	}()
+	if !panicked {
+		fail(t, "expected function to panic, but it did not")
+	}
+}
+
+// AssertNoPanic fails if f panics.
+// For automatic test failures, pass a non-nil testing.TB.
+//
+// Example:
+//
+//	zhtest.AssertNoPanic(t, func() {
+//	    someFunctionThatShouldNotPanic()
+//	})
+func AssertNoPanic(t testing.TB, f func()) {
+	panicked := false
+	var panicValue any
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+				panicValue = r
+			}
+		}()
+		f()
+	}()
+	if panicked {
+		fail(t, "expected function not to panic, but it panicked with: %v", panicValue)
+	}
+}
+
+// AssertPanicContains fails if f does not panic with a message containing substring.
+// For automatic test failures, pass a non-nil testing.TB.
+//
+// Example:
+//
+//	zhtest.AssertPanicContains(t, func() {
+//	    someFunctionThatPanicsWithMessage()
+//	}, "expected error message")
+func AssertPanicContains(t testing.TB, f func(), substring string) {
+	panicked := false
+	var panicValue any
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+				panicValue = r
+			}
+		}()
+		f()
+	}()
+	if !panicked {
+		fail(t, "expected function to panic, but it did not")
+		return
+	}
+	panicStr := fmt.Sprintf("%v", panicValue)
+	if !strings.Contains(panicStr, substring) {
+		fail(t, "expected panic message to contain %q, got %q", substring, panicStr)
 	}
 }

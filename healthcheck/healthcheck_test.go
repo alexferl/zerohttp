@@ -80,9 +80,7 @@ func TestCustomHandlers(t *testing.T) {
 		w := zhtest.Serve(app, req)
 		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("alive")
 
-		if !livenessHandlerCalled {
-			t.Error("Liveness handler was not called")
-		}
+		zhtest.AssertTrue(t, livenessHandlerCalled)
 	})
 
 	t.Run("readiness", func(t *testing.T) {
@@ -90,9 +88,7 @@ func TestCustomHandlers(t *testing.T) {
 		w := zhtest.Serve(app, req)
 		zhtest.AssertWith(t, w).Status(http.StatusServiceUnavailable).Body("not ready")
 
-		if !readinessHandlerCalled {
-			t.Error("Readiness handler was not called")
-		}
+		zhtest.AssertTrue(t, readinessHandlerCalled)
 	})
 
 	t.Run("startup", func(t *testing.T) {
@@ -100,9 +96,7 @@ func TestCustomHandlers(t *testing.T) {
 		w := zhtest.Serve(app, req)
 		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("started")
 
-		if !startupHandlerCalled {
-			t.Error("Startup handler was not called")
-		}
+		zhtest.AssertTrue(t, startupHandlerCalled)
 	})
 }
 
@@ -134,36 +128,17 @@ func TestMixedOptions(t *testing.T) {
 		w := zhtest.Serve(app, req)
 		zhtest.AssertWith(t, w).Status(http.StatusTeapot).Body("custom")
 
-		if !customHandlerCalled {
-			t.Error("Custom handler was not called")
-		}
+		zhtest.AssertTrue(t, customHandlerCalled)
 	})
 }
 
 func TestDefaultConfig(t *testing.T) {
-	if DefaultConfig.LivenessEndpoint != "/livez" {
-		t.Errorf("Expected LivenessEndpoint '/livez', got '%s'", DefaultConfig.LivenessEndpoint)
-	}
-
-	if DefaultConfig.ReadinessEndpoint != "/readyz" {
-		t.Errorf("Expected ReadinessEndpoint '/readyz', got '%s'", DefaultConfig.ReadinessEndpoint)
-	}
-
-	if DefaultConfig.StartupEndpoint != "/startupz" {
-		t.Errorf("Expected StartupEndpoint '/startupz', got '%s'", DefaultConfig.StartupEndpoint)
-	}
-
-	if DefaultConfig.LivenessHandler == nil {
-		t.Error("Expected LivenessHandler to be set")
-	}
-
-	if DefaultConfig.ReadinessHandler == nil {
-		t.Error("Expected ReadinessHandler to be set")
-	}
-
-	if DefaultConfig.StartupHandler == nil {
-		t.Error("Expected StartupHandler to be set")
-	}
+	zhtest.AssertEqual(t, "/livez", DefaultConfig.LivenessEndpoint)
+	zhtest.AssertEqual(t, "/readyz", DefaultConfig.ReadinessEndpoint)
+	zhtest.AssertEqual(t, "/startupz", DefaultConfig.StartupEndpoint)
+	zhtest.AssertNotNil(t, DefaultConfig.LivenessHandler)
+	zhtest.AssertNotNil(t, DefaultConfig.ReadinessHandler)
+	zhtest.AssertNotNil(t, DefaultConfig.StartupHandler)
 }
 
 func TestNoConfig(t *testing.T) {

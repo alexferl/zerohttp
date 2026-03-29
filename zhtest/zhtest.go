@@ -226,9 +226,8 @@ func (r *Response) BodyBytes() []byte {
 // Example:
 //
 //	var result User
-//	if err := w.JSON(&result); err != nil {
-//	    t.Fatal(err)
-//	}
+//	err := w.JSON(&result)
+//	zhtest.AssertNoError(t, err)
 func (r *Response) JSON(v any) error {
 	return json.Unmarshal(r.Body.Bytes(), v)
 }
@@ -238,9 +237,7 @@ func (r *Response) JSON(v any) error {
 // Example:
 //
 //	sessionCookie := w.Cookie("session")
-//	if sessionCookie == nil {
-//	    t.Error("session cookie not found")
-//	}
+//	zhtest.AssertNotNil(t, sessionCookie)
 func (r *Response) Cookie(name string) *http.Cookie {
 	for _, c := range r.Result().Cookies() {
 		if c.Name == name {

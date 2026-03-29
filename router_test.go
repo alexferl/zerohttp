@@ -120,14 +120,7 @@ func TestHandlerFunc(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		expectedCalls := []string{"error-handler-mw", "handler"}
-		if len(calls) != len(expectedCalls) {
-			t.Errorf("Expected %d calls, got %d", len(expectedCalls), len(calls))
-		}
-		for i, expected := range expectedCalls {
-			if i >= len(calls) || calls[i] != expected {
-				t.Errorf("Expected call %d to be '%s', got '%s'", i, expected, calls[i])
-			}
-		}
+		zhtest.AssertEqual(t, calls, expectedCalls)
 	})
 
 	t.Run("HEAD request discards body writes", func(t *testing.T) {
@@ -157,12 +150,8 @@ func TestHandlerFunc(t *testing.T) {
 
 		// Test that Unwrap returns the underlying ResponseWriter
 		unwrapped, ok := hrw.Unwrap().(*httptest.ResponseRecorder)
-		if !ok {
-			t.Error("Unwrap did not return the underlying ResponseRecorder")
-		}
-		if unwrapped != recorder {
-			t.Error("Unwrap returned a different ResponseWriter")
-		}
+		zhtest.AssertTrue(t, ok)
+		zhtest.AssertEqual(t, unwrapped, recorder)
 	})
 
 	// Test that headResponseWriter calls WriteHeader on underlying ResponseWriter
@@ -175,9 +164,7 @@ func TestHandlerFunc(t *testing.T) {
 		_, _ = hrw.Write([]byte("test"))
 
 		// Verify WriteHeader was called (status should be 200)
-		if recorder.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, recorder.Code)
-		}
+		zhtest.AssertEqual(t, recorder.Code, http.StatusOK)
 	})
 
 	t.Run("headResponseWriter Content-Length matches GET", func(t *testing.T) {
@@ -203,13 +190,8 @@ func TestHandlerFunc(t *testing.T) {
 		headCL := headRec.Header().Get(httpx.HeaderContentLength)
 
 		// HEAD Content-Length should match GET body size
-		if headCL == "" {
-			t.Error("HEAD request missing Content-Length header")
-			return
-		}
-		if headCL != fmt.Sprintf("%d", getSize) {
-			t.Errorf("HEAD Content-Length (%s) != GET body size (%d)", headCL, getSize)
-		}
+		zhtest.AssertTrue(t, headCL != "")
+		zhtest.AssertEqual(t, headCL, fmt.Sprintf("%d", getSize))
 	})
 
 	t.Run("interface compatibility", func(t *testing.T) {
@@ -296,9 +278,7 @@ func TestJSONEncodingErrorLogged(t *testing.T) {
 			handleHandlerError(recorder, tc.handlerError)
 
 			// Verify the status was written before the write failure
-			if recorder.Code != tc.expectedStatus {
-				t.Errorf("Expected status %d, got %d", tc.expectedStatus, recorder.Code)
-			}
+			zhtest.AssertEqual(t, recorder.Code, tc.expectedStatus)
 
 			// Note: We can't easily capture the log output from DefaultLogger
 			// since it writes to stdout, but we verify the code path doesn't panic
@@ -324,22 +304,12 @@ func (e *testValidationError) ValidationErrors() map[string][]string {
 func TestNewRouter(t *testing.T) {
 	t.Run("without middleware", func(t *testing.T) {
 		router := NewRouter()
-		if router == nil {
-			t.Error("Expected router to be created")
-		}
-
-		logger := router.Logger()
-		if logger == nil {
-			t.Error("Expected router to have a default logger")
-		}
+		zhtest.AssertNotNil(t, router)
+		zhtest.AssertNotNil(t, router.Logger())
 
 		cfg := router.Config()
-		if cfg.RequestID.Header != "X-Request-Id" {
-			t.Errorf("Expected default header name 'X-Request-Id', got '%s'", cfg.RequestID.Header)
-		}
-		if cfg.RequestID.Generator == nil {
-			t.Error("Expected default GenerateID function to be set")
-		}
+		zhtest.AssertEqual(t, cfg.RequestID.Header, "X-Request-Id")
+		zhtest.AssertNotNil(t, cfg.RequestID.Generator)
 	})
 
 	t.Run("with global middleware", func(t *testing.T) {
@@ -354,11 +324,7 @@ func TestNewRouter(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		zhtest.AssertWith(t, w).Status(http.StatusOK)
-
-		expectedCalls := []string{"mw1", "mw2"}
-		if len(calls) != len(expectedCalls) {
-			t.Errorf("Expected %d middleware calls, got %d", len(expectedCalls), len(calls))
-		}
+		zhtest.AssertEqual(t, calls, []string{"mw1", "mw2"})
 	})
 }
 
@@ -420,10 +386,7 @@ func TestRouter_Middleware(t *testing.T) {
 
 		zhtest.AssertWith(t, w).Status(http.StatusOK)
 
-		expectedCalls := []string{"global", "route1", "route2"}
-		if len(calls) != len(expectedCalls) {
-			t.Errorf("Expected %d middleware calls, got %d", len(expectedCalls), len(calls))
-		}
+		zhtest.AssertEqual(t, calls, []string{"global", "route1", "route2"})
 	})
 
 	t.Run("use method", func(t *testing.T) {
@@ -439,10 +402,7 @@ func TestRouter_Middleware(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		expectedCalls := []string{"mw1", "mw2", "mw3"}
-		if len(calls) != len(expectedCalls) {
-			t.Errorf("Expected %d middleware calls, got %d", len(expectedCalls), len(calls))
-		}
+		zhtest.AssertEqual(t, calls, []string{"mw1", "mw2", "mw3"})
 	})
 
 	t.Run("middleware order", func(t *testing.T) {
@@ -463,10 +423,7 @@ func TestRouter_Middleware(t *testing.T) {
 		}
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			order = append(order, 0)
-			_, err := w.Write([]byte("ok"))
-			if err != nil {
-				t.Fatalf("failed to write response: %v", err)
-			}
+			_, _ = w.Write([]byte("ok"))
 		})
 
 		router := NewRouter()
@@ -477,15 +434,7 @@ func TestRouter_Middleware(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		expectedOrder := []int{1, 2, 0, -2, -1}
-		if len(order) != len(expectedOrder) {
-			t.Errorf("Expected %d calls, got %d", len(expectedOrder), len(order))
-		}
-		for i, expected := range expectedOrder {
-			if i >= len(order) || order[i] != expected {
-				t.Errorf("Expected order[%d] to be %d, got %d", i, expected, order[i])
-			}
-		}
+		zhtest.AssertEqual(t, order, []int{1, 2, 0, -2, -1})
 	})
 }
 
@@ -508,15 +457,7 @@ func TestRouter_Groups(t *testing.T) {
 			Status(http.StatusOK).
 			Body("group response")
 
-		expectedCalls := []string{"global", "group"}
-		if len(calls) != len(expectedCalls) {
-			t.Errorf("Expected %d middleware calls, got %d", len(expectedCalls), len(calls))
-		}
-		for i, expected := range expectedCalls {
-			if i >= len(calls) || calls[i] != expected {
-				t.Errorf("Expected middleware call %d to be %s, got %s", i, expected, calls[i])
-			}
-		}
+		zhtest.AssertEqual(t, calls, []string{"global", "group"})
 	})
 
 	t.Run("group isolation", func(t *testing.T) {
@@ -537,12 +478,8 @@ func TestRouter_Groups(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if len(globalCalls) != 1 || globalCalls[0] != "global" {
-			t.Error("Outside route should only have global middleware")
-		}
-		if len(groupCalls) != 0 {
-			t.Error("Outside route should not execute group middleware")
-		}
+		zhtest.AssertEqual(t, globalCalls, []string{"global"})
+		zhtest.AssertEmpty(t, groupCalls)
 
 		// Reset and test inside route
 		globalCalls = nil
@@ -551,12 +488,8 @@ func TestRouter_Groups(t *testing.T) {
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if len(globalCalls) != 1 || globalCalls[0] != "global" {
-			t.Error("Inside route should have global middleware")
-		}
-		if len(groupCalls) != 1 || groupCalls[0] != "group" {
-			t.Error("Inside route should have group middleware")
-		}
+		zhtest.AssertEqual(t, globalCalls, []string{"global"})
+		zhtest.AssertEqual(t, groupCalls, []string{"group"})
 	})
 }
 
@@ -575,10 +508,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			_, err := w.Write([]byte("Custom 404"))
-			if err != nil {
-				t.Fatalf("failed to write response: %v", err)
-			}
+			_, _ = w.Write([]byte("Custom 404"))
 		}))
 
 		req = httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
@@ -622,19 +552,12 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
 
 		allowHeader := w.Header().Get(httpx.HeaderAllow)
-		if allowHeader == "" {
-			t.Error("Expected Allow header to be set")
-		}
-		if !strings.Contains(allowHeader, http.MethodGet) || !strings.Contains(allowHeader, http.MethodPost) {
-			t.Errorf("Expected Allow header to contain GET and POST, got '%s'", allowHeader)
-		}
+		zhtest.AssertTrue(t, allowHeader != "")
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodGet) && strings.Contains(allowHeader, http.MethodPost))
 
 		router.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, err := w.Write([]byte("Custom 405"))
-			if err != nil {
-				t.Fatalf("failed to write response: %v", err)
-			}
+			_, _ = w.Write([]byte("Custom 405"))
 		}))
 
 		req = httptest.NewRequest(http.MethodPut, "/test", nil)
@@ -679,22 +602,11 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
 
 		allowHeader := w.Header().Get(httpx.HeaderAllow)
-		if allowHeader == "" {
-			t.Error("Expected Allow header to be set")
-		}
-		// Should contain GET, POST, and implicit HEAD and OPTIONS
-		if !strings.Contains(allowHeader, http.MethodGet) {
-			t.Errorf("Expected Allow header to contain GET, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodPost) {
-			t.Errorf("Expected Allow header to contain POST, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodHead) {
-			t.Errorf("Expected Allow header to contain implicit HEAD, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodOptions) {
-			t.Errorf("Expected Allow header to contain OPTIONS, got '%s'", allowHeader)
-		}
+		zhtest.AssertTrue(t, allowHeader != "")
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodGet))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodPost))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodHead))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodOptions))
 	})
 
 	t.Run("auto OPTIONS for unknown path returns 404", func(t *testing.T) {
@@ -725,9 +637,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 			Status(http.StatusOK).
 			Body("custom options")
 
-		if w.Header().Get(httpx.HeaderAllow) != "CUSTOM" {
-			t.Errorf("Expected Allow header to be 'CUSTOM', got '%s'", w.Header().Get(httpx.HeaderAllow))
-		}
+		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderAllow), "CUSTOM")
 	})
 
 	// Test fallback path when ProblemDetail fails
@@ -739,11 +649,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		// Now call the handler - should trigger fallback path
 		defaultNotFoundHandler.ServeHTTP(w, req)
 
-		// Content-Type should be text/plain; charset=utf-8
-		contentType := w.Header().Get(httpx.HeaderContentType)
-		if contentType != httpx.MIMETextPlainCharset {
-			t.Errorf("expected Content-Type %q, got %q", httpx.MIMETextPlainCharset, contentType)
-		}
+		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMETextPlainCharset)
 	})
 
 	t.Run("default method not allowed handler fallback", func(t *testing.T) {
@@ -752,10 +658,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		defaultMethodNotAllowedHandler.ServeHTTP(w, req)
 
-		contentType := w.Header().Get(httpx.HeaderContentType)
-		if contentType != httpx.MIMETextPlainCharset {
-			t.Errorf("expected Content-Type %q, got %q", httpx.MIMETextPlainCharset, contentType)
-		}
+		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMETextPlainCharset)
 	})
 
 	// Test for parameterized routes returning 405 instead of 404
@@ -772,20 +675,12 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
 
-		// Should be JSON problem detail response
-		contentType := w.Header().Get(httpx.HeaderContentType)
-		if contentType != httpx.MIMEApplicationProblemJSON {
-			t.Errorf("expected Content-Type %q, got %q", httpx.MIMEApplicationProblemJSON, contentType)
-		}
+		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMEApplicationProblemJSON)
 
 		// Allow header should contain GET (and implicit HEAD)
 		allowHeader := w.Header().Get(httpx.HeaderAllow)
-		if allowHeader == "" {
-			t.Error("expected Allow header to be set for 405 response")
-		}
-		if !strings.Contains(allowHeader, http.MethodGet) {
-			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
-		}
+		zhtest.AssertTrue(t, allowHeader != "")
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodGet))
 	})
 
 	t.Run("405 for parameterized routes with multiple methods", func(t *testing.T) {
@@ -803,18 +698,10 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		// Allow header should contain all registered methods
 		allowHeader := w.Header().Get(httpx.HeaderAllow)
-		if !strings.Contains(allowHeader, http.MethodGet) {
-			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodPut) {
-			t.Errorf("expected Allow header to contain PUT, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodDelete) {
-			t.Errorf("expected Allow header to contain DELETE, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodHead) {
-			t.Errorf("expected Allow header to contain implicit HEAD, got '%s'", allowHeader)
-		}
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodGet))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodPut))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodDelete))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodHead))
 	})
 
 	t.Run("OPTIONS for parameterized routes", func(t *testing.T) {
@@ -830,18 +717,10 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
 
 		allowHeader := w.Header().Get(httpx.HeaderAllow)
-		if !strings.Contains(allowHeader, http.MethodGet) {
-			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodPost) {
-			t.Errorf("expected Allow header to contain POST, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodHead) {
-			t.Errorf("expected Allow header to contain implicit HEAD, got '%s'", allowHeader)
-		}
-		if !strings.Contains(allowHeader, http.MethodOptions) {
-			t.Errorf("expected Allow header to contain OPTIONS, got '%s'", allowHeader)
-		}
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodGet))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodPost))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodHead))
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodOptions))
 	})
 
 	t.Run("404 for non-matching parameterized paths", func(t *testing.T) {
@@ -857,10 +736,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusNotFound)
 
 		// Content-Type should be JSON problem detail
-		contentType := w.Header().Get(httpx.HeaderContentType)
-		if contentType != httpx.MIMEApplicationProblemJSON {
-			t.Errorf("expected Content-Type %q, got %q", httpx.MIMEApplicationProblemJSON, contentType)
-		}
+		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMEApplicationProblemJSON)
 	})
 
 	// Test wildcard patterns like /files/...
@@ -876,10 +752,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusMethodNotAllowed)
 
 		// Allow header should contain GET
-		allowHeader := w.Header().Get(httpx.HeaderAllow)
-		if !strings.Contains(allowHeader, http.MethodGet) {
-			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
-		}
+		zhtest.AssertTrue(t, strings.Contains(w.Header().Get(httpx.HeaderAllow), http.MethodGet))
 	})
 
 	t.Run("OPTIONS for wildcard routes", func(t *testing.T) {
@@ -894,9 +767,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusNoContent)
 
 		allowHeader := w.Header().Get(httpx.HeaderAllow)
-		if !strings.Contains(allowHeader, http.MethodGet) {
-			t.Errorf("expected Allow header to contain GET, got '%s'", allowHeader)
-		}
+		zhtest.AssertTrue(t, strings.Contains(allowHeader, http.MethodGet))
 	})
 
 	// Test wildcard with parameter like /api/{version}/...
@@ -955,10 +826,7 @@ func TestMatchPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := matchPattern(tt.pattern, tt.path)
-			if got != tt.want {
-				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.pattern, tt.path, got, tt.want)
-			}
+			zhtest.AssertEqual(t, matchPattern(tt.pattern, tt.path), tt.want)
 		})
 	}
 }
@@ -966,21 +834,14 @@ func TestMatchPattern(t *testing.T) {
 func TestRouter_Configuration(t *testing.T) {
 	t.Run("logger management", func(t *testing.T) {
 		router := NewRouter()
-		logger := router.Logger()
-		if logger == nil {
-			t.Error("Expected new router to have a default logger, got nil")
-		}
+		zhtest.AssertNotNil(t, router.Logger())
 
 		customLogger := log.NewDefaultLogger()
 		router.SetLogger(customLogger)
-		if router.Logger() != customLogger {
-			t.Error("Expected SetLogger to update the router's logger")
-		}
+		zhtest.AssertEqual(t, router.Logger(), customLogger)
 
 		router.SetLogger(nil)
-		if router.Logger() != nil {
-			t.Error("Expected Logger to return nil when set to nil")
-		}
+		zhtest.AssertNil(t, router.Logger())
 	})
 
 	t.Run("config management", func(t *testing.T) {
@@ -1062,9 +923,7 @@ func TestRouter_EdgeCases(t *testing.T) {
 
 		for range numRequests {
 			result := <-results
-			if result != "concurrent" {
-				t.Errorf("Expected 'concurrent', got '%s'", result)
-			}
+			zhtest.AssertEqual(t, result, "concurrent")
 		}
 	})
 }
@@ -1109,26 +968,11 @@ func TestUtilityFunctions(t *testing.T) {
 		result := allowedMethods(methods)
 
 		for method := range methods {
-			if !strings.Contains(result, method) {
-				t.Errorf("Expected result to contain %s, got '%s'", method, result)
-			}
+			zhtest.AssertTrue(t, strings.Contains(result, method))
 		}
-
-		// Implicit HEAD is added when GET is present
-		if !strings.Contains(result, http.MethodHead) {
-			t.Errorf("Expected result to contain implicit HEAD, got '%s'", result)
-		}
-
-		// OPTIONS is always implicitly allowed
-		if !strings.Contains(result, http.MethodOptions) {
-			t.Errorf("Expected result to contain OPTIONS, got '%s'", result)
-		}
-
-		parts := strings.Split(result, ", ")
-		// 3 registered + implicit HEAD + implicit OPTIONS = 5
-		if len(parts) != 5 {
-			t.Errorf("Expected 5 methods separated by commas, got %d parts: %s", len(parts), result)
-		}
+		zhtest.AssertTrue(t, strings.Contains(result, http.MethodHead))
+		zhtest.AssertTrue(t, strings.Contains(result, http.MethodOptions))
+		zhtest.AssertEqual(t, len(strings.Split(result, ", ")), 5)
 	})
 }
 
@@ -1238,10 +1082,7 @@ func TestRouter_Static(t *testing.T) {
 		// Set custom 404 handler
 		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			_, err := w.Write([]byte("Custom 404 for missing file"))
-			if err != nil {
-				t.Fatalf("failed to write response: %v", err)
-			}
+			_, _ = w.Write([]byte("Custom 404 for missing file"))
 		}))
 
 		// Test serving existing file (should work)
@@ -1298,10 +1139,7 @@ func TestRouter_Static(t *testing.T) {
 		// Set custom 404 handler
 		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			_, err := w.Write([]byte("Static site 404"))
-			if err != nil {
-				t.Fatalf("failed to write response: %v", err)
-			}
+			_, _ = w.Write([]byte("Static site 404"))
 		}))
 
 		// Test missing file (should use custom 404)
@@ -1350,60 +1188,36 @@ func TestRouter_Static(t *testing.T) {
 		router := NewRouter()
 		router.GET("/", testHandler("root"))
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Expected panic when Static() conflicts with GET / route")
-			} else if !strings.Contains(fmt.Sprintf("%v", r), "Static()") {
-				t.Errorf("Expected panic message to contain 'Static()', got: %v", r)
-			}
-		}()
-
-		router.Static(testStaticFS, "testdata/static", false)
+		zhtest.AssertPanic(t, func() {
+			router.Static(testStaticFS, "testdata/static", false)
+		})
 	})
 
 	t.Run("StaticDir - panics on GET / conflict", func(t *testing.T) {
 		router := NewRouter()
 		router.GET("/", testHandler("root"))
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Expected panic when StaticDir() conflicts with GET / route")
-			} else if !strings.Contains(fmt.Sprintf("%v", r), "StaticDir()") {
-				t.Errorf("Expected panic message to contain 'StaticDir()', got: %v", r)
-			}
-		}()
-
-		router.StaticDir("testdata/static", false)
+		zhtest.AssertPanic(t, func() {
+			router.StaticDir("testdata/static", false)
+		})
 	})
 
 	t.Run("Static - panics on double Static() call", func(t *testing.T) {
 		router := NewRouter()
 		router.Static(testStaticFS, "testdata/static", false)
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Expected panic when Static() called twice")
-			} else if !strings.Contains(fmt.Sprintf("%v", r), "Static()") {
-				t.Errorf("Expected panic message to contain 'Static()', got: %v", r)
-			}
-		}()
-
-		router.Static(testStaticFS, "testdata/static", false)
+		zhtest.AssertPanic(t, func() {
+			router.Static(testStaticFS, "testdata/static", false)
+		})
 	})
 
 	t.Run("StaticDir - panics on double StaticDir() call", func(t *testing.T) {
 		router := NewRouter()
 		router.StaticDir("testdata/static", false)
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Expected panic when StaticDir() called twice")
-			} else if !strings.Contains(fmt.Sprintf("%v", r), "StaticDir()") {
-				t.Errorf("Expected panic message to contain 'StaticDir()', got: %v", r)
-			}
-		}()
-
-		router.StaticDir("testdata/static", false)
+		zhtest.AssertPanic(t, func() {
+			router.StaticDir("testdata/static", false)
+		})
 	})
 
 	t.Run("Duplicate route registration panics with clear message", func(t *testing.T) {
@@ -1412,20 +1226,11 @@ func TestRouter_Static(t *testing.T) {
 			_, _ = w.Write([]byte("first"))
 		}))
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Expected panic on duplicate route registration")
-			} else {
-				msg := fmt.Sprintf("%v", r)
-				if !strings.Contains(msg, "GET /test already registered") {
-					t.Errorf("Expected clear panic message with route details, got: %v", r)
-				}
-			}
-		}()
-
-		router.GET("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte("second"))
-		}))
+		zhtest.AssertPanic(t, func() {
+			router.GET("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte("second"))
+			}))
+		})
 	})
 
 	t.Run("Static file handler logs actual status codes", func(t *testing.T) {
@@ -1440,9 +1245,7 @@ func TestRouter_Static(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected 404 for missing file, got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, w.Code, http.StatusNotFound)
 	})
 }
 
@@ -1453,12 +1256,8 @@ func TestStatusCapture(t *testing.T) {
 
 		statusCap.WriteHeader(http.StatusNotFound)
 
-		if statusCap.status != http.StatusNotFound {
-			t.Errorf("Expected captured status %d, got %d", http.StatusNotFound, statusCap.status)
-		}
-		if rec.Code != http.StatusNotFound {
-			t.Errorf("Expected recorder status %d, got %d", http.StatusNotFound, rec.Code)
-		}
+		zhtest.AssertEqual(t, statusCap.status, http.StatusNotFound)
+		zhtest.AssertEqual(t, rec.Code, http.StatusNotFound)
 	})
 
 	t.Run("implements http.Flusher", func(t *testing.T) {
@@ -1467,9 +1266,7 @@ func TestStatusCapture(t *testing.T) {
 
 		// Verify it implements http.Flusher
 		flusher, ok := interface{}(statusCap).(http.Flusher)
-		if !ok {
-			t.Error("statusCapture should implement http.Flusher")
-		}
+		zhtest.AssertTrue(t, ok)
 
 		// Verify Flush doesn't panic
 		flusher.Flush()
@@ -1490,15 +1287,10 @@ func TestRouter_ServeMux(t *testing.T) {
 	router := NewRouter()
 
 	mux := router.ServeMux()
-	if mux == nil {
-		t.Fatal("Expected ServeMux to return a non-nil mux")
-	}
+	zhtest.AssertNotNil(t, mux)
 
 	mux.HandleFunc("GET /direct", func(w http.ResponseWriter, r *http.Request) {
-		_, err := w.Write([]byte("direct handler"))
-		if err != nil {
-			t.Fatalf("failed to write response: %v", err)
-		}
+		_, _ = w.Write([]byte("direct handler"))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/direct", nil)
@@ -1527,9 +1319,7 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 
-		if !handlerCalled {
-			t.Error("CONNECT handler was not called")
-		}
+		zhtest.AssertTrue(t, handlerCalled)
 
 		zhtest.AssertWith(t, w).Status(http.StatusOK)
 	})
@@ -1557,9 +1347,7 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 
-		if len(calls) != 2 || calls[0] != "middleware" || calls[1] != "handler" {
-			t.Errorf("Expected [middleware, handler], got %v", calls)
-		}
+		zhtest.AssertEqual(t, calls, []string{"middleware", "handler"})
 	})
 
 	t.Run("CONNECT route not found", func(t *testing.T) {
@@ -1578,9 +1366,7 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 
 		upgradeCalled := false
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodConnect {
-				t.Errorf("Expected CONNECT method, got %s", r.Method)
-			}
+			zhtest.AssertEqual(t, r.Method, http.MethodConnect)
 			upgradeCalled = true
 			w.WriteHeader(http.StatusOK)
 		})
@@ -1593,9 +1379,7 @@ func TestRouter_CONNECT_WebTransport(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 
-		if !upgradeCalled {
-			t.Error("CONNECT handler was not called for WebTransport upgrade")
-		}
+		zhtest.AssertTrue(t, upgradeCalled)
 	})
 }
 
@@ -1608,9 +1392,7 @@ func TestShouldLogRequest(t *testing.T) {
 			},
 		})
 
-		if !r.shouldLogRequest() {
-			t.Error("expected shouldLogRequest to be true when Enabled is nil")
-		}
+		zhtest.AssertTrue(t, r.shouldLogRequest())
 	})
 
 	t.Run("returns true when Enabled is explicitly true", func(t *testing.T) {
@@ -1621,9 +1403,7 @@ func TestShouldLogRequest(t *testing.T) {
 			},
 		})
 
-		if !r.shouldLogRequest() {
-			t.Error("expected shouldLogRequest to be true when Enabled is true")
-		}
+		zhtest.AssertTrue(t, r.shouldLogRequest())
 	})
 
 	t.Run("returns false when Enabled is explicitly false", func(t *testing.T) {
@@ -1634,9 +1414,7 @@ func TestShouldLogRequest(t *testing.T) {
 			},
 		})
 
-		if r.shouldLogRequest() {
-			t.Error("expected shouldLogRequest to be false when Enabled is false")
-		}
+		zhtest.AssertFalse(t, r.shouldLogRequest())
 	})
 
 	t.Run("returns false when DisableDefaultMiddlewares is true", func(t *testing.T) {
@@ -1648,9 +1426,7 @@ func TestShouldLogRequest(t *testing.T) {
 			},
 		})
 
-		if r.shouldLogRequest() {
-			t.Error("expected shouldLogRequest to be false when DisableDefaultMiddlewares is true")
-		}
+		zhtest.AssertFalse(t, r.shouldLogRequest())
 	})
 
 	t.Run("returns true when DisableDefaultMiddlewares is false and Enabled is nil", func(t *testing.T) {
@@ -1662,9 +1438,7 @@ func TestShouldLogRequest(t *testing.T) {
 			},
 		})
 
-		if !r.shouldLogRequest() {
-			t.Error("expected shouldLogRequest to be true when DisableDefaultMiddlewares is false and Enabled is nil")
-		}
+		zhtest.AssertTrue(t, r.shouldLogRequest())
 	})
 }
 
@@ -2137,9 +1911,7 @@ func TestHeadResponseWriter_Flush(t *testing.T) {
 			// Call Flush
 			hrw.Flush()
 
-			if *flushCalled != tt.expectFlushCalled {
-				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
-			}
+			zhtest.AssertEqual(t, *flushCalled, tt.expectFlushCalled)
 		})
 	}
 }

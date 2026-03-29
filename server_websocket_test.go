@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/extensions/websocket"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // mockWebSocketConn is a mock implementation of WebSocketConn for testing.
@@ -78,18 +79,14 @@ func TestServerWebSocketUpgrader(t *testing.T) {
 	app := New()
 
 	// Initially should be nil
-	if app.WebSocketUpgrader() != nil {
-		t.Error("WebSocketUpgrader should be nil initially")
-	}
+	zhtest.AssertNil(t, app.WebSocketUpgrader())
 
 	// Set upgrader
 	mockUpgrader := &mockWebSocketUpgrader{}
 	app.SetWebSocketUpgrader(mockUpgrader)
 
 	// Should be retrievable
-	if app.WebSocketUpgrader() != mockUpgrader {
-		t.Error("WebSocketUpgrader should be retrievable")
-	}
+	zhtest.AssertEqual(t, mockUpgrader, app.WebSocketUpgrader())
 }
 
 func TestServerWithWebSocketUpgrader(t *testing.T) {
@@ -97,9 +94,7 @@ func TestServerWithWebSocketUpgrader(t *testing.T) {
 	mockUpgrader := &mockWebSocketUpgrader{}
 	app := New(Config{Extensions: ExtensionsConfig{WebSocketUpgrader: mockUpgrader}})
 
-	if app.WebSocketUpgrader() != mockUpgrader {
-		t.Error("WebSocketUpgrader should be set via config option")
-	}
+	zhtest.AssertEqual(t, mockUpgrader, app.WebSocketUpgrader())
 }
 
 func TestWebSocketHandler(t *testing.T) {
@@ -149,12 +144,8 @@ func TestWebSocketHandler(t *testing.T) {
 	app.ServeHTTP(rec, req)
 
 	// Verify connection was closed
-	if !mockConn.closed {
-		t.Error("WebSocket connection should be closed")
-	}
+	zhtest.AssertTrue(t, mockConn.closed)
 
 	// Verify messages were echoed
-	if len(mockConn.writeMessages) != 2 {
-		t.Errorf("Expected 2 written messages, got %d", len(mockConn.writeMessages))
-	}
+	zhtest.AssertEqual(t, 2, len(mockConn.writeMessages))
 }

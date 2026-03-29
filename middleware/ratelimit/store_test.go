@@ -18,30 +18,18 @@ func TestInMemoryStore_TokenBucket(t *testing.T) {
 
 	// First request allowed
 	allowed, remaining, _ := store.CheckAndRecord(ctx, "key1", now)
-	if !allowed {
-		t.Error("first request should be allowed")
-	}
-	if remaining != 1 {
-		t.Errorf("expected remaining=1, got %d", remaining)
-	}
+	zhtest.AssertTrue(t, allowed)
+	zhtest.AssertEqual(t, 1, remaining)
 
 	// Second request allowed
 	allowed, remaining, _ = store.CheckAndRecord(ctx, "key1", now)
-	if !allowed {
-		t.Error("second request should be allowed")
-	}
-	if remaining != 0 {
-		t.Errorf("expected remaining=0, got %d", remaining)
-	}
+	zhtest.AssertTrue(t, allowed)
+	zhtest.AssertEqual(t, 0, remaining)
 
 	// Third request denied
 	allowed, remaining, _ = store.CheckAndRecord(ctx, "key1", now)
-	if allowed {
-		t.Error("third request should be denied")
-	}
-	if remaining != 0 {
-		t.Errorf("expected remaining=0, got %d", remaining)
-	}
+	zhtest.AssertFalse(t, allowed)
+	zhtest.AssertEqual(t, 0, remaining)
 }
 
 // TestInMemoryStore_FixedWindow tests fixed window algorithm in MemoryStore
@@ -53,16 +41,12 @@ func TestInMemoryStore_FixedWindow(t *testing.T) {
 	// Three requests allowed
 	for i := 0; i < 3; i++ {
 		allowed, _, _ := store.CheckAndRecord(ctx, "key1", now)
-		if !allowed {
-			t.Errorf("request %d should be allowed", i+1)
-		}
+		zhtest.AssertTrue(t, allowed)
 	}
 
 	// Fourth request denied
 	allowed, _, _ := store.CheckAndRecord(ctx, "key1", now)
-	if allowed {
-		t.Error("fourth request should be denied")
-	}
+	zhtest.AssertFalse(t, allowed)
 }
 
 // TestInMemoryStore_SlidingWindow tests sliding window algorithm in MemoryStore
@@ -74,25 +58,19 @@ func TestInMemoryStore_SlidingWindow(t *testing.T) {
 	// Two requests allowed
 	for i := 0; i < 2; i++ {
 		allowed, _, _ := store.CheckAndRecord(ctx, "key1", now)
-		if !allowed {
-			t.Errorf("request %d should be allowed", i+1)
-		}
+		zhtest.AssertTrue(t, allowed)
 	}
 
 	// Third request denied
 	allowed, _, _ := store.CheckAndRecord(ctx, "key1", now)
-	if allowed {
-		t.Error("third request should be denied")
-	}
+	zhtest.AssertFalse(t, allowed)
 
 	// Wait for window to expire
 	time.Sleep(110 * time.Millisecond)
 
 	// After expiration, request allowed again
 	allowed, _, _ = store.CheckAndRecord(ctx, "key1", time.Now())
-	if !allowed {
-		t.Error("request after window expiry should be allowed")
-	}
+	zhtest.AssertTrue(t, allowed)
 }
 
 // TestInMemoryStore_MaxKeysEviction tests that oldest entries are evicted at limit
@@ -105,9 +83,7 @@ func TestInMemoryStore_MaxKeysEviction(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		key := string(rune('a' + i))
 		allowed, _, _ := store.CheckAndRecord(ctx, key, now)
-		if !allowed {
-			t.Errorf("initial request for key %s should be allowed", key)
-		}
+		zhtest.AssertTrue(t, allowed)
 	}
 
 	// Wait a bit and access first key to update its lastAccess
@@ -117,15 +93,11 @@ func TestInMemoryStore_MaxKeysEviction(t *testing.T) {
 
 	// Add 6th key - should evict the oldest (b, since a was just accessed)
 	allowed, _, _ := store.CheckAndRecord(ctx, "f", now.Add(10*time.Millisecond))
-	if !allowed {
-		t.Error("request for new key should be allowed (eviction should happen)")
-	}
+	zhtest.AssertTrue(t, allowed)
 
 	// Key "b" should have been evicted and treated as new
 	allowed, _, _ = store.CheckAndRecord(ctx, "b", now.Add(20*time.Millisecond))
-	if !allowed {
-		t.Error("key 'b' should have been evicted and treated as new")
-	}
+	zhtest.AssertTrue(t, allowed)
 }
 
 // TestInMemoryStore_Expiration tests that expired entries are cleaned up
@@ -141,21 +113,15 @@ func TestInMemoryStore_Expiration(t *testing.T) {
 
 	// Request denied
 	allowed, _, _ := store.CheckAndRecord(ctx, "key1", now)
-	if allowed {
-		t.Error("request should be denied (no tokens)")
-	}
+	zhtest.AssertFalse(t, allowed)
 
 	// Wait for entry to expire
 	time.Sleep(110 * time.Millisecond)
 
 	// After expiration, should be treated as new entry with fresh tokens
 	allowed, remaining, _ := store.CheckAndRecord(ctx, "key1", time.Now())
-	if !allowed {
-		t.Error("request after expiration should be allowed (new entry)")
-	}
-	if remaining != 1 {
-		t.Errorf("expected remaining=1 after expiration, got %d", remaining)
-	}
+	zhtest.AssertTrue(t, allowed)
+	zhtest.AssertEqual(t, 1, remaining)
 }
 
 // TestInMemoryStore_MultipleKeys tests isolation between keys
@@ -170,27 +136,18 @@ func TestInMemoryStore_MultipleKeys(t *testing.T) {
 
 	// key2 should still have tokens
 	allowed, remaining, _ := store.CheckAndRecord(ctx, "key2", now)
-	if !allowed {
-		t.Error("key2 first request should be allowed")
-	}
-	if remaining != 1 {
-		t.Errorf("expected remaining=1 for key2, got %d", remaining)
-	}
+	zhtest.AssertTrue(t, allowed)
+	zhtest.AssertEqual(t, 1, remaining)
 
 	// key1 should still be denied
 	allowed, _, _ = store.CheckAndRecord(ctx, "key1", now)
-	if allowed {
-		t.Error("key1 should still be denied")
-	}
+	zhtest.AssertFalse(t, allowed)
 }
 
 // TestInMemoryStore_DefaultMaxKeys tests default max keys (0 = 10000)
 func TestInMemoryStore_DefaultMaxKeys(t *testing.T) {
 	store := NewMemoryStore(TokenBucket, time.Second, 10, 0)
-
-	if store.maxKeys != 10000 {
-		t.Errorf("expected default maxKeys=10000, got %d", store.maxKeys)
-	}
+	zhtest.AssertEqual(t, 10000, store.maxKeys)
 }
 
 // mockStore is a test implementation of Store
@@ -235,18 +192,14 @@ func TestCustomStore(t *testing.T) {
 	req1.RemoteAddr = "allowed"
 	w1 := httptest.NewRecorder()
 	handler.ServeHTTP(w1, req1)
-	if w1.Code != http.StatusOK {
-		t.Errorf("expected 200 for allowed key, got %d", w1.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, w1.Code)
 
 	// Test denied key
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req2.RemoteAddr = "denied"
 	w2 := httptest.NewRecorder()
 	handler.ServeHTTP(w2, req2)
-	if w2.Code != http.StatusTooManyRequests {
-		t.Errorf("expected 429 for denied key, got %d", w2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusTooManyRequests, w2.Code)
 }
 
 // TestInMemoryStore_ResetTime tests that reset time is calculated correctly
@@ -262,14 +215,10 @@ func TestInMemoryStore_ResetTime(t *testing.T) {
 
 	// Get reset time for remaining tokens
 	_, remaining, resetTime := store.CheckAndRecord(ctx, "key1", now)
-	if remaining != 29 {
-		t.Errorf("expected remaining=29, got %d", remaining)
-	}
+	zhtest.AssertEqual(t, 29, remaining)
 
 	// Reset time should be in the future
-	if !resetTime.After(now) {
-		t.Error("resetTime should be after now")
-	}
+	zhtest.AssertTrue(t, resetTime.After(now))
 }
 
 // TestRateLimit_WithMaxKeysConfig tests MaxKeys config option
@@ -290,18 +239,14 @@ func TestRateLimit_WithMaxKeysConfig(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		req.RemoteAddr = "192.168.1." + string(rune('1'+i)) + ":12345"
 		w := zhtest.Serve(handler, req)
-		if w.Code != http.StatusOK {
-			t.Errorf("request %d should be allowed", i+1)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
 	}
 
 	// Create 4th key - should still work (eviction happens)
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "192.168.1.100:12345"
 	w := zhtest.Serve(handler, req)
-	if w.Code != http.StatusOK {
-		t.Error("4th key should be allowed (eviction)")
-	}
+	zhtest.AssertEqual(t, http.StatusOK, w.Code)
 }
 
 // TestInMemoryStore_MaxKeysEviction_FixedWindow tests eviction for fixed window
@@ -327,14 +272,10 @@ func TestInMemoryStore_MaxKeysEviction_FixedWindow(t *testing.T) {
 	// Key "b" should have been evicted
 	// Check by seeing if it's treated as new (allowed with full count)
 	allowed, remaining, _ := store.CheckAndRecord(ctx, "b", now.Add(20*time.Millisecond))
-	if !allowed {
-		t.Error("key 'b' should have been evicted and treated as new")
-	}
+	zhtest.AssertTrue(t, allowed)
 	// After eviction, key 'b' is recreated with count=1, so remaining = 100 - 1 = 99
 	// Even if key 'a' was accessed twice (count=2), its lastAccess is updated so 'b' is evicted
-	if remaining != 99 {
-		t.Errorf("expected remaining=99 for evicted key, got %d", remaining)
-	}
+	zhtest.AssertEqual(t, 99, remaining)
 }
 
 // TestInMemoryStore_MaxKeysEviction_SlidingWindow tests eviction for sliding window
@@ -360,15 +301,12 @@ func TestInMemoryStore_MaxKeysEviction_SlidingWindow(t *testing.T) {
 	// Key "b" should have been evicted
 	// Just check that it's allowed (not rate limited)
 	allowed, _, _ := store.CheckAndRecord(ctx, "b", now.Add(20*time.Millisecond))
-	if !allowed {
-		t.Error("key 'b' should have been evicted and treated as new")
-	}
+	zhtest.AssertTrue(t, allowed)
 }
 
 func TestInMemoryStore_Close(t *testing.T) {
 	store := NewMemoryStore(TokenBucket, time.Second, 10, 100)
 
-	if err := store.Close(); err != nil {
-		t.Errorf("Unexpected error closing store: %v", err)
-	}
+	err := store.Close()
+	zhtest.AssertNoError(t, err)
 }

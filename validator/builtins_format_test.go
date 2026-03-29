@@ -2,6 +2,8 @@ package validator
 
 import (
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestBase64Validator(t *testing.T) {
@@ -24,11 +26,10 @@ func TestBase64Validator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestBase64{Value: tt.value})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -39,9 +40,7 @@ func TestBase64OnNonString(t *testing.T) {
 		Value int `validate:"base64"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for base64 on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestHexadecimalValidator(t *testing.T) {
@@ -65,11 +64,10 @@ func TestHexadecimalValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestHex{Value: tt.value})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -80,9 +78,7 @@ func TestHexadecimalOnNonString(t *testing.T) {
 		Value int `validate:"hexadecimal"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for hexadecimal on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestHexColorValidator(t *testing.T) {
@@ -111,11 +107,10 @@ func TestHexColorValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestHexColor{Color: tt.color}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.color)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.color, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -126,9 +121,7 @@ func TestHexColorOnNonString(t *testing.T) {
 		Value int `validate:"hexcolor"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for hexcolor on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestE164Validator(t *testing.T) {
@@ -154,11 +147,10 @@ func TestE164Validator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestE164{Phone: tt.phone}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.phone)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.phone, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -169,9 +161,7 @@ func TestE164OnNonString(t *testing.T) {
 		Value int `validate:"e164"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for e164 on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestSemverValidator(t *testing.T) {
@@ -199,11 +189,10 @@ func TestSemverValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestSemver{Version: tt.version}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.version)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.version, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -214,9 +203,7 @@ func TestSemverOnNonString(t *testing.T) {
 		Value int `validate:"semver"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for semver on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestJWTValidator(t *testing.T) {
@@ -239,11 +226,10 @@ func TestJWTValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestJWT{Token: tt.token}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.token)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.token, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -254,7 +240,5 @@ func TestJWTOnNonString(t *testing.T) {
 		Value int `validate:"jwt"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for jwt on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }

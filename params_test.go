@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestParam(t *testing.T) {
@@ -56,9 +58,7 @@ func TestParam(t *testing.T) {
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 
-			if got != tt.want {
-				t.Errorf("Param() = %q, want %q", got, tt.want)
-			}
+			zhtest.AssertEqual(t, got, tt.want)
 		})
 	}
 }
@@ -102,9 +102,7 @@ func TestParamOrDefault(t *testing.T) {
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 
-			if got != tt.want {
-				t.Errorf("ParamOrDefault() = %q, want %q", got, tt.want)
-			}
+			zhtest.AssertEqual(t, got, tt.want)
 		})
 	}
 }
@@ -158,19 +156,13 @@ func TestParamAs(t *testing.T) {
 			mux.ServeHTTP(rec, req)
 
 			if tt.wantErr {
-				if gotErr == nil {
-					t.Errorf("ParamAs() expected error, got nil")
-					return
-				}
+				zhtest.AssertError(t, gotErr)
 				if tt.errMsg != "" {
-					if got := gotErr.Error(); got[:len(tt.errMsg)] != tt.errMsg {
-						t.Errorf("ParamAs() error = %q, want prefix %q", got, tt.errMsg)
-					}
+					zhtest.AssertTrue(t, len(gotErr.Error()) >= len(tt.errMsg))
+					zhtest.AssertEqual(t, gotErr.Error()[:len(tt.errMsg)], tt.errMsg)
 				}
 			} else {
-				if gotErr != nil {
-					t.Errorf("ParamAs() unexpected error: %v", gotErr)
-				}
+				zhtest.AssertNoError(t, gotErr)
 			}
 		})
 	}
@@ -192,13 +184,8 @@ func TestParamAs_Bool(t *testing.T) {
 			mux := http.NewServeMux()
 			mux.HandleFunc("/flag/{enabled}", func(w http.ResponseWriter, r *http.Request) {
 				val, err := ParamAs[bool](r, "enabled")
-				if err != nil {
-					t.Errorf("ParamAs[bool]() error = %v", err)
-					return
-				}
-				if val != tt.want {
-					t.Errorf("ParamAs[bool]() = %v, want %v", val, tt.want)
-				}
+				zhtest.AssertNoError(t, err)
+				zhtest.AssertEqual(t, val, tt.want)
 			})
 
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
@@ -224,9 +211,7 @@ func TestParamAs_CommonTypes(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if val != 42 {
-					t.Errorf("ParamAs[int]() = %d, want 42", val)
-				}
+				zhtest.AssertEqual(t, val, 42)
 				return nil
 			},
 		},
@@ -239,9 +224,7 @@ func TestParamAs_CommonTypes(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if val != 9223372036854775807 {
-					t.Errorf("ParamAs[int64]() = %d, want max int64", val)
-				}
+				zhtest.AssertEqual(t, val, int64(9223372036854775807))
 				return nil
 			},
 		},
@@ -254,9 +237,7 @@ func TestParamAs_CommonTypes(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if val != 100 {
-					t.Errorf("ParamAs[uint]() = %d, want 100", val)
-				}
+				zhtest.AssertEqual(t, val, uint(100))
 				return nil
 			},
 		},
@@ -269,9 +250,7 @@ func TestParamAs_CommonTypes(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if val != 19.99 {
-					t.Errorf("ParamAs[float64]() = %f, want 19.99", val)
-				}
+				zhtest.AssertEqual(t, val, 19.99)
 				return nil
 			},
 		},
@@ -289,9 +268,7 @@ func TestParamAs_CommonTypes(t *testing.T) {
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 
-			if gotErr != nil {
-				t.Errorf("ParamAs[%s]() error = %v", tt.name, gotErr)
-			}
+			zhtest.AssertNoError(t, gotErr)
 		})
 	}
 }
@@ -348,9 +325,7 @@ func TestParamAsOrDefault(t *testing.T) {
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 
-			if got != tt.want {
-				t.Errorf("ParamAsOrDefault() = %d, want %d", got, tt.want)
-			}
+			zhtest.AssertEqual(t, got, tt.want)
 		})
 	}
 }
@@ -479,13 +454,8 @@ func TestParamAs_Types(t *testing.T) {
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 
-			if err != nil {
-				t.Errorf("ParamAs() error = %v", err)
-				return
-			}
-			if got != tt.expected {
-				t.Errorf("ParamAs() = %v (%T), want %v (%T)", got, got, tt.expected, tt.expected)
-			}
+			zhtest.AssertNoError(t, err)
+			zhtest.AssertEqual(t, got, tt.expected)
 		})
 	}
 }
@@ -619,13 +589,9 @@ func TestParamAs_InvalidValues(t *testing.T) {
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 
-			if gotErr == nil {
-				t.Errorf("expected error, got nil")
-				return
-			}
-			if got := gotErr.Error(); got[:len(tt.wantErr)] != tt.wantErr {
-				t.Errorf("error = %q, want prefix %q", got, tt.wantErr)
-			}
+			zhtest.AssertError(t, gotErr)
+			zhtest.AssertTrue(t, len(gotErr.Error()) >= len(tt.wantErr))
+			zhtest.AssertEqual(t, gotErr.Error()[:len(tt.wantErr)], tt.wantErr)
 		})
 	}
 }
@@ -643,9 +609,7 @@ func TestDefaultParamsExtractor(t *testing.T) {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 
-		if got != "456" {
-			t.Errorf("Param() = %q, want %q", got, "456")
-		}
+		zhtest.AssertEqual(t, got, "456")
 	})
 
 	t.Run("ParamOrDefault method with value", func(t *testing.T) {
@@ -660,9 +624,7 @@ func TestDefaultParamsExtractor(t *testing.T) {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 
-		if got != "789" {
-			t.Errorf("ParamOrDefault() = %q, want %q", got, "789")
-		}
+		zhtest.AssertEqual(t, got, "789")
 	})
 
 	t.Run("ParamOrDefault method with default", func(t *testing.T) {
@@ -677,8 +639,6 @@ func TestDefaultParamsExtractor(t *testing.T) {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 
-		if got != "default" {
-			t.Errorf("ParamOrDefault() = %q, want %q", got, "default")
-		}
+		zhtest.AssertEqual(t, got, "default")
 	})
 }

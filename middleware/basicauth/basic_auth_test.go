@@ -25,9 +25,7 @@ func testMiddleware(t *testing.T, middleware func(http.Handler) http.Handler, re
 		rw.WriteHeader(http.StatusOK)
 	})).ServeHTTP(w, req)
 
-	if called != expectAuth {
-		t.Errorf("expected auth %v, got %v", expectAuth, called)
-	}
+	zhtest.AssertEqual(t, expectAuth, called)
 	zhtest.AssertWith(t, w).Status(expectedStatus)
 }
 
@@ -176,9 +174,7 @@ func TestBasicAuth(t *testing.T) {
 				rw.WriteHeader(http.StatusOK)
 			})).ServeHTTP(w, req)
 
-			if called != tt.expectAuth {
-				t.Errorf("expected auth %v, got %v", tt.expectAuth, called)
-			}
+			zhtest.AssertEqual(t, tt.expectAuth, called)
 			zhtest.AssertWith(t, w).Status(tt.expectedStatus)
 			if tt.checkWWWAuth {
 				zhtest.AssertWith(t, w).Header(httpx.HeaderWWWAuthenticate, tt.expectedRealm)
@@ -289,16 +285,12 @@ func TestBasicAuthIncludedPathsWithAuth(t *testing.T) {
 }
 
 func TestBasicAuthBothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		Credentials:   map[string]string{"admin": "secret"},
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/admin"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			Credentials:   map[string]string{"admin": "secret"},
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/admin"},
+		})
 	})
 }
 
@@ -316,9 +308,7 @@ func TestBasicAuthNoAuthConfigured(t *testing.T) {
 		called = true
 	})).ServeHTTP(w, req)
 
-	if called {
-		t.Error("handler should not be called when no auth configured")
-	}
+	zhtest.AssertFalse(t, called)
 	zhtest.AssertWith(t, w).Status(http.StatusUnauthorized)
 }
 
@@ -335,9 +325,7 @@ func TestBasicAuthNilExcludedPathsFallback(t *testing.T) {
 		called = true
 	})).ServeHTTP(w, req)
 
-	if called {
-		t.Error("handler should not be called without auth")
-	}
+	zhtest.AssertFalse(t, called)
 	zhtest.AssertWith(t, w).Status(http.StatusUnauthorized)
 }
 
@@ -370,9 +358,7 @@ func TestBasicAuth_Metrics(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w1 := httptest.NewRecorder()
 	wrapped.ServeHTTP(w1, req1)
-	if w1.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", w1.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, w1.Code)
 
 	// Test valid auth
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -380,9 +366,7 @@ func TestBasicAuth_Metrics(t *testing.T) {
 	req2.Header.Set(httpx.HeaderAuthorization, "Basic "+auth)
 	w2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(w2, req2)
-	if w2.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, w2.Code)
 
 	// Check metrics
 	families := reg.Gather()
@@ -393,19 +377,13 @@ func TestBasicAuth_Metrics(t *testing.T) {
 			break
 		}
 	}
-	if counter == nil {
-		t.Fatal("expected basic_auth_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, counter)
 
 	// Should have metrics for both valid and missing
 	results := make(map[string]int)
 	for _, m := range counter.Metrics {
 		results[m.Labels["result"]]++
 	}
-	if results["missing"] != 1 {
-		t.Errorf("expected 1 missing, got %d", results["missing"])
-	}
-	if results["valid"] != 1 {
-		t.Errorf("expected 1 valid, got %d", results["valid"])
-	}
+	zhtest.AssertEqual(t, 1, results["missing"])
+	zhtest.AssertEqual(t, 1, results["valid"])
 }

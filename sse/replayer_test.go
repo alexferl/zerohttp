@@ -26,15 +26,9 @@ func TestMemoryReplayer(t *testing.T) {
 			replayed = append(replayed, e)
 			return nil
 		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if count != 2 {
-			t.Errorf("expected 2 events replayed, got %d", count)
-		}
-		if len(replayed) != 2 {
-			t.Errorf("expected 2 events in slice, got %d", len(replayed))
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertEqual(t, 2, count)
+		zhtest.AssertEqual(t, 2, len(replayed))
 	})
 
 	t.Run("respects max events limit", func(t *testing.T) {
@@ -47,9 +41,7 @@ func TestMemoryReplayer(t *testing.T) {
 		count, _ := replay.Replay("", func(e Event) error {
 			return nil
 		})
-		if count != 2 {
-			t.Errorf("expected 2 events (max), got %d", count)
-		}
+		zhtest.AssertEqual(t, 2, count)
 	})
 
 	t.Run("respects TTL", func(t *testing.T) {
@@ -62,9 +54,7 @@ func TestMemoryReplayer(t *testing.T) {
 		count, _ := replay.Replay("", func(e Event) error {
 			return nil
 		})
-		if count != 1 {
-			t.Errorf("expected 1 event (old expired), got %d", count)
-		}
+		zhtest.AssertEqual(t, 1, count)
 	})
 
 	t.Run("auto-assigns IDs", func(t *testing.T) {
@@ -74,14 +64,10 @@ func TestMemoryReplayer(t *testing.T) {
 		returnedEvent := replay.Store(event)
 
 		// Check that returned event has ID assigned
-		if returnedEvent.ID == "" {
-			t.Error("expected returned event to have ID auto-assigned")
-		}
+		zhtest.AssertNotEmpty(t, returnedEvent.ID)
 
 		// Check that ID is accessible immediately without replay
-		if returnedEvent.ID != "1" {
-			t.Errorf("expected ID to be 1, got %s", returnedEvent.ID)
-		}
+		zhtest.AssertEqual(t, "1", returnedEvent.ID)
 
 		// Also verify it's stored correctly
 		var replayed Event
@@ -89,12 +75,8 @@ func TestMemoryReplayer(t *testing.T) {
 			replayed = e
 			return nil
 		})
-		if replayed.ID == "" {
-			t.Error("expected ID to be auto-assigned in storage")
-		}
-		if replayed.ID != returnedEvent.ID {
-			t.Errorf("replay ID %s doesn't match returned ID %s", replayed.ID, returnedEvent.ID)
-		}
+		zhtest.AssertNotEmpty(t, replayed.ID)
+		zhtest.AssertEqual(t, returnedEvent.ID, replayed.ID)
 	})
 }
 
@@ -105,9 +87,7 @@ func TestWithReplay(t *testing.T) {
 		replay := NewMemoryReplayer(100, 0)
 
 		stream, err := WithReplay(w, r, replay)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 		defer func() { _ = stream.Close() }()
 
 		// Should not replay anything
@@ -123,9 +103,7 @@ func TestWithReplay(t *testing.T) {
 		replay.Store(Event{Data: []byte("event2")})
 
 		stream, err := WithReplay(w, r, replay)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 		defer func() { _ = stream.Close() }()
 
 		zhtest.AssertWith(t, w).
@@ -140,9 +118,7 @@ func TestWithReplay(t *testing.T) {
 		replay := NewMemoryReplayer(100, 0)
 
 		_, err := WithReplay(w, r, replay)
-		if err == nil {
-			t.Error("expected error for invalid Last-Event-ID")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("returns error when Last-Event-ID present but replayer is nil", func(t *testing.T) {
@@ -151,11 +127,7 @@ func TestWithReplay(t *testing.T) {
 		r.Header.Set(httpx.HeaderLastEventId, "1")
 
 		_, err := WithReplay(w, r, nil)
-		if err == nil {
-			t.Error("expected error when Last-Event-ID present but replayer is nil")
-		}
-		if !strings.Contains(err.Error(), "no replayer configured") {
-			t.Errorf("expected error to contain 'no replayer configured', got: %v", err)
-		}
+		zhtest.AssertError(t, err)
+		zhtest.AssertTrue(t, strings.Contains(err.Error(), "no replayer configured"))
 	})
 }

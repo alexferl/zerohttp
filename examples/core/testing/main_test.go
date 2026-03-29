@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	zh "github.com/alexferl/zerohttp"
@@ -67,10 +66,7 @@ func TestGetUser(t *testing.T) {
 		Status(http.StatusOK).
 		HeaderContains(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 
-	body := w.Body.String()
-	if !strings.Contains(body, "Alice") {
-		t.Errorf("expected body to contain 'Alice', got %s", body)
-	}
+	zhtest.AssertContains(t, w.Body.String(), "Alice")
 }
 
 func TestGetUserNotFound(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/log"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 const testCertPEM = `-----BEGIN CERTIFICATE-----
@@ -99,17 +100,9 @@ func (m *mockServerLogger) WithContext(ctx context.Context) log.Logger { return 
 func TestNew_DefaultConfig(t *testing.T) {
 	server := New()
 
-	if server == nil {
-		t.Fatal("Expected server to be created")
-	}
-
-	if server.Router == nil {
-		t.Error("Expected router to be initialized")
-	}
-
-	if server.logger == nil {
-		t.Error("Expected logger to be initialized")
-	}
+	zhtest.AssertNotNil(t, server)
+	zhtest.AssertNotNil(t, server.Router)
+	zhtest.AssertNotNil(t, server.logger)
 }
 
 func TestNew_MiddlewareScenarios(t *testing.T) {
@@ -125,18 +118,14 @@ func TestNew_MiddlewareScenarios(t *testing.T) {
 		DefaultMiddlewares:        []func(http.Handler) http.Handler{customMiddleware},
 	})
 
-	if server == nil {
-		t.Fatal("Expected server to be created")
-	}
+	zhtest.AssertNotNil(t, server)
 
 	// Test with custom default middlewares combined with defaults
 	server2 := New(Config{
 		DefaultMiddlewares: []func(http.Handler) http.Handler{customMiddleware},
 	})
 
-	if server2 == nil {
-		t.Fatal("Expected server to be created")
-	}
+	zhtest.AssertNotNil(t, server2)
 }
 
 func TestServer_ListenerAddr(t *testing.T) {
@@ -151,26 +140,18 @@ func TestServer_ListenerAddr(t *testing.T) {
 	// Set server address explicitly
 	server.server = &http.Server{Addr: ":8080"}
 	addr = server.ListenerAddr()
-	if addr != ":8080" {
-		t.Errorf("Expected ':8080', got '%s'", addr)
-	}
+	zhtest.AssertEqual(t, ":8080", addr)
 
 	// Set actual listener (takes precedence)
 	listener, _ := net.Listen("tcp", "127.0.0.1:0")
 	server.listener = listener
 	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Errorf("failed to close listener: %v", err)
-		}
+		zhtest.AssertNoError(t, listener.Close())
 	}()
 
 	addr = server.ListenerAddr()
-	if addr == "" {
-		t.Error("Expected non-empty address from actual listener")
-	}
-	if !strings.Contains(addr, "127.0.0.1") {
-		t.Errorf("Expected address to contain localhost, got '%s'", addr)
-	}
+	zhtest.AssertNotEmpty(t, addr)
+	zhtest.AssertTrue(t, strings.Contains(addr, "127.0.0.1"))
 }
 
 func TestServer_ListenAndServe_NoServer(t *testing.T) {
@@ -179,9 +160,7 @@ func TestServer_ListenAndServe_NoServer(t *testing.T) {
 	server.server = nil
 
 	err := server.ListenAndServe()
-	if err != nil {
-		t.Errorf("Expected no error when server is nil, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Should log debug message about skipping
 	found := false
@@ -191,9 +170,7 @@ func TestServer_ListenAndServe_NoServer(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Error("Expected debug log about skipping HTTP server")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestServer_Close_WithServers(t *testing.T) {
@@ -206,16 +183,11 @@ func TestServer_Close_WithServers(t *testing.T) {
 
 	// Close should work even with nil listeners (uses server.Close() internally)
 	err := server.Close()
-	if err != nil {
-		t.Errorf("Expected no error closing servers, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Calling Close again should handle closed servers gracefully
-	err = server.Close()
+	_ = server.Close()
 	// May return error from already closed servers, but shouldn't crash
-	if err != nil {
-		t.Logf("Second Close() returned error (expected): %v", err)
-	}
 }
 
 func TestServer_Start_NoServersConfigured(t *testing.T) {
@@ -232,11 +204,9 @@ func TestServer_Start_NoServersConfigured(t *testing.T) {
 
 	select {
 	case err := <-done:
-		if err != nil {
-			t.Errorf("Expected no error when no servers configured, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	case <-time.After(time.Second):
-		t.Error("Start() hung when no servers configured - expected immediate return")
+		zhtest.AssertFail(t, "Start() hung when no servers configured - expected immediate return")
 	}
 }
 
@@ -249,9 +219,7 @@ func TestServer_Shutdown_NoServers(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error when no servers, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }
 
 func TestServer_Shutdown_AfterStart(t *testing.T) {
@@ -274,16 +242,14 @@ func TestServer_Shutdown_AfterStart(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error during shutdown, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Wait for Start() to return
 	select {
 	case <-done:
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for Start() to return after shutdown")
+		zhtest.AssertFail(t, "timeout waiting for Start() to return after shutdown")
 	}
 }
 
@@ -304,16 +270,14 @@ func TestServer_Close_AfterStart(t *testing.T) {
 
 	// Close should work even though server.listener is nil
 	err := server.Close()
-	if err != nil {
-		t.Errorf("Expected no error during close, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Wait for Start() to return
 	select {
 	case <-done:
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for Start() to return after close")
+		zhtest.AssertFail(t, "timeout waiting for Start() to return after close")
 	}
 }
 
@@ -336,17 +300,13 @@ func TestServer_Start_MultipleServers_CleanShutdown(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error during shutdown, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	select {
 	case startErr := <-done:
-		if startErr != nil {
-			t.Errorf("Expected Start() to return nil after clean shutdown, got %v", startErr)
-		}
+		zhtest.AssertNoError(t, startErr)
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for Start() to return after shutdown")
+		zhtest.AssertFail(t, "timeout waiting for Start() to return after shutdown")
 	}
 }
 
@@ -379,25 +339,19 @@ func TestServer_Shutdown_DrainsHookErrors(t *testing.T) {
 
 	// Shutdown should complete without deadlock even with hook errors
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error (hooks logged but don't fail shutdown), got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Wait for Start() to complete
 	select {
 	case <-done:
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for Start() to return")
+		zhtest.AssertFail(t, "timeout waiting for Start() to return")
 	}
 
 	// Verify hooks were called
-	if !hook1Called {
-		t.Error("hook 1 was not called")
-	}
-	if !hook2Called {
-		t.Error("hook 2 was not called")
-	}
+	zhtest.AssertTrue(t, hook1Called)
+	zhtest.AssertTrue(t, hook2Called)
 }
 
 func TestServer_ConcurrentAccess(t *testing.T) {
@@ -422,9 +376,7 @@ func TestServer_ConcurrentAccess(t *testing.T) {
 func TestServer_ListenAndServe_WithListener(t *testing.T) {
 	server := New()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	server.listener = listener
 
 	// Start server in goroutine
@@ -441,18 +393,16 @@ func TestServer_ListenAndServe_WithListener(t *testing.T) {
 	defer cancel()
 
 	err = server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("unexpected error during shutdown: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Wait for ListenAndServe to return
 	select {
 	case err := <-done:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			t.Errorf("unexpected error: %v", err)
-		}
+		// ErrServerClosed is expected after shutdown
+		isExpectedErr := err == nil || errors.Is(err, http.ErrServerClosed)
+		zhtest.AssertTrue(t, isExpectedErr)
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for ListenAndServe to return")
+		zhtest.AssertFail(t, "timeout waiting for ListenAndServe to return")
 	}
 }
 
@@ -472,9 +422,7 @@ func TestServer_ListenAndServe_CreatesListener(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// Verify listener was created (use the public method to avoid race)
-	if server.ListenerAddr() == "" {
-		t.Error("expected listener to be created")
-	}
+	zhtest.AssertNotEmpty(t, server.ListenerAddr())
 
 	// Shutdown to stop the server
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -487,7 +435,7 @@ func TestServer_ListenAndServe_CreatesListener(t *testing.T) {
 	case <-done:
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for ListenAndServe to return")
+		zhtest.AssertFail(t, "timeout waiting for ListenAndServe to return")
 	}
 }
 
@@ -552,10 +500,7 @@ func TestServer_Logger(t *testing.T) {
 	mockLogger := &mockServerLogger{}
 	server := New(Config{Logger: mockLogger})
 
-	logger := server.Logger()
-	if logger == nil {
-		t.Error("expected logger to not be nil")
-	}
+	zhtest.AssertNotNil(t, server.Logger())
 }
 
 func TestServer_ListenerAddr_Empty(t *testing.T) {
@@ -564,9 +509,7 @@ func TestServer_ListenerAddr_Empty(t *testing.T) {
 	server.listener = nil
 
 	addr := server.ListenerAddr()
-	if addr != "" {
-		t.Errorf("Expected empty address, got '%s'", addr)
-	}
+	zhtest.AssertEmpty(t, addr)
 }
 
 // mockValidator is a mock implementation of Validator for testing.
@@ -594,30 +537,22 @@ func TestServerValidator(t *testing.T) {
 	app := New()
 
 	// Initially should be nil
-	if app.Validator() != nil {
-		t.Error("Validator should be nil initially")
-	}
+	zhtest.AssertNil(t, app.Validator())
 
 	// Set validator
 	mockVal := &mockValidator{}
 	app.SetValidator(mockVal)
 
 	// Should be retrievable
-	if app.Validator() != mockVal {
-		t.Error("Validator should be retrievable")
-	}
+	zhtest.AssertEqual(t, mockVal, app.Validator())
 
 	// Test that it works
 	type testStruct struct {
 		Name string
 	}
 	ts := testStruct{Name: "test"}
-	if err := app.Validator().Struct(&ts); err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	if !mockVal.structCalled {
-		t.Error("expected Struct to be called")
-	}
+	zhtest.AssertNoError(t, app.Validator().Struct(&ts))
+	zhtest.AssertTrue(t, mockVal.structCalled)
 }
 
 func TestServerWithValidator(t *testing.T) {
@@ -625,37 +560,20 @@ func TestServerWithValidator(t *testing.T) {
 	mockVal := &mockValidator{}
 	app := New(Config{Validator: mockVal})
 
-	if app.Validator() != mockVal {
-		t.Error("Validator should be set via config option")
-	}
+	zhtest.AssertEqual(t, mockVal, app.Validator())
 }
 
 func TestDefaultTimeoutConstants(t *testing.T) {
-	if DefaultReadTimeout != 10*time.Second {
-		t.Errorf("Expected DefaultReadTimeout = 10s, got %v", DefaultReadTimeout)
-	}
-	if DefaultWriteTimeout != 15*time.Second {
-		t.Errorf("Expected DefaultWriteTimeout = 15s, got %v", DefaultWriteTimeout)
-	}
-	if DefaultIdleTimeout != 60*time.Second {
-		t.Errorf("Expected DefaultIdleTimeout = 60s, got %v", DefaultIdleTimeout)
-	}
+	zhtest.AssertEqual(t, 10*time.Second, DefaultReadTimeout)
+	zhtest.AssertEqual(t, 15*time.Second, DefaultWriteTimeout)
+	zhtest.AssertEqual(t, 60*time.Second, DefaultIdleTimeout)
 }
 
 func TestServer_DefaultTimeoutsApplied(t *testing.T) {
 	server := New()
 
-	if server.server == nil {
-		t.Fatal("Expected HTTP server to be created")
-	}
-
-	if server.server.ReadTimeout != DefaultReadTimeout {
-		t.Errorf("Expected ReadTimeout = %v, got %v", DefaultReadTimeout, server.server.ReadTimeout)
-	}
-	if server.server.WriteTimeout != DefaultWriteTimeout {
-		t.Errorf("Expected WriteTimeout = %v, got %v", DefaultWriteTimeout, server.server.WriteTimeout)
-	}
-	if server.server.IdleTimeout != DefaultIdleTimeout {
-		t.Errorf("Expected IdleTimeout = %v, got %v", DefaultIdleTimeout, server.server.IdleTimeout)
-	}
+	zhtest.AssertNotNil(t, server.server)
+	zhtest.AssertEqual(t, DefaultReadTimeout, server.server.ReadTimeout)
+	zhtest.AssertEqual(t, DefaultWriteTimeout, server.server.WriteTimeout)
+	zhtest.AssertEqual(t, DefaultIdleTimeout, server.server.IdleTimeout)
 }

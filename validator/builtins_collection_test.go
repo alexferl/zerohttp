@@ -3,6 +3,8 @@ package validator
 import (
 	"errors"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestUniqueValidator(t *testing.T) {
@@ -24,11 +26,10 @@ func TestUniqueValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestUnique{Items: tt.items}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Errorf("expected error for duplicates in %v", tt.items)
-				}
-				if !tt.wantErr && err != nil {
-					t.Errorf("unexpected error for %v: %v", tt.items, err)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -51,11 +52,10 @@ func TestUniqueValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestUnique{Items: tt.items}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Errorf("expected error for duplicates in %v", tt.items)
-				}
-				if !tt.wantErr && err != nil {
-					t.Errorf("unexpected error for %v: %v", tt.items, err)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -67,9 +67,7 @@ func TestUniqueValidator(t *testing.T) {
 		}
 		input := TestUnique{Value: "hello"}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for unique on string type")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("unique on empty slice", func(t *testing.T) {
@@ -78,9 +76,7 @@ func TestUniqueValidator(t *testing.T) {
 		}
 		input := TestUnique{Items: []string{}}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("unique on struct slice fails", func(t *testing.T) {
@@ -94,9 +90,7 @@ func TestUniqueValidator(t *testing.T) {
 			Items: []Item{{Name: "a"}, {Name: "a"}},
 		}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for unique on struct slice")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("unique on pointer slice compares addresses", func(t *testing.T) {
@@ -108,9 +102,7 @@ func TestUniqueValidator(t *testing.T) {
 			Items: []*string{&a, &b, &c},
 		}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("unique on map always passes", func(t *testing.T) {
@@ -121,9 +113,7 @@ func TestUniqueValidator(t *testing.T) {
 			Items: map[string]int{"a": 1, "b": 2, "c": 3},
 		}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error for unique on map: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("unique on empty map passes", func(t *testing.T) {
@@ -134,9 +124,7 @@ func TestUniqueValidator(t *testing.T) {
 			Items: map[string]int{},
 		}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error for unique on empty map: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("unique on nil map passes", func(t *testing.T) {
@@ -147,9 +135,7 @@ func TestUniqueValidator(t *testing.T) {
 			Items: nil,
 		}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error for unique on nil map: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 }
 
@@ -189,11 +175,10 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestEach{Items: tt.items}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error for invalid each item")
-				}
-				if !tt.wantErr && err != nil {
-					t.Errorf("unexpected error: %v", err)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -218,16 +203,16 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestTags{Tags: tt.tags}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Errorf("expected error for invalid tags %v", tt.tags)
-				}
-				if tt.wantErr && tt.errIdx >= 0 {
-					var ve ValidationErrors
-					errors.As(err, &ve)
-					fieldName := "Tags[" + string(rune('0'+tt.errIdx)) + "]"
-					if errs := ve.FieldErrors(fieldName); len(errs) == 0 {
-						t.Errorf("expected error on %s, got %v", fieldName, ve)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+					if tt.errIdx >= 0 {
+						var ve ValidationErrors
+						zhtest.AssertTrue(t, errors.As(err, &ve))
+						fieldName := "Tags[" + string(rune('0'+tt.errIdx)) + "]"
+						zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors(fieldName)))
 					}
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -251,16 +236,16 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestEmails{Emails: tt.emails}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error for invalid email")
-				}
-				if tt.wantErr && tt.errIdx >= 0 {
-					var ve ValidationErrors
-					errors.As(err, &ve)
-					fieldName := "Emails[" + string(rune('0'+tt.errIdx)) + "]"
-					if errs := ve.FieldErrors(fieldName); len(errs) == 0 {
-						t.Errorf("expected error on %s, got %v", fieldName, ve)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+					if tt.errIdx >= 0 {
+						var ve ValidationErrors
+						zhtest.AssertTrue(t, errors.As(err, &ve))
+						fieldName := "Emails[" + string(rune('0'+tt.errIdx)) + "]"
+						zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors(fieldName)))
 					}
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -283,11 +268,10 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestCodes{Codes: tt.codes}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error for non-alphanumeric code")
-				}
-				if !tt.wantErr && err != nil {
-					t.Errorf("unexpected error: %v", err)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -311,16 +295,16 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestArray{Tags: tt.tags}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error for short tag in array")
-				}
-				if tt.wantErr && tt.errIdx >= 0 {
-					var ve ValidationErrors
-					errors.As(err, &ve)
-					fieldName := "Tags[" + string(rune('0'+tt.errIdx)) + "]"
-					if errs := ve.FieldErrors(fieldName); len(errs) == 0 {
-						t.Errorf("expected error on %s, got %v", fieldName, ve)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+					if tt.errIdx >= 0 {
+						var ve ValidationErrors
+						zhtest.AssertTrue(t, errors.As(err, &ve))
+						fieldName := "Tags[" + string(rune('0'+tt.errIdx)) + "]"
+						zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors(fieldName)))
 					}
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -349,11 +333,10 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestPtrSlice{Items: tt.items}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error for invalid pointer element")
-				}
-				if !tt.wantErr && err != nil {
-					t.Errorf("unexpected error: %v", err)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -378,11 +361,10 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestMap{Tags: tt.tags}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error for short map value")
-				}
-				if !tt.wantErr && err != nil {
-					t.Errorf("unexpected error: %v", err)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -425,20 +407,15 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestMapStruct{Grades: tt.grades}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error")
-				}
-				if tt.wantErr && tt.errField != "" {
-					var ve ValidationErrors
-					ok := errors.As(err, &ve)
-					if !ok {
-						t.Errorf("expected ValidationErrors, got %T", err)
-						return
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+					if tt.errField != "" {
+						var ve ValidationErrors
+						zhtest.AssertTrue(t, errors.As(err, &ve))
+						zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors(tt.errField)))
 					}
-					errs := ve.FieldErrors(tt.errField)
-					if len(errs) == 0 {
-						t.Errorf("expected error for %s, got %v", tt.errField, ve)
-					}
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -487,21 +464,15 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestMapDive{Scores: tt.scores}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
-				if tt.wantErr && tt.errField != "" {
-					var ve ValidationErrors
-					ok := errors.As(err, &ve)
-					if !ok {
-						t.Errorf("expected ValidationErrors, got %T", err)
-						return
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+					if tt.errField != "" {
+						var ve ValidationErrors
+						zhtest.AssertTrue(t, errors.As(err, &ve))
+						zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors(tt.errField)))
 					}
-					errs := ve.FieldErrors(tt.errField)
-					if len(errs) == 0 {
-						t.Errorf("expected error for %s, got none", tt.errField)
-					}
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -530,11 +501,10 @@ func TestEachValidator(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				input := TestPtrSlice{Items: tt.items}
 				err := New().Struct(&input)
-				if tt.wantErr && err == nil {
-					t.Error("expected error for invalid pointer element")
-				}
-				if !tt.wantErr && err != nil {
-					t.Errorf("unexpected error: %v", err)
+				if tt.wantErr {
+					zhtest.AssertError(t, err)
+				} else {
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -560,11 +530,10 @@ func TestMapValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestMap{Items: tt.items}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Error("expected error for empty/nil map")
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error: %v", err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -577,7 +546,5 @@ func TestArrayValidation(t *testing.T) {
 
 	input := TestArray{Items: [3]int{1, 2, 3}}
 	err := New().Struct(&input)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }

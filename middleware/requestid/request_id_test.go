@@ -17,15 +17,9 @@ func TestRequestID_ExistingHeader(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(New(), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	if handler.requestID != existingID {
-		t.Errorf("Expected to use existing request ID %s, got %s", existingID, handler.requestID)
-	}
-	if reqHeaderValue := handler.request.Header.Get(httpx.HeaderXRequestId); reqHeaderValue != existingID {
-		t.Errorf("Expected request header to be %s, got %s", existingID, reqHeaderValue)
-	}
-	if respHeaderValue := w.Header().Get(httpx.HeaderXRequestId); respHeaderValue != existingID {
-		t.Errorf("Expected response header to be %s, got %s", existingID, respHeaderValue)
-	}
+	zhtest.AssertEqual(t, existingID, handler.requestID)
+	zhtest.AssertEqual(t, existingID, handler.request.Header.Get(httpx.HeaderXRequestId))
+	zhtest.AssertEqual(t, existingID, w.Header().Get(httpx.HeaderXRequestId))
 }
 
 func TestRequestID_CustomHeader(t *testing.T) {
@@ -37,16 +31,10 @@ func TestRequestID_CustomHeader(t *testing.T) {
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	reqHeaderValue := handler.request.Header.Get("X-Trace-Id")
-	if reqHeaderValue == "" {
-		t.Error("Expected custom request header to be set")
-	}
+	zhtest.AssertNotEmpty(t, reqHeaderValue)
 	respHeaderValue := w.Header().Get("X-Trace-Id")
-	if respHeaderValue == "" {
-		t.Error("Expected custom response header to be set")
-	}
-	if reqHeaderValue != respHeaderValue {
-		t.Errorf("Expected request and response headers to match: %s != %s", reqHeaderValue, respHeaderValue)
-	}
+	zhtest.AssertNotEmpty(t, respHeaderValue)
+	zhtest.AssertEqual(t, reqHeaderValue, respHeaderValue)
 	zhtest.AssertWith(t, w).HeaderNotExists(httpx.HeaderXRequestId)
 }
 
@@ -66,9 +54,7 @@ func TestRequestID_CustomGenerator(t *testing.T) {
 
 	zhtest.AssertWith(t, w1).Status(http.StatusOK)
 	expectedID1 := customIDPrefix + "1"
-	if handler1.requestID != expectedID1 {
-		t.Errorf("Expected first custom generated ID %s, got %s", expectedID1, handler1.requestID)
-	}
+	zhtest.AssertEqual(t, expectedID1, handler1.requestID)
 
 	handler2 := &testHandler{}
 	req2 := zhtest.NewRequest(http.MethodGet, "/").Build()
@@ -76,9 +62,7 @@ func TestRequestID_CustomGenerator(t *testing.T) {
 
 	zhtest.AssertWith(t, w2).Status(http.StatusOK)
 	expectedID2 := customIDPrefix + "2"
-	if handler2.requestID != expectedID2 {
-		t.Errorf("Expected second custom generated ID %s, got %s", expectedID2, handler2.requestID)
-	}
+	zhtest.AssertEqual(t, expectedID2, handler2.requestID)
 }
 
 func TestRequestID_CustomContextKey(t *testing.T) {
@@ -93,15 +77,9 @@ func TestRequestID_CustomContextKey(t *testing.T) {
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	customRequestID := Get(handler.context, customKey)
-	if customRequestID == "" {
-		t.Error("Expected request ID to be stored with custom context key")
-	}
-	if defaultRequestID := Get(handler.context); defaultRequestID != "" {
-		t.Error("Expected request ID not to be available with default key when custom key is used")
-	}
-	if handler.requestID != "" {
-		t.Error("Expected handler's request ID to be empty when custom context key is used")
-	}
+	zhtest.AssertNotEmpty(t, customRequestID)
+	zhtest.AssertEmpty(t, Get(handler.context))
+	zhtest.AssertEmpty(t, handler.requestID)
 }
 
 func TestRequestID_EmptyConfigValues(t *testing.T) {
@@ -111,12 +89,8 @@ func TestRequestID_EmptyConfigValues(t *testing.T) {
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	zhtest.AssertWith(t, w).HeaderExists(httpx.HeaderXRequestId)
-	if len(handler.requestID) != 32 {
-		t.Errorf("Expected default generated ID length 32, got %d", len(handler.requestID))
-	}
-	if handler.requestID == "" {
-		t.Error("Expected request ID to be available with default context key")
-	}
+	zhtest.AssertEqual(t, 32, len(handler.requestID))
+	zhtest.AssertNotEmpty(t, handler.requestID)
 }
 
 func TestRequestID_MultipleOptions(t *testing.T) {
@@ -137,48 +111,31 @@ func TestGetRequestID_WithCustomKey(t *testing.T) {
 	testRequestID := "test-123"
 	ctx := context.WithValue(context.Background(), customKey, testRequestID)
 	retrievedID := Get(ctx, customKey)
-	if retrievedID != testRequestID {
-		t.Errorf("Expected %s, got %s", testRequestID, retrievedID)
-	}
-	if defaultID := Get(ctx); defaultID != "" {
-		t.Errorf("Expected empty string with default key, got %s", defaultID)
-	}
+	zhtest.AssertEqual(t, testRequestID, retrievedID)
+	zhtest.AssertEmpty(t, Get(ctx))
 }
 
 func TestGetRequestID_EdgeCases(t *testing.T) {
 	t.Run("no request ID", func(t *testing.T) {
 		ctx := context.Background()
-		if requestID := Get(ctx); requestID != "" {
-			t.Errorf("Expected empty string, got %s", requestID)
-		}
+		zhtest.AssertEmpty(t, Get(ctx))
 	})
 
 	t.Run("wrong type", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), DefaultConfig.ContextKey, 123)
-		if requestID := Get(ctx); requestID != "" {
-			t.Errorf("Expected empty string for non-string value, got %s", requestID)
-		}
+		zhtest.AssertEmpty(t, Get(ctx))
 	})
 }
 
 func TestDefaultRequestIDConfig(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Header != httpx.HeaderXRequestId {
-		t.Errorf("Expected default header 'X-Request-Id', got %s", cfg.Header)
-	}
-	if cfg.Generator == nil {
-		t.Error("Expected default generator to be set")
-	}
-	if cfg.ContextKey != ContextKey {
-		t.Errorf("Expected default context key to be RequestIDContextKey, got %v", cfg.ContextKey)
-	}
+	zhtest.AssertEqual(t, httpx.HeaderXRequestId, cfg.Header)
+	zhtest.AssertNotNil(t, cfg.Generator)
+	zhtest.AssertEqual(t, ContextKey, cfg.ContextKey)
 	id := cfg.Generator()
-	if len(id) != 32 {
-		t.Errorf("Expected default generator to produce 32-char string, got %d", len(id))
-	}
-	if matched, _ := regexp.MatchString("^[a-f0-9]{32}$", id); !matched {
-		t.Errorf("Expected default generator to produce hex string, got %s", id)
-	}
+	zhtest.AssertEqual(t, 32, len(id))
+	matched, _ := regexp.MatchString("^[a-f0-9]{32}$", id)
+	zhtest.AssertTrue(t, matched)
 }
 
 func TestGenerateRequestID_Uniqueness(t *testing.T) {
@@ -186,16 +143,10 @@ func TestGenerateRequestID_Uniqueness(t *testing.T) {
 	ids := make(map[string]bool)
 	for range 100 {
 		id := GenerateRequestID()
-		if ids[id] {
-			t.Errorf("Generated duplicate request ID: %s", id)
-		}
+		zhtest.AssertFalse(t, ids[id])
 		ids[id] = true
-		if len(id) != 32 {
-			t.Errorf("Expected ID length 32, got %d for ID: %s", len(id), id)
-		}
-		if !hexRe.MatchString(id) {
-			t.Errorf("Expected hex format, got: %s", id)
-		}
+		zhtest.AssertEqual(t, 32, len(id))
+		zhtest.AssertTrue(t, hexRe.MatchString(id))
 	}
 }
 
@@ -212,12 +163,8 @@ func TestRequestID_PreservesExistingContext(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(New(), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	if retrievedValue := handler.context.Value(existingKey); retrievedValue != existingValue {
-		t.Errorf("Expected existing context value to be preserved: %v != %v", existingValue, retrievedValue)
-	}
-	if handler.requestID == "" {
-		t.Error("Expected request ID to be available in context")
-	}
+	zhtest.AssertEqual(t, existingValue, handler.context.Value(existingKey))
+	zhtest.AssertNotEmpty(t, handler.requestID)
 }
 
 func TestRequestID_CaseInsensitiveHeader(t *testing.T) {
@@ -227,9 +174,7 @@ func TestRequestID_CaseInsensitiveHeader(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(New(), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	if handler.requestID != existingID {
-		t.Errorf("Expected to use existing request ID %s, got %s", existingID, handler.requestID)
-	}
+	zhtest.AssertEqual(t, existingID, handler.requestID)
 }
 
 // testHandler is a reusable test handler that captures request information

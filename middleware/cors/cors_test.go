@@ -37,9 +37,7 @@ func TestCORSSimpleRequest(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})).ServeHTTP(rr, req)
 
-			if called != tt.expectNext {
-				t.Errorf("expected called=%v, got %v", tt.expectNext, called)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, called)
 			zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlAllowOrigin, tt.expectOrigin)
 		})
 	}
@@ -78,9 +76,7 @@ func TestCORSPreflightRequest(t *testing.T) {
 				called = true
 			})).ServeHTTP(rr, req)
 
-			if called != tt.expectNext {
-				t.Errorf("expected called=%v, got %v", tt.expectNext, called)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, called)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 
 			if tt.checkProblemDetail {
@@ -194,9 +190,7 @@ func TestCORSOptionsPassthrough(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
-	if !called {
-		t.Error("expected handler called with OptionsPassthrough=true")
-	}
+	zhtest.AssertTrue(t, called)
 	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
@@ -220,10 +214,10 @@ func TestCORSExcludedPaths(t *testing.T) {
 			})).ServeHTTP(rr, req)
 
 			corsOrigin := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin)
-			if tt.expectCORS && corsOrigin == "" {
-				t.Error("expected CORS headers")
-			} else if !tt.expectCORS && corsOrigin != "" {
-				t.Error("expected no CORS headers for excluded path")
+			if tt.expectCORS {
+				zhtest.AssertNotEmpty(t, corsOrigin)
+			} else {
+				zhtest.AssertEmpty(t, corsOrigin)
 			}
 		})
 	}
@@ -266,9 +260,7 @@ func TestCORSNilConfig(t *testing.T) {
 		Status(http.StatusNoContent).
 		Header(httpx.HeaderAccessControlAllowOrigin, "*")
 
-	if methods := rr.Header().Get(httpx.HeaderAccessControlAllowMethods); !strings.Contains(methods, http.MethodGet) {
-		t.Errorf("expected methods to contain 'GET', got '%s'", methods)
-	}
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderAccessControlAllowMethods), http.MethodGet)
 }
 
 func TestCORSNilExcludedPathsFallback(t *testing.T) {
@@ -282,9 +274,7 @@ func TestCORSNilExcludedPathsFallback(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
-	if !called {
-		t.Error("should fallback to default excluded paths and process CORS")
-	}
+	zhtest.AssertTrue(t, called)
 	zhtest.AssertWith(t, rr).Header(httpx.HeaderAccessControlAllowOrigin, "*")
 }
 
@@ -309,9 +299,7 @@ func TestCORSNoOriginOptionsPassthrough(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
-	if !called {
-		t.Error("should pass OPTIONS without Origin with passthrough")
-	}
+	zhtest.AssertTrue(t, called)
 	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
@@ -330,9 +318,7 @@ func TestCORSDisallowedOriginOptionsPassthrough(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
-	if !called {
-		t.Error("should pass OPTIONS with disallowed Origin and passthrough")
-	}
+	zhtest.AssertTrue(t, called)
 	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
@@ -347,9 +333,7 @@ func TestCORSDisallowedOriginNoPassthrough(t *testing.T) {
 		called = true
 	})).ServeHTTP(rr, req)
 
-	if called {
-		t.Error("handler should not be called when origin disallowed and passthrough is false")
-	}
+	zhtest.AssertFalse(t, called)
 	zhtest.AssertWith(t, rr).Status(http.StatusNoContent)
 }
 
@@ -376,9 +360,7 @@ func TestCORS_Metrics(t *testing.T) {
 	rr1 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr1, req1)
 
-	if rr1.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", rr1.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusNoContent, rr1.Code)
 
 	// Test allowed origin
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -386,9 +368,7 @@ func TestCORS_Metrics(t *testing.T) {
 	rr2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr2.Code)
 
 	// Test rejected origin
 	req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -396,9 +376,7 @@ func TestCORS_Metrics(t *testing.T) {
 	rr3 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr3, req3)
 
-	if rr3.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr3.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr3.Code)
 
 	// Check metrics
 	families := reg.Gather()
@@ -414,21 +392,15 @@ func TestCORS_Metrics(t *testing.T) {
 		}
 	}
 
-	if preflightCounter == nil {
-		t.Fatal("expected cors_preflight_requests_total metric")
-	}
-	if originCounter == nil {
-		t.Fatal("expected cors_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, preflightCounter)
+	zhtest.AssertNotNil(t, originCounter)
 
 	// Should have 1 preflight
 	preflightTotal := 0
 	for _, m := range preflightCounter.Metrics {
 		preflightTotal = int(m.Counter)
 	}
-	if preflightTotal != 1 {
-		t.Errorf("expected 1 preflight, got %d", preflightTotal)
-	}
+	zhtest.AssertEqual(t, 1, preflightTotal)
 
 	// Should have 1 allowed and 1 rejected
 	allowed, rejected := 0, 0
@@ -440,12 +412,8 @@ func TestCORS_Metrics(t *testing.T) {
 			rejected = int(m.Counter)
 		}
 	}
-	if allowed != 1 {
-		t.Errorf("expected 1 allowed, got %d", allowed)
-	}
-	if rejected != 1 {
-		t.Errorf("expected 1 rejected, got %d", rejected)
-	}
+	zhtest.AssertEqual(t, 1, allowed)
+	zhtest.AssertEqual(t, 1, rejected)
 }
 
 func TestCORSAllowOriginFunc(t *testing.T) {
@@ -501,19 +469,17 @@ func TestCORSAllowOriginFunc(t *testing.T) {
 			})).ServeHTTP(rr, req)
 
 			varyHeader := rr.Header().Get(httpx.HeaderVary)
-			if tt.expectVary && varyHeader != httpx.HeaderOrigin {
-				t.Errorf("expected Vary: Origin, got %s", varyHeader)
-			}
-			if !tt.expectVary && varyHeader == httpx.HeaderOrigin {
-				t.Errorf("unexpected Vary: Origin header")
+			if tt.expectVary {
+				zhtest.AssertEqual(t, httpx.HeaderOrigin, varyHeader)
+			} else {
+				zhtest.AssertNotEqual(t, httpx.HeaderOrigin, varyHeader)
 			}
 
 			allowOrigin := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin)
-			if tt.expectAllowed && allowOrigin == "" {
-				t.Errorf("expected Access-Control-Allow-Origin header, got none")
-			}
-			if !tt.expectAllowed && allowOrigin != "" {
-				t.Errorf("expected no Access-Control-Allow-Origin header, got %s", allowOrigin)
+			if tt.expectAllowed {
+				zhtest.AssertNotEmpty(t, allowOrigin)
+			} else {
+				zhtest.AssertEmpty(t, allowOrigin)
 			}
 		})
 	}
@@ -536,17 +502,9 @@ func TestCORSCustomOriginFuncWithCredentials(t *testing.T) {
 	})).ServeHTTP(rr, req)
 
 	// When credentials are allowed and using custom validator, should echo origin
-	if got := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin); got != "https://app.example.com" {
-		t.Errorf("expected origin echo with credentials, got %s", got)
-	}
-
-	if got := rr.Header().Get(httpx.HeaderAccessControlAllowCredentials); got != "true" {
-		t.Errorf("expected credentials header, got %s", got)
-	}
-
-	if got := rr.Header().Get(httpx.HeaderVary); got != httpx.HeaderOrigin {
-		t.Errorf("expected Vary: Origin, got %s", got)
-	}
+	zhtest.AssertEqual(t, "https://app.example.com", rr.Header().Get(httpx.HeaderAccessControlAllowOrigin))
+	zhtest.AssertEqual(t, "true", rr.Header().Get(httpx.HeaderAccessControlAllowCredentials))
+	zhtest.AssertEqual(t, httpx.HeaderOrigin, rr.Header().Get(httpx.HeaderVary))
 }
 
 func TestCORSIncludedPaths(t *testing.T) {
@@ -573,24 +531,20 @@ func TestCORSIncludedPaths(t *testing.T) {
 			})).ServeHTTP(rr, req)
 
 			corsOrigin := rr.Header().Get(httpx.HeaderAccessControlAllowOrigin)
-			if tt.expectCORS && corsOrigin == "" {
-				t.Error("expected CORS headers")
-			} else if !tt.expectCORS && corsOrigin != "" {
-				t.Error("expected no CORS headers for non-allowed path")
+			if tt.expectCORS {
+				zhtest.AssertNotEmpty(t, corsOrigin)
+			} else {
+				zhtest.AssertEmpty(t, corsOrigin)
 			}
 		})
 	}
 }
 
 func TestCORSBothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

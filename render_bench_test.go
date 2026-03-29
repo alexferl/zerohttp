@@ -195,8 +195,8 @@ func BenchmarkRenderer_ProblemDetail(b *testing.B) {
 
 		for b.Loop() {
 			w := httptest.NewRecorder()
-			problem := NewProblemDetail(http.StatusNotFound, "Resource not found")
-			_ = R.ProblemDetail(w, problem)
+			detail := NewProblemDetail(http.StatusNotFound, "Resource not found")
+			_ = R.ProblemDetail(w, detail)
 		}
 	})
 
@@ -206,10 +206,10 @@ func BenchmarkRenderer_ProblemDetail(b *testing.B) {
 
 		for b.Loop() {
 			w := httptest.NewRecorder()
-			problem := NewProblemDetail(http.StatusBadRequest, "Validation failed")
-			problem.Set("field", "email")
-			problem.Set("constraint", "required")
-			_ = R.ProblemDetail(w, problem)
+			detail := NewProblemDetail(http.StatusBadRequest, "Validation failed")
+			detail.Set("field", "email")
+			detail.Set("constraint", "required")
+			_ = R.ProblemDetail(w, detail)
 		}
 	})
 
@@ -225,8 +225,8 @@ func BenchmarkRenderer_ProblemDetail(b *testing.B) {
 
 		for b.Loop() {
 			w := httptest.NewRecorder()
-			problem := problem.NewValidationDetail("Validation failed", errors)
-			_ = R.ProblemDetail(w, problem)
+			detail := problem.NewValidationDetail("Validation failed", errors)
+			_ = R.ProblemDetail(w, detail)
 		}
 	})
 
@@ -246,8 +246,8 @@ func BenchmarkRenderer_ProblemDetail(b *testing.B) {
 
 				for b.Loop() {
 					w := httptest.NewRecorder()
-					problem := NewProblemDetail(code, "Test error message")
-					_ = R.ProblemDetail(w, problem)
+					detail := NewProblemDetail(code, "Test error message")
+					_ = R.ProblemDetail(w, detail)
 				}
 			})
 		}

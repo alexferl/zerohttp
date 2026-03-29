@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestServer_RegisterPreShutdownHook(t *testing.T) {
@@ -20,23 +22,13 @@ func TestServer_RegisterPreShutdownHook(t *testing.T) {
 		return nil
 	})
 
-	if len(server.preShutdownHooks) != 1 {
-		t.Errorf("Expected 1 pre-shutdown hook, got %d", len(server.preShutdownHooks))
-	}
-
-	if server.preShutdownHooks[0].Name != "test-hook" {
-		t.Errorf("Expected hook name 'test-hook', got '%s'", server.preShutdownHooks[0].Name)
-	}
+	zhtest.AssertEqual(t, 1, len(server.preShutdownHooks))
+	zhtest.AssertEqual(t, "test-hook", server.preShutdownHooks[0].Name)
 
 	// Verify hook works
 	err := server.preShutdownHooks[0].Hook(context.Background())
-	if err != nil {
-		t.Errorf("Expected no error from hook, got %v", err)
-	}
-
-	if !called {
-		t.Error("Expected hook to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, called)
 }
 
 func TestServer_RegisterShutdownHook(t *testing.T) {
@@ -48,22 +40,12 @@ func TestServer_RegisterShutdownHook(t *testing.T) {
 		return nil
 	})
 
-	if len(server.shutdownHooks) != 1 {
-		t.Errorf("Expected 1 shutdown hook, got %d", len(server.shutdownHooks))
-	}
-
-	if server.shutdownHooks[0].Name != "test-hook" {
-		t.Errorf("Expected hook name 'test-hook', got '%s'", server.shutdownHooks[0].Name)
-	}
+	zhtest.AssertEqual(t, 1, len(server.shutdownHooks))
+	zhtest.AssertEqual(t, "test-hook", server.shutdownHooks[0].Name)
 
 	err := server.shutdownHooks[0].Hook(context.Background())
-	if err != nil {
-		t.Errorf("Expected no error from hook, got %v", err)
-	}
-
-	if !called {
-		t.Error("Expected hook to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, called)
 }
 
 func TestServer_RegisterPostShutdownHook(t *testing.T) {
@@ -75,22 +57,12 @@ func TestServer_RegisterPostShutdownHook(t *testing.T) {
 		return nil
 	})
 
-	if len(server.postShutdownHooks) != 1 {
-		t.Errorf("Expected 1 post-shutdown hook, got %d", len(server.postShutdownHooks))
-	}
-
-	if server.postShutdownHooks[0].Name != "test-hook" {
-		t.Errorf("Expected hook name 'test-hook', got '%s'", server.postShutdownHooks[0].Name)
-	}
+	zhtest.AssertEqual(t, 1, len(server.postShutdownHooks))
+	zhtest.AssertEqual(t, "test-hook", server.postShutdownHooks[0].Name)
 
 	err := server.postShutdownHooks[0].Hook(context.Background())
-	if err != nil {
-		t.Errorf("Expected no error from hook, got %v", err)
-	}
-
-	if !called {
-		t.Error("Expected hook to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, called)
 }
 
 func TestServer_Shutdown_WithPreShutdownHooks(t *testing.T) {
@@ -113,17 +85,10 @@ func TestServer_Shutdown_WithPreShutdownHooks(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	if len(order) != 2 {
-		t.Errorf("Expected 2 hooks to run, got %d", len(order))
-	}
-
-	if order[0] != "hook-1" || order[1] != "hook-2" {
-		t.Errorf("Expected hooks to run in registration order, got %v", order)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, 2, len(order))
+	zhtest.AssertEqual(t, "hook-1", order[0])
+	zhtest.AssertEqual(t, "hook-2", order[1])
 }
 
 func TestServer_Shutdown_WithPostShutdownHooks(t *testing.T) {
@@ -146,17 +111,10 @@ func TestServer_Shutdown_WithPostShutdownHooks(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	if len(order) != 2 {
-		t.Errorf("Expected 2 hooks to run, got %d", len(order))
-	}
-
-	if order[0] != "hook-1" || order[1] != "hook-2" {
-		t.Errorf("Expected hooks to run in registration order, got %v", order)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, 2, len(order))
+	zhtest.AssertEqual(t, "hook-1", order[0])
+	zhtest.AssertEqual(t, "hook-2", order[1])
 }
 
 func TestServer_Shutdown_WithShutdownHooks(t *testing.T) {
@@ -184,14 +142,10 @@ func TestServer_Shutdown_WithShutdownHooks(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	mu.Lock()
-	if len(calls) != 2 {
-		t.Errorf("Expected 2 shutdown hooks to run, got %d", len(calls))
-	}
+	zhtest.AssertEqual(t, 2, len(calls))
 	mu.Unlock()
 }
 
@@ -216,18 +170,12 @@ func TestServer_Shutdown_HooksContinueOnError(t *testing.T) {
 
 	// Shutdown should complete without returning the hook error
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error from server shutdown, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Both hooks should have been called
-	if len(calls) != 2 {
-		t.Errorf("Expected both hooks to run, got %v", calls)
-	}
-
-	if calls[0] != "failing" || calls[1] != "success" {
-		t.Errorf("Expected hooks to run in order despite first failing, got %v", calls)
-	}
+	zhtest.AssertEqual(t, 2, len(calls))
+	zhtest.AssertEqual(t, "failing", calls[0])
+	zhtest.AssertEqual(t, "success", calls[1])
 }
 
 func TestServer_Shutdown_HooksRespectContextCancellation(t *testing.T) {
@@ -247,14 +195,10 @@ func TestServer_Shutdown_HooksRespectContextCancellation(t *testing.T) {
 	})
 
 	err := server.Shutdown(ctx)
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("Expected context.Canceled error, got %v", err)
-	}
+	zhtest.AssertErrorIs(t, err, context.Canceled)
 
 	// Hook should not have been called due to cancelled context
-	if called {
-		t.Error("Expected hook not to be called due to cancelled context")
-	}
+	zhtest.AssertFalse(t, called)
 }
 
 func TestServer_ConfigWithShutdownHooks(t *testing.T) {
@@ -291,19 +235,10 @@ func TestServer_ConfigWithShutdownHooks(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	if !preCalled {
-		t.Error("Expected pre-shutdown hook to be called")
-	}
-	if !shutdownCalled {
-		t.Error("Expected shutdown hook to be called")
-	}
-	if !postCalled {
-		t.Error("Expected post-shutdown hook to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, preCalled)
+	zhtest.AssertTrue(t, shutdownCalled)
+	zhtest.AssertTrue(t, postCalled)
 }
 
 // ============================================================================
@@ -319,22 +254,12 @@ func TestServer_RegisterPreStartupHook(t *testing.T) {
 		return nil
 	})
 
-	if len(server.preStartupHooks) != 1 {
-		t.Errorf("Expected 1 pre-startup hook, got %d", len(server.preStartupHooks))
-	}
-
-	if server.preStartupHooks[0].Name != "test-hook" {
-		t.Errorf("Expected hook name 'test-hook', got '%s'", server.preStartupHooks[0].Name)
-	}
+	zhtest.AssertEqual(t, 1, len(server.preStartupHooks))
+	zhtest.AssertEqual(t, "test-hook", server.preStartupHooks[0].Name)
 
 	err := server.preStartupHooks[0].Hook(context.Background())
-	if err != nil {
-		t.Errorf("Expected no error from hook, got %v", err)
-	}
-
-	if !called {
-		t.Error("Expected hook to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, called)
 }
 
 func TestServer_RegisterStartupHook(t *testing.T) {
@@ -346,22 +271,12 @@ func TestServer_RegisterStartupHook(t *testing.T) {
 		return nil
 	})
 
-	if len(server.startupHooks) != 1 {
-		t.Errorf("Expected 1 startup hook, got %d", len(server.startupHooks))
-	}
-
-	if server.startupHooks[0].Name != "test-hook" {
-		t.Errorf("Expected hook name 'test-hook', got '%s'", server.startupHooks[0].Name)
-	}
+	zhtest.AssertEqual(t, 1, len(server.startupHooks))
+	zhtest.AssertEqual(t, "test-hook", server.startupHooks[0].Name)
 
 	err := server.startupHooks[0].Hook(context.Background())
-	if err != nil {
-		t.Errorf("Expected no error from hook, got %v", err)
-	}
-
-	if !called {
-		t.Error("Expected hook to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, called)
 }
 
 func TestServer_RegisterPostStartupHook(t *testing.T) {
@@ -373,22 +288,12 @@ func TestServer_RegisterPostStartupHook(t *testing.T) {
 		return nil
 	})
 
-	if len(server.postStartupHooks) != 1 {
-		t.Errorf("Expected 1 post-startup hook, got %d", len(server.postStartupHooks))
-	}
-
-	if server.postStartupHooks[0].Name != "test-hook" {
-		t.Errorf("Expected hook name 'test-hook', got '%s'", server.postStartupHooks[0].Name)
-	}
+	zhtest.AssertEqual(t, 1, len(server.postStartupHooks))
+	zhtest.AssertEqual(t, "test-hook", server.postStartupHooks[0].Name)
 
 	err := server.postStartupHooks[0].Hook(context.Background())
-	if err != nil {
-		t.Errorf("Expected no error from hook, got %v", err)
-	}
-
-	if !called {
-		t.Error("Expected hook to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, called)
 }
 
 func TestServer_StartupHooks_RunInOrder(t *testing.T) {
@@ -433,7 +338,7 @@ func TestServer_StartupHooks_RunInOrder(t *testing.T) {
 	select {
 	case <-hooksDone:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for hooks")
+		zhtest.AssertFail(t, "timeout waiting for hooks")
 	}
 
 	// Shutdown to clean up
@@ -443,13 +348,9 @@ func TestServer_StartupHooks_RunInOrder(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(order) != 2 {
-		t.Errorf("Expected 2 hooks to run, got %d", len(order))
-	}
-
-	if len(order) >= 2 && (order[0] != "hook-1" || order[1] != "hook-2") {
-		t.Errorf("Expected hooks to run in registration order, got %v", order)
-	}
+	zhtest.AssertEqual(t, 2, len(order))
+	zhtest.AssertEqual(t, "hook-1", order[0])
+	zhtest.AssertEqual(t, "hook-2", order[1])
 }
 
 func TestServer_StartupHook_FailsServerStart(t *testing.T) {
@@ -476,25 +377,26 @@ func TestServer_StartupHook_FailsServerStart(t *testing.T) {
 	}()
 
 	// Wait for hook to run or timeout
+	var hookRanOK bool
 	select {
 	case <-hookRan:
-		// Hook ran, good
+		hookRanOK = true
 	case <-time.After(500 * time.Millisecond):
-		t.Error("Expected startup hook to have run")
+		hookRanOK = false
 	}
+	zhtest.AssertTrue(t, hookRanOK)
 
 	// Wait for Start() to return
 	var startErr error
+	var gotErr bool
 	select {
 	case startErr = <-errChan:
-		// Got error
+		gotErr = true
 	case <-time.After(500 * time.Millisecond):
-		t.Error("Expected Start() to return")
+		gotErr = false
 	}
-
-	if startErr == nil {
-		t.Error("Expected server start to fail due to startup hook error")
-	}
+	zhtest.AssertTrue(t, gotErr)
+	zhtest.AssertError(t, startErr)
 }
 
 func TestServer_StartupHook_StopsOnFirstError(t *testing.T) {
@@ -539,12 +441,9 @@ func TestServer_StartupHook_StopsOnFirstError(t *testing.T) {
 	defer mu.Unlock()
 
 	// Only first hook should have run
-	if len(calls) != 1 {
-		t.Errorf("Expected only 1 hook to run, got %d: %v", len(calls), calls)
-	}
-
-	if len(calls) > 0 && calls[0] != "first" {
-		t.Errorf("Expected first hook to run, got %v", calls)
+	zhtest.AssertEqual(t, 1, len(calls))
+	if len(calls) > 0 {
+		zhtest.AssertEqual(t, "first", calls[0])
 	}
 }
 
@@ -575,14 +474,10 @@ func TestServer_StartupHook_RespectsContextCancellation(t *testing.T) {
 	server.cancelBaseCtx()
 
 	err := server.Start()
-	if err == nil {
-		t.Error("Expected server start to fail due to cancelled context")
-	}
+	zhtest.AssertError(t, err)
 
 	// When context is cancelled before hooks run, hooks should not be called
-	if hookCalled {
-		t.Error("Expected hook not to be called when context is already cancelled")
-	}
+	zhtest.AssertFalse(t, hookCalled)
 }
 
 func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
@@ -636,7 +531,7 @@ func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 	select {
 	case <-hooksDone:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for hooks")
+		zhtest.AssertFail(t, "timeout waiting for hooks")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -646,9 +541,7 @@ func TestServer_StartupHook_ViaRegisterMethod(t *testing.T) {
 	// Should have 3 hooks: hook-a, hook-b, hook-config
 	mu.Lock()
 	defer mu.Unlock()
-	if len(order) != 3 {
-		t.Errorf("Expected 3 hooks to run, got %d: %v", len(order), order)
-	}
+	zhtest.AssertEqual(t, 3, len(order))
 }
 
 func TestServer_StartupHookOrder(t *testing.T) {
@@ -697,7 +590,7 @@ func TestServer_StartupHookOrder(t *testing.T) {
 	select {
 	case <-hooksDone:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for hooks")
+		zhtest.AssertFail(t, "timeout waiting for hooks")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -706,21 +599,10 @@ func TestServer_StartupHookOrder(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(order) != 3 {
-		t.Errorf("Expected 3 hooks to run, got %d: %v", len(order), order)
-	}
-
-	if len(order) >= 3 {
-		if order[0] != "pre" {
-			t.Errorf("Expected pre-startup hook first, got %s", order[0])
-		}
-		if order[1] != "startup" {
-			t.Errorf("Expected startup hook second, got %s", order[1])
-		}
-		if order[2] != "post" {
-			t.Errorf("Expected post-startup hook third, got %s", order[2])
-		}
-	}
+	zhtest.AssertEqual(t, 3, len(order))
+	zhtest.AssertEqual(t, "pre", order[0])
+	zhtest.AssertEqual(t, "startup", order[1])
+	zhtest.AssertEqual(t, "post", order[2])
 }
 
 func TestServer_PreStartupHook_FailsServerStart(t *testing.T) {
@@ -739,13 +621,8 @@ func TestServer_PreStartupHook_FailsServerStart(t *testing.T) {
 	server.server = &http.Server{Addr: listener.Addr().String()}
 
 	err := server.Start()
-	if err == nil {
-		t.Error("Expected server start to fail due to pre-startup hook error")
-	}
-
-	if !strings.Contains(err.Error(), "pre-startup hook \"failing-hook\" failed") {
-		t.Errorf("Expected pre-startup hook error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertTrue(t, strings.Contains(err.Error(), "pre-startup hook \"failing-hook\" failed"))
 }
 
 func TestServer_StartupHook_FailsAndShutsDownServers(t *testing.T) {
@@ -772,25 +649,26 @@ func TestServer_StartupHook_FailsAndShutsDownServers(t *testing.T) {
 	}()
 
 	// Wait for hook to run or timeout
+	var hookRanOK bool
 	select {
 	case <-hookRan:
-		// Hook ran, good
+		hookRanOK = true
 	case <-time.After(500 * time.Millisecond):
-		t.Error("Expected startup hook to have run")
+		hookRanOK = false
 	}
+	zhtest.AssertTrue(t, hookRanOK)
 
 	// Wait for Start() to return
 	var startErr error
+	var gotErr bool
 	select {
 	case startErr = <-errChan:
-		// Got error
+		gotErr = true
 	case <-time.After(500 * time.Millisecond):
-		t.Error("Expected Start() to return")
+		gotErr = false
 	}
-
-	if startErr == nil {
-		t.Error("Expected server start to fail")
-	}
+	zhtest.AssertTrue(t, gotErr)
+	zhtest.AssertError(t, startErr)
 }
 
 func TestServer_PostStartupHook_RunsAfterStartupHookCompletes(t *testing.T) {
@@ -815,9 +693,7 @@ func TestServer_PostStartupHook_RunsAfterStartupHookCompletes(t *testing.T) {
 					mu.Lock()
 					defer mu.Unlock()
 					// Verify startup hook completed before this ran
-					if !startupComplete {
-						t.Error("PostStartupHook ran before StartupHook completed")
-					}
+					zhtest.AssertTrue(t, startupComplete)
 					order = append(order, "post")
 					return nil
 				}},
@@ -842,11 +718,9 @@ func TestServer_PostStartupHook_RunsAfterStartupHookCompletes(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(order) != 2 {
-		t.Errorf("Expected 2 hooks to run, got %d: %v", len(order), order)
-	}
-
-	if len(order) >= 2 && order[0] != "startup" && order[1] != "post" {
-		t.Errorf("Expected startup then post, got %v", order)
+	zhtest.AssertEqual(t, 2, len(order))
+	if len(order) >= 2 {
+		zhtest.AssertEqual(t, "startup", order[0])
+		zhtest.AssertEqual(t, "post", order[1])
 	}
 }

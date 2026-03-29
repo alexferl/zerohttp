@@ -1,31 +1,20 @@
 package contentencoding
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestContentEncodingConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if len(cfg.Encodings) != 2 {
-		t.Errorf("expected 2 default encodings, got %d", len(cfg.Encodings))
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.Encodings))
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	expectedEncodings := []string{"gzip", "deflate"}
-	if !reflect.DeepEqual(cfg.Encodings, expectedEncodings) {
-		t.Errorf("expected default encodings = %v, got %v", expectedEncodings, cfg.Encodings)
-	}
-	if cfg.Encodings[0] != "gzip" {
-		t.Errorf("expected first encoding = 'gzip', got %s", cfg.Encodings[0])
-	}
-	if cfg.Encodings[1] != "deflate" {
-		t.Errorf("expected second encoding = 'deflate', got %s", cfg.Encodings[1])
-	}
+	zhtest.AssertDeepEqual(t, expectedEncodings, cfg.Encodings)
+	zhtest.AssertEqual(t, "gzip", cfg.Encodings[0])
+	zhtest.AssertEqual(t, "deflate", cfg.Encodings[1])
 }
 
 func TestContentEncodingConfig_StructAssignment(t *testing.T) {
@@ -47,12 +36,8 @@ func TestContentEncodingConfig_StructAssignment(t *testing.T) {
 				cfg := Config{
 					Encodings: tt.input,
 				}
-				if len(cfg.Encodings) != len(tt.expected) {
-					t.Errorf("expected %d encodings, got %d", len(tt.expected), len(cfg.Encodings))
-				}
-				if !reflect.DeepEqual(cfg.Encodings, tt.expected) {
-					t.Errorf("expected encodings = %v, got %v", tt.expected, cfg.Encodings)
-				}
+				zhtest.AssertEqual(t, len(tt.expected), len(cfg.Encodings))
+				zhtest.AssertDeepEqual(t, tt.expected, cfg.Encodings)
 			})
 		}
 	})
@@ -62,12 +47,8 @@ func TestContentEncodingConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 4 {
-			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("included paths assignment", func(t *testing.T) {
@@ -75,12 +56,8 @@ func TestContentEncodingConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertDeepEqual(t, includedPaths, cfg.IncludedPaths)
 	})
 
 	t.Run("single encoding variants", func(t *testing.T) {
@@ -89,12 +66,8 @@ func TestContentEncodingConfig_StructAssignment(t *testing.T) {
 			cfg := Config{
 				Encodings: []string{encoding},
 			}
-			if len(cfg.Encodings) != 1 {
-				t.Errorf("expected 1 encoding for %s, got %d", encoding, len(cfg.Encodings))
-			}
-			if cfg.Encodings[0] != encoding {
-				t.Errorf("expected encoding = %s, got %s", encoding, cfg.Encodings[0])
-			}
+			zhtest.AssertEqual(t, 1, len(cfg.Encodings))
+			zhtest.AssertEqual(t, encoding, cfg.Encodings[0])
 		}
 	})
 }
@@ -109,24 +82,12 @@ func TestContentEncodingConfig_MultipleFields(t *testing.T) {
 		IncludedPaths: includedPaths,
 	}
 
-	if len(cfg.Encodings) != 2 {
-		t.Errorf("expected 2 encodings, got %d", len(cfg.Encodings))
-	}
-	if !reflect.DeepEqual(cfg.Encodings, encodings) {
-		t.Error("expected encodings to be set correctly")
-	}
-	if len(cfg.ExcludedPaths) != 2 {
-		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
-	}
-	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-		t.Error("expected excluded paths to be set correctly")
-	}
-	if len(cfg.IncludedPaths) != 1 {
-		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
-	}
-	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-		t.Error("expected included paths to be set correctly")
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.Encodings))
+	zhtest.AssertDeepEqual(t, encodings, cfg.Encodings)
+	zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
+	zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
+	zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
+	zhtest.AssertDeepEqual(t, includedPaths, cfg.IncludedPaths)
 }
 
 func TestContentEncodingConfig_EdgeCases(t *testing.T) {
@@ -137,15 +98,12 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 			IncludedPaths: []string{},
 		}
 
-		if cfg.Encodings == nil || len(cfg.Encodings) != 0 {
-			t.Errorf("expected empty encodings slice, got %v", cfg.Encodings)
-		}
-		if cfg.ExcludedPaths == nil || len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected empty excluded paths slice, got %v", cfg.ExcludedPaths)
-		}
-		if cfg.IncludedPaths == nil || len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %v", cfg.IncludedPaths)
-		}
+		zhtest.AssertNotNil(t, cfg.Encodings)
+		zhtest.AssertEqual(t, 0, len(cfg.Encodings))
+		zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil slices", func(t *testing.T) {
@@ -155,15 +113,9 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 			IncludedPaths: nil,
 		}
 
-		if cfg.Encodings != nil {
-			t.Error("expected encodings to remain nil when nil is passed")
-		}
-		if cfg.ExcludedPaths != nil {
-			t.Error("expected excluded paths to remain nil when nil is passed")
-		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.Encodings)
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 
 	t.Run("case sensitivity", func(t *testing.T) {
@@ -171,13 +123,9 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Encodings: encodings,
 		}
-		if len(cfg.Encodings) != 5 {
-			t.Errorf("expected 5 encodings, got %d", len(cfg.Encodings))
-		}
+		zhtest.AssertEqual(t, 5, len(cfg.Encodings))
 		for i, expectedEncoding := range encodings {
-			if cfg.Encodings[i] != expectedEncoding {
-				t.Errorf("expected encoding[%d] = %s, got %s", i, expectedEncoding, cfg.Encodings[i])
-			}
+			zhtest.AssertEqual(t, expectedEncoding, cfg.Encodings[i])
 		}
 	})
 
@@ -186,13 +134,9 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Encodings: encodings,
 		}
-		if len(cfg.Encodings) != 5 {
-			t.Errorf("expected 5 encodings (including duplicates), got %d", len(cfg.Encodings))
-		}
+		zhtest.AssertEqual(t, 5, len(cfg.Encodings))
 		for i, expectedEncoding := range encodings {
-			if cfg.Encodings[i] != expectedEncoding {
-				t.Errorf("expected encoding[%d] = %s, got %s", i, expectedEncoding, cfg.Encodings[i])
-			}
+			zhtest.AssertEqual(t, expectedEncoding, cfg.Encodings[i])
 		}
 	})
 
@@ -204,22 +148,14 @@ func TestContentEncodingConfig_EdgeCases(t *testing.T) {
 			ExcludedPaths: excludedPaths,
 		}
 
-		if len(cfg.Encodings) != 3 {
-			t.Errorf("expected 3 encodings, got %d", len(cfg.Encodings))
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Encodings))
 		for i, expectedEncoding := range encodings {
-			if cfg.Encodings[i] != expectedEncoding {
-				t.Errorf("expected encoding[%d] = %q, got %q", i, expectedEncoding, cfg.Encodings[i])
-			}
+			zhtest.AssertEqual(t, expectedEncoding, cfg.Encodings[i])
 		}
 
-		if len(cfg.ExcludedPaths) != 3 {
-			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.ExcludedPaths))
 		for i, expectedPath := range excludedPaths {
-			if cfg.ExcludedPaths[i] != expectedPath {
-				t.Errorf("expected excluded path[%d] = %q, got %q", i, expectedPath, cfg.ExcludedPaths[i])
-			}
+			zhtest.AssertEqual(t, expectedPath, cfg.ExcludedPaths[i])
 		}
 	})
 }
@@ -238,12 +174,8 @@ func TestContentEncodingConfig_PathPatterns(t *testing.T) {
 		cfg := Config{
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != len(excludedPaths) {
-			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, len(excludedPaths), len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("special character paths", func(t *testing.T) {
@@ -254,16 +186,12 @@ func TestContentEncodingConfig_PathPatterns(t *testing.T) {
 			"/metrics.json",
 			"/admin/files (test)",
 			"/path with spaces",
-			"/path/with/unicode-ñ",
+			"/path/with/unicode-\xc3\xb1",
 		}
 		cfg := Config{
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != len(excludedPaths) {
-			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, len(excludedPaths), len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 }

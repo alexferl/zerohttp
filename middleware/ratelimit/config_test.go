@@ -2,42 +2,24 @@ package ratelimit
 
 import (
 	"net/http"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRateLimitConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Rate != 100 {
-		t.Errorf("expected default rate = 100, got %d", cfg.Rate)
-	}
-	if cfg.Window != time.Minute {
-		t.Errorf("expected default window = 1m, got %v", cfg.Window)
-	}
-	if cfg.Algorithm != TokenBucket {
-		t.Errorf("expected default algorithm = %s, got %s", TokenBucket, cfg.Algorithm)
-	}
-	if cfg.KeyExtractor != nil {
-		t.Error("expected default key extractor to be nil (falls back to ratelimit.IPKeyExtractor)")
-	}
-	if cfg.StatusCode != http.StatusTooManyRequests {
-		t.Errorf("expected default status code = %d, got %d", http.StatusTooManyRequests, cfg.StatusCode)
-	}
-	if cfg.Message != "Rate limit exceeded" {
-		t.Errorf("expected default message = 'Rate limit exceeded', got %s", cfg.Message)
-	}
-	if cfg.IncludeHeaders != true {
-		t.Errorf("expected default include headers = true, got %t", cfg.IncludeHeaders)
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, 100, cfg.Rate)
+	zhtest.AssertEqual(t, time.Minute, cfg.Window)
+	zhtest.AssertEqual(t, TokenBucket, cfg.Algorithm)
+	zhtest.AssertNil(t, cfg.KeyExtractor)
+	zhtest.AssertEqual(t, http.StatusTooManyRequests, cfg.StatusCode)
+	zhtest.AssertEqual(t, "Rate limit exceeded", cfg.Message)
+	zhtest.AssertTrue(t, cfg.IncludeHeaders)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 }
 
 func TestRateLimitConfig_StructAssignment(t *testing.T) {
@@ -50,24 +32,12 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 			Message:        "Too many requests, please try again later",
 			IncludeHeaders: false,
 		}
-		if cfg.Rate != 50 {
-			t.Errorf("expected rate = 50, got %d", cfg.Rate)
-		}
-		if cfg.Window != 30*time.Second {
-			t.Errorf("expected window = %v, got %v", 30*time.Second, cfg.Window)
-		}
-		if cfg.Algorithm != SlidingWindow {
-			t.Errorf("expected algorithm = %s, got %s", SlidingWindow, cfg.Algorithm)
-		}
-		if cfg.StatusCode != http.StatusServiceUnavailable {
-			t.Errorf("expected status code = %d, got %d", http.StatusServiceUnavailable, cfg.StatusCode)
-		}
-		if cfg.Message != "Too many requests, please try again later" {
-			t.Errorf("expected message = %s, got %s", "Too many requests, please try again later", cfg.Message)
-		}
-		if cfg.IncludeHeaders != false {
-			t.Errorf("expected include headers = false, got %t", cfg.IncludeHeaders)
-		}
+		zhtest.AssertEqual(t, 50, cfg.Rate)
+		zhtest.AssertEqual(t, 30*time.Second, cfg.Window)
+		zhtest.AssertEqual(t, SlidingWindow, cfg.Algorithm)
+		zhtest.AssertEqual(t, http.StatusServiceUnavailable, cfg.StatusCode)
+		zhtest.AssertEqual(t, "Too many requests, please try again later", cfg.Message)
+		zhtest.AssertFalse(t, cfg.IncludeHeaders)
 	})
 
 	t.Run("key extractor", func(t *testing.T) {
@@ -77,16 +47,11 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			KeyExtractor: customExtractor,
 		}
-		if cfg.KeyExtractor == nil {
-			t.Error("expected key extractor to be set")
-		}
+		zhtest.AssertNotNil(t, cfg.KeyExtractor)
 
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		req.Header.Set("X-User-ID", "user123")
-		result := cfg.KeyExtractor(req)
-		if result != "user123" {
-			t.Errorf("expected key = 'user123', got %s", result)
-		}
+		zhtest.AssertEqual(t, "user123", cfg.KeyExtractor(req))
 	})
 
 	t.Run("excluded paths", func(t *testing.T) {
@@ -94,12 +59,8 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 4 {
-			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("included paths", func(t *testing.T) {
@@ -107,12 +68,8 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertEqual(t, includedPaths, cfg.IncludedPaths)
 	})
 
 	t.Run("all algorithms", func(t *testing.T) {
@@ -121,9 +78,7 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 			cfg := Config{
 				Algorithm: algorithm,
 			}
-			if cfg.Algorithm != algorithm {
-				t.Errorf("expected algorithm = %s, got %s", algorithm, cfg.Algorithm)
-			}
+			zhtest.AssertEqual(t, algorithm, cfg.Algorithm)
 		}
 	})
 }
@@ -146,42 +101,20 @@ func TestRateLimitConfig_MultipleFields(t *testing.T) {
 		IncludedPaths:  includedPaths,
 	}
 
-	if cfg.Rate != 200 {
-		t.Errorf("expected rate = 200, got %d", cfg.Rate)
-	}
-	if cfg.Window != 5*time.Minute {
-		t.Errorf("expected window = 5m, got %v", cfg.Window)
-	}
-	if cfg.Algorithm != FixedWindow {
-		t.Errorf("expected algorithm = %s, got %s", FixedWindow, cfg.Algorithm)
-	}
-	if cfg.KeyExtractor == nil {
-		t.Error("expected key extractor to be set")
-	}
-	if cfg.StatusCode != http.StatusForbidden {
-		t.Errorf("expected status code = %d, got %d", http.StatusForbidden, cfg.StatusCode)
-	}
-	if cfg.Message != "Rate limit reached" {
-		t.Errorf("expected message = 'Rate limit reached', got %s", cfg.Message)
-	}
-	if cfg.IncludeHeaders != false {
-		t.Errorf("expected include headers = false, got %t", cfg.IncludeHeaders)
-	}
-	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-		t.Error("expected excluded paths to be set correctly")
-	}
-	if len(cfg.IncludedPaths) != 1 {
-		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
-	}
-	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-		t.Error("expected included paths to be set correctly")
-	}
+	zhtest.AssertEqual(t, 200, cfg.Rate)
+	zhtest.AssertEqual(t, 5*time.Minute, cfg.Window)
+	zhtest.AssertEqual(t, FixedWindow, cfg.Algorithm)
+	zhtest.AssertNotNil(t, cfg.KeyExtractor)
+	zhtest.AssertEqual(t, http.StatusForbidden, cfg.StatusCode)
+	zhtest.AssertEqual(t, "Rate limit reached", cfg.Message)
+	zhtest.AssertFalse(t, cfg.IncludeHeaders)
+	zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
+	zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
+	zhtest.AssertEqual(t, includedPaths, cfg.IncludedPaths)
 
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set(httpx.HeaderAuthorization, "Bearer token123")
-	if cfg.KeyExtractor(req) != "Bearer token123" {
-		t.Error("expected custom key extractor to work")
-	}
+	zhtest.AssertEqual(t, "Bearer token123", cfg.KeyExtractor(req))
 }
 
 func TestRateLimitConfig_EdgeCases(t *testing.T) {
@@ -191,9 +124,7 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 			cfg := Config{
 				Rate: rate,
 			}
-			if cfg.Rate != rate {
-				t.Errorf("Rate %d: expected rate = %d, got %d", rate, rate, cfg.Rate)
-			}
+			zhtest.AssertEqual(t, rate, cfg.Rate)
 		}
 	})
 
@@ -203,9 +134,7 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 			cfg := Config{
 				Window: window,
 			}
-			if cfg.Window != window {
-				t.Errorf("Window %v: expected window = %v, got %v", window, window, cfg.Window)
-			}
+			zhtest.AssertEqual(t, window, cfg.Window)
 		}
 	})
 
@@ -215,9 +144,7 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 			cfg := Config{
 				StatusCode: statusCode,
 			}
-			if cfg.StatusCode != statusCode {
-				t.Errorf("StatusCode %d: expected %d, got %d", statusCode, statusCode, cfg.StatusCode)
-			}
+			zhtest.AssertEqual(t, statusCode, cfg.StatusCode)
 		}
 	})
 
@@ -225,58 +152,46 @@ func TestRateLimitConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Message: "",
 		}
-		if cfg.Message != "" {
-			t.Errorf("expected empty message, got %s", cfg.Message)
-		}
+		zhtest.AssertEqual(t, "", cfg.Message)
 
 		longMessage := "This is a very long rate limit message that explains in detail why the request was rejected and what the client should do to resolve the issue including waiting for the rate limit window to reset."
 		cfg2 := Config{
 			Message: longMessage,
 		}
-		if cfg2.Message != longMessage {
-			t.Errorf("expected long message to be preserved")
-		}
+		zhtest.AssertEqual(t, longMessage, cfg2.Message)
 	})
 
 	t.Run("empty and nil excluded paths", func(t *testing.T) {
 		cfg := Config{
 			ExcludedPaths: []string{},
 		}
-		if cfg.ExcludedPaths == nil || len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected empty excluded paths slice, got %v", cfg.ExcludedPaths)
-		}
+		zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 
 		cfg2 := Config{
 			ExcludedPaths: nil,
 		}
-		if cfg2.ExcludedPaths != nil {
-			t.Error("expected excluded paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg2.ExcludedPaths)
 	})
 
 	t.Run("empty and nil included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: []string{},
 		}
-		if cfg.IncludedPaths == nil || len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %v", cfg.IncludedPaths)
-		}
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 
 		cfg2 := Config{
 			IncludedPaths: nil,
 		}
-		if cfg2.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg2.IncludedPaths)
 	})
 
 	t.Run("nil key extractor", func(t *testing.T) {
 		cfg := Config{
 			KeyExtractor: nil,
 		}
-		if cfg.KeyExtractor != nil {
-			t.Error("expected key extractor to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.KeyExtractor)
 	})
 }
 
@@ -342,10 +257,7 @@ func TestRateLimitConfig_CustomKeyExtractors(t *testing.T) {
 			}
 			req, _ := http.NewRequest(http.MethodGet, "/", nil)
 			tt.setupRequest(req)
-			result := cfg.KeyExtractor(req)
-			if result != tt.expectedKey {
-				t.Errorf("expected key = %s, got %s", tt.expectedKey, result)
-			}
+			zhtest.AssertEqual(t, tt.expectedKey, cfg.KeyExtractor(req))
 		})
 	}
 }
@@ -363,10 +275,6 @@ func TestRateLimitConfig_PathPatterns(t *testing.T) {
 	cfg := Config{
 		ExcludedPaths: excludedPaths,
 	}
-	if len(cfg.ExcludedPaths) != len(excludedPaths) {
-		t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
-	}
-	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-		t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-	}
+	zhtest.AssertEqual(t, len(excludedPaths), len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 }

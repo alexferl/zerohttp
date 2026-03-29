@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestIdempotencyMemoryStore(t *testing.T) {
@@ -18,20 +20,12 @@ func TestIdempotencyMemoryStore(t *testing.T) {
 		}
 
 		err := store.Set(context.Background(), "key1", record, time.Hour)
-		if err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		retrieved, found, err := store.Get(context.Background(), "key1")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if !found {
-			t.Error("Expected to find key1")
-		}
-		if string(retrieved.Body) != `{"id":"123"}` {
-			t.Errorf("Expected body '{\"id\":\"123\"}', got %q", string(retrieved.Body))
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, `{"id":"123"}`, string(retrieved.Body))
 	})
 
 	t.Run("expired entry not returned", func(t *testing.T) {
@@ -43,38 +37,27 @@ func TestIdempotencyMemoryStore(t *testing.T) {
 		}
 
 		err := store.Set(context.Background(), "key1", record, 1*time.Millisecond)
-		if err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		time.Sleep(2 * time.Millisecond)
 
 		_, found, err := store.Get(context.Background(), "key1")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if found {
-			t.Error("Expected expired entry to not be found")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertFalse(t, found)
 	})
 
 	t.Run("not found returns false", func(t *testing.T) {
 		store := NewMemoryStore(100)
 
 		_, found, err := store.Get(context.Background(), "nonexistent-key")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if found {
-			t.Error("Expected not found for nonexistent key")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertFalse(t, found)
 	})
 }
 
 func TestIdempotencyMemoryStore_Close(t *testing.T) {
 	store := NewMemoryStore(100)
 
-	if err := store.Close(); err != nil {
-		t.Errorf("Unexpected error closing store: %v", err)
-	}
+	err := store.Close()
+	zhtest.AssertNoError(t, err)
 }

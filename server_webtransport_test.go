@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/extensions/autocert"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestServer_Shutdown_WithWebTransportError(t *testing.T) {
@@ -28,9 +29,7 @@ func TestServer_Shutdown_WithWebTransportError(t *testing.T) {
 
 	// Error is logged and also returned via errCh
 	err := server.Shutdown(ctx)
-	if err == nil {
-		t.Error("expected close error")
-	}
+	zhtest.AssertError(t, err)
 }
 
 // mockWebTransportServerWithAutocert implements both WebTransportServer and WebTransportServerWithAutocert
@@ -90,13 +89,8 @@ func TestServer_StartAutoTLS_WithWebTransportAutocert(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// The WebTransport server with autocert support should have the autocert method called
-	if !wtServer.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("Expected WebTransport server ListenAndServeTLSWithAutocert to be called")
-	}
-
-	if wtServer.autocertManager != mgr {
-		t.Error("Expected WebTransport server to receive the autocert manager")
-	}
+	zhtest.AssertTrue(t, wtServer.wasListenAndServeTLSWithAutocertCalled())
+	zhtest.AssertEqual(t, mgr, wtServer.autocertManager)
 }
 
 func TestServer_StartAutoTLS_WithWebTransportNoAutocert(t *testing.T) {
@@ -154,9 +148,7 @@ func TestServer_ListenAndServeTLS_WithWebTransport(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify WebTransport was started
-	if !mockWT.wasListenAndServeTLSCalled() {
-		t.Error("expected WebTransport ListenAndServeTLS to be called")
-	}
+	zhtest.AssertTrue(t, mockWT.wasListenAndServeTLSCalled())
 
 	// Shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -167,7 +159,7 @@ func TestServer_ListenAndServeTLS_WithWebTransport(t *testing.T) {
 	case <-done:
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for ListenAndServeTLS to return")
+		zhtest.AssertFail(t, "timeout waiting for ListenAndServeTLS to return")
 	}
 }
 
@@ -208,15 +200,13 @@ func TestServer_Start_WithWebTransport(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify WebTransport was started
-	if !mockWT.wasListenAndServeTLSCalled() {
-		t.Error("expected WebTransport ListenAndServeTLS to be called")
-	}
+	zhtest.AssertTrue(t, mockWT.wasListenAndServeTLSCalled())
 
 	select {
 	case <-done:
 		// Expected - HTTPS failed
 	case <-time.After(2 * time.Second):
-		t.Error("timeout waiting for Start to return")
+		zhtest.AssertFail(t, "timeout waiting for Start to return")
 	}
 }
 
@@ -257,18 +247,14 @@ func TestServer_SetWebTransportServer(t *testing.T) {
 
 	server.SetWebTransportServer(mockWT)
 
-	if server.webTransportServer != mockWT {
-		t.Error("Expected WebTransport server to be set")
-	}
+	zhtest.AssertEqual(t, mockWT, server.webTransportServer)
 }
 
 func TestServer_SetWebTransportServer_WithConfig(t *testing.T) {
 	mockWT := &mockWebTransportServer{}
 	server := New(Config{Extensions: ExtensionsConfig{WebTransportServer: mockWT}})
 
-	if server.webTransportServer != mockWT {
-		t.Error("Expected WebTransport server to be set via config")
-	}
+	zhtest.AssertEqual(t, mockWT, server.webTransportServer)
 }
 
 func TestServer_Close_WithWebTransport(t *testing.T) {
@@ -281,13 +267,8 @@ func TestServer_Close_WithWebTransport(t *testing.T) {
 	server.listener = listener
 
 	err := server.Close()
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	if !mockWT.closeCalled {
-		t.Error("Expected WebTransport server Close to be called")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, mockWT.closeCalled)
 }
 
 func TestServer_Shutdown_WithWebTransport(t *testing.T) {
@@ -303,11 +284,6 @@ func TestServer_Shutdown_WithWebTransport(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	if !mockWT.closeCalled {
-		t.Error("Expected WebTransport server Close to be called during shutdown")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, mockWT.closeCalled)
 }

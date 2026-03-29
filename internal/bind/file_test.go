@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestFileHeader_Open(t *testing.T) {
@@ -22,29 +23,19 @@ func TestFileHeader_Open(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
 	req.Header.Set(httpx.HeaderContentType, writer.FormDataContentType())
 
-	if err := req.ParseMultipartForm(32 << 20); err != nil {
-		t.Fatalf("failed to parse multipart form: %v", err)
-	}
+	zhtest.AssertNoError(t, req.ParseMultipartForm(32<<20))
 
 	fileHeaders := req.MultipartForm.File["test"]
-	if len(fileHeaders) == 0 {
-		t.Fatal("no files found")
-	}
+	zhtest.AssertGreater(t, len(fileHeaders), 0)
 
 	file, err := fileHeaders[0].Open()
-	if err != nil {
-		t.Fatalf("failed to open file: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = file.Close() }()
 
 	content, err := io.ReadAll(file)
-	if err != nil {
-		t.Fatalf("failed to read file: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if string(content) != "Hello" {
-		t.Errorf("expected content 'Hello', got %q", string(content))
-	}
+	zhtest.AssertEqual(t, "Hello", string(content))
 }
 
 func TestFileHeader_ReadAll(t *testing.T) {
@@ -57,9 +48,7 @@ func TestFileHeader_ReadAll(t *testing.T) {
 	// Parse multipart form directly (no binder)
 	reader := multipart.NewReader(&body, writer.Boundary())
 	form, err := reader.ReadForm(32 << 20)
-	if err != nil {
-		t.Fatalf("failed to read form: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() {
 		if err := form.RemoveAll(); err != nil {
 			t.Logf("failed to remove temp files: %v", err)
@@ -67,15 +56,11 @@ func TestFileHeader_ReadAll(t *testing.T) {
 	}()
 
 	files := form.File["test"]
-	if len(files) == 0 {
-		t.Fatal("expected file in form")
-	}
+	zhtest.AssertGreater(t, len(files), 0)
 
 	// Open the file directly
 	file, err := files[0].Open()
-	if err != nil {
-		t.Fatalf("failed to open file: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Create FileHeader directly
 	fh := &FileHeader{
@@ -86,13 +71,9 @@ func TestFileHeader_ReadAll(t *testing.T) {
 	}
 
 	content, err := fh.ReadAll()
-	if err != nil {
-		t.Fatalf("failed to read file: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if string(content) != "Hello, World!" {
-		t.Errorf("expected content 'Hello, World!', got %q", string(content))
-	}
+	zhtest.AssertEqual(t, "Hello, World!", string(content))
 }
 
 func TestFileHeader_Open_AfterClose(t *testing.T) {
@@ -103,13 +84,8 @@ func TestFileHeader_Open_AfterClose(t *testing.T) {
 	}
 
 	_, err := fh.Open()
-	if err == nil {
-		t.Fatal("expected error when opening closed file")
-	}
-
-	if !strings.Contains(err.Error(), "no longer available") {
-		t.Errorf("expected 'no longer available' error, got %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertTrue(t, strings.Contains(err.Error(), "no longer available"))
 }
 
 func TestFileHeader_ReadAll_OpenError(t *testing.T) {
@@ -121,10 +97,6 @@ func TestFileHeader_ReadAll_OpenError(t *testing.T) {
 	}
 
 	_, err := fh.ReadAll()
-	if err == nil {
-		t.Fatal("expected error when file is not available")
-	}
-	if !strings.Contains(err.Error(), "no longer available") {
-		t.Errorf("expected 'no longer available' error, got %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertTrue(t, strings.Contains(err.Error(), "no longer available"))
 }

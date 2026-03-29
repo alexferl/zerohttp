@@ -19,9 +19,7 @@ func TestNewEventStream(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 		defer func() { _ = stream.Close() }()
 
 		// Check headers
@@ -39,9 +37,7 @@ func TestNewEventStream(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		_, err := New(w, r)
-		if err == nil {
-			t.Error("expected error when headers already sent")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -51,18 +47,14 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{
 			Data: []byte("hello world"),
 		}
 
 		err = stream.Send(event)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Check body
 		zhtest.AssertWith(t, w).BodyContains("data: hello world\n")
@@ -73,9 +65,7 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{
 			ID:    "123",
@@ -85,9 +75,7 @@ func TestEventStream_Send(t *testing.T) {
 		}
 
 		err = stream.Send(event)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).
 			BodyContains("id: 123\n").
@@ -101,18 +89,14 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{
 			Data: []byte("line1\nline2\nline3"),
 		}
 
 		err = stream.Send(event)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).BodyContains("data: line1\ndata: line2\ndata: line3\n")
 	})
@@ -122,17 +106,13 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		_ = stream.Close()
 
 		event := Event{Data: []byte("test")}
 		err = stream.Send(event)
-		if err == nil {
-			t.Error("expected error after close")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("rejects event ID with CR", func(t *testing.T) {
@@ -140,15 +120,11 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{ID: "abc\rdef", Data: []byte("test")}
 		err = stream.Send(event)
-		if err == nil {
-			t.Error("expected error for ID with CR")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("rejects event ID with LF", func(t *testing.T) {
@@ -156,15 +132,11 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{ID: "abc\ndef", Data: []byte("test")}
 		err = stream.Send(event)
-		if err == nil {
-			t.Error("expected error for ID with LF")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("rejects event ID with NULL", func(t *testing.T) {
@@ -172,15 +144,11 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{ID: "abc\x00def", Data: []byte("test")}
 		err = stream.Send(event)
-		if err == nil {
-			t.Error("expected error for ID with NULL")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("rejects event name with CR", func(t *testing.T) {
@@ -188,15 +156,11 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{Name: "update\rnotify", Data: []byte("test")}
 		err = stream.Send(event)
-		if err == nil {
-			t.Error("expected error for Name with CR")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("rejects event name with LF", func(t *testing.T) {
@@ -204,15 +168,11 @@ func TestEventStream_Send(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{Name: "update\nnotify", Data: []byte("test")}
 		err = stream.Send(event)
-		if err == nil {
-			t.Error("expected error for Name with LF")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -222,14 +182,10 @@ func TestEventStream_SendComment(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		err = stream.SendComment("keepalive")
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).BodyContains(": keepalive\n")
 	})
@@ -241,22 +197,16 @@ func TestEventStream_SetRetry(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 		defer func() { _ = stream.Close() }()
 
 		err = stream.SetRetry(10 * time.Second)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Send event without retry - should use default
 		event := Event{Data: []byte("test")}
 		err = stream.Send(event)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).BodyContains("retry: 10000\n")
 	})
@@ -268,9 +218,7 @@ func TestEventStream_ContextCancellation(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
 
 	stream, err := New(w, r)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Cancel context
 	cancel()
@@ -279,9 +227,7 @@ func TestEventStream_ContextCancellation(t *testing.T) {
 	// Send should fail after context cancellation
 	event := Event{Data: []byte("test")}
 	err = stream.Send(event)
-	if err == nil {
-		t.Error("expected error after context cancellation")
-	}
+	zhtest.AssertError(t, err)
 }
 
 // errorWriter is a ResponseWriter that fails on write
@@ -319,9 +265,7 @@ func TestEventStream_Send_WriteError(t *testing.T) {
 
 		event := Event{Data: []byte("test")}
 		err := stream.Send(event)
-		if err == nil {
-			t.Error("expected error on write failure")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -342,9 +286,7 @@ func TestEventStream_SendComment_WriteError(t *testing.T) {
 		}
 
 		err := stream.SendComment("test")
-		if err == nil {
-			t.Error("expected error on write failure")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -355,26 +297,20 @@ func TestEventStream_SendComment_ContextCancelled(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		cancel()
 		time.Sleep(10 * time.Millisecond)
 
 		err = stream.SendComment("test")
-		if err == nil {
-			t.Error("expected error when context cancelled")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
 func TestIsClientDisconnected(t *testing.T) {
 	t.Run("returns false for active request", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
-		if IsClientDisconnected(r) {
-			t.Error("expected false for active request")
-		}
+		zhtest.AssertFalse(t, IsClientDisconnected(r))
 	})
 
 	t.Run("returns true for cancelled context", func(t *testing.T) {
@@ -384,9 +320,7 @@ func TestIsClientDisconnected(t *testing.T) {
 		cancel()
 		time.Sleep(10 * time.Millisecond) // Let cancellation propagate
 
-		if !IsClientDisconnected(r) {
-			t.Error("expected true for cancelled context")
-		}
+		zhtest.AssertTrue(t, IsClientDisconnected(r))
 	})
 }
 
@@ -396,15 +330,11 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Close the stream
 		err = stream.Close()
-		if err != nil {
-			t.Fatalf("expected no error on close, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Wait for monitor goroutine to exit
 		done := make(chan struct{})
@@ -417,7 +347,7 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 		case <-done:
 			// Goroutine exited successfully
 		case <-time.After(time.Second):
-			t.Error("monitor goroutine did not exit within timeout")
+			zhtest.AssertFail(t, "monitor goroutine did not exit within timeout")
 		}
 	})
 
@@ -427,9 +357,7 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
 
 		stream, err := New(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Cancel the context
 		cancel()
@@ -445,7 +373,7 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 		case <-done:
 			// Goroutine exited successfully
 		case <-time.After(time.Second):
-			t.Error("monitor goroutine did not exit within timeout")
+			zhtest.AssertFail(t, "monitor goroutine did not exit within timeout")
 		}
 	})
 
@@ -461,9 +389,7 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 			stream, err := New(w, r)
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			// Send an event
 			_ = stream.Send(Event{Data: []byte("test")})
@@ -479,9 +405,7 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 
 		final := runtime.NumGoroutine()
 
-		if final != initial {
-			t.Errorf("goroutine leak detected: started with %d, ended with %d", initial, final)
-		}
+		zhtest.AssertEqual(t, initial, final)
 	})
 
 	t.Run("no goroutine leak on context cancellation", func(t *testing.T) {
@@ -497,9 +421,7 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
 
 			stream, err := New(w, r)
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			// Cancel context and wait for cleanup
 			cancel()
@@ -512,8 +434,6 @@ func TestSSE_GoroutineCleanup(t *testing.T) {
 
 		final := runtime.NumGoroutine()
 
-		if final != initial {
-			t.Errorf("goroutine leak detected on cancellation: started with %d, ended with %d", initial, final)
-		}
+		zhtest.AssertEqual(t, initial, final)
 	})
 }

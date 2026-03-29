@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestTracerConfigWrapper_IsExcluded(t *testing.T) {
@@ -25,9 +27,7 @@ func TestTracerConfigWrapper_IsExcluded(t *testing.T) {
 			cfg := Config{ExcludedPaths: tt.excludedPaths}
 			wrapper := cfg.Wrap()
 			got := wrapper.IsExcluded(tt.path)
-			if got != tt.want {
-				t.Errorf("IsExcluded(%q) = %v, want %v", tt.path, got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -64,9 +64,7 @@ func TestTracerConfigWrapper_GetSpanName(t *testing.T) {
 			wrapper := cfg.Wrap()
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			got := wrapper.GetSpanName(req)
-			if got != tt.want {
-				t.Errorf("GetSpanName() = %q, want %q", got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -75,25 +73,13 @@ func TestDefaultSpanNameFormatter(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test/path", nil)
 	got := DefaultSpanNameFormatter(req)
 	want := "GET /test/path"
-	if got != want {
-		t.Errorf("DefaultSpanNameFormatter() = %q, want %q", got, want)
-	}
+	zhtest.AssertEqual(t, want, got)
 }
 
 func TestDefaultTracerConfig(t *testing.T) {
-	if DefaultConfig.ExcludedPaths == nil {
-		t.Error("DefaultTracerConfig.ExcludedPaths should not be nil")
-	}
-	if len(DefaultConfig.ExcludedPaths) != 0 {
-		t.Errorf("DefaultTracerConfig.ExcludedPaths should be empty, got %d", len(DefaultConfig.ExcludedPaths))
-	}
-	if DefaultConfig.IncludedPaths == nil {
-		t.Error("DefaultTracerConfig.IncludedPaths should not be nil")
-	}
-	if len(DefaultConfig.IncludedPaths) != 0 {
-		t.Errorf("DefaultTracerConfig.IncludedPaths should be empty, got %d", len(DefaultConfig.IncludedPaths))
-	}
-	if DefaultConfig.SpanNameFormatter != nil {
-		t.Error("DefaultTracerConfig.SpanNameFormatter should be nil")
-	}
+	zhtest.AssertNotNil(t, DefaultConfig.ExcludedPaths)
+	zhtest.AssertEqual(t, 0, len(DefaultConfig.ExcludedPaths))
+	zhtest.AssertNotNil(t, DefaultConfig.IncludedPaths)
+	zhtest.AssertEqual(t, 0, len(DefaultConfig.IncludedPaths))
+	zhtest.AssertNil(t, DefaultConfig.SpanNameFormatter)
 }

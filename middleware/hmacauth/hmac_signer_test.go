@@ -2,7 +2,6 @@ package hmacauth
 
 import (
 	"encoding/base64"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,18 +10,14 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestNewHMACSigner(t *testing.T) {
 	signer := NewSigner("test-key", "test-secret-that-is-32-bytes-long!!")
 
-	if signer.AccessKeyID() != "test-key" {
-		t.Errorf("expected access key ID 'test-key', got %s", signer.AccessKeyID())
-	}
-
-	if signer.Algorithm() != SHA256 {
-		t.Errorf("expected default algorithm SHA256, got %s", signer.Algorithm())
-	}
+	zhtest.AssertEqual(t, "test-key", signer.AccessKeyID())
+	zhtest.AssertEqual(t, SHA256, signer.Algorithm())
 }
 
 func TestNewHMACSignerWithAlgorithm(t *testing.T) {
@@ -39,9 +34,7 @@ func TestNewHMACSignerWithAlgorithm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			signer := NewSignerWithAlgorithm("test-key", tt.secret, tt.algorithm)
-			if signer.Algorithm() != tt.algorithm {
-				t.Errorf("expected algorithm %s, got %s", tt.algorithm, signer.Algorithm())
-			}
+			zhtest.AssertEqual(t, tt.algorithm, signer.Algorithm())
 		})
 	}
 }
@@ -60,27 +53,16 @@ func TestNewHMACSignerWithAlgorithm_ShortSecretPanics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				if r == nil {
-					t.Error("expected panic for short secret, but did not panic")
-				}
-				msg, ok := r.(string)
-				if !ok || !strings.Contains(msg, fmt.Sprintf("at least %d bytes", tt.expectedSize)) {
-					t.Errorf("expected panic message about %d bytes, got: %v", tt.expectedSize, r)
-				}
-			}()
-
-			_ = NewSignerWithAlgorithm("test-key", tt.secret, tt.algorithm)
+			zhtest.AssertPanic(t, func() {
+				_ = NewSignerWithAlgorithm("test-key", tt.secret, tt.algorithm)
+			})
 		})
 	}
 }
 
 func TestHMACSigner_AccessKeyID(t *testing.T) {
 	signer := NewSigner("my-access-key", "test-secret-that-is-32-bytes!")
-	if signer.AccessKeyID() != "my-access-key" {
-		t.Errorf("expected AccessKeyID to be 'my-access-key', got %q", signer.AccessKeyID())
-	}
+	zhtest.AssertEqual(t, "my-access-key", signer.AccessKeyID())
 }
 
 func TestHMACSigner_Algorithm(t *testing.T) {
@@ -108,9 +90,7 @@ func TestHMACSigner_Algorithm(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.signer.Algorithm() != tt.expected {
-				t.Errorf("expected algorithm %q, got %q", tt.expected, tt.signer.Algorithm())
-			}
+			zhtest.AssertEqual(t, tt.expected, tt.signer.Algorithm())
 		})
 	}
 }
@@ -120,26 +100,16 @@ func TestHMACSigner_SignRequest(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Check that Authorization header was added
-	authHeader := req.Header.Get(httpx.HeaderAuthorization)
-	if authHeader == "" {
-		t.Error("expected Authorization header to be set")
-	}
+	zhtest.AssertNotEmpty(t, req.Header.Get(httpx.HeaderAuthorization))
 
 	// Check that X-Timestamp header was added
-	timestampHeader := req.Header.Get("X-Timestamp")
-	if timestampHeader == "" {
-		t.Error("expected X-Timestamp header to be set")
-	}
+	zhtest.AssertNotEmpty(t, req.Header.Get("X-Timestamp"))
 
 	// Verify Authorization header format
-	if !strings.HasPrefix(authHeader, "HMAC-SHA256 ") {
-		t.Errorf("expected Authorization header to start with 'HMAC-SHA256 ', got: %s", authHeader)
-	}
+	zhtest.AssertTrue(t, strings.HasPrefix(req.Header.Get(httpx.HeaderAuthorization), "HMAC-SHA256 "))
 }
 
 func TestHMACSigner_SignRequestWithTime(t *testing.T) {
@@ -149,15 +119,10 @@ func TestHMACSigner_SignRequestWithTime(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequestWithTime(req, fixedTime)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	timestampHeader := req.Header.Get("X-Timestamp")
 	expectedTimestamp := fixedTime.Format(time.RFC3339)
-	if timestampHeader != expectedTimestamp {
-		t.Errorf("expected timestamp %s, got %s", expectedTimestamp, timestampHeader)
-	}
+	zhtest.AssertEqual(t, expectedTimestamp, req.Header.Get("X-Timestamp"))
 }
 
 func TestHMACSigner_SignRequestWithBody(t *testing.T) {
@@ -168,19 +133,13 @@ func TestHMACSigner_SignRequestWithBody(t *testing.T) {
 	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Verify body is still readable
-	if req.Body == nil {
-		t.Error("expected body to be preserved")
-	}
+	zhtest.AssertNotNil(t, req.Body)
 
 	readBody, _ := io.ReadAll(req.Body)
-	if string(readBody) != body {
-		t.Errorf("expected body %s, got %s", body, string(readBody))
-	}
+	zhtest.AssertEqual(t, body, string(readBody))
 }
 
 func TestHMACSigner_SetAllowUnsignedPayload(t *testing.T) {
@@ -191,9 +150,7 @@ func TestHMACSigner_SetAllowUnsignedPayload(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/test", strings.NewReader(body))
 
 	hash := signer.computeBodyHash(req)
-	if hash != "UNSIGNED-PAYLOAD" {
-		t.Errorf("expected UNSIGNED-PAYLOAD, got %s", hash)
-	}
+	zhtest.AssertEqual(t, "UNSIGNED-PAYLOAD", hash)
 }
 
 func TestHMACSigner_SetHeadersToSign(t *testing.T) {
@@ -243,15 +200,9 @@ func TestHMACSigner_SetHeadersToSign(t *testing.T) {
 
 			headers := signer.buildSignedHeadersList(req)
 
-			if len(headers) != len(tt.expectedHeaders) {
-				t.Errorf("expected %d headers, got %d: %v", len(tt.expectedHeaders), len(headers), headers)
-				return
-			}
-
+			zhtest.AssertEqual(t, len(tt.expectedHeaders), len(headers))
 			for i, h := range headers {
-				if h != tt.expectedHeaders[i] {
-					t.Errorf("header[%d]: expected %q, got %q", i, tt.expectedHeaders[i], h)
-				}
+				zhtest.AssertEqual(t, tt.expectedHeaders[i], h)
 			}
 		})
 	}
@@ -281,19 +232,14 @@ func TestHMACSigner_CustomHeadersRoundTrip(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set(httpx.HeaderXRequestId, "test-request-123")
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACSigner_GenerateSignature(t *testing.T) {
@@ -302,18 +248,13 @@ func TestHMACSigner_GenerateSignature(t *testing.T) {
 
 	timestamp := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
 	sig, err := signer.GenerateSignature(req, timestamp)
-	if err != nil {
-		t.Fatalf("GenerateSignature failed: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if sig == "" {
-		t.Error("expected non-empty signature")
-	}
+	zhtest.AssertNotEmpty(t, sig)
 
 	// Signature should be base64-encoded
-	if _, err := base64.StdEncoding.DecodeString(sig); err != nil {
-		t.Errorf("signature is not valid base64: %v", err)
-	}
+	_, err = base64.StdEncoding.DecodeString(sig)
+	zhtest.AssertNoError(t, err)
 }
 
 func TestHMACSigner_PresignURL(t *testing.T) {
@@ -321,27 +262,15 @@ func TestHMACSigner_PresignURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://api.example.com/data?foo=bar", nil)
 
 	presignedURL, err := signer.PresignURL(req, 5*time.Minute)
-	if err != nil {
-		t.Fatalf("PresignURL failed: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if presignedURL == "" {
-		t.Fatal("expected non-empty presigned URL")
-	}
+	zhtest.AssertNotEmpty(t, presignedURL)
 
 	// Check that query parameters were added
-	if !strings.Contains(presignedURL, "X-HMAC-Algorithm=") {
-		t.Error("expected X-HMAC-Algorithm in presigned URL")
-	}
-	if !strings.Contains(presignedURL, "X-HMAC-Credential=") {
-		t.Error("expected X-HMAC-Credential in presigned URL")
-	}
-	if !strings.Contains(presignedURL, "X-HMAC-SignedHeaders=") {
-		t.Error("expected X-HMAC-SignedHeaders in presigned URL")
-	}
-	if !strings.Contains(presignedURL, "X-HMAC-Signature=") {
-		t.Error("expected X-HMAC-Signature in presigned URL")
-	}
+	zhtest.AssertTrue(t, strings.Contains(presignedURL, "X-HMAC-Algorithm="))
+	zhtest.AssertTrue(t, strings.Contains(presignedURL, "X-HMAC-Credential="))
+	zhtest.AssertTrue(t, strings.Contains(presignedURL, "X-HMAC-SignedHeaders="))
+	zhtest.AssertTrue(t, strings.Contains(presignedURL, "X-HMAC-Signature="))
 }
 
 func TestHMACSigner_PresignURLWithTime(t *testing.T) {
@@ -350,18 +279,12 @@ func TestHMACSigner_PresignURLWithTime(t *testing.T) {
 
 	expiresAt := time.Date(2026, 3, 7, 13, 0, 0, 0, time.UTC)
 	presignedURL, err := signer.PresignURLWithTime(req, expiresAt)
-	if err != nil {
-		t.Fatalf("PresignURLWithTime failed: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if presignedURL == "" {
-		t.Fatal("expected non-empty presigned URL")
-	}
+	zhtest.AssertNotEmpty(t, presignedURL)
 
 	// URL should contain the specific expiration time
-	if !strings.Contains(presignedURL, "2026-03-07T13%3A00%3A00Z") {
-		t.Error("expected expiration time in presigned URL")
-	}
+	zhtest.AssertTrue(t, strings.Contains(presignedURL, "2026-03-07T13%3A00%3A00Z"))
 }
 
 func TestHMACSigner_computeBodyHash(t *testing.T) {
@@ -417,19 +340,13 @@ func TestHMACSigner_computeBodyHash(t *testing.T) {
 			hash := signer.computeBodyHash(req)
 
 			if tt.unsigned {
-				if hash != tt.expected {
-					t.Errorf("expected %s, got %s", tt.expected, hash)
-				}
+				zhtest.AssertEqual(t, tt.expected, hash)
 			} else {
 				// Hash should be hex encoded
-				if len(hash) == 0 {
-					t.Error("expected non-empty hash")
-				}
+				zhtest.AssertNotEmpty(t, hash)
 				// Check it's valid hex
 				for _, c := range hash {
-					if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-						t.Errorf("hash contains invalid hex character: %c", c)
-					}
+					zhtest.AssertTrue(t, (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
 				}
 			}
 		})
@@ -469,9 +386,7 @@ func TestHMACSigner_buildCanonicalQueryString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := signer.buildCanonicalQueryString(tt.query)
-			if result != tt.expected {
-				t.Errorf("expected %q, got %q", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }

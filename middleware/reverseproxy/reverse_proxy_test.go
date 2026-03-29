@@ -28,7 +28,7 @@ func TestReverseProxy_SingleTarget(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("next handler should not be called")
+		zhtest.AssertFail(t, "next handler should not be called")
 	})
 
 	mw(next).ServeHTTP(rec, req)
@@ -201,12 +201,8 @@ func TestReverseProxy_ForwardHeaders(t *testing.T) {
 
 	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 	body := rec.Body.String()
-	if !strings.Contains(body, "http") {
-		t.Errorf("expected X-Forwarded-Proto to be 'http', got %s", body)
-	}
-	if !strings.Contains(body, "example.com") {
-		t.Errorf("expected X-Forwarded-Host to be 'example.com', got %s", body)
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, "http"))
+	zhtest.AssertTrue(t, strings.Contains(body, "example.com"))
 }
 
 func TestReverseProxy_ExcludedPaths(t *testing.T) {
@@ -232,9 +228,7 @@ func TestReverseProxy_ExcludedPaths(t *testing.T) {
 
 	mw(next).ServeHTTP(rec, req)
 
-	if !nextCalled {
-		t.Error("expected next handler to be called for excluded path")
-	}
+	zhtest.AssertTrue(t, nextCalled)
 	zhtest.AssertWith(t, rec).Body("excluded")
 
 	// Test non-excluded path - should go to upstream
@@ -362,12 +356,8 @@ func TestReverseProxy_LoadBalancer_RoundRobin(t *testing.T) {
 	// Both should get responses (we don't know which order due to round-robin)
 	body1 := rec1.Body.String()
 	body2 := rec2.Body.String()
-	if body1 != "backend1" && body1 != "backend2" {
-		t.Errorf("unexpected body: %s", body1)
-	}
-	if body2 != "backend1" && body2 != "backend2" {
-		t.Errorf("unexpected body: %s", body2)
-	}
+	zhtest.AssertTrue(t, body1 == "backend1" || body1 == "backend2")
+	zhtest.AssertTrue(t, body2 == "backend1" || body2 == "backend2")
 }
 
 func TestReverseProxy_LoadBalancer_Random(t *testing.T) {
@@ -395,9 +385,7 @@ func TestReverseProxy_LoadBalancer_Random(t *testing.T) {
 
 	zhtest.AssertWith(t, rec).Status(http.StatusOK)
 	body := rec.Body.String()
-	if body != "backend1" && body != "backend2" {
-		t.Errorf("unexpected body: %s", body)
-	}
+	zhtest.AssertTrue(t, body == "backend1" || body == "backend2")
 }
 
 func TestReverseProxy_LoadBalancer_LeastConnections(t *testing.T) {
@@ -428,26 +416,18 @@ func TestReverseProxy_LoadBalancer_LeastConnections(t *testing.T) {
 }
 
 func TestReverseProxy_PanicOnMissingTarget(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for missing target")
-		}
-	}()
-
-	New(Config{
-		Target: "",
+	zhtest.AssertPanic(t, func() {
+		New(Config{
+			Target: "",
+		})
 	})
 }
 
 func TestReverseProxy_PanicOnInvalidURL(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for invalid URL")
-		}
-	}()
-
-	New(Config{
-		Target: "://invalid-url",
+	zhtest.AssertPanic(t, func() {
+		New(Config{
+			Target: "://invalid-url",
+		})
 	})
 }
 
@@ -570,9 +550,7 @@ func TestReverseProxy_WithNextHandler(t *testing.T) {
 
 	mw(next).ServeHTTP(rec, req)
 
-	if nextCalled {
-		t.Error("expected next handler NOT to be called without excluded paths")
-	}
+	zhtest.AssertFalse(t, nextCalled)
 	zhtest.AssertWith(t, rec).Body("upstream")
 }
 
@@ -670,9 +648,7 @@ func TestReverseProxy_HealthCheckCleanup(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Wait for a health check cycle
 	time.Sleep(75 * time.Millisecond)
@@ -688,9 +664,7 @@ func TestReverseProxy_HealthCheckCleanup(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	handler.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusOK {
-		t.Fatalf("expected status 200 after cleanup, got %d", rec2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec2.Code)
 }
 
 type flusherRecorder struct {
@@ -743,9 +717,7 @@ func TestReverseProxy_proxyResponseRecorder_Flush(t *testing.T) {
 			// Call Flush
 			prr.Flush()
 
-			if *flushCalled != tt.expectFlushCalled {
-				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectFlushCalled, *flushCalled)
 		})
 	}
 }
@@ -787,11 +759,10 @@ func TestReverseProxy_IncludedPaths(t *testing.T) {
 
 			mw(next).ServeHTTP(rec, req)
 
-			if tt.expectUpstream && nextCalled {
-				t.Error("expected upstream to handle request, but next was called")
-			}
-			if !tt.expectUpstream && !nextCalled {
-				t.Error("expected next handler to be called, but upstream handled it")
+			if tt.expectUpstream {
+				zhtest.AssertFalse(t, nextCalled)
+			} else {
+				zhtest.AssertTrue(t, nextCalled)
 			}
 			zhtest.AssertWith(t, rec).Body(tt.expectBody)
 		})
@@ -804,15 +775,11 @@ func TestReverseProxy_BothExcludedAndIncludedPathsPanics(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_, _ = New(Config{
-		Target:        upstream.URL,
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_, _ = New(Config{
+			Target:        upstream.URL,
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

@@ -25,9 +25,7 @@ func Serve(handler http.Handler, req *http.Request) *httptest.ResponseRecorder {
 //
 //	req := zhtest.NewRequest(http.MethodGet, "/users").Build()
 //	w := zhtest.ServeWithRecorder(router, req)
-//	if !w.IsSuccess() {
-//	    t.Error("expected success")
-//	}
+//	zhtest.AssertTrue(t, w.IsSuccess())
 func ServeWithRecorder(handler http.Handler, req *http.Request) *Response {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

@@ -85,9 +85,8 @@ func TestRateLimitTokenBucket(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		w := zhtest.Serve(handler, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("request %d: expected status 200, got %d", i+1, w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
+		_ = i
 	}
 	// Test JSON response
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("Accept", "application/json").Build()
@@ -101,9 +100,7 @@ func TestRateLimitTokenBucket(t *testing.T) {
 	w = zhtest.Serve(handler, req)
 	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
 
-	if count != 2 {
-		t.Errorf("expected 2 successful requests, got %d", count)
-	}
+	zhtest.AssertEqual(t, 2, count)
 }
 
 func TestRateLimitFixedWindow(t *testing.T) {
@@ -122,18 +119,15 @@ func TestRateLimitFixedWindow(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		w := zhtest.Serve(handler, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("request %d: expected status 200, got %d", i+1, w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
+		_ = i
 	}
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := zhtest.Serve(handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests)
-	if count != 3 {
-		t.Errorf("expected 3 successful requests, got %d", count)
-	}
+	zhtest.AssertEqual(t, 3, count)
 }
 
 func TestRateLimitSlidingWindow(t *testing.T) {
@@ -148,9 +142,8 @@ func TestRateLimitSlidingWindow(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		w := zhtest.Serve(handler, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("request %d: expected status 200, got %d", i+1, w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
+		_ = i
 	}
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -218,9 +211,8 @@ func TestRateLimitCustomKeyExtractor(t *testing.T) {
 	for i := range 2 {
 		req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("User-ID", "user1").Build()
 		w := zhtest.Serve(handler, req)
-		if w.Code != http.StatusOK {
-			t.Errorf("user1 request %d: expected status 200, got %d", i+1, w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
+		_ = i
 	}
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("User-ID", "user1").Build()
 	w := zhtest.Serve(handler, req)
@@ -250,13 +242,10 @@ func TestRateLimitExcludedPaths(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		w := zhtest.Serve(handler, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("excluded path request %d: expected status 200, got %d", i+1, w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
+		_ = i
 	}
-	if count != 3 {
-		t.Errorf("expected 3 requests to excluded path, got %d", count)
-	}
+	zhtest.AssertEqual(t, 3, count)
 	req := zhtest.NewRequest(http.MethodGet, "/api").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := zhtest.Serve(handler, req)
@@ -306,15 +295,11 @@ func TestIPKeyExtractor(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Forwarded-For", "192.168.1.1").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	key := IPKeyExtractor()(req)
-	if key != "192.168.1.1" {
-		t.Errorf("expected key '192.168.1.1', got '%s'", key)
-	}
+	zhtest.AssertEqual(t, "192.168.1.1", key)
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	key = IPKeyExtractor()(req)
-	if key != "127.0.0.1" {
-		t.Errorf("expected key '127.0.0.1', got '%s'", key)
-	}
+	zhtest.AssertEqual(t, "127.0.0.1", key)
 }
 
 func TestRateLimit_Metrics(t *testing.T) {
@@ -339,18 +324,14 @@ func TestRateLimit_Metrics(t *testing.T) {
 	req1.RemoteAddr = "127.0.0.1:12345"
 	w1 := httptest.NewRecorder()
 	wrapped.ServeHTTP(w1, req1)
-	if w1.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w1.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, w1.Code)
 
 	// Second request rejected
 	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req2.RemoteAddr = "127.0.0.1:12345"
 	w2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(w2, req2)
-	if w2.Code != http.StatusTooManyRequests {
-		t.Errorf("expected 429, got %d", w2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusTooManyRequests, w2.Code)
 
 	// Check metrics
 	families := reg.Gather()
@@ -361,9 +342,7 @@ func TestRateLimit_Metrics(t *testing.T) {
 			break
 		}
 	}
-	if counter == nil {
-		t.Fatal("expected ratelimit metrics")
-	}
+	zhtest.AssertNotNil(t, counter)
 }
 
 func TestHeaderKeyExtractor(t *testing.T) {
@@ -408,9 +387,7 @@ func TestHeaderKeyExtractor(t *testing.T) {
 			}
 
 			result := extractor(req)
-			if result != tt.expected {
-				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -459,9 +436,7 @@ func TestContextKeyExtractor(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").Build().WithContext(ctx)
 
 			result := extractor(req)
-			if result != tt.expected {
-				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -506,9 +481,7 @@ func TestJWTSubjectKeyExtractor(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, "/test").Build().WithContext(ctx)
 
 			result := extractor(req)
-			if result != tt.expected {
-				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -586,9 +559,7 @@ func TestCompositeKeyExtractor(t *testing.T) {
 			tt.setupReq(req)
 
 			result := extractor(req)
-			if result != tt.expected {
-				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -639,9 +610,7 @@ func TestIPKeyExtractor_IPv6(t *testing.T) {
 
 			extractor := IPKeyExtractor()
 			result := extractor(req)
-			if result != tt.expected {
-				t.Errorf("expected key '%s', got '%s'", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -679,25 +648,19 @@ func TestRateLimit_IncludedPaths(t *testing.T) {
 			req.RemoteAddr = "127.0.0.1:12345"
 			w := zhtest.Serve(handler, req)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("expected status %d, got %d", tt.wantStatus, w.Code)
-			}
+			zhtest.AssertEqual(t, tt.wantStatus, w.Code)
 		})
 	}
 }
 
 func TestRateLimit_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		Rate:          1,
-		Window:        time.Second,
-		Algorithm:     TokenBucket,
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			Rate:          1,
+			Window:        time.Second,
+			Algorithm:     TokenBucket,
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

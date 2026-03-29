@@ -80,12 +80,10 @@ func TestRequestLogger_LogLevels(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/notfound").Build()
 		zhtest.TestMiddlewareWithHandler(middleware, handler, req)
 
-		if len(logger.warnLogs) != 1 {
-			t.Fatalf("Expected 1 warn log, got %d", len(logger.warnLogs))
-		}
-		if value, found := findFieldValue(logger.warnLogs[0].fields, "status"); !found || value != http.StatusNotFound {
-			t.Errorf("Expected status 404, got %v", value)
-		}
+		zhtest.AssertEqual(t, 1, len(logger.warnLogs))
+		value, found := findFieldValue(logger.warnLogs[0].fields, "status")
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, http.StatusNotFound, value)
 	})
 
 	t.Run("server error", func(t *testing.T) {
@@ -93,12 +91,10 @@ func TestRequestLogger_LogLevels(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/error").Build()
 		zhtest.TestMiddlewareWithHandler(middleware, handler, req)
 
-		if len(logger.errorLogs) != 1 {
-			t.Fatalf("Expected 1 error log, got %d", len(logger.errorLogs))
-		}
-		if value, found := findFieldValue(logger.errorLogs[0].fields, "status"); !found || value != http.StatusInternalServerError {
-			t.Errorf("Expected status 500, got %v", value)
-		}
+		zhtest.AssertEqual(t, 1, len(logger.errorLogs))
+		value, found := findFieldValue(logger.errorLogs[0].fields, "status")
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, http.StatusInternalServerError, value)
 	})
 
 	t.Run("logErrors disabled", func(t *testing.T) {
@@ -109,12 +105,8 @@ func TestRequestLogger_LogLevels(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/error").Build()
 		zhtest.TestMiddlewareWithHandler(middleware, handler, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
-		if len(logger.errorLogs) != 0 {
-			t.Errorf("Expected no error logs when LogErrors is false, got %d", len(logger.errorLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
+		zhtest.AssertEqual(t, 0, len(logger.errorLogs))
 	})
 }
 
@@ -129,28 +121,22 @@ func TestRequestLogger_FieldsAndDurations(t *testing.T) {
 	zhtest.Serve(middleware, req)
 	elapsed := time.Since(start)
 
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 	entry := logger.infoLogs[0]
-	if value, found := findFieldValue(entry.fields, "duration_ns"); !found {
-		t.Error("Expected duration_ns field to be present")
-	} else {
-		durationNS, ok := value.(int64)
-		if !ok {
-			t.Errorf("Expected duration_ns to be int64, got %T", value)
-		} else if time.Duration(durationNS) < delay {
-			t.Errorf("Expected duration to be at least %v, got %v", delay, time.Duration(durationNS))
-		} else if time.Duration(durationNS) > elapsed+time.Millisecond {
-			t.Errorf("Expected duration to be less than %v, got %v", elapsed+time.Millisecond, time.Duration(durationNS))
-		}
-	}
-	if value, found := findFieldValue(entry.fields, "duration_human"); !found {
-		t.Error("Expected duration_human field to be present")
-	} else if durationStr, ok := value.(string); !ok || !strings.Contains(durationStr, "ms") && !strings.Contains(durationStr, "µs") && !strings.Contains(durationStr, "ns") {
-		t.Errorf("Expected duration_human to contain time unit, got %s", value)
-	}
+	value, found := findFieldValue(entry.fields, "duration_ns")
+	zhtest.AssertTrue(t, found)
+	durationNS, ok := value.(int64)
+	zhtest.AssertTrue(t, ok)
+	zhtest.AssertTrue(t, time.Duration(durationNS) >= delay)
+	zhtest.AssertTrue(t, time.Duration(durationNS) <= elapsed+time.Millisecond)
+
+	value, found = findFieldValue(entry.fields, "duration_human")
+	zhtest.AssertTrue(t, found)
+	durationStr, ok := value.(string)
+	zhtest.AssertTrue(t, ok)
+	hasUnit := strings.Contains(durationStr, "ms") || strings.Contains(durationStr, "µs") || strings.Contains(durationStr, "ns")
+	zhtest.AssertTrue(t, hasUnit)
 }
 
 func TestRequestLogger_EmptyPath(t *testing.T) {
@@ -162,13 +148,11 @@ func TestRequestLogger_EmptyPath(t *testing.T) {
 	req.URL.Path = ""
 	zhtest.Serve(middleware, req)
 
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 	entry := logger.infoLogs[0]
-	if value, found := findFieldValue(entry.fields, "path"); !found || value != "/" {
-		t.Errorf("Expected empty path to be '/', got %v", value)
-	}
+	value, found := findFieldValue(entry.fields, "path")
+	zhtest.AssertTrue(t, found)
+	zhtest.AssertEqual(t, "/", value)
 }
 
 func TestRequestLogger_RequestIDField(t *testing.T) {
@@ -179,14 +163,12 @@ func TestRequestLogger_RequestIDField(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader("X-Request-Id", "test-123").Build()
 	zhtest.Serve(middleware, req)
 
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 	entry := logger.infoLogs[0]
-	if value, found := findFieldValue(entry.fields, "request_id"); !found || value != "test-123" {
-		t.Errorf("Expected request_id 'test-123', got %v", value)
-	}
+	value, found := findFieldValue(entry.fields, "request_id")
+	zhtest.AssertTrue(t, found)
+	zhtest.AssertEqual(t, "test-123", value)
 }
 
 func TestRequestLogger_NoRequestIDField(t *testing.T) {
@@ -197,14 +179,11 @@ func TestRequestLogger_NoRequestIDField(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(middleware, req)
 
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 	entry := logger.infoLogs[0]
-	if _, found := findFieldValue(entry.fields, "request_id"); found {
-		t.Error("Expected request_id field not to be present when header is missing")
-	}
+	_, found := findFieldValue(entry.fields, "request_id")
+	zhtest.AssertFalse(t, found)
 }
 
 func TestRequestLogger_CustomFields(t *testing.T) {
@@ -219,23 +198,19 @@ func TestRequestLogger_CustomFields(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodPost, "/api/users").Build()
 	zhtest.Serve(middleware, req)
 
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 	entry := logger.infoLogs[0]
 	expectedFields := []string{"method", "path", "status"}
 	unexpectedFields := []string{"uri", "host", "protocol", "user_agent"}
 
 	for _, field := range expectedFields {
-		if _, found := findFieldValue(entry.fields, field); !found {
-			t.Errorf("Expected field %s to be present", field)
-		}
+		_, found := findFieldValue(entry.fields, field)
+		zhtest.AssertTrue(t, found)
 	}
 	for _, field := range unexpectedFields {
-		if _, found := findFieldValue(entry.fields, field); found {
-			t.Errorf("Expected field %s not to be present", field)
-		}
+		_, found := findFieldValue(entry.fields, field)
+		zhtest.AssertFalse(t, found)
 	}
 }
 
@@ -247,16 +222,12 @@ func TestRequestLogger_ExcludedPaths(t *testing.T) {
 	req1 := zhtest.NewRequest(http.MethodGet, "/health").Build()
 	zhtest.Serve(middleware, req1)
 
-	if len(logger.infoLogs) != 0 {
-		t.Errorf("Expected no logs for excluded path, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 0, len(logger.infoLogs))
 
 	req2 := zhtest.NewRequest(http.MethodGet, "/api").Build()
 	zhtest.Serve(middleware, req2)
 
-	if len(logger.infoLogs) != 1 {
-		t.Errorf("Expected 1 log for non-excluded path, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 }
 
 func TestRequestLogger_NilFields(t *testing.T) {
@@ -267,13 +238,10 @@ func TestRequestLogger_NilFields(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(middleware, req)
 
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 	entry := logger.infoLogs[0]
-	if _, found := findFieldValue(entry.fields, "method"); !found {
-		t.Error("Expected method field to be present with nil Fields config")
-	}
+	_, found := findFieldValue(entry.fields, "method")
+	zhtest.AssertTrue(t, found)
 }
 
 func TestRequestLogger_MultipleOptions(t *testing.T) {
@@ -286,50 +254,28 @@ func TestRequestLogger_MultipleOptions(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 	zhtest.Serve(middleware, req)
 
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 	entry := logger.infoLogs[0]
-	if _, found := findFieldValue(entry.fields, "method"); found {
-		t.Error("Expected method field not to be present (overridden by second option)")
-	}
-	if _, found := findFieldValue(entry.fields, "path"); !found {
-		t.Error("Expected path field from last option to be present")
-	}
+	_, found := findFieldValue(entry.fields, "method")
+	zhtest.AssertFalse(t, found)
+	_, found = findFieldValue(entry.fields, "path")
+	zhtest.AssertTrue(t, found)
 }
 
 func TestDefaultRequestLoggerConfig(t *testing.T) {
 	cfg := DefaultConfig
-	if !cfg.LogErrors {
-		t.Error("Expected default LogErrors to be true")
-	}
-	expectedFieldCount := 13
-	if len(cfg.Fields) != expectedFieldCount {
-		t.Errorf("Expected %d default fields, got %d", expectedFieldCount, len(cfg.Fields))
-	}
+	zhtest.AssertTrue(t, cfg.LogErrors)
+	zhtest.AssertEqual(t, 13, len(cfg.Fields))
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+
 	expectedFields := []LogField{
 		FieldMethod, FieldURI, FieldPath, FieldHost, FieldProtocol,
 		FieldReferer, FieldUserAgent, FieldStatus, FieldDurationNS,
 		FieldDurationHuman, FieldRemoteAddr, FieldClientIP, FieldRequestID,
 	}
-	fieldMap := make(map[LogField]bool)
-	for _, field := range cfg.Fields {
-		fieldMap[field] = true
-	}
-	for _, expected := range expectedFields {
-		if !fieldMap[expected] {
-			t.Errorf("Expected field %s to be in default cfg", expected)
-		}
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("Expected default excluded paths to be empty, got %d", len(cfg.ExcludedPaths))
-	}
-	if cfg.MaxBodySize != 1024 {
-		t.Errorf("Expected default MaxBodySize to be 1024, got %d", cfg.MaxBodySize)
-	}
-	if len(cfg.SensitiveFields) == 0 {
-		t.Error("Expected default SensitiveFields to be populated")
-	}
+	zhtest.AssertEqual(t, expectedFields, cfg.Fields)
+	zhtest.AssertEqual(t, 1024, cfg.MaxBodySize)
+	zhtest.AssertNotEmpty(t, cfg.SensitiveFields)
 }
 
 func TestRequestLogger_RequestBodyLogging(t *testing.T) {
@@ -347,15 +293,11 @@ func TestRequestLogger_RequestBodyLogging(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
-			t.Error("Expected request_body field to be present")
-		} else if body, ok := value.(string); !ok || body != `{"name":"test","value":123}` {
-			t.Errorf("Expected request_body to be '{\"name\":\"test\",\"value\":123}', got %v", value)
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, `{"name":"test","value":123}`, value)
 	})
 
 	t.Run("disabled by default", func(t *testing.T) {
@@ -368,13 +310,10 @@ func TestRequestLogger_RequestBodyLogging(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
-		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			t.Error("Expected request_body field not to be present when disabled")
-		}
+		_, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertFalse(t, found)
 	})
 
 	t.Run("body available to handler", func(t *testing.T) {
@@ -397,9 +336,7 @@ func TestRequestLogger_RequestBodyLogging(t *testing.T) {
 		recorder := zhtest.Serve(middleware, req)
 
 		// Verify handler could read the body
-		if !strings.Contains(recorder.Body.String(), `{"data":"value"}`) {
-			t.Errorf("Expected handler to read body, got %s", recorder.Body.String())
-		}
+		zhtest.AssertContains(t, recorder.Body.String(), `{"data":"value"}`)
 	})
 }
 
@@ -417,20 +354,14 @@ func TestRequestLogger_ResponseBodyLogging(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); !found {
-			t.Error("Expected response_body field to be present")
-		} else if body, ok := value.(string); !ok {
-			t.Errorf("Expected response_body to be string, got %T", value)
-		} else {
-			// Check for expected content without relying on key order
-			if !strings.Contains(body, `"status":"ok"`) || !strings.Contains(body, `"id":123`) {
-				t.Errorf("Expected response_body to contain '{\"status\":\"ok\",\"id\":123}', got %v", body)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "response_body")
+		zhtest.AssertTrue(t, found)
+		body, ok := value.(string)
+		zhtest.AssertTrue(t, ok)
+		zhtest.AssertContains(t, body, `"status":"ok"`)
+		zhtest.AssertContains(t, body, `"id":123`)
 	})
 
 	t.Run("disabled by default", func(t *testing.T) {
@@ -443,13 +374,10 @@ func TestRequestLogger_ResponseBodyLogging(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
-		if _, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
-			t.Error("Expected response_body field not to be present when disabled")
-		}
+		_, found := findFieldValue(logger.infoLogs[0].fields, "response_body")
+		zhtest.AssertFalse(t, found)
 	})
 
 	t.Run("response still returned", func(t *testing.T) {
@@ -465,9 +393,7 @@ func TestRequestLogger_ResponseBodyLogging(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		recorder := zhtest.Serve(middleware, req)
 
-		if recorder.Body.String() != "response data" {
-			t.Errorf("Expected response body to be 'response data', got %s", recorder.Body.String())
-		}
+		zhtest.AssertEqual(t, "response data", recorder.Body.String())
 	})
 }
 
@@ -486,15 +412,11 @@ func TestRequestLogger_MaxBodySize(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			// 10 chars + "..." = 13
-			if len(value.(string)) != 13 {
-				t.Errorf("Expected request_body to be truncated to 10 chars + ..., got %d", len(value.(string)))
-			}
-			if !strings.HasSuffix(value.(string), "...") {
-				t.Errorf("Expected request_body to end with ..., got %s", value.(string))
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		// 10 chars + "..." = 13
+		zhtest.AssertEqual(t, 13, len(value.(string)))
+		zhtest.AssertTrue(t, strings.HasSuffix(value.(string), "..."))
 	})
 
 	t.Run("response body truncated", func(t *testing.T) {
@@ -511,15 +433,11 @@ func TestRequestLogger_MaxBodySize(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
-			// 10 chars + "..." = 13
-			if len(value.(string)) != 13 {
-				t.Errorf("Expected response_body to be truncated to 10 chars + ..., got %d", len(value.(string)))
-			}
-			if !strings.HasSuffix(value.(string), "...") {
-				t.Errorf("Expected response_body to end with ..., got %s", value.(string))
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "response_body")
+		zhtest.AssertTrue(t, found)
+		// 10 chars + "..." = 13
+		zhtest.AssertEqual(t, 13, len(value.(string)))
+		zhtest.AssertTrue(t, strings.HasSuffix(value.(string), "..."))
 	})
 
 	t.Run("unlimited body size", func(t *testing.T) {
@@ -536,11 +454,9 @@ func TestRequestLogger_MaxBodySize(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/test").Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
-			if value != "short" {
-				t.Errorf("Expected response_body to be 'short', got %v", value)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "response_body")
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, "short", value)
 	})
 }
 
@@ -559,15 +475,11 @@ func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			body := value.(string)
-			if strings.Contains(body, "secret123") {
-				t.Errorf("Expected password to be masked, got %s", body)
-			}
-			if !strings.Contains(body, "[REDACTED]") {
-				t.Errorf("Expected [REDACTED] in body, got %s", body)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		body := value.(string)
+		zhtest.AssertNotContains(t, body, "secret123")
+		zhtest.AssertContains(t, body, "[REDACTED]")
 	})
 
 	t.Run("masks token field", func(t *testing.T) {
@@ -583,16 +495,12 @@ func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodPost, "/token").Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); found {
-			body := value.(string)
-			if strings.Contains(body, "abc123") || strings.Contains(body, "xyz789") {
-				t.Errorf("Expected tokens to be masked, got %s", body)
-			}
-			count := strings.Count(body, "[REDACTED]")
-			if count != 2 {
-				t.Errorf("Expected 2 [REDACTED] values, got %d in %s", count, body)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "response_body")
+		zhtest.AssertTrue(t, found)
+		body := value.(string)
+		zhtest.AssertNotContains(t, body, "abc123")
+		zhtest.AssertNotContains(t, body, "xyz789")
+		zhtest.AssertEqual(t, 2, strings.Count(body, "[REDACTED]"))
 	})
 
 	t.Run("custom sensitive fields", func(t *testing.T) {
@@ -609,16 +517,13 @@ func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			body := value.(string)
-			if strings.Contains(body, "123-45-6789") || strings.Contains(body, "4111-1111-1111-1111") {
-				t.Errorf("Expected sensitive fields to be masked, got %s", body)
-			}
-			// "name" should not be masked
-			if !strings.Contains(body, "John") {
-				t.Errorf("Expected name to not be masked, got %s", body)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		body := value.(string)
+		zhtest.AssertNotContains(t, body, "123-45-6789")
+		zhtest.AssertNotContains(t, body, "4111-1111-1111-1111")
+		// "name" should not be masked
+		zhtest.AssertContains(t, body, "John")
 	})
 
 	t.Run("nested object masking", func(t *testing.T) {
@@ -634,16 +539,12 @@ func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			body := value.(string)
-			if strings.Contains(body, "nested_secret") {
-				t.Errorf("Expected nested password to be masked, got %s", body)
-			}
-			// "name" inside user should not be masked
-			if !strings.Contains(body, "John") {
-				t.Errorf("Expected name to not be masked, got %s", body)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		body := value.(string)
+		zhtest.AssertNotContains(t, body, "nested_secret")
+		// "name" inside user should not be masked
+		zhtest.AssertContains(t, body, "John")
 	})
 
 	t.Run("array of objects masking", func(t *testing.T) {
@@ -659,16 +560,14 @@ func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			body := value.(string)
-			if strings.Contains(body, "pass1") || strings.Contains(body, "pass2") {
-				t.Errorf("Expected passwords in array to be masked, got %s", body)
-			}
-			// Check ids are preserved
-			if !strings.Contains(body, `"id":1`) || !strings.Contains(body, `"id":2`) {
-				t.Errorf("Expected ids to not be masked, got %s", body)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		body := value.(string)
+		zhtest.AssertNotContains(t, body, "pass1")
+		zhtest.AssertNotContains(t, body, "pass2")
+		// Check ids are preserved
+		zhtest.AssertContains(t, body, `"id":1`)
+		zhtest.AssertContains(t, body, `"id":2`)
 	})
 
 	t.Run("non-json body passthrough", func(t *testing.T) {
@@ -684,11 +583,9 @@ func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			if value != "plain text body" {
-				t.Errorf("Expected plain text body, got %v", value)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, "plain text body", value)
 	})
 
 	t.Run("empty sensitive fields list", func(t *testing.T) {
@@ -705,13 +602,11 @@ func TestRequestLogger_SensitiveFieldMasking(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if value, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); found {
-			body := value.(string)
-			// With empty sensitive fields list, password should NOT be masked
-			if !strings.Contains(body, "secret") {
-				t.Errorf("Expected password not to be masked with empty list, got %s", body)
-			}
-		}
+		value, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		body := value.(string)
+		// With empty sensitive fields list, password should NOT be masked
+		zhtest.AssertContains(t, body, "secret")
 	})
 }
 
@@ -733,21 +628,15 @@ func TestRequestLogger_BothBodies(t *testing.T) {
 	recorder := zhtest.Serve(middleware, req)
 
 	// Verify handler works
-	if !strings.Contains(recorder.Body.String(), `"msg":"hello"`) {
-		t.Errorf("Expected handler to work, got %s", recorder.Body.String())
-	}
+	zhtest.AssertContains(t, recorder.Body.String(), `"msg":"hello"`)
 
 	// Verify both bodies logged
-	if len(logger.infoLogs) != 1 {
-		t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-	}
+	zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
-	if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
-		t.Error("Expected request_body field to be present")
-	}
-	if _, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); !found {
-		t.Error("Expected response_body field to be present")
-	}
+	_, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+	zhtest.AssertTrue(t, found)
+	_, found = findFieldValue(logger.infoLogs[0].fields, "response_body")
+	zhtest.AssertTrue(t, found)
 }
 
 type panicLogger struct{}
@@ -764,19 +653,13 @@ func (p *panicLogger) WithFields(fields ...log.Field) log.Logger  { return p }
 func (p *panicLogger) WithContext(ctx context.Context) log.Logger { return p }
 
 func TestRequestLogger_ExcludedPathsAndIncludedPathsPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic when both ExcludedPaths and IncludedPaths are set")
-		} else if !strings.Contains(r.(string), "cannot set both ExcludedPaths and IncludedPaths") {
-			t.Errorf("Expected panic message about ExcludedPaths and IncludedPaths, got: %v", r)
-		}
-	}()
-
-	logger := &panicLogger{}
-	_ = New(logger, Config{
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api/debug"},
-	})
+	zhtest.AssertPanicContains(t, func() {
+		logger := &panicLogger{}
+		_ = New(logger, Config{
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api/debug"},
+		})
+	}, "cannot set both ExcludedPaths and IncludedPaths")
 }
 
 func TestRequestLogger_IncludedPaths(t *testing.T) {
@@ -798,15 +681,11 @@ func TestRequestLogger_IncludedPaths(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req1)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
-		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
-			t.Error("Expected request_body to be present for allowed path")
-		}
-		if _, found := findFieldValue(logger.infoLogs[0].fields, "response_body"); !found {
-			t.Error("Expected response_body to be present for allowed path")
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
+		_, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
+		_, found = findFieldValue(logger.infoLogs[0].fields, "response_body")
+		zhtest.AssertTrue(t, found)
 
 		// Request to non-allowed path - bodies should NOT be logged
 		logger2 := &requestLoggerMockLogger{}
@@ -822,15 +701,11 @@ func TestRequestLogger_IncludedPaths(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware2, req2)
 
-		if len(logger2.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger2.infoLogs))
-		}
-		if _, found := findFieldValue(logger2.infoLogs[0].fields, "request_body"); found {
-			t.Error("Expected request_body to NOT be present for non-allowed path")
-		}
-		if _, found := findFieldValue(logger2.infoLogs[0].fields, "response_body"); found {
-			t.Error("Expected response_body to NOT be present for non-allowed path")
-		}
+		zhtest.AssertEqual(t, 1, len(logger2.infoLogs))
+		_, found = findFieldValue(logger2.infoLogs[0].fields, "request_body")
+		zhtest.AssertFalse(t, found)
+		_, found = findFieldValue(logger2.infoLogs[0].fields, "response_body")
+		zhtest.AssertFalse(t, found)
 	})
 
 	t.Run("prefix matching for included paths", func(t *testing.T) {
@@ -851,12 +726,9 @@ func TestRequestLogger_IncludedPaths(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
-		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
-			t.Error("Expected request_body to be present for path under allowed prefix")
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
+		_, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
 	})
 
 	t.Run("empty included paths allows all", func(t *testing.T) {
@@ -876,12 +748,9 @@ func TestRequestLogger_IncludedPaths(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
-		if _, found := findFieldValue(logger.infoLogs[0].fields, "request_body"); !found {
-			t.Error("Expected request_body to be present when IncludedPaths is empty")
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
+		_, found := findFieldValue(logger.infoLogs[0].fields, "request_body")
+		zhtest.AssertTrue(t, found)
 	})
 }
 
@@ -937,9 +806,7 @@ func TestRequestLogger_Flush(t *testing.T) {
 			// Call Flush
 			bcrw.Flush()
 
-			if *flushCalled != tt.expectFlushCalled {
-				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectFlushCalled, *flushCalled)
 
 			_ = logger // suppress unused warning
 		})
@@ -956,10 +823,7 @@ func TestRequestLogger_Flush_SupportsSSE(t *testing.T) {
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try to get a Flusher from the writer
 		f, ok := w.(http.Flusher)
-		if !ok {
-			t.Error("expected ResponseWriter to implement http.Flusher")
-			return
-		}
+		zhtest.AssertTrue(t, ok)
 
 		// Write and flush like SSE would
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)
@@ -971,13 +835,8 @@ func TestRequestLogger_Flush_SupportsSSE(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	handler.ServeHTTP(rec, req)
 
-	if !rec.flushed {
-		t.Error("expected Flush to be called on underlying ResponseWriter")
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertTrue(t, rec.flushed)
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
@@ -998,16 +857,12 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 		entry := logger.infoLogs[0]
-		if value, found := findFieldValue(entry.fields, "api_key"); !found {
-			t.Error("Expected api_key field to be present")
-		} else if value != "secret-key-123" {
-			t.Errorf("Expected api_key to be 'secret-key-123', got %v", value)
-		}
+		value, found := findFieldValue(entry.fields, "api_key")
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, "secret-key-123", value)
 	})
 
 	type contextKey string
@@ -1030,16 +885,12 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-456"))
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 		entry := logger.infoLogs[0]
-		if value, found := findFieldValue(entry.fields, "user_id"); !found {
-			t.Error("Expected user_id field to be present")
-		} else if value != "user-456" {
-			t.Errorf("Expected user_id to be 'user-456', got %v", value)
-		}
+		value, found := findFieldValue(entry.fields, "user_id")
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, "user-456", value)
 	})
 
 	t.Run("nil custom fields callback", func(t *testing.T) {
@@ -1053,18 +904,14 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 		// Should only have the built-in fields
 		entry := logger.infoLogs[0]
-		if _, found := findFieldValue(entry.fields, "method"); !found {
-			t.Error("Expected method field to be present")
-		}
-		if _, found := findFieldValue(entry.fields, "path"); !found {
-			t.Error("Expected path field to be present")
-		}
+		_, found := findFieldValue(entry.fields, "method")
+		zhtest.AssertTrue(t, found)
+		_, found = findFieldValue(entry.fields, "path")
+		zhtest.AssertTrue(t, found)
 	})
 
 	t.Run("empty custom fields returned", func(t *testing.T) {
@@ -1080,15 +927,12 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 		// Should only have the built-in fields
 		entry := logger.infoLogs[0]
-		if _, found := findFieldValue(entry.fields, "method"); !found {
-			t.Error("Expected method field to be present")
-		}
+		_, found := findFieldValue(entry.fields, "method")
+		zhtest.AssertTrue(t, found)
 	})
 
 	t.Run("multiple custom fields", func(t *testing.T) {
@@ -1108,9 +952,7 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		req := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
 		zhtest.Serve(middleware, req)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 		entry := logger.infoLogs[0]
 		expectedFields := map[string]any{
@@ -1120,11 +962,9 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		}
 
 		for key, expectedValue := range expectedFields {
-			if value, found := findFieldValue(entry.fields, key); !found {
-				t.Errorf("Expected %s field to be present", key)
-			} else if value != expectedValue {
-				t.Errorf("Expected %s to be '%v', got %v", key, expectedValue, value)
-			}
+			value, found := findFieldValue(entry.fields, key)
+			zhtest.AssertTrue(t, found)
+			zhtest.AssertEqual(t, expectedValue, value)
 		}
 	})
 
@@ -1151,17 +991,13 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 			Build()
 		zhtest.Serve(middleware, req1)
 
-		if len(logger.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger.infoLogs))
 
 		entry := logger.infoLogs[0]
-		if _, found := findFieldValue(entry.fields, "access_level"); !found {
-			t.Error("Expected access_level field to be present for admin path")
-		}
-		if _, found := findFieldValue(entry.fields, "request_source"); !found {
-			t.Error("Expected request_source field to be present")
-		}
+		_, found := findFieldValue(entry.fields, "access_level")
+		zhtest.AssertTrue(t, found)
+		_, found = findFieldValue(entry.fields, "request_source")
+		zhtest.AssertTrue(t, found)
 
 		// Request to non-admin path without internal header
 		logger2 := &requestLoggerMockLogger{}
@@ -1182,16 +1018,12 @@ func TestRequestLogger_CustomFieldsCallback(t *testing.T) {
 		req2 := zhtest.NewRequest(http.MethodGet, "/api/users").Build()
 		zhtest.Serve(middleware2, req2)
 
-		if len(logger2.infoLogs) != 1 {
-			t.Fatalf("Expected 1 info log, got %d", len(logger2.infoLogs))
-		}
+		zhtest.AssertEqual(t, 1, len(logger2.infoLogs))
 
 		entry2 := logger2.infoLogs[0]
-		if _, found := findFieldValue(entry2.fields, "access_level"); found {
-			t.Error("Expected access_level field NOT to be present for non-admin path")
-		}
-		if _, found := findFieldValue(entry2.fields, "request_source"); found {
-			t.Error("Expected request_source field NOT to be present")
-		}
+		_, found = findFieldValue(entry2.fields, "access_level")
+		zhtest.AssertFalse(t, found)
+		_, found = findFieldValue(entry2.fields, "request_source")
+		zhtest.AssertFalse(t, found)
 	})
 }

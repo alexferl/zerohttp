@@ -173,14 +173,9 @@ func TestTimeout_PanicPropagation(t *testing.T) {
 
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
-	defer func() {
-		if r := recover(); r != "test panic" {
-			t.Errorf("panic = %v, want 'test panic'", r)
-		}
-	}()
-	zhtest.Serve(middleware, req)
-
-	t.Error("should not reach here")
+	zhtest.AssertPanic(t, func() {
+		zhtest.Serve(middleware, req)
+	})
 }
 
 func TestTimeout_NoRaceCondition(t *testing.T) {
@@ -193,7 +188,7 @@ func TestTimeout_NoRaceCondition(t *testing.T) {
 				_, err := w.Write([]byte("done"))
 				// Ignore timeout middleware write errors - this is expected behavior
 				if err != nil && !errors.Is(err, ErrTimeoutWrite) {
-					t.Fatalf("unexpected write error: %v", err)
+					zhtest.AssertFailf(t, "unexpected write error: %v", err)
 				}
 			}
 		})
@@ -204,10 +199,10 @@ func TestTimeout_NoRaceCondition(t *testing.T) {
 
 		body := w.Body.String()
 		if w.Code == http.StatusOK && body != "done" {
-			t.Fatalf("race detected: status 200 but body %q", body)
+			zhtest.AssertFailf(t, "race detected: status 200 but body %q", body)
 		}
 		if w.Code == http.StatusGatewayTimeout && body == "done" {
-			t.Fatal("race detected: timeout status but success body")
+			zhtest.AssertFail(t, "race detected: timeout status but success body")
 		}
 	}
 }
@@ -237,9 +232,7 @@ func TestTimeout_Metrics(t *testing.T) {
 	w := zhtest.Serve(wrapped, req)
 
 	// Should timeout
-	if w.Code != http.StatusGatewayTimeout {
-		t.Errorf("expected status %d, got %d", http.StatusGatewayTimeout, w.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusGatewayTimeout, w.Code)
 
 	// Check that timeout metric was recorded
 	families := reg.Gather()
@@ -252,13 +245,8 @@ func TestTimeout_Metrics(t *testing.T) {
 		}
 	}
 
-	if timeoutCounter == nil {
-		t.Fatal("expected timeout_requests_total metric")
-	}
-
-	if len(timeoutCounter.Metrics) != 1 {
-		t.Errorf("expected 1 timeout metric, got %d", len(timeoutCounter.Metrics))
-	}
+	zhtest.AssertNotNil(t, timeoutCounter)
+	zhtest.AssertEqual(t, 1, len(timeoutCounter.Metrics))
 }
 
 type flusherRecorder struct {
@@ -313,9 +301,7 @@ func TestTimeout_Flush(t *testing.T) {
 			// Call Flush
 			tw.Flush()
 
-			if *flushCalled != tt.expectFlushCalled {
-				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectFlushCalled, *flushCalled)
 		})
 	}
 }
@@ -334,17 +320,13 @@ func TestTimeout_Flush_WritesBufferedData(t *testing.T) {
 	_, _ = tw.Write([]byte("hello"))
 
 	// Buffered data should not be written yet
-	if rec.Body.String() != "" {
-		t.Error("expected data to be buffered, not written yet")
-	}
+	zhtest.AssertEqual(t, "", rec.Body.String())
 
 	// Flush should write buffered data
 	tw.Flush()
 
 	// Now data should be written
-	if rec.Body.String() != "hello" {
-		t.Errorf("expected body 'hello', got '%s'", rec.Body.String())
-	}
+	zhtest.AssertEqual(t, "hello", rec.Body.String())
 }
 
 func TestTimeout_IncludedPaths(t *testing.T) {
@@ -386,15 +368,11 @@ func TestTimeout_IncludedPaths(t *testing.T) {
 }
 
 func TestTimeout_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		Duration:      50 * time.Millisecond,
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			Duration:      50 * time.Millisecond,
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

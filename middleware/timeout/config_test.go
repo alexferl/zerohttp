@@ -2,37 +2,24 @@ package timeout
 
 import (
 	"net/http"
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestTimeoutConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Duration != 30*time.Second {
-		t.Errorf("expected default timeout = 30s, got %v", cfg.Duration)
-	}
-	if cfg.StatusCode != http.StatusGatewayTimeout {
-		t.Errorf("expected default status code = %d, got %d", http.StatusGatewayTimeout, cfg.StatusCode)
-	}
-	if cfg.Message != "" {
-		t.Errorf("expected default message = '', got %s", cfg.Message)
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, 30*time.Second, cfg.Duration)
+	zhtest.AssertEqual(t, http.StatusGatewayTimeout, cfg.StatusCode)
+	zhtest.AssertEqual(t, "", cfg.Message)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 
 	// Test default status code specifically
 	expectedStatusCode := 504 // Gateway Timeout
-	if cfg.StatusCode != expectedStatusCode {
-		t.Errorf("expected default status code = %d (Gateway Timeout), got %d", expectedStatusCode, cfg.StatusCode)
-	}
-	if cfg.StatusCode != http.StatusGatewayTimeout {
-		t.Errorf("expected status code to equal http.StatusGatewayTimeout (%d), got %d", http.StatusGatewayTimeout, cfg.StatusCode)
-	}
+	zhtest.AssertEqual(t, expectedStatusCode, cfg.StatusCode)
+	zhtest.AssertEqual(t, http.StatusGatewayTimeout, cfg.StatusCode)
 }
 
 func TestTimeoutConfig_StructAssignment(t *testing.T) {
@@ -40,9 +27,7 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			Duration: 60 * time.Second,
 		}
-		if cfg.Duration != 60*time.Second {
-			t.Errorf("expected timeout = 60s, got %v", cfg.Duration)
-		}
+		zhtest.AssertEqual(t, 60*time.Second, cfg.Duration)
 	})
 
 	t.Run("status code assignment", func(t *testing.T) {
@@ -50,9 +35,7 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 			Duration:   DefaultConfig.Duration,
 			StatusCode: http.StatusRequestTimeout,
 		}
-		if cfg.StatusCode != http.StatusRequestTimeout {
-			t.Errorf("expected status code = %d, got %d", http.StatusRequestTimeout, cfg.StatusCode)
-		}
+		zhtest.AssertEqual(t, http.StatusRequestTimeout, cfg.StatusCode)
 	})
 
 	t.Run("message assignment", func(t *testing.T) {
@@ -61,9 +44,7 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 			Duration: DefaultConfig.Duration,
 			Message:  message,
 		}
-		if cfg.Message != message {
-			t.Errorf("expected message = %s, got %s", message, cfg.Message)
-		}
+		zhtest.AssertEqual(t, message, cfg.Message)
 	})
 
 	t.Run("excluded paths assignment", func(t *testing.T) {
@@ -72,12 +53,8 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 4 {
-			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("included paths assignment", func(t *testing.T) {
@@ -86,12 +63,8 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			IncludedPaths: includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertDeepEqual(t, includedPaths, cfg.IncludedPaths)
 	})
 
 	t.Run("multiple fields", func(t *testing.T) {
@@ -105,24 +78,12 @@ func TestTimeoutConfig_StructAssignment(t *testing.T) {
 			IncludedPaths: includedPaths,
 		}
 
-		if cfg.Duration != 2*time.Minute {
-			t.Errorf("expected timeout = 2m, got %v", cfg.Duration)
-		}
-		if cfg.StatusCode != http.StatusServiceUnavailable {
-			t.Errorf("expected status code = %d, got %d", http.StatusServiceUnavailable, cfg.StatusCode)
-		}
-		if cfg.Message != "Service unavailable due to timeout" {
-			t.Error("expected timeout message to be set correctly")
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Error("expected excluded paths to be set correctly")
-		}
-		if len(cfg.IncludedPaths) != 1 {
-			t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-			t.Error("expected included paths to be set correctly")
-		}
+		zhtest.AssertEqual(t, 2*time.Minute, cfg.Duration)
+		zhtest.AssertEqual(t, http.StatusServiceUnavailable, cfg.StatusCode)
+		zhtest.AssertEqual(t, "Service unavailable due to timeout", cfg.Message)
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
+		zhtest.AssertDeepEqual(t, includedPaths, cfg.IncludedPaths)
 	})
 }
 
@@ -152,9 +113,7 @@ func TestTimeoutConfig_DurationVariations(t *testing.T) {
 			cfg := Config{
 				Duration: tt.duration,
 			}
-			if cfg.Duration != tt.duration {
-				t.Errorf("expected timeout = %v, got %v", tt.duration, cfg.Duration)
-			}
+			zhtest.AssertEqual(t, tt.duration, cfg.Duration)
 		})
 	}
 }
@@ -180,9 +139,7 @@ func TestTimeoutConfig_StatusCodeVariations(t *testing.T) {
 				Duration:   DefaultConfig.Duration,
 				StatusCode: tt.statusCode,
 			}
-			if cfg.StatusCode != tt.expected {
-				t.Errorf("expected status code = %d, got %d", tt.expected, cfg.StatusCode)
-			}
+			zhtest.AssertEqual(t, tt.expected, cfg.StatusCode)
 		})
 	}
 }
@@ -208,9 +165,7 @@ func TestTimeoutConfig_MessageVariations(t *testing.T) {
 				Duration: DefaultConfig.Duration,
 				Message:  tt.message,
 			}
-			if cfg.Message != tt.message {
-				t.Errorf("expected message = %q, got %q", tt.message, cfg.Message)
-			}
+			zhtest.AssertEqual(t, tt.message, cfg.Message)
 		})
 	}
 }
@@ -221,12 +176,8 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: []string{},
 		}
-		if cfg.ExcludedPaths == nil {
-			t.Error("expected excluded paths slice to be initialized, not nil")
-		}
-		if len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 	})
 
 	t.Run("nil excluded paths", func(t *testing.T) {
@@ -234,9 +185,7 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: nil,
 		}
-		if cfg.ExcludedPaths != nil {
-			t.Error("expected excluded paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
 	})
 
 	t.Run("empty string paths", func(t *testing.T) {
@@ -245,12 +194,8 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 3 {
-			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("empty included paths", func(t *testing.T) {
@@ -258,12 +203,8 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			IncludedPaths: []string{},
 		}
-		if cfg.IncludedPaths == nil {
-			t.Error("expected included paths slice to be initialized, not nil")
-		}
-		if len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil included paths", func(t *testing.T) {
@@ -271,9 +212,7 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			IncludedPaths: nil,
 		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 
 	t.Run("custom included paths", func(t *testing.T) {
@@ -282,12 +221,8 @@ func TestTimeoutConfig_EdgeCases(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			IncludedPaths: includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertDeepEqual(t, includedPaths, cfg.IncludedPaths)
 	})
 }
 
@@ -301,28 +236,20 @@ func TestTimeoutConfig_PathPatterns(t *testing.T) {
 			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != len(excludedPaths) {
-			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, len(excludedPaths), len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("special character paths", func(t *testing.T) {
 		excludedPaths := []string{
 			"/api-v1/upload", "/long_running_task", "/upload-service", "/stream.data",
-			"/process (background)", "/path with spaces", "/path/with/unicode-ñ", "/files/test@example.com",
+			"/process (background)", "/path with spaces", "/path/with/unicode-\xc3\xb1", "/files/test@example.com",
 		}
 		cfg := Config{
 			Duration:      DefaultConfig.Duration,
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != len(excludedPaths) {
-			t.Errorf("expected %d excluded paths, got %d", len(excludedPaths), len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, len(excludedPaths), len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 }

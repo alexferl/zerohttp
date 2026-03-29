@@ -26,9 +26,7 @@ func TestNewWriter(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		writer, err := NewWriter(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Check headers
 		zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, httpx.MIMETextEventStream)
@@ -44,9 +42,7 @@ func TestNewWriter(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		_, err := NewWriter(w, r)
-		if err == nil {
-			t.Error("expected error when headers already sent")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -56,9 +52,7 @@ func TestWriter_WriteEvent(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		writer, err := NewWriter(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{
 			ID:    "456",
@@ -68,9 +62,7 @@ func TestWriter_WriteEvent(t *testing.T) {
 		}
 
 		err = writer.WriteEvent(event)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).
 			BodyContains("id: 456").
@@ -84,15 +76,11 @@ func TestWriter_WriteEvent(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		writer, err := NewWriter(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{ID: "abc\r\ndef", Data: []byte("test")}
 		err = writer.WriteEvent(event)
-		if err == nil {
-			t.Error("expected error for ID with CRLF")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("rejects event name with LF", func(t *testing.T) {
@@ -100,15 +88,11 @@ func TestWriter_WriteEvent(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		writer, err := NewWriter(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		event := Event{Name: "update\nnotify", Data: []byte("test")}
 		err = writer.WriteEvent(event)
-		if err == nil {
-			t.Error("expected error for Name with LF")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -118,14 +102,10 @@ func TestWriter_WriteComment(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		writer, err := NewWriter(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		err = writer.WriteComment("keepalive")
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		zhtest.AssertWith(t, w).BodyContains(": keepalive")
 	})
@@ -136,20 +116,14 @@ func TestWriter_WriteComment(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil).WithContext(ctx)
 
 		writer, err := NewWriter(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		cancel()
 		time.Sleep(10 * time.Millisecond)
 
 		err = writer.WriteComment("test")
-		if err == nil {
-			t.Error("expected error when context cancelled")
-		}
-		if !strings.Contains(err.Error(), "sse:") {
-			t.Errorf("expected error to contain 'sse:' prefix, got: %v", err)
-		}
+		zhtest.AssertError(t, err)
+		zhtest.AssertTrue(t, strings.Contains(err.Error(), "sse:"))
 	})
 }
 
@@ -159,9 +133,7 @@ func TestWriter_Flush(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		writer, err := NewWriter(w, r)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Flush should not panic
 		writer.Flush()

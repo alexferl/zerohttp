@@ -23,13 +23,10 @@ var testHMACKey = []byte("test-key-for-csrf-middleware-32!!")
 func TestCSRF_MissingHMACKeyPanics(t *testing.T) {
 	defer func() {
 		r := recover()
-		if r == nil {
-			t.Error("Expected panic for missing HMACKey, but did not panic")
-		}
+		zhtest.AssertNotNil(t, r)
 		msg, ok := r.(string)
-		if !ok || !strings.Contains(msg, "HMACKey is required") {
-			t.Errorf("Expected panic message to contain 'HMACKey is required', got: %v", r)
-		}
+		zhtest.AssertTrue(t, ok)
+		zhtest.AssertTrue(t, strings.Contains(msg, "HMACKey is required"))
 	}()
 
 	// This should panic
@@ -38,9 +35,7 @@ func TestCSRF_MissingHMACKeyPanics(t *testing.T) {
 
 func TestCSRF_ValidateTokenFormat(t *testing.T) {
 	validToken, err := generateToken(testHMACKey)
-	if err != nil {
-		t.Fatalf("Failed to generate test token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	tests := []struct {
 		name     string
@@ -72,9 +67,7 @@ func TestCSRF_ValidateTokenFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := validateTokenFormat(tt.token)
-			if result != tt.expected {
-				t.Errorf("validateTokenFormat(%q) = %v, want %v", tt.token, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -112,25 +105,15 @@ func TestCSRF_DefaultValues(t *testing.T) {
 		}
 	}
 
-	if csrfCookie == nil {
-		t.Fatal("Expected csrf_token cookie with default name")
-	}
-
-	if csrfCookie.Path != "/" {
-		t.Errorf("Expected default path /, got %s", csrfCookie.Path)
-	}
-
-	if csrfCookie.MaxAge != 86400 {
-		t.Errorf("Expected default max-age 86400, got %d", csrfCookie.MaxAge)
-	}
+	zhtest.AssertNotNil(t, csrfCookie)
+	zhtest.AssertEqual(t, "/", csrfCookie.Path)
+	zhtest.AssertEqual(t, 86400, csrfCookie.MaxAge)
 }
 
 func TestCSRF_TokenGeneration(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := Get(r)
-		if token == "" {
-			t.Error("Expected CSRF token in context, got empty string")
-		}
+		zhtest.AssertNotEmpty(t, token)
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -154,22 +137,11 @@ func TestCSRF_TokenGeneration(t *testing.T) {
 		}
 	}
 
-	if csrfCookie == nil {
-		t.Error("Expected CSRF cookie to be set")
-	} else {
-		if csrfCookie.HttpOnly != true {
-			t.Error("Expected cookie to be HttpOnly")
-		}
-		if csrfCookie.Secure != true {
-			t.Error("Expected cookie to be Secure")
-		}
-		if csrfCookie.SameSite != http.SameSiteStrictMode {
-			t.Errorf("Expected SameSite=Strict, got %v", csrfCookie.SameSite)
-		}
-		if csrfCookie.Path != "/" {
-			t.Errorf("Expected Path=/, got %s", csrfCookie.Path)
-		}
-	}
+	zhtest.AssertNotNil(t, csrfCookie)
+	zhtest.AssertTrue(t, csrfCookie.HttpOnly)
+	zhtest.AssertTrue(t, csrfCookie.Secure)
+	zhtest.AssertEqual(t, http.SameSiteStrictMode, csrfCookie.SameSite)
+	zhtest.AssertEqual(t, "/", csrfCookie.Path)
 }
 
 func TestCSRF_ValidToken(t *testing.T) {
@@ -195,9 +167,7 @@ func TestCSRF_ValidToken(t *testing.T) {
 		}
 	}
 
-	if token == "" {
-		t.Fatal("Failed to get CSRF token")
-	}
+	zhtest.AssertNotEmpty(t, token)
 
 	// Now make POST request with token
 	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -513,29 +483,12 @@ func TestCSRF_CustomCookieOptions(t *testing.T) {
 		}
 	}
 
-	if csrfCookie == nil {
-		t.Fatal("Expected custom CSRF cookie to be set")
-	}
-
-	if csrfCookie.MaxAge != 3600 {
-		t.Errorf("Expected MaxAge=3600, got %d", csrfCookie.MaxAge)
-	}
-
-	if csrfCookie.Domain != "example.com" {
-		t.Errorf("Expected Domain=example.com, got %s", csrfCookie.Domain)
-	}
-
-	if csrfCookie.Path != "/api" {
-		t.Errorf("Expected Path=/api, got %s", csrfCookie.Path)
-	}
-
-	if csrfCookie.Secure != false {
-		t.Error("Expected Secure=false")
-	}
-
-	if csrfCookie.SameSite != http.SameSiteLaxMode {
-		t.Errorf("Expected SameSite=Lax, got %v", csrfCookie.SameSite)
-	}
+	zhtest.AssertNotNil(t, csrfCookie)
+	zhtest.AssertEqual(t, 3600, csrfCookie.MaxAge)
+	zhtest.AssertEqual(t, "example.com", csrfCookie.Domain)
+	zhtest.AssertEqual(t, "/api", csrfCookie.Path)
+	zhtest.AssertFalse(t, csrfCookie.Secure)
+	zhtest.AssertEqual(t, http.SameSiteLaxMode, csrfCookie.SameSite)
 }
 
 func TestCSRF_TokenRotation(t *testing.T) {
@@ -579,13 +532,8 @@ func TestCSRF_TokenRotation(t *testing.T) {
 		}
 	}
 
-	if token2 == "" {
-		t.Error("Expected new token after POST")
-	}
-
-	if token1 == token2 {
-		t.Error("Expected token to be rotated after POST")
-	}
+	zhtest.AssertNotEmpty(t, token2)
+	zhtest.AssertNotEqual(t, token1, token2)
 }
 
 func TestCSRF_GetCSRFToken(t *testing.T) {
@@ -601,21 +549,15 @@ func TestCSRF_GetCSRFToken(t *testing.T) {
 
 	// Should have a non-empty token in response body
 	token := w.Body.String()
-	if token == "" {
-		t.Error("Expected non-empty CSRF token from GetCSRFToken")
-	}
+	zhtest.AssertNotEmpty(t, token)
 
 	// Verify it's a valid base64 token
 	data, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil {
-		t.Errorf("Token is not valid base64: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Should be 32 bytes token + 32 bytes HMAC
 	expectedLen := defaultTokenLength + sha256.Size
-	if len(data) != expectedLen {
-		t.Errorf("Expected token length %d, got %d", expectedLen, len(data))
-	}
+	zhtest.AssertEqual(t, expectedLen, len(data))
 }
 
 func TestCSRF_NoTokenInContext(t *testing.T) {
@@ -623,9 +565,7 @@ func TestCSRF_NoTokenInContext(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
 	token := Get(req)
-	if token != "" {
-		t.Errorf("Expected empty token without middleware, got %s", token)
-	}
+	zhtest.AssertEmpty(t, token)
 }
 
 func TestCSRF_InvalidBase64Token(t *testing.T) {
@@ -755,9 +695,7 @@ func TestCSRF_InvalidTokenFormatRegeneration(t *testing.T) {
 		}
 	}
 
-	if newCookie == nil {
-		t.Error("Expected new CSRF cookie to be set")
-	}
+	zhtest.AssertNotNil(t, newCookie)
 }
 
 func TestCSRF_DefaultTokenLookup(t *testing.T) {
@@ -888,9 +826,7 @@ func TestCSRF_Metrics(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rr.Code)
 
 	// Check metrics
 	families := reg.Gather()
@@ -901,9 +837,7 @@ func TestCSRF_Metrics(t *testing.T) {
 			break
 		}
 	}
-	if counter == nil {
-		t.Fatal("expected csrf_rejected_total metric")
-	}
+	zhtest.AssertNotNil(t, counter)
 }
 
 // TestCSRF_GenerateTokenErrorHandling verifies that generateToken can return an error
@@ -911,12 +845,8 @@ func TestCSRF_Metrics(t *testing.T) {
 func TestCSRF_GenerateTokenErrorHandling(t *testing.T) {
 	// Test that generateToken succeeds with valid key
 	token, err := generateToken(testHMACKey)
-	if err != nil {
-		t.Errorf("generateToken should not fail with valid key: %v", err)
-	}
-	if token == "" {
-		t.Error("generateToken should return non-empty token on success")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertNotEmpty(t, token)
 
 	// The function signature now returns (string, error) to handle rare cases
 	// where crypto/rand.Read fails (e.g., system out of entropy).
@@ -945,7 +875,7 @@ func TestCSRF_TokenGenerationFailsClosed(t *testing.T) {
 		PathLabelFunc: func(p string) string { return p },
 	})
 	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("handler should not be called when token generation fails")
+		zhtest.AssertFail(t, "handler should not be called when token generation fails")
 	})))
 
 	// Test GET request (excluded method) with failing token generation
@@ -953,9 +883,7 @@ func TestCSRF_TokenGenerationFailsClosed(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 when token generation fails, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rr.Code)
 
 	// Verify the metric was incremented
 	families := reg.Gather()
@@ -970,9 +898,7 @@ func TestCSRF_TokenGenerationFailsClosed(t *testing.T) {
 			}
 		}
 	}
-	if !found {
-		t.Error("expected csrf_rejected_total metric with reason=token_generation_failed")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 // TestCSRF_TokenGenerationFailsClosed_POST verifies that when token generation fails
@@ -982,9 +908,7 @@ func TestCSRF_TokenGenerationFailsClosed_POST(t *testing.T) {
 
 	// First, generate a valid token
 	validToken, err := generateToken(testHMACKey)
-	if err != nil {
-		t.Fatalf("failed to generate valid token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Inject a failing token generator
 	failCount := 0
@@ -1004,7 +928,7 @@ func TestCSRF_TokenGenerationFailsClosed_POST(t *testing.T) {
 		PathLabelFunc: func(p string) string { return p },
 	})
 	wrapped := metricsMw(mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("handler should not be called when token generation fails")
+		zhtest.AssertFail(t, "handler should not be called when token generation fails")
 	})))
 
 	// Test POST request with valid token but failing token generation for new token
@@ -1014,9 +938,7 @@ func TestCSRF_TokenGenerationFailsClosed_POST(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 when token generation fails on POST, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rr.Code)
 
 	// Verify the metric was incremented
 	families := reg.Gather()
@@ -1031,9 +953,7 @@ func TestCSRF_TokenGenerationFailsClosed_POST(t *testing.T) {
 			}
 		}
 	}
-	if !found {
-		t.Error("expected csrf_rejected_total metric with reason=token_generation_failed")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 // TestCSRF_DefaultTokenGenerator verifies that when TokenGenerator is not set (nil),
@@ -1054,13 +974,8 @@ func TestCSRF_DefaultTokenGenerator(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
-
-	if tokenFromContext == "" {
-		t.Error("expected CSRF token to be generated and set in context")
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+	zhtest.AssertNotEmpty(t, tokenFromContext)
 
 	// Verify the cookie was set
 	cookies := rr.Result().Cookies()
@@ -1071,9 +986,7 @@ func TestCSRF_DefaultTokenGenerator(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Error("expected csrf_token cookie to be set")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestCSRF_IncludedPaths(t *testing.T) {
@@ -1129,7 +1042,7 @@ func TestCSRF_IncludedPathsWithWildcard(t *testing.T) {
 func TestCSRF_BothExcludedAndIncludedPathsPanics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
+			zhtest.AssertFail(t, "expected panic when both ExcludedPaths and IncludedPaths are set")
 		}
 	}()
 

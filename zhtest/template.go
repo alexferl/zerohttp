@@ -29,9 +29,7 @@ func NewTemplateRenderer(templates *template.Template) *TemplateRenderer {
 // Example:
 //
 //	w := tr.Render("index.html", map[string]string{"Title": "Hello"})
-//	if w.Code != http.StatusOK {
-//	    t.Error("expected status 200")
-//	}
+//	zhtest.AssertEqual(t, http.StatusOK, w.Code)
 func (tr *TemplateRenderer) Render(name string, data any) *Response {
 	w := httptest.NewRecorder()
 	if err := tr.templates.ExecuteTemplate(w, name, data); err != nil {
@@ -49,9 +47,7 @@ func (tr *TemplateRenderer) Render(name string, data any) *Response {
 // Example:
 //
 //	html := tr.RenderToString("index.html", map[string]string{"Title": "Hello"})
-//	if !strings.Contains(html, "<h1>Hello</h1>") {
-//	    t.Error("expected title in output")
-//	}
+//	zhtest.AssertContains(t, html, "<h1>Hello</h1>")
 func (tr *TemplateRenderer) RenderToString(name string, data any) string {
 	w := tr.Render(name, data)
 	return w.BodyString()
@@ -91,9 +87,7 @@ func TestTemplate(content string, data any) *Response {
 // Example:
 //
 //	html := zhtest.TestTemplateToString(`<h1>{{.Title}}</h1>`, map[string]string{"Title": "Hello"})
-//	if html != "<h1>Hello</h1>" {
-//	    t.Errorf("unexpected output: %s", html)
-//	}
+//	zhtest.AssertEqual(t, "<h1>Hello</h1>", html)
 func TestTemplateToString(content string, data any) string {
 	return TestTemplate(content, data).BodyString()
 }

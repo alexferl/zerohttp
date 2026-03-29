@@ -311,21 +311,13 @@ func TestSecurityHeaders_CSPNonce(t *testing.T) {
 			zhtest.AssertWith(t, w).Status(http.StatusOK)
 
 			csp := w.Header().Get(httpx.HeaderContentSecurityPolicy)
-			if !strings.Contains(csp, tt.wantCSPContains) {
-				t.Errorf("CSP header = %q, want containing %q", csp, tt.wantCSPContains)
-			}
+			zhtest.AssertTrue(t, strings.Contains(csp, tt.wantCSPContains))
 
 			if tt.wantNonce {
-				if capturedNonce == "" {
-					t.Error("Expected nonce in context, got empty string")
-				}
-				if !strings.Contains(csp, capturedNonce) {
-					t.Errorf("CSP header %q does not contain nonce %q", csp, capturedNonce)
-				}
+				zhtest.AssertNotEmpty(t, capturedNonce)
+				zhtest.AssertTrue(t, strings.Contains(csp, capturedNonce))
 			} else {
-				if capturedNonce != "" {
-					t.Errorf("Expected no nonce, got %q", capturedNonce)
-				}
+				zhtest.AssertEmpty(t, capturedNonce)
 			}
 		})
 	}
@@ -348,9 +340,7 @@ func TestSecurityHeaders_CSPNonceReportOnly(t *testing.T) {
 	zhtest.AssertWith(t, w).HeaderNotExists(httpx.HeaderContentSecurityPolicy)
 
 	csp := w.Header().Get(httpx.HeaderContentSecurityPolicyReportOnly)
-	if !strings.Contains(csp, "'nonce-") {
-		t.Errorf("CSP-Report-Only header should contain nonce, got: %s", csp)
-	}
+	zhtest.AssertTrue(t, strings.Contains(csp, "'nonce-"))
 }
 
 func TestSecurityHeaders_CSPNonceCustomContextKey(t *testing.T) {
@@ -372,18 +362,13 @@ func TestSecurityHeaders_CSPNonceCustomContextKey(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(mw, handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-
-	if capturedNonce == "" {
-		t.Error("Expected nonce with custom context key, got empty string")
-	}
+	zhtest.AssertNotEmpty(t, capturedNonce)
 }
 
 func TestGetCSPNonce_NotFound(t *testing.T) {
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	nonce := GetCSPNonce(req)
-	if nonce != "" {
-		t.Errorf("Expected empty string for missing nonce, got %q", nonce)
-	}
+	zhtest.AssertEmpty(t, nonce)
 }
 
 func TestSecurityHeaders_IncludedPaths(t *testing.T) {
@@ -422,15 +407,11 @@ func TestSecurityHeaders_IncludedPaths(t *testing.T) {
 }
 
 func TestSecurityHeaders_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		ContentSecurityPolicy: "default-src 'self'",
-		ExcludedPaths:         []string{"/health"},
-		IncludedPaths:         []string{"/api"},
-	})
+	zhtest.AssertPanicContains(t, func() {
+		_ = New(Config{
+			ContentSecurityPolicy: "default-src 'self'",
+			ExcludedPaths:         []string{"/health"},
+			IncludedPaths:         []string{"/api"},
+		})
+	}, "cannot set both ExcludedPaths and IncludedPaths")
 }

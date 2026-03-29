@@ -3,6 +3,8 @@ package log
 import (
 	"context"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestNoopLoggerMethods(t *testing.T) {
@@ -16,34 +18,24 @@ func TestNoopLoggerMethods(t *testing.T) {
 
 	// Test WithFields returns a logger
 	newLogger := logger.WithFields(F("newKey", "newValue"))
-	if newLogger == nil {
-		t.Error("WithFields should not return nil")
-	}
+	zhtest.AssertNotNil(t, newLogger)
 
 	// Test WithContext returns a logger
 	ctxLogger := logger.WithContext(context.Background())
-	if ctxLogger == nil {
-		t.Error("WithContext should not return nil")
-	}
+	zhtest.AssertNotNil(t, ctxLogger)
 
 	// Test that chained calls work
 	chainedLogger := logger.WithFields(F("key", "value")).WithContext(context.Background())
-	if chainedLogger == nil {
-		t.Error("Chained calls should not return nil")
-	}
+	zhtest.AssertNotNil(t, chainedLogger)
 	chainedLogger.Info("test message")
 }
 
 func TestNoopLoggerPanic(t *testing.T) {
 	logger := &NoopLogger{}
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Panic method should have panicked")
-		}
-	}()
-
-	logger.Panic("panic message", F("key", "value"))
+	zhtest.AssertPanic(t, func() {
+		logger.Panic("panic message", F("key", "value"))
+	})
 }
 
 func TestGlobalLoggerDefaultsToNoop(t *testing.T) {
@@ -51,9 +43,7 @@ func TestGlobalLoggerDefaultsToNoop(t *testing.T) {
 	SetGlobalLogger(&NoopLogger{})
 
 	logger := GetGlobalLogger()
-	if logger == nil {
-		t.Fatal("GetGlobalLogger should not return nil")
-	}
+	zhtest.AssertNotNil(t, logger)
 
 	// Should be able to call methods without panic
 	logger.Info("test message")
@@ -70,9 +60,7 @@ func TestSetAndGetGlobalLogger(t *testing.T) {
 
 	// Retrieve it
 	retrievedLogger := GetGlobalLogger()
-	if retrievedLogger != newLogger {
-		t.Error("GetGlobalLogger should return the logger set by SetGlobalLogger")
-	}
+	zhtest.AssertEqual(t, newLogger, retrievedLogger)
 }
 
 func TestGlobalLoggerThreadSafety(t *testing.T) {
