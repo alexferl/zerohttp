@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestHMACAuth_MissingAuthorization(t *testing.T) {
@@ -34,9 +35,7 @@ func TestHMACAuth_MissingAuthorization(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_InvalidFormat(t *testing.T) {
@@ -60,9 +59,7 @@ func TestHMACAuth_InvalidFormat(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_InvalidAlgorithm(t *testing.T) {
@@ -84,16 +81,13 @@ func TestHMACAuth_InvalidAlgorithm(t *testing.T) {
 	// Try with SHA512 when expecting SHA256
 	signer := NewSignerWithAlgorithm("test-key", "test-secret-key-that-is-64-bytes-long-for-the-sha512-algorithm-use!!", SHA512)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for algorithm mismatch, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_ValidRequest(t *testing.T) {
@@ -116,19 +110,13 @@ func TestHMACAuth_ValidRequest(t *testing.T) {
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_WithBody(t *testing.T) {
@@ -144,9 +132,7 @@ func TestHMACAuth_WithBody(t *testing.T) {
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		if string(body) != `{"test":"data"}` {
-			t.Errorf("body mismatch: got %s", string(body))
-		}
+		zhtest.AssertEqual(t, `{"test":"data"}`, string(body))
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -155,16 +141,12 @@ func TestHMACAuth_WithBody(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/test", body)
 	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_InvalidSignature(t *testing.T) {
@@ -185,16 +167,13 @@ func TestHMACAuth_InvalidSignature(t *testing.T) {
 	// Sign with wrong secret
 	signer := NewSigner("test-key", "wrong-secret")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for invalid signature, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_UnknownAccessKey(t *testing.T) {
@@ -214,16 +193,13 @@ func TestHMACAuth_UnknownAccessKey(t *testing.T) {
 
 	signer := NewSigner("unknown-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for unknown key, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_ExpiredTimestamp(t *testing.T) {
@@ -247,16 +223,13 @@ func TestHMACAuth_ExpiredTimestamp(t *testing.T) {
 	// Sign with old timestamp (10 minutes ago)
 	oldTime := time.Now().UTC().Add(-10 * time.Minute)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequestWithTime(req, oldTime); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequestWithTime(req, oldTime)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for expired timestamp, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_FutureTimestamp(t *testing.T) {
@@ -281,16 +254,13 @@ func TestHMACAuth_FutureTimestamp(t *testing.T) {
 	// Sign with future timestamp (10 minutes from now)
 	futureTime := time.Now().UTC().Add(10 * time.Minute)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequestWithTime(req, futureTime); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequestWithTime(req, futureTime)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for future timestamp, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_ExcludedPath(t *testing.T) {
@@ -315,12 +285,8 @@ func TestHMACAuth_ExcludedPath(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called for excluded path")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for excluded path, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_SHA384(t *testing.T) {
@@ -344,19 +310,13 @@ func TestHMACAuth_SHA384(t *testing.T) {
 	signer := NewSignerWithAlgorithm("test-key", "test-secret-key-that-is-48-bytes-long-for-sha384-algorithm-use", SHA384)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_SHA512(t *testing.T) {
@@ -380,19 +340,13 @@ func TestHMACAuth_SHA512(t *testing.T) {
 	signer := NewSignerWithAlgorithm("test-key", "test-secret-key-that-is-64-bytes-long-for-the-sha512-algorithm-use!!", SHA512)
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_QueryParameters(t *testing.T) {
@@ -410,28 +364,20 @@ func TestHMACAuth_QueryParameters(t *testing.T) {
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		// Verify query params are still accessible
-		if r.URL.Query().Get("foo") != "bar" {
-			t.Errorf("query param mismatch")
-		}
+		zhtest.AssertEqual(t, "bar", r.URL.Query().Get("foo"))
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test?foo=bar&baz=qux", nil)
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_MissingRequiredHeader(t *testing.T) {
@@ -452,9 +398,8 @@ func TestHMACAuth_MissingRequiredHeader(t *testing.T) {
 
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 	// Remove the X-Request-Id header (which was never set)
 	// Actually, the signer won't sign it if it's not present,
 	// so this test validates that the middleware rejects requests
@@ -464,9 +409,7 @@ func TestHMACAuth_MissingRequiredHeader(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	// Should be rejected because x-request-id is missing
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for missing required header, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_CustomErrorHandler(t *testing.T) {
@@ -494,15 +437,9 @@ func TestHMACAuth_CustomErrorHandler(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !customCalled {
-		t.Error("custom error handler was not called")
-	}
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 from custom handler, got %d", rr.Code)
-	}
-	if !strings.Contains(rr.Body.String(), "custom error") {
-		t.Errorf("custom error response not found")
-	}
+	zhtest.AssertTrue(t, customCalled)
+	zhtest.AssertEqual(t, http.StatusForbidden, rr.Code)
+	zhtest.AssertContains(t, rr.Body.String(), "custom error")
 }
 
 func TestHMACAuth_AllowUnsignedPayload(t *testing.T) {
@@ -526,29 +463,20 @@ func TestHMACAuth_AllowUnsignedPayload(t *testing.T) {
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	signer.SetAllowUnsignedPayload(true)
 	req := httptest.NewRequest("POST", "/api/test", strings.NewReader("body"))
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_PanicWithoutCredentialStore(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic without CredentialStore")
-		}
-	}()
-
-	New(Config{})
+	zhtest.AssertPanic(t, func() {
+		New(Config{})
+	})
 }
 
 func TestParseAuthorizationHeader(t *testing.T) {
@@ -593,16 +521,10 @@ func TestParseAuthorizationHeader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			parsed, err := parseAuthorizationHeader(tt.header, "X-Timestamp")
 			if tt.wantError {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
+				zhtest.AssertError(t, err)
 			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-				if parsed == nil {
-					t.Error("expected parsed auth, got nil")
-				}
+				zhtest.AssertNoError(t, err)
+				zhtest.AssertNotNil(t, parsed)
 			}
 		})
 	}
@@ -649,11 +571,10 @@ func TestValidateTimestamp(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateTimestamp(tt.timestamp, tt.maxSkew, tt.grace)
-			if tt.wantError && err == nil {
-				t.Error("expected error, got nil")
-			}
-			if !tt.wantError && err != nil {
-				t.Errorf("unexpected error: %v", err)
+			if tt.wantError {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -665,21 +586,15 @@ func TestComputeHMACSignature(t *testing.T) {
 
 	// Test SHA256
 	sig256 := computeHMACSignature(secret, canonicalRequest, SHA256)
-	if len(sig256) != 32 { // SHA256 produces 32 bytes
-		t.Errorf("expected 32 bytes for SHA256, got %d", len(sig256))
-	}
+	zhtest.AssertEqual(t, 32, len(sig256)) // SHA256 produces 32 bytes
 
 	// Test SHA384
 	sig384 := computeHMACSignature(secret, canonicalRequest, SHA384)
-	if len(sig384) != 48 { // SHA384 produces 48 bytes
-		t.Errorf("expected 48 bytes for SHA384, got %d", len(sig384))
-	}
+	zhtest.AssertEqual(t, 48, len(sig384)) // SHA384 produces 48 bytes
 
 	// Test SHA512
 	sig512 := computeHMACSignature(secret, canonicalRequest, SHA512)
-	if len(sig512) != 64 { // SHA512 produces 64 bytes
-		t.Errorf("expected 64 bytes for SHA512, got %d", len(sig512))
-	}
+	zhtest.AssertEqual(t, 64, len(sig512)) // SHA512 produces 64 bytes
 }
 
 func TestBuildCanonicalQueryString(t *testing.T) {
@@ -715,9 +630,7 @@ func TestBuildCanonicalQueryString(t *testing.T) {
 			// Create a signer just to access the method
 			signer := NewSigner("key", "secret")
 			got := signer.buildCanonicalQueryString(tt.values)
-			if got != tt.want {
-				t.Errorf("buildCanonicalQueryString() = %q, want %q", got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -760,9 +673,7 @@ func TestGetHMACAccessKeyID(t *testing.T) {
 			tt.setupContext(req)
 
 			accessKeyID := GetAccessKeyID(req)
-			if accessKeyID != tt.expectedKeyID {
-				t.Errorf("expected %q, got %q", tt.expectedKeyID, accessKeyID)
-			}
+			zhtest.AssertEqual(t, tt.expectedKeyID, accessKeyID)
 		})
 	}
 }
@@ -786,19 +697,14 @@ func TestHMACAuth_ContextPropagation(t *testing.T) {
 
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
-	if receivedAccessKeyID != "test-key" {
-		t.Errorf("expected access key ID %q, got %q", "test-key", receivedAccessKeyID)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+	zhtest.AssertEqual(t, "test-key", receivedAccessKeyID)
 }
 
 func TestHMACAuth_AuditLogging(t *testing.T) {
@@ -834,59 +740,35 @@ func TestHMACAuth_AuditLogging(t *testing.T) {
 	rr1 := httptest.NewRecorder()
 	handler.ServeHTTP(rr1, req1)
 
-	if len(auditEvents) != 1 {
-		t.Fatalf("expected 1 audit event, got %d", len(auditEvents))
-	}
-	if auditEvents[0].success {
-		t.Error("expected failed audit event for missing auth")
-	}
-	if auditEvents[0].errType != "missing_auth" {
-		t.Errorf("expected errType 'missing_auth', got %q", auditEvents[0].errType)
-	}
+	zhtest.AssertEqual(t, 1, len(auditEvents))
+	zhtest.AssertFalse(t, auditEvents[0].success)
+	zhtest.AssertEqual(t, "missing_auth", auditEvents[0].errType)
 
 	// Test 2: Successful auth
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req2 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req2); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req2)
+	zhtest.AssertNoError(t, err)
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 
-	if len(auditEvents) != 2 {
-		t.Fatalf("expected 2 audit events, got %d", len(auditEvents))
-	}
-	if !auditEvents[1].success {
-		t.Error("expected successful audit event")
-	}
-	if auditEvents[1].errType != "" {
-		t.Errorf("expected empty errType for success, got %q", auditEvents[1].errType)
-	}
-	if auditEvents[1].accessKeyID != "test-key" {
-		t.Errorf("expected access key ID 'test-key', got %q", auditEvents[1].accessKeyID)
-	}
+	zhtest.AssertEqual(t, 2, len(auditEvents))
+	zhtest.AssertTrue(t, auditEvents[1].success)
+	zhtest.AssertEqual(t, "", auditEvents[1].errType)
+	zhtest.AssertEqual(t, "test-key", auditEvents[1].accessKeyID)
 
 	// Test 3: Invalid credentials
 	signer3 := NewSigner("unknown-key", "test-secret-key-that-is-32-bytes-long!")
 	req3 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer3.SignRequest(req3); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err = signer3.SignRequest(req3)
+	zhtest.AssertNoError(t, err)
 	rr3 := httptest.NewRecorder()
 	handler.ServeHTTP(rr3, req3)
 
-	if len(auditEvents) != 3 {
-		t.Fatalf("expected 3 audit events, got %d", len(auditEvents))
-	}
-	if auditEvents[2].success {
-		t.Error("expected failed audit event for invalid credentials")
-	}
-	if auditEvents[2].errType != "invalid_credentials" {
-		t.Errorf("expected errType 'invalid_credentials', got %q", auditEvents[2].errType)
-	}
-	if auditEvents[2].accessKeyID != "unknown-key" {
-		t.Errorf("expected access key ID 'unknown-key', got %q", auditEvents[2].accessKeyID)
-	}
+	zhtest.AssertEqual(t, 3, len(auditEvents))
+	zhtest.AssertFalse(t, auditEvents[2].success)
+	zhtest.AssertEqual(t, "invalid_credentials", auditEvents[2].errType)
+	zhtest.AssertEqual(t, "unknown-key", auditEvents[2].accessKeyID)
 }
 
 func TestGetHMACError(t *testing.T) {
@@ -929,18 +811,12 @@ func TestGetHMACError(t *testing.T) {
 
 			err := GetError(req)
 			if tt.expectedNil {
-				if err != nil {
-					t.Errorf("expected nil error, got %v", err)
-				}
+				zhtest.AssertNil(t, err)
 				return
 			}
 
-			if err == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if err.Type != tt.expectedType {
-				t.Errorf("expected error type %q, got %q", tt.expectedType, err.Type)
-			}
+			zhtest.AssertNotNil(t, err)
+			zhtest.AssertEqual(t, tt.expectedType, err.Type)
 		})
 	}
 }
@@ -973,15 +849,9 @@ func TestHMACAuth_CustomErrorHandlerWithContext(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", rr.Code)
-	}
-	if receivedError == nil {
-		t.Fatal("expected error in custom handler, got nil")
-	}
-	if receivedError.Type != errMissingAuth.Type {
-		t.Errorf("expected error type %q, got %q", errMissingAuth.Type, receivedError.Type)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
+	zhtest.AssertNotNil(t, receivedError)
+	zhtest.AssertEqual(t, errMissingAuth.Type, receivedError.Type)
 }
 
 func TestHMACAuth_CustomErrorHandlerWithSignatureMismatch(t *testing.T) {
@@ -1009,26 +879,17 @@ func TestHMACAuth_CustomErrorHandlerWithSignatureMismatch(t *testing.T) {
 	// Test with wrong secret - should trigger signature mismatch
 	signer := NewSigner("test-key", "wrong-secret")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	receivedError = nil
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("expected 403 from custom handler, got %d", rr.Code)
-	}
-	if receivedError == nil {
-		t.Fatal("expected error in custom handler, got nil")
-	}
-	if receivedError.Type != errSignatureMismatch.Type {
-		t.Errorf("expected signature mismatch, got %q", receivedError.Type)
-	}
-	if !strings.Contains(rr.Body.String(), "auth failed: Signature Mismatch") {
-		t.Errorf("unexpected response body: %s", rr.Body.String())
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rr.Code)
+	zhtest.AssertNotNil(t, receivedError)
+	zhtest.AssertEqual(t, errSignatureMismatch.Type, receivedError.Type)
+	zhtest.AssertContains(t, rr.Body.String(), "auth failed: Signature Mismatch")
 }
 
 func TestHMACAuth_KeyRotation(t *testing.T) {
@@ -1059,19 +920,14 @@ func TestHMACAuth_KeyRotation(t *testing.T) {
 		handlerCalled = false
 		oldSigner := NewSigner("test-key", oldSecret)
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		if err := oldSigner.SignRequest(req); err != nil {
-			t.Fatalf("failed to sign request: %v", err)
-		}
+		err := oldSigner.SignRequest(req)
+		zhtest.AssertNoError(t, err)
 
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		if !handlerCalled {
-			t.Error("handler was not called with old secret")
-		}
-		if rr.Code != http.StatusOK {
-			t.Errorf("expected 200 with old secret, got %d", rr.Code)
-		}
+		zhtest.AssertTrue(t, handlerCalled)
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 	})
 
 	// Test 2: Request signed with new secret should work
@@ -1079,35 +935,27 @@ func TestHMACAuth_KeyRotation(t *testing.T) {
 		handlerCalled = false
 		newSigner := NewSigner("test-key", newSecret)
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		if err := newSigner.SignRequest(req); err != nil {
-			t.Fatalf("failed to sign request: %v", err)
-		}
+		err := newSigner.SignRequest(req)
+		zhtest.AssertNoError(t, err)
 
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		if !handlerCalled {
-			t.Error("handler was not called with new secret")
-		}
-		if rr.Code != http.StatusOK {
-			t.Errorf("expected 200 with new secret, got %d", rr.Code)
-		}
+		zhtest.AssertTrue(t, handlerCalled)
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 	})
 
 	// Test 3: Request with wrong secret should fail
 	t.Run("wrong secret", func(t *testing.T) {
 		wrongSigner := NewSigner("test-key", "completely-wrong-secret")
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		if err := wrongSigner.SignRequest(req); err != nil {
-			t.Fatalf("failed to sign request: %v", err)
-		}
+		err := wrongSigner.SignRequest(req)
+		zhtest.AssertNoError(t, err)
 
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusUnauthorized {
-			t.Errorf("expected 401 with wrong secret, got %d", rr.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 	})
 }
 
@@ -1125,16 +973,13 @@ func TestHMACAuth_NoSecrets(t *testing.T) {
 
 	signer := NewSigner("any-key", "this-secret-is-32-bytes-long!!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for unknown access key, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_ShortSecretRejected(t *testing.T) {
@@ -1157,16 +1002,13 @@ func TestHMACAuth_ShortSecretRejected(t *testing.T) {
 	// Sign with short secret - should be rejected by middleware
 	signer := NewSigner("test-key", "short-secret")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for short secret, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_ShortSecretRejected_AllAlgorithms(t *testing.T) {
@@ -1243,27 +1085,18 @@ func TestHMACAuth_ShortSecretRejected_AllAlgorithms(t *testing.T) {
 
 			signer := NewSignerWithAlgorithm("test-key", tt.validSecret, tt.algorithm)
 			req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-			if err := signer.SignRequest(req); err != nil {
-				t.Fatalf("failed to sign request: %v", err)
-			}
+			err := signer.SignRequest(req)
+			zhtest.AssertNoError(t, err)
 
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
 			if tt.shouldPass {
-				if rr.Code != http.StatusOK {
-					t.Errorf("expected 200 for valid secret length, got %d", rr.Code)
-				}
-				if !handlerCalled {
-					t.Error("handler was not called for valid secret")
-				}
+				zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+				zhtest.AssertTrue(t, handlerCalled)
 			} else {
-				if rr.Code != http.StatusUnauthorized {
-					t.Errorf("expected 401 for short secret, got %d", rr.Code)
-				}
-				if handlerCalled {
-					t.Error("handler was called for invalid secret")
-				}
+				zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
+				zhtest.AssertFalse(t, handlerCalled)
 			}
 		})
 	}
@@ -1293,32 +1126,26 @@ func TestHMACAuth_ReplayAttack_Prevented(t *testing.T) {
 	t.Run("at_boundary", func(t *testing.T) {
 		oldTime := time.Now().UTC().Add(-2 * time.Minute)
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		if err := signer.SignRequestWithTime(req, oldTime); err != nil {
-			t.Fatalf("failed to sign request: %v", err)
-		}
+		err := signer.SignRequestWithTime(req, oldTime)
+		zhtest.AssertNoError(t, err)
 
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusUnauthorized {
-			t.Errorf("expected 401 for replayed request, got %d", rr.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	// Test 2: Request with timestamp just inside window (should succeed)
 	t.Run("just_inside_window", func(t *testing.T) {
 		recentTime := time.Now().UTC().Add(-30 * time.Second)
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-		if err := signer.SignRequestWithTime(req, recentTime); err != nil {
-			t.Fatalf("failed to sign request: %v", err)
-		}
+		err := signer.SignRequestWithTime(req, recentTime)
+		zhtest.AssertNoError(t, err)
 
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Errorf("expected 200 for valid request, got %d", rr.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 	})
 }
 
@@ -1345,9 +1172,8 @@ func TestHMACAuth_HeaderTampering_Detected(t *testing.T) {
 	// Sign a request with specific headers
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set(httpx.HeaderXRequestId, "original-request-id")
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	// Tamper with the header after signing
 	req.Header.Set(httpx.HeaderXRequestId, "tampered-request-id")
@@ -1355,9 +1181,7 @@ func TestHMACAuth_HeaderTampering_Detected(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for tampered header, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_BodyTampering_Detected(t *testing.T) {
@@ -1382,9 +1206,8 @@ func TestHMACAuth_BodyTampering_Detected(t *testing.T) {
 	originalBody := []byte(`{"amount": 100, "to": "alice"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/transfer", bytes.NewReader(originalBody))
 	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	// Tamper with the body after signing
 	tamperedBody := []byte(`{"amount": 9999, "to": "attacker"}`)
@@ -1393,9 +1216,7 @@ func TestHMACAuth_BodyTampering_Detected(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for tampered body, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_QueryParamTampering_Detected(t *testing.T) {
@@ -1418,9 +1239,8 @@ func TestHMACAuth_QueryParamTampering_Detected(t *testing.T) {
 
 	// Sign a request with specific query params
 	req := httptest.NewRequest(http.MethodGet, "/api/data?user=alice&amount=100", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	// Tamper with query params after signing
 	req.URL.RawQuery = "user=alice&amount=9999"
@@ -1428,9 +1248,7 @@ func TestHMACAuth_QueryParamTampering_Detected(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for tampered query params, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_MiddlewareChaining(t *testing.T) {
@@ -1464,63 +1282,48 @@ func TestHMACAuth_MiddlewareChaining(t *testing.T) {
 
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if !handlerCalled {
-		t.Error("handler was not called")
-	}
-	if chainHeaderValue != "added-by-middleware" {
-		t.Errorf("expected chain middleware header, got %q", chainHeaderValue)
-	}
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rr.Code)
-	}
+	zhtest.AssertTrue(t, handlerCalled)
+	zhtest.AssertEqual(t, "added-by-middleware", chainHeaderValue)
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestParseAuthorizationHeader_InvalidCases(t *testing.T) {
 	tests := []struct {
-		name    string
-		header  string
-		wantErr string
+		name   string
+		header string
 	}{
 		{
-			name:    "not HMAC algorithm",
-			header:  "Bearer token123 Credential=test/2026-03-07T12:00:00Z, SignedHeaders=host, Signature=abcd",
-			wantErr: "invalid format: not HMAC algorithm",
+			name:   "not HMAC algorithm",
+			header: "Bearer token123 Credential=test/2026-03-07T12:00:00Z, SignedHeaders=host, Signature=abcd",
 		},
 		{
-			name:    "invalid base64 signature",
-			header:  "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, SignedHeaders=host, Signature=!!!invalid!!!",
-			wantErr: "invalid signature encoding",
+			name:   "invalid base64 signature",
+			header: "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, SignedHeaders=host, Signature=!!!invalid!!!",
 		},
 		{
-			name:    "missing credential",
-			header:  "HMAC-SHA256 SignedHeaders=host, Signature=YWJjZA==",
-			wantErr: "missing required fields",
+			name:   "missing credential",
+			header: "HMAC-SHA256 SignedHeaders=host, Signature=YWJjZA==",
 		},
 		{
-			name:    "missing signed headers",
-			header:  "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, Signature=YWJjZA==",
-			wantErr: "missing required fields",
+			name:   "missing signed headers",
+			header: "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, Signature=YWJjZA==",
 		},
 		{
-			name:    "missing signature",
-			header:  "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, SignedHeaders=host",
-			wantErr: "missing required fields",
+			name:   "missing signature",
+			header: "HMAC-SHA256 Credential=test-key/2026-03-07T12:00:00Z, SignedHeaders=host",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parseAuthorizationHeader(tt.header, "X-Timestamp")
-			if err == nil {
-				t.Error("expected error, got nil")
-			}
+			zhtest.AssertError(t, err)
 		})
 	}
 }
@@ -1532,9 +1335,7 @@ func TestComputeHMACSignature_DefaultAlgorithm(t *testing.T) {
 
 	// Use an invalid algorithm value
 	sig := computeHMACSignature(secret, canonicalRequest, HashAlgorithm("INVALID"))
-	if len(sig) != 32 { // Should default to SHA256 (32 bytes)
-		t.Errorf("expected 32 bytes for default SHA256, got %d", len(sig))
-	}
+	zhtest.AssertEqual(t, 32, len(sig)) // Should default to SHA256 (32 bytes)
 }
 
 func TestComputeBodyHash_DefaultAlgorithm(t *testing.T) {
@@ -1542,30 +1343,22 @@ func TestComputeBodyHash_DefaultAlgorithm(t *testing.T) {
 
 	// Use an invalid algorithm value - should default to SHA256
 	hash, err := computeBodyHash(req, HashAlgorithm("INVALID"), 1024*1024)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(hash) != 64 { // SHA256 hex is 64 characters
-		t.Errorf("expected 64 char hex for default SHA256, got %d", len(hash))
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, 64, len(hash)) // SHA256 hex is 64 characters
 }
 
 func TestValidateTimestamp_FutureBeyondGrace(t *testing.T) {
 	// Timestamp too far in the future (beyond grace period)
 	future := time.Now().UTC().Add(10 * time.Minute)
 	err := validateTimestamp(future, 5*time.Minute, 1*time.Minute)
-	if err == nil {
-		t.Error("expected error for future timestamp beyond grace")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestValidateTimestamp_FutureWithinGrace(t *testing.T) {
 	// Timestamp slightly in the future (within grace period)
 	future := time.Now().UTC().Add(30 * time.Second)
 	err := validateTimestamp(future, 5*time.Minute, 1*time.Minute)
-	if err != nil {
-		t.Errorf("expected no error for future timestamp within grace, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }
 
 func TestHMACAuth_InvalidBase64Signature(t *testing.T) {
@@ -1591,9 +1384,7 @@ func TestHMACAuth_InvalidBase64Signature(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for invalid base64 signature, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_MaxBodySize(t *testing.T) {
@@ -1619,9 +1410,7 @@ func TestHMACAuth_MaxBodySize(t *testing.T) {
 
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	err := signer.SignRequest(req)
-	if err != nil {
-		t.Fatalf("Signer error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Check the body after signing
 	bodyBytes, _ := io.ReadAll(req.Body)
@@ -1633,9 +1422,7 @@ func TestHMACAuth_MaxBodySize(t *testing.T) {
 
 	t.Logf("Response code: %d, Body: %s", rr.Code, rr.Body.String())
 
-	if rr.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("expected 413 for body exceeding MaxBodySize, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusRequestEntityTooLarge, rr.Code)
 }
 
 func TestHMACAuth_MaxBodySize_AllowedWithUnsignedPayload(t *testing.T) {
@@ -1662,16 +1449,13 @@ func TestHMACAuth_MaxBodySize_AllowedWithUnsignedPayload(t *testing.T) {
 
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	signer.SetAllowUnsignedPayload(true)
-	if err := signer.SignRequest(req); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req)
+	zhtest.AssertNoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 with AllowUnsignedPayload, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_PresignedURL(t *testing.T) {
@@ -1694,9 +1478,7 @@ func TestHMACAuth_PresignedURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://api.example.com/data", nil)
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	presignedURL, err := signer.PresignURL(req, 5*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to create presigned URL: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Parse the presigned URL and make a request
 	parsedURL, _ := url.Parse(presignedURL)
@@ -1705,9 +1487,7 @@ func TestHMACAuth_PresignedURL(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req2)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for valid presigned URL, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 }
 
 func TestHMACAuth_PresignedURL_NotAllowed(t *testing.T) {
@@ -1732,9 +1512,7 @@ func TestHMACAuth_PresignedURL_NotAllowed(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 when presigned URLs not allowed, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_PresignedURL_MissingParams(t *testing.T) {
@@ -1793,9 +1571,7 @@ func TestHMACAuth_PresignedURL_MissingParams(t *testing.T) {
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
-			if rr.Code != http.StatusUnauthorized {
-				t.Errorf("expected 401 for %s, got %d", tt.name, rr.Code)
-			}
+			zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 		})
 	}
 }
@@ -1822,9 +1598,7 @@ func TestHMACAuth_PresignedURL_InvalidSignature(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for invalid presigned URL signature, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestValidatePresignedURLTimestamp_Expired(t *testing.T) {
@@ -1850,21 +1624,15 @@ func TestValidatePresignedURLTimestamp_Expired(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for expired presigned URL, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestHMACAuth_NilCredentialStore(t *testing.T) {
 	// Test that nil CredentialStore causes panic
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic for nil CredentialStore")
-		}
-	}()
-
-	_ = New(Config{
-		CredentialStore: nil,
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			CredentialStore: nil,
+		})
 	})
 }
 
@@ -1892,9 +1660,7 @@ func TestHMACAuth_PresignedURL_NoHeaderModification(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://api.example.com/data", nil)
 	signer := NewSigner("test-key", "test-secret-key-that-is-32-bytes-long!")
 	presignedURL, err := signer.PresignURL(req, 5*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to create presigned URL: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Parse the presigned URL and make a request
 	parsedURL, _ := url.Parse(presignedURL)
@@ -1906,19 +1672,12 @@ func TestHMACAuth_PresignedURL_NoHeaderModification(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req2)
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 for valid presigned URL, got %d", rr.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
 
 	// Verify that the X-Timestamp header was NOT modified by the middleware
-	if capturedRequest == nil {
-		t.Fatal("capturedRequest is nil")
-	}
+	zhtest.AssertNotNil(t, capturedRequest)
 	finalTimestampHeader := capturedRequest.Header.Get("X-Timestamp")
-	if finalTimestampHeader != originalTimestampHeader {
-		t.Errorf("X-Timestamp header was modified by middleware: original=%q, final=%q",
-			originalTimestampHeader, finalTimestampHeader)
-	}
+	zhtest.AssertEqual(t, originalTimestampHeader, finalTimestampHeader)
 }
 
 func TestHMACAuth_IncludedPaths(t *testing.T) {
@@ -1941,45 +1700,34 @@ func TestHMACAuth_IncludedPaths(t *testing.T) {
 
 	// Test allowed path - should require auth
 	req1 := httptest.NewRequest(http.MethodGet, "/api/test", nil)
-	if err := signer.SignRequest(req1); err != nil {
-		t.Fatalf("failed to sign request: %v", err)
-	}
+	err := signer.SignRequest(req1)
+	zhtest.AssertNoError(t, err)
 	rr1 := httptest.NewRecorder()
 	handler.ServeHTTP(rr1, req1)
 
-	if rr1.Code != http.StatusOK {
-		t.Errorf("expected 200 for allowed path with valid auth, got %d", rr1.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr1.Code)
 
 	// Test non-allowed path - should skip auth
 	req2 := httptest.NewRequest(http.MethodGet, "/public", nil)
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Errorf("expected 200 for non-allowed path, got %d", rr2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr2.Code)
 
 	// Test non-allowed path with missing auth - should still pass
 	req3 := httptest.NewRequest(http.MethodGet, "/other", nil)
 	rr3 := httptest.NewRecorder()
 	handler.ServeHTTP(rr3, req3)
 
-	if rr3.Code != http.StatusOK {
-		t.Errorf("expected 200 for non-allowed path without auth, got %d", rr3.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rr3.Code)
 }
 
 func TestHMACAuth_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		CredentialStore: func(id string) []string { return nil },
-		ExcludedPaths:   []string{"/health"},
-		IncludedPaths:   []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			CredentialStore: func(id string) []string { return nil },
+			ExcludedPaths:   []string{"/health"},
+			IncludedPaths:   []string{"/api"},
+		})
 	})
 }

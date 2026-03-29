@@ -12,12 +12,8 @@ import (
 
 func TestNoCacheEpochValue(t *testing.T) {
 	expectedEpoch := time.Unix(0, 0).UTC().Format(http.TimeFormat)
-	if Epoch != expectedEpoch {
-		t.Errorf("expected config.Epoch %s, got %s", expectedEpoch, Epoch)
-	}
-	if expectedEpoch != "Thu, 01 Jan 1970 00:00:00 GMT" {
-		t.Errorf("expected config.Epoch to be Thu, 01 Jan 1970 00:00:00 GMT, got %s", expectedEpoch)
-	}
+	zhtest.AssertEqual(t, expectedEpoch, Epoch)
+	zhtest.AssertEqual(t, "Thu, 01 Jan 1970 00:00:00 GMT", expectedEpoch)
 }
 
 func TestNoCacheResponseHeaders(t *testing.T) {
@@ -37,9 +33,7 @@ func TestNoCacheResponseHeaders(t *testing.T) {
 		httpx.HeaderXAccelExpires: "0",
 	}
 	for header, expected := range expectedHeaders {
-		if got := w.Header().Get(header); got != expected {
-			t.Errorf("expected %s header = %s, got %s", header, expected, got)
-		}
+		zhtest.AssertEqual(t, expected, w.Header().Get(header))
 	}
 	zhtest.AssertWith(t, w).Status(http.StatusOK).Body("test response")
 }
@@ -57,13 +51,9 @@ func TestNoCacheRequestHeaderRemoval(t *testing.T) {
 	}
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for _, header := range []string{httpx.HeaderETag, httpx.HeaderIfModifiedSince, httpx.HeaderIfMatch, httpx.HeaderIfNoneMatch, httpx.HeaderIfRange, httpx.HeaderIfUnmodifiedSince} {
-			if value := r.Header.Get(header); value != "" {
-				t.Errorf("expected %s header to be removed, but got %s", header, value)
-			}
+			zhtest.AssertEmpty(t, r.Header.Get(header))
 		}
-		if userAgent := r.Header.Get(httpx.HeaderUserAgent); userAgent != "test-agent" {
-			t.Errorf("expected User-Agent to remain, got %s", userAgent)
-		}
+		zhtest.AssertEqual(t, "test-agent", r.Header.Get(httpx.HeaderUserAgent))
 		w.WriteHeader(http.StatusOK)
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeaders(headers).Build()
@@ -79,15 +69,9 @@ func TestNoCacheCustomConfig(t *testing.T) {
 		ETagHeaders: []string{httpx.HeaderETag, httpx.HeaderIfNoneMatch},
 	})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if etag := r.Header.Get(httpx.HeaderETag); etag != "" {
-			t.Errorf("expected ETag to be removed, got %s", etag)
-		}
-		if ifNoneMatch := r.Header.Get(httpx.HeaderIfNoneMatch); ifNoneMatch != "" {
-			t.Errorf("expected If-None-Match to be removed, got %s", ifNoneMatch)
-		}
-		if ifModified := r.Header.Get(httpx.HeaderIfModifiedSince); ifModified == "" {
-			t.Error("expected If-Modified-Since to remain")
-		}
+		zhtest.AssertEmpty(t, r.Header.Get(httpx.HeaderETag))
+		zhtest.AssertEmpty(t, r.Header.Get(httpx.HeaderIfNoneMatch))
+		zhtest.AssertNotEmpty(t, r.Header.Get(httpx.HeaderIfModifiedSince))
 		w.WriteHeader(http.StatusOK)
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/test").
@@ -109,9 +93,7 @@ func TestNoCacheNilConfig(t *testing.T) {
 		ETagHeaders: nil,
 	})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if etag := r.Header.Get(httpx.HeaderETag); etag != "" {
-			t.Errorf("expected ETag to be removed with nil config, got %s", etag)
-		}
+		zhtest.AssertEmpty(t, r.Header.Get(httpx.HeaderETag))
 		w.WriteHeader(http.StatusOK)
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/test").WithHeader(httpx.HeaderETag, `"test123"`).Build()
@@ -128,9 +110,7 @@ func TestNoCacheHTTPMethods(t *testing.T) {
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if etag := r.Header.Get(httpx.HeaderETag); etag != "" {
-					t.Errorf("expected ETag to be removed for %s method, got %s", method, etag)
-				}
+				zhtest.AssertEmpty(t, r.Header.Get(httpx.HeaderETag))
 				w.WriteHeader(http.StatusOK)
 			})
 
@@ -148,12 +128,8 @@ func TestNoCacheEmptyHeaders(t *testing.T) {
 		ETagHeaders: []string{},
 	})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if etag := r.Header.Get(httpx.HeaderETag); etag != `"test123"` {
-			t.Errorf("expected ETag to remain with empty config, got %s", etag)
-		}
-		if ifNoneMatch := r.Header.Get(httpx.HeaderIfNoneMatch); ifNoneMatch != `"test456"` {
-			t.Errorf("expected If-None-Match to remain with empty config, got %s", ifNoneMatch)
-		}
+		zhtest.AssertEqual(t, `"test123"`, r.Header.Get(httpx.HeaderETag))
+		zhtest.AssertEqual(t, `"test456"`, r.Header.Get(httpx.HeaderIfNoneMatch))
 		w.WriteHeader(http.StatusOK)
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/test").
@@ -170,15 +146,9 @@ func TestNoCacheEmptyHeaders(t *testing.T) {
 func TestNoCacheOnlyExistingHeaders(t *testing.T) {
 	middleware := New()
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if ifMatch := r.Header.Get(httpx.HeaderIfMatch); ifMatch != "" {
-			t.Errorf("expected If-Match to be removed, got %s", ifMatch)
-		}
-		if userAgent := r.Header.Get(httpx.HeaderUserAgent); userAgent != "test-agent" {
-			t.Errorf("expected User-Agent to remain, got %s", userAgent)
-		}
-		if etag := r.Header.Get(httpx.HeaderETag); etag != "" {
-			t.Errorf("expected ETag to remain empty, got %s", etag)
-		}
+		zhtest.AssertEmpty(t, r.Header.Get(httpx.HeaderIfMatch))
+		zhtest.AssertEqual(t, "test-agent", r.Header.Get(httpx.HeaderUserAgent))
+		zhtest.AssertEmpty(t, r.Header.Get(httpx.HeaderETag))
 		w.WriteHeader(http.StatusOK)
 	})
 	req := zhtest.NewRequest(http.MethodGet, "/test").
@@ -191,12 +161,8 @@ func TestNoCacheOnlyExistingHeaders(t *testing.T) {
 func TestNoCacheResponseAndRequest(t *testing.T) {
 	middleware := New()
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if ifNoneMatch := r.Header.Get(httpx.HeaderIfNoneMatch); ifNoneMatch != "" {
-			t.Errorf("expected If-None-Match to be removed, got %s", ifNoneMatch)
-		}
-		if auth := r.Header.Get(httpx.HeaderAuthorization); auth != "Bearer token123" {
-			t.Errorf("expected Authorization to remain, got %s", auth)
-		}
+		zhtest.AssertEmpty(t, r.Header.Get(httpx.HeaderIfNoneMatch))
+		zhtest.AssertEqual(t, "Bearer token123", r.Header.Get(httpx.HeaderAuthorization))
 
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusOK)
@@ -209,9 +175,7 @@ func TestNoCacheResponseAndRequest(t *testing.T) {
 		Build()
 	w := zhtest.Serve(middleware(next), req)
 
-	if cacheControl := w.Header().Get(httpx.HeaderCacheControl); !strings.Contains(cacheControl, "no-cache") {
-		t.Errorf("expected Cache-Control to contain no-cache, got %s", cacheControl)
-	}
+	zhtest.AssertTrue(t, strings.Contains(w.Header().Get(httpx.HeaderCacheControl), "no-cache"))
 	zhtest.AssertWith(t, w).
 		Header(httpx.HeaderContentType, "application/json").
 		Body(`{"data": "test"}`)

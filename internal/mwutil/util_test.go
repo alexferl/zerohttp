@@ -1,6 +1,10 @@
 package mwutil
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
+)
 
 func TestPathMatches(t *testing.T) {
 	tests := []struct {
@@ -25,10 +29,7 @@ func TestPathMatches(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.requestPath+"_vs_"+tt.excludedPath, func(t *testing.T) {
 			result := PathMatches(tt.requestPath, tt.excludedPath)
-			if result != tt.expected {
-				t.Errorf("pathMatches(%q, %q) = %v, expected %v",
-					tt.requestPath, tt.excludedPath, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }

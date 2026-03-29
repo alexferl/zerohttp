@@ -7,22 +7,15 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestDefaultJWTAuthConfig(t *testing.T) {
 	cfg := DefaultConfig
 
-	if cfg.AccessTokenTTL != 15*time.Minute {
-		t.Errorf("expected AccessTokenTTL to be 15m, got %v", cfg.AccessTokenTTL)
-	}
-
-	if cfg.RefreshTokenTTL != 7*24*time.Hour {
-		t.Errorf("expected RefreshTokenTTL to be 7d, got %v", cfg.RefreshTokenTTL)
-	}
-
-	if cfg.Extractor == nil {
-		t.Error("expected TokenExtractor to be set")
-	}
+	zhtest.AssertEqual(t, 15*time.Minute, cfg.AccessTokenTTL)
+	zhtest.AssertEqual(t, 7*24*time.Hour, cfg.RefreshTokenTTL)
+	zhtest.AssertNotNil(t, cfg.Extractor)
 }
 
 func TestExtractBearerToken(t *testing.T) {
@@ -66,20 +59,14 @@ func TestExtractBearerToken(t *testing.T) {
 			}
 
 			got := extractBearerToken(req)
-			if got != tt.want {
-				t.Errorf("extractBearerToken() = %q, want %q", got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
 
 func TestTokenType(t *testing.T) {
-	if AccessToken != 0 {
-		t.Errorf("expected AccessToken to be 0, got %d", AccessToken)
-	}
-	if RefreshToken != 1 {
-		t.Errorf("expected RefreshToken to be 1, got %d", RefreshToken)
-	}
+	zhtest.AssertEqual(t, 0, int(AccessToken))
+	zhtest.AssertEqual(t, 1, int(RefreshToken))
 }
 
 func TestJWTAuthConfig_Customization(t *testing.T) {
@@ -99,29 +86,22 @@ func TestJWTAuthConfig_Customization(t *testing.T) {
 	// Test custom extractor
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("X-Custom-Token", "my-token")
-	if got := cfg.Extractor(req); got != "my-token" {
-		t.Errorf("expected token 'my-token', got %q", got)
-	}
+	zhtest.AssertEqual(t, "my-token", cfg.Extractor(req))
 
-	if len(cfg.RequiredClaims) != 2 || cfg.RequiredClaims[0] != "sub" || cfg.RequiredClaims[1] != "iss" {
-		t.Errorf("expected RequiredClaims [sub iss], got %v", cfg.RequiredClaims)
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.RequiredClaims))
+	zhtest.AssertEqual(t, "sub", cfg.RequiredClaims[0])
+	zhtest.AssertEqual(t, "iss", cfg.RequiredClaims[1])
 
-	if len(cfg.ExcludedPaths) != 2 || cfg.ExcludedPaths[0] != "/health" || cfg.ExcludedPaths[1] != "/metrics" {
-		t.Errorf("expected ExcludedPaths [/health /metrics], got %v", cfg.ExcludedPaths)
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, "/health", cfg.ExcludedPaths[0])
+	zhtest.AssertEqual(t, "/metrics", cfg.ExcludedPaths[1])
 
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected 0 included paths, got %d", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 
-	if len(cfg.ExcludedMethods) != 1 || cfg.ExcludedMethods[0] != http.MethodHead {
-		t.Errorf("expected ExcludedMethods [HEAD], got %v", cfg.ExcludedMethods)
-	}
+	zhtest.AssertEqual(t, 1, len(cfg.ExcludedMethods))
+	zhtest.AssertEqual(t, http.MethodHead, cfg.ExcludedMethods[0])
 
-	if cfg.AccessTokenTTL != 30*time.Minute {
-		t.Errorf("expected AccessTokenTTL to be 30m, got %v", cfg.AccessTokenTTL)
-	}
+	zhtest.AssertEqual(t, 30*time.Minute, cfg.AccessTokenTTL)
 }
 
 func TestJWTAuthConfig_IncludedPaths(t *testing.T) {
@@ -139,62 +119,32 @@ func TestJWTAuthConfig_IncludedPaths(t *testing.T) {
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 	}
 
-	if len(cfg.IncludedPaths) != 2 {
-		t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-	}
-	if cfg.IncludedPaths[0] != "/api/public" {
-		t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
-	}
-	if cfg.IncludedPaths[1] != "/api/internal" {
-		t.Errorf("expected second allowed path to be /api/internal, got %s", cfg.IncludedPaths[1])
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+	zhtest.AssertEqual(t, "/api/public", cfg.IncludedPaths[0])
+	zhtest.AssertEqual(t, "/api/internal", cfg.IncludedPaths[1])
 
 	// Test empty included paths
 	cfg2 := Config{
 		IncludedPaths: []string{},
 	}
-	if cfg2.IncludedPaths == nil {
-		t.Error("expected included paths slice to be initialized, not nil")
-	}
-	if len(cfg2.IncludedPaths) != 0 {
-		t.Errorf("expected empty included paths slice, got %d entries", len(cfg2.IncludedPaths))
-	}
+	zhtest.AssertNotNil(t, cfg2.IncludedPaths)
+	zhtest.AssertEqual(t, 0, len(cfg2.IncludedPaths))
 
 	// Test nil included paths
 	cfg3 := Config{
 		IncludedPaths: nil,
 	}
-	if cfg3.IncludedPaths != nil {
-		t.Error("expected included paths to remain nil when nil is passed")
-	}
+	zhtest.AssertNil(t, cfg3.IncludedPaths)
 }
 
 func TestJWTClaimConstants(t *testing.T) {
-	if JWTClaimSubject != "sub" {
-		t.Errorf("expected JWTClaimSubject = sub, got %s", JWTClaimSubject)
-	}
-	if JWTClaimIssuer != "iss" {
-		t.Errorf("expected JWTClaimIssuer = iss, got %s", JWTClaimIssuer)
-	}
-	if JWTClaimAudience != "aud" {
-		t.Errorf("expected JWTClaimAudience = aud, got %s", JWTClaimAudience)
-	}
-	if JWTClaimExpiration != "exp" {
-		t.Errorf("expected JWTClaimExpiration = exp, got %s", JWTClaimExpiration)
-	}
-	if JWTClaimNotBefore != "nbf" {
-		t.Errorf("expected JWTClaimNotBefore = nbf, got %s", JWTClaimNotBefore)
-	}
-	if JWTClaimIssuedAt != "iat" {
-		t.Errorf("expected JWTClaimIssuedAt = iat, got %s", JWTClaimIssuedAt)
-	}
-	if JWTClaimJWTID != "jti" {
-		t.Errorf("expected JWTClaimJWTID = jti, got %s", JWTClaimJWTID)
-	}
-	if JWTClaimScope != "scope" {
-		t.Errorf("expected JWTClaimScope = scope, got %s", JWTClaimScope)
-	}
-	if JWTClaimType != "type" {
-		t.Errorf("expected JWTClaimType = type, got %s", JWTClaimType)
-	}
+	zhtest.AssertEqual(t, "sub", JWTClaimSubject)
+	zhtest.AssertEqual(t, "iss", JWTClaimIssuer)
+	zhtest.AssertEqual(t, "aud", JWTClaimAudience)
+	zhtest.AssertEqual(t, "exp", JWTClaimExpiration)
+	zhtest.AssertEqual(t, "nbf", JWTClaimNotBefore)
+	zhtest.AssertEqual(t, "iat", JWTClaimIssuedAt)
+	zhtest.AssertEqual(t, "jti", JWTClaimJWTID)
+	zhtest.AssertEqual(t, "scope", JWTClaimScope)
+	zhtest.AssertEqual(t, "type", JWTClaimType)
 }

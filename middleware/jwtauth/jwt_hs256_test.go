@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestHS256Validator_Success(t *testing.T) {
@@ -23,24 +25,16 @@ func TestHS256Validator_Success(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Validate the token
 	validatedClaims, err := validator(token)
-	if err != nil {
-		t.Fatalf("failed to validate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	hsClaims, ok := validatedClaims.(HS256Claims)
-	if !ok {
-		t.Fatal("expected HS256Claims")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if hsClaims["sub"] != "user123" {
-		t.Errorf("expected sub = 'user123', got %v", hsClaims["sub"])
-	}
+	zhtest.AssertEqual(t, "user123", hsClaims["sub"])
 }
 
 func TestHS256Validator_InvalidSignature(t *testing.T) {
@@ -57,20 +51,14 @@ func TestHS256Validator_InvalidSignature(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Create validator with wrong secret
 	wrongValidator := HS256Validator(wrongSecret, opts)
 
 	_, err = wrongValidator(token)
-	if err == nil {
-		t.Error("expected validation to fail with wrong secret")
-	}
-	if !strings.Contains(err.Error(), "invalid signature") {
-		t.Errorf("expected 'invalid signature' error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "invalid signature")
 }
 
 func TestHS256Validator_ExpiredToken(t *testing.T) {
@@ -87,17 +75,11 @@ func TestHS256Validator_ExpiredToken(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	_, err = validator(token)
-	if err == nil {
-		t.Error("expected validation to fail for expired token")
-	}
-	if !strings.Contains(err.Error(), "expired") {
-		t.Errorf("expected 'expired' error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "expired")
 }
 
 func TestHS256Validator_NotBefore(t *testing.T) {
@@ -115,17 +97,11 @@ func TestHS256Validator_NotBefore(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	_, err = validator(token)
-	if err == nil {
-		t.Error("expected validation to fail for not-yet-valid token")
-	}
-	if !strings.Contains(err.Error(), "not yet valid") {
-		t.Errorf("expected 'not yet valid' error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "not yet valid")
 }
 
 func TestHS256Validator_InvalidFormat(t *testing.T) {
@@ -143,9 +119,7 @@ func TestHS256Validator_InvalidFormat(t *testing.T) {
 
 	for _, token := range tests {
 		_, err := validator(token)
-		if err == nil {
-			t.Errorf("expected error for token %q", token)
-		}
+		zhtest.AssertError(t, err)
 	}
 }
 
@@ -160,12 +134,8 @@ func TestHS256Validator_InvalidAlgorithm(t *testing.T) {
 	invalidToken := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIn0.invalid"
 
 	_, err := validator(invalidToken)
-	if err == nil {
-		t.Error("expected error for unsupported algorithm")
-	}
-	if !strings.Contains(err.Error(), "unsupported algorithm") {
-		t.Errorf("expected 'unsupported algorithm' error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "unsupported algorithm")
 }
 
 func TestHS256Validator_ValidateIssuer(t *testing.T) {
@@ -185,15 +155,11 @@ func TestHS256Validator_ValidateIssuer(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Should validate successfully (generator adds issuer)
 	_, err = validator(token)
-	if err != nil {
-		t.Errorf("expected validation to succeed: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Test with wrong issuer
 	wrongOpts := HS256Config{
@@ -203,9 +169,7 @@ func TestHS256Validator_ValidateIssuer(t *testing.T) {
 	wrongValidator := HS256Validator(secret, wrongOpts)
 
 	_, err = wrongValidator(token)
-	if err == nil {
-		t.Error("expected validation to fail with wrong issuer")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestHS256Validator_ValidateAudience(t *testing.T) {
@@ -225,15 +189,11 @@ func TestHS256Validator_ValidateAudience(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Should validate successfully
 	_, err = validator(token)
-	if err != nil {
-		t.Errorf("expected validation to succeed: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Test with wrong audience
 	wrongOpts := HS256Config{
@@ -243,9 +203,7 @@ func TestHS256Validator_ValidateAudience(t *testing.T) {
 	wrongValidator := HS256Validator(secret, wrongOpts)
 
 	_, err = wrongValidator(token)
-	if err == nil {
-		t.Error("expected validation to fail with wrong audience")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestHS256Generator_WithMapClaims(t *testing.T) {
@@ -263,15 +221,11 @@ func TestHS256Generator_WithMapClaims(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Token should have 3 parts
 	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		t.Errorf("expected 3 parts, got %d", len(parts))
-	}
+	zhtest.AssertEqual(t, 3, len(parts))
 }
 
 func TestHS256Generator_UnsupportedClaimsType(t *testing.T) {
@@ -282,9 +236,7 @@ func TestHS256Generator_UnsupportedClaimsType(t *testing.T) {
 
 	// Use unsupported claims type
 	_, err := generator("not a map", AccessToken)
-	if err == nil {
-		t.Error("expected error for unsupported claims type")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestGetHS256Subject(t *testing.T) {
@@ -293,15 +245,11 @@ func TestGetHS256Subject(t *testing.T) {
 	}
 
 	sub := GetHS256Subject(claims)
-	if sub != "user123" {
-		t.Errorf("expected sub = 'user123', got %q", sub)
-	}
+	zhtest.AssertEqual(t, "user123", sub)
 
 	// Test with non-HS256Claims
 	sub = GetHS256Subject(map[string]any{"sub": "user456"})
-	if sub != "" {
-		t.Errorf("expected empty string for non-HS256Claims, got %q", sub)
-	}
+	zhtest.AssertEqual(t, "", sub)
 }
 
 func TestGetHS256Expiration(t *testing.T) {
@@ -311,15 +259,11 @@ func TestGetHS256Expiration(t *testing.T) {
 	}
 
 	got := GetHS256Expiration(claims)
-	if !got.Equal(time.Unix(expTime.Unix(), 0)) {
-		t.Errorf("expected exp = %v, got %v", expTime, got)
-	}
+	zhtest.AssertEqual(t, time.Unix(expTime.Unix(), 0), got)
 
 	// Test with non-HS256Claims
 	got = GetHS256Expiration(map[string]any{"exp": float64(expTime.Unix())})
-	if !got.IsZero() {
-		t.Errorf("expected zero time for non-HS256Claims, got %v", got)
-	}
+	zhtest.AssertTrue(t, got.IsZero())
 }
 
 func TestSignHS256(t *testing.T) {
@@ -330,15 +274,11 @@ func TestSignHS256(t *testing.T) {
 	sig2 := signHS256(data, secret)
 
 	// Same input should produce same signature
-	if sig1 != sig2 {
-		t.Error("expected same signature for same input")
-	}
+	zhtest.AssertEqual(t, sig1, sig2)
 
 	// Different secret should produce different signature
 	otherSig := signHS256(data, []byte("other-secret"))
-	if sig1 == otherSig {
-		t.Error("expected different signature for different secret")
-	}
+	zhtest.AssertNotEqual(t, sig1, otherSig)
 }
 
 // Tests for HS256TokenStore (TokenStore interface implementation)
@@ -351,25 +291,14 @@ func TestNewHS256TokenStore(t *testing.T) {
 	}
 
 	store := NewHS256Store(secret, opts)
-	if store == nil {
-		t.Fatal("expected store to be created")
-	}
+	zhtest.AssertNotNil(t, store)
 }
 
 func TestNewHS256TokenStore_ShortSecretPanics(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Error("expected panic for short secret, but did not panic")
-		}
-		msg, ok := r.(string)
-		if !ok || !strings.Contains(msg, "HS256 secret must be at least 32 bytes") {
-			t.Errorf("expected panic message about 32 bytes, got: %v", r)
-		}
-	}()
-
-	// This should panic - secret is only 13 bytes
-	_ = NewHS256Store([]byte("short-secret"), HS256Config{})
+	zhtest.AssertPanicContains(t, func() {
+		// This should panic - secret is only 13 bytes
+		_ = NewHS256Store([]byte("short-secret"), HS256Config{})
+	}, "HS256 secret must be at least 32 bytes")
 }
 
 func TestHS256TokenStore_Validate(t *testing.T) {
@@ -384,24 +313,16 @@ func TestHS256TokenStore_Validate(t *testing.T) {
 	}
 
 	token, err := store.Generate(context.Background(), claims, AccessToken, 15*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Validate the token
 	validatedClaims, err := store.Validate(context.Background(), token)
-	if err != nil {
-		t.Fatalf("failed to validate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	hsClaims, ok := validatedClaims.(HS256Claims)
-	if !ok {
-		t.Fatal("expected HS256Claims")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if hsClaims["sub"] != "user123" {
-		t.Errorf("expected sub = 'user123', got %v", hsClaims["sub"])
-	}
+	zhtest.AssertEqual(t, "user123", hsClaims["sub"])
 }
 
 func TestHS256TokenStore_Validate_InvalidToken(t *testing.T) {
@@ -410,9 +331,7 @@ func TestHS256TokenStore_Validate_InvalidToken(t *testing.T) {
 	store := NewHS256Store(secret, opts)
 
 	_, err := store.Validate(context.Background(), "invalid.token.here")
-	if err == nil {
-		t.Error("expected error for invalid token")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestHS256TokenStore_Generate(t *testing.T) {
@@ -428,15 +347,11 @@ func TestHS256TokenStore_Generate(t *testing.T) {
 	}
 
 	token, err := store.Generate(context.Background(), claims, AccessToken, 15*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Token should have 3 parts
 	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		t.Errorf("expected 3 parts, got %d", len(parts))
-	}
+	zhtest.AssertEqual(t, 3, len(parts))
 }
 
 func TestHS256TokenStore_Generate_WithMapClaims(t *testing.T) {
@@ -451,15 +366,11 @@ func TestHS256TokenStore_Generate_WithMapClaims(t *testing.T) {
 	}
 
 	token, err := store.Generate(context.Background(), claims, AccessToken, 15*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Token should have 3 parts
 	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		t.Errorf("expected 3 parts, got %d", len(parts))
-	}
+	zhtest.AssertEqual(t, 3, len(parts))
 }
 
 func TestHS256TokenStore_Generate_UnsupportedClaimsType(t *testing.T) {
@@ -469,9 +380,7 @@ func TestHS256TokenStore_Generate_UnsupportedClaimsType(t *testing.T) {
 
 	// Use unsupported claims type
 	_, err := store.Generate(context.Background(), "not a map", AccessToken, 15*time.Minute)
-	if err == nil {
-		t.Error("expected error for unsupported claims type")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestHS256TokenStore_Revoke(t *testing.T) {
@@ -482,9 +391,7 @@ func TestHS256TokenStore_Revoke(t *testing.T) {
 	// Revoke is a no-op for HS256TokenStore
 	claims := HS256Claims{"sub": "user123"}
 	err := store.Revoke(context.Background(), claims)
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }
 
 func TestHS256TokenStore_IsRevoked(t *testing.T) {
@@ -495,9 +402,7 @@ func TestHS256TokenStore_IsRevoked(t *testing.T) {
 	// IsRevoked always returns false for HS256TokenStore
 	claims := HS256Claims{"sub": "user123", "jti": "token-id"}
 	revoked, _ := store.IsRevoked(context.Background(), claims)
-	if revoked {
-		t.Error("expected IsRevoked to return false")
-	}
+	zhtest.AssertFalse(t, revoked)
 }
 
 func TestHS256TokenStore_RoundTrip(t *testing.T) {
@@ -516,36 +421,22 @@ func TestHS256TokenStore_RoundTrip(t *testing.T) {
 	}
 
 	token, err := store.Generate(context.Background(), claims, AccessToken, 15*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Validate token
 	validatedClaims, err := store.Validate(context.Background(), token)
-	if err != nil {
-		t.Fatalf("failed to validate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	hsClaims, ok := validatedClaims.(HS256Claims)
-	if !ok {
-		t.Fatal("expected HS256Claims")
-	}
+	zhtest.AssertTrue(t, ok)
 
 	// Check claims survived round trip
-	if hsClaims["sub"] != "user123" {
-		t.Errorf("expected sub = 'user123', got %v", hsClaims["sub"])
-	}
-	if hsClaims["scope"] != "read write" {
-		t.Errorf("expected scope = 'read write', got %v", hsClaims["scope"])
-	}
+	zhtest.AssertEqual(t, "user123", hsClaims["sub"])
+	zhtest.AssertEqual(t, "read write", hsClaims["scope"])
 
 	// Issuer and audience should be added by generator
-	if hsClaims["iss"] != "test-issuer" {
-		t.Errorf("expected iss = 'test-issuer', got %v", hsClaims["iss"])
-	}
-	if hsClaims["aud"] != "test-audience" {
-		t.Errorf("expected aud = 'test-audience', got %v", hsClaims["aud"])
-	}
+	zhtest.AssertEqual(t, "test-issuer", hsClaims["iss"])
+	zhtest.AssertEqual(t, "test-audience", hsClaims["aud"])
 }
 
 func TestParseHS256Token_InvalidBase64(t *testing.T) {
@@ -556,9 +447,7 @@ func TestParseHS256Token_InvalidBase64(t *testing.T) {
 
 	// Invalid base64 in header
 	_, err := validator("!!!.eyJzdWIiOiJ1c2VyMTIzIn0.signature")
-	if err == nil {
-		t.Error("expected error for invalid base64 header")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestParseHS256Token_InvalidHeaderJSON(t *testing.T) {
@@ -572,9 +461,7 @@ func TestParseHS256Token_InvalidHeaderJSON(t *testing.T) {
 	token := invalidHeader + ".eyJzdWIiOiJ1c2VyMTIzIn0.signature"
 
 	_, err := validator(token)
-	if err == nil {
-		t.Error("expected error for invalid header JSON")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestParseHS256Token_InvalidPayloadBase64(t *testing.T) {
@@ -588,9 +475,7 @@ func TestParseHS256Token_InvalidPayloadBase64(t *testing.T) {
 	token := validHeader + ".!!!.signature"
 
 	_, err := validator(token)
-	if err == nil {
-		t.Error("expected error for invalid payload base64")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestParseHS256Token_InvalidPayloadJSON(t *testing.T) {
@@ -605,9 +490,7 @@ func TestParseHS256Token_InvalidPayloadJSON(t *testing.T) {
 	token := validHeader + "." + invalidPayload + ".signature"
 
 	_, err := validator(token)
-	if err == nil {
-		t.Error("expected error for invalid payload JSON")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestParseHS256Token_MissingAudience(t *testing.T) {
@@ -626,9 +509,8 @@ func TestParseHS256Token_MissingAudience(t *testing.T) {
 	tokenWithoutAud := header + "." + payload + "." + signature
 
 	_, err := validator(tokenWithoutAud)
-	if err == nil || !strings.Contains(err.Error(), "audience") {
-		t.Errorf("expected 'missing audience' error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "audience")
 }
 
 func TestParseHS256Token_InvalidAudienceArray(t *testing.T) {
@@ -646,9 +528,8 @@ func TestParseHS256Token_InvalidAudienceArray(t *testing.T) {
 
 	validator := HS256Validator(secret, opts)
 	_, err := validator(token)
-	if err == nil || !strings.Contains(err.Error(), "invalid audience") {
-		t.Errorf("expected 'invalid audience' error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "invalid audience")
 }
 
 func TestParseHS256Token_AudienceWrongFormat(t *testing.T) {
@@ -666,9 +547,8 @@ func TestParseHS256Token_AudienceWrongFormat(t *testing.T) {
 
 	validator := HS256Validator(secret, opts)
 	_, err := validator(token)
-	if err == nil || !strings.Contains(err.Error(), "invalid audience format") {
-		t.Errorf("expected 'invalid audience format' error, got: %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "invalid audience format")
 }
 
 func TestParseHS256Token_NoExpiration(t *testing.T) {
@@ -683,19 +563,13 @@ func TestParseHS256Token_NoExpiration(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Token without exp should be valid
 	validator := HS256Validator(secret, opts)
 	validatedClaims, err := validator(token)
-	if err != nil {
-		t.Errorf("expected token without exp to be valid: %v", err)
-	}
-	if validatedClaims == nil {
-		t.Error("expected claims to be returned")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertNotNil(t, validatedClaims)
 }
 
 func TestParseHS256Token_NoNotBefore(t *testing.T) {
@@ -711,19 +585,13 @@ func TestParseHS256Token_NoNotBefore(t *testing.T) {
 	}
 
 	token, err := generator(claims, AccessToken)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Token without nbf should be valid
 	validator := HS256Validator(secret, opts)
 	validatedClaims, err := validator(token)
-	if err != nil {
-		t.Errorf("expected token without nbf to be valid: %v", err)
-	}
-	if validatedClaims == nil {
-		t.Error("expected claims to be returned")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertNotNil(t, validatedClaims)
 }
 
 func TestGenerateHS256Token_NoIssuer(t *testing.T) {
@@ -740,20 +608,15 @@ func TestGenerateHS256Token_NoIssuer(t *testing.T) {
 	}
 
 	token, err := store.Generate(context.Background(), claims, AccessToken, 15*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Validate and check issuer wasn't added
 	validatedClaims, err := store.Validate(context.Background(), token)
-	if err != nil {
-		t.Fatalf("failed to validate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	hsClaims := validatedClaims.(HS256Claims)
-	if _, ok := hsClaims["iss"]; ok {
-		t.Error("expected no issuer claim when Issuer is empty")
-	}
+	_, ok := hsClaims["iss"]
+	zhtest.AssertFalse(t, ok)
 }
 
 func TestGenerateHS256Token_NoAudience(t *testing.T) {
@@ -770,20 +633,15 @@ func TestGenerateHS256Token_NoAudience(t *testing.T) {
 	}
 
 	token, err := store.Generate(context.Background(), claims, AccessToken, 15*time.Minute)
-	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Validate and check audience wasn't added
 	validatedClaims, err := store.Validate(context.Background(), token)
-	if err != nil {
-		t.Fatalf("failed to validate token: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	hsClaims := validatedClaims.(HS256Claims)
-	if _, ok := hsClaims["aud"]; ok {
-		t.Error("expected no audience claim when Audience is empty")
-	}
+	_, ok := hsClaims["aud"]
+	zhtest.AssertFalse(t, ok)
 }
 
 func TestGetHS256Subject_Missing(t *testing.T) {
@@ -792,9 +650,7 @@ func TestGetHS256Subject_Missing(t *testing.T) {
 	}
 
 	sub := GetHS256Subject(claims)
-	if sub != "" {
-		t.Errorf("expected empty subject, got %q", sub)
-	}
+	zhtest.AssertEqual(t, "", sub)
 }
 
 func TestGetHS256Expiration_Missing(t *testing.T) {
@@ -803,9 +659,7 @@ func TestGetHS256Expiration_Missing(t *testing.T) {
 	}
 
 	exp := GetHS256Expiration(claims)
-	if !exp.IsZero() {
-		t.Errorf("expected zero time, got %v", exp)
-	}
+	zhtest.AssertTrue(t, exp.IsZero())
 }
 
 func TestHS256Store_Close(t *testing.T) {
@@ -814,7 +668,5 @@ func TestHS256Store_Close(t *testing.T) {
 	store := NewHS256Store(secret, opts)
 
 	err := store.Close()
-	if err != nil {
-		t.Errorf("unexpected error closing store: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }

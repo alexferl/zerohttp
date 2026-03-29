@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 type TestUser struct {
@@ -16,39 +18,23 @@ type TestUser struct {
 func TestValidationErrors_ValidUser(t *testing.T) {
 	input := TestUser{Name: "John", Email: "john@example.com", Age: 25}
 	err := New().Struct(&input)
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }
 
 func TestValidationErrors_MissingRequired(t *testing.T) {
 	input := TestUser{}
 	err := New().Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
+	zhtest.AssertError(t, err)
 	var ve ValidationErrors
-	ok := errors.As(err, &ve)
-	if !ok {
-		t.Errorf("expected ValidationErrors, got %T", err)
-		return
-	}
-	if len(ve.FieldErrors("Name")) == 0 {
-		t.Errorf("expected Name error, got none")
-	}
-	if len(ve.FieldErrors("Email")) == 0 {
-		t.Errorf("expected Email error, got none")
-	}
+	zhtest.AssertTrue(t, errors.As(err, &ve))
+	zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors("Name")))
+	zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors("Email")))
 }
 
 func TestValidationErrors_InvalidEmail(t *testing.T) {
 	input := TestUser{Name: "John", Email: "not-an-email", Age: 25}
 	err := New().Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
+	zhtest.AssertError(t, err)
 	var ve ValidationErrors
 	errors.As(err, &ve)
 	errs := ve.FieldErrors("Email")
@@ -59,18 +45,13 @@ func TestValidationErrors_InvalidEmail(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Errorf("expected invalid email error, got %v", errs)
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestValidationErrors_MinLength(t *testing.T) {
 	input := TestUser{Name: "J", Email: "john@example.com", Age: 25}
 	err := New().Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
+	zhtest.AssertError(t, err)
 	var ve ValidationErrors
 	errors.As(err, &ve)
 	errs := ve.FieldErrors("Name")
@@ -81,18 +62,13 @@ func TestValidationErrors_MinLength(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Errorf("expected min length error, got %v", errs)
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestValidationErrors_MaxLength(t *testing.T) {
 	input := TestUser{Name: strings.Repeat("a", 51), Email: "john@example.com", Age: 25}
 	err := New().Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
+	zhtest.AssertError(t, err)
 	var ve ValidationErrors
 	errors.As(err, &ve)
 	errs := ve.FieldErrors("Name")
@@ -103,29 +79,18 @@ func TestValidationErrors_MaxLength(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Errorf("expected max length error, got %v", errs)
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestValidationErrors_Multiple(t *testing.T) {
 	input := TestUser{Name: "", Email: "bad", Age: 5}
 	err := New().Struct(&input)
-	if err == nil {
-		t.Errorf("expected error, got nil")
-		return
-	}
+	zhtest.AssertError(t, err)
 	var ve ValidationErrors
 	errors.As(err, &ve)
-	if len(ve.FieldErrors("Name")) == 0 {
-		t.Errorf("expected Name error")
-	}
-	if len(ve.FieldErrors("Email")) == 0 {
-		t.Errorf("expected Email error")
-	}
-	if len(ve.FieldErrors("Age")) == 0 {
-		t.Errorf("expected Age error")
-	}
+	zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors("Name")))
+	zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors("Email")))
+	zhtest.AssertNotEqual(t, 0, len(ve.FieldErrors("Age")))
 }
 
 func TestValidationErrors_Error(t *testing.T) {
@@ -160,13 +125,11 @@ func TestValidationErrors_Error(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.errors.Error()
-			if tt.wantExact != "" && got != tt.wantExact {
-				t.Errorf("Error() = %q, want %q", got, tt.wantExact)
+			if tt.wantExact != "" {
+				zhtest.AssertEqual(t, tt.wantExact, got)
 			}
 			for _, substr := range tt.wantContains {
-				if !strings.Contains(got, substr) {
-					t.Errorf("Error() = %q, should contain %q", got, substr)
-				}
+				zhtest.AssertTrue(t, strings.Contains(got, substr))
 			}
 		})
 	}
@@ -174,13 +137,9 @@ func TestValidationErrors_Error(t *testing.T) {
 
 func TestValidationErrors_HasErrors(t *testing.T) {
 	ve := ValidationErrors{}
-	if ve.HasErrors() {
-		t.Error("expected HasErrors to be false for empty errors")
-	}
+	zhtest.AssertFalse(t, ve.HasErrors())
 	ve.Add("field", "error")
-	if !ve.HasErrors() {
-		t.Error("expected HasErrors to be true when errors exist")
-	}
+	zhtest.AssertTrue(t, ve.HasErrors())
 }
 
 func TestValidationErrors_ValidationErrors(t *testing.T) {
@@ -189,12 +148,10 @@ func TestValidationErrors_ValidationErrors(t *testing.T) {
 		"Age":  {"min"},
 	}
 	errs := ve.ValidationErrors()
-	if len(errs["Name"]) != 1 || errs["Name"][0] != "required" {
-		t.Errorf("expected Name error, got %v", errs["Name"])
-	}
-	if len(errs["Age"]) != 1 || errs["Age"][0] != "min" {
-		t.Errorf("expected Age error, got %v", errs["Age"])
-	}
+	zhtest.AssertEqual(t, 1, len(errs["Name"]))
+	zhtest.AssertEqual(t, "required", errs["Name"][0])
+	zhtest.AssertEqual(t, 1, len(errs["Age"]))
+	zhtest.AssertEqual(t, "min", errs["Age"][0])
 }
 
 func TestValidationErrorer(t *testing.T) {
@@ -203,9 +160,7 @@ func TestValidationErrorer(t *testing.T) {
 		errs: map[string][]string{"field": {"required"}},
 	}
 
-	if errs := ve.ValidationErrors(); len(errs) != 1 {
-		t.Errorf("expected 1 validation error, got %d", len(errs))
-	}
+	zhtest.AssertEqual(t, 1, len(ve.ValidationErrors()))
 }
 
 type testValidationError struct {
@@ -225,37 +180,25 @@ func TestBindError(t *testing.T) {
 	be := &BindError{Err: inner}
 
 	// Test Error() message
-	if msg := be.Error(); msg != "bind error: invalid JSON" {
-		t.Errorf("expected 'bind error: invalid JSON', got %q", msg)
-	}
+	zhtest.AssertEqual(t, "bind error: invalid JSON", be.Error())
 
 	// Test Unwrap
-	if unwrapped := be.Unwrap(); unwrapped != inner {
-		t.Error("expected Unwrap to return inner error")
-	}
+	zhtest.AssertEqual(t, inner, be.Unwrap())
 }
 
 func TestIsBindError(t *testing.T) {
 	// Test with nil
-	if IsBindError(nil) {
-		t.Error("expected IsBindError(nil) to be false")
-	}
+	zhtest.AssertFalse(t, IsBindError(nil))
 
 	// Test with regular error
 	regularErr := errors.New("some error")
-	if IsBindError(regularErr) {
-		t.Error("expected IsBindError(regularErr) to be false")
-	}
+	zhtest.AssertFalse(t, IsBindError(regularErr))
 
 	// Test with BindError
 	bindErr := &BindError{Err: errors.New("bind error")}
-	if !IsBindError(bindErr) {
-		t.Error("expected IsBindError(bindErr) to be true")
-	}
+	zhtest.AssertTrue(t, IsBindError(bindErr))
 
 	// Test with wrapped BindError
 	wrappedErr := fmt.Errorf("wrapped: %w", bindErr)
-	if !IsBindError(wrappedErr) {
-		t.Error("expected IsBindError(wrappedErr) to be true")
-	}
+	zhtest.AssertTrue(t, IsBindError(wrappedErr))
 }

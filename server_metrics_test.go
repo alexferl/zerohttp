@@ -6,12 +6,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/metrics"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // TestServer_MetricsDisabledByDefault verifies that metrics server does NOT start
@@ -23,14 +23,10 @@ func TestServer_MetricsDisabledByDefault(t *testing.T) {
 
 	// Verify metrics addr is empty when disabled
 	addr := srv.MetricsAddr()
-	if addr != "" {
-		t.Errorf("expected metrics to be disabled (empty addr), got %s", addr)
-	}
+	zhtest.AssertEmpty(t, addr)
 
 	// Verify metrics registry is nil
-	if srv.Metrics() != nil {
-		t.Error("expected metrics registry to be nil when disabled")
-	}
+	zhtest.AssertNil(t, srv.Metrics())
 }
 
 // TestServer_MetricsServerAddrDefault verifies that ServerAddr defaults to localhost:9090
@@ -38,13 +34,9 @@ func TestServer_MetricsDisabledByDefault(t *testing.T) {
 func TestServer_MetricsServerAddrDefault(t *testing.T) {
 	// Get available port for main server
 	mainListener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to create main listener: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	mainAddr := mainListener.Addr().String()
-	if err := mainListener.Close(); err != nil {
-		t.Fatalf("failed to close main listener: %v", err)
-	}
+	zhtest.AssertNoError(t, mainListener.Close())
 
 	srv := New(Config{
 		Addr: mainAddr,
@@ -56,9 +48,7 @@ func TestServer_MetricsServerAddrDefault(t *testing.T) {
 
 	// Verify metrics addr is the default
 	addr := srv.MetricsAddr()
-	if addr != "localhost:9090" {
-		t.Errorf("expected metrics addr to default to localhost:9090, got %s", addr)
-	}
+	zhtest.AssertEqual(t, "localhost:9090", addr)
 }
 
 // TestServer_MetricsExplicitEmptyServerAddr verifies that explicitly setting ServerAddr to empty
@@ -82,26 +72,18 @@ func TestServer_MetricsExplicitEmptyServerAddr(t *testing.T) {
 
 	// Make a request
 	resp, err := http.Get(server.URL + "/test")
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp.Body.Close()
 
 	// Metrics should be on main server
 	resp, err = http.Get(server.URL + "/metrics")
-	if err != nil {
-		t.Fatalf("failed to get metrics: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != 200 {
-		t.Errorf("expected metrics on main server to return 200, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, 200, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "http_requests_total") {
-		t.Error("metrics should contain http_requests_total")
-	}
+	zhtest.AssertContains(t, string(body), "http_requests_total")
 }
 
 // TestServer_MetricsDedicatedServer verifies that a dedicated metrics server starts
@@ -109,22 +91,14 @@ func TestServer_MetricsExplicitEmptyServerAddr(t *testing.T) {
 func TestServer_MetricsDedicatedServer(t *testing.T) {
 	// Get available ports for both servers
 	mainListener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to create main listener: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	mainAddr := mainListener.Addr().String()
-	if err := mainListener.Close(); err != nil {
-		t.Fatalf("failed to close main listener: %v", err)
-	}
+	zhtest.AssertNoError(t, mainListener.Close())
 
 	metricsListener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to create metrics listener: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	metricsAddr := metricsListener.Addr().String()
-	if err := metricsListener.Close(); err != nil {
-		t.Fatalf("failed to close metrics listener: %v", err)
-	}
+	zhtest.AssertNoError(t, metricsListener.Close())
 
 	srv := New(Config{
 		Addr: mainAddr,
@@ -144,9 +118,7 @@ func TestServer_MetricsDedicatedServer(t *testing.T) {
 
 	// Start server in background
 	go func() {
-		if err := srv.Start(); err != nil {
-			t.Errorf("server start error: %v", err)
-		}
+		_ = srv.Start()
 	}()
 
 	// Wait for server to start
@@ -154,35 +126,25 @@ func TestServer_MetricsDedicatedServer(t *testing.T) {
 
 	// Make a request to the main server
 	resp, err := http.Get("http://" + mainAddr + "/test")
-	if err != nil {
-		t.Fatalf("failed to request main server: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp.Body.Close()
 
 	// Request metrics from dedicated server
 	resp, err = http.Get("http://" + metricsAddr + "/metrics")
-	if err != nil {
-		t.Fatalf("failed to request metrics server: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != 200 {
-		t.Errorf("expected status 200, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, 200, resp.StatusCode)
 
 	body, _ := io.ReadAll(resp.Body)
-	metrics := string(body)
+	m := string(body)
 
-	if !strings.Contains(metrics, "http_requests_total") {
-		t.Error("metrics should contain http_requests_total")
-	}
+	zhtest.AssertContains(t, m, "http_requests_total")
 
 	// Shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		t.Errorf("shutdown error: %v", err)
-	}
+	zhtest.AssertNoError(t, srv.Shutdown(ctx))
 }
 
 // TestServer_MetricsAddr_NoServer verifies MetricsAddr returns empty string when no metrics server is configured.
@@ -194,9 +156,7 @@ func TestServer_MetricsAddr_NoServer(t *testing.T) {
 	})
 
 	addr := srv.MetricsAddr()
-	if addr != "" {
-		t.Errorf("expected empty address, got %s", addr)
-	}
+	zhtest.AssertEmpty(t, addr)
 }
 
 // TestServer_MetricsDedicatedServerNotExposedOnMainServer verifies that when using
@@ -204,22 +164,14 @@ func TestServer_MetricsAddr_NoServer(t *testing.T) {
 func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
 	// Get available ports for both servers
 	mainListener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to create main listener: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	mainAddr := mainListener.Addr().String()
-	if err := mainListener.Close(); err != nil {
-		t.Fatalf("failed to close main listener: %v", err)
-	}
+	zhtest.AssertNoError(t, mainListener.Close())
 
 	metricsListener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to create metrics listener: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	metricsAddr := metricsListener.Addr().String()
-	if err := metricsListener.Close(); err != nil {
-		t.Fatalf("failed to close metrics listener: %v", err)
-	}
+	zhtest.AssertNoError(t, metricsListener.Close())
 
 	srv := New(Config{
 		Addr: mainAddr,
@@ -232,9 +184,7 @@ func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
 
 	// Start server in background
 	go func() {
-		if err := srv.Start(); err != nil {
-			t.Errorf("server start error: %v", err)
-		}
+		_ = srv.Start()
 	}()
 
 	// Wait for server to start
@@ -242,25 +192,17 @@ func TestServer_MetricsDedicatedServerNotExposedOnMainServer(t *testing.T) {
 
 	// Try to access metrics on main server - should 404
 	resp, err := http.Get("http://" + mainAddr + "/metrics")
-	if err != nil {
-		t.Fatalf("failed to request main server: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp.Body.Close()
 
-	if resp.StatusCode != 404 {
-		t.Errorf("expected status 404 on main server, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, 404, resp.StatusCode)
 
 	// But should work on metrics server
 	resp2, err := http.Get("http://" + metricsAddr + "/metrics")
-	if err != nil {
-		t.Fatalf("failed to request metrics server: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp2.Body.Close()
 
-	if resp2.StatusCode != 200 {
-		t.Errorf("expected status 200 on metrics server, got %d", resp2.StatusCode)
-	}
+	zhtest.AssertEqual(t, 200, resp2.StatusCode)
 
 	// Shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -295,9 +237,7 @@ func TestServer_RequestContextCancellation(t *testing.T) {
 
 	// Start server
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to create listener: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = listener.Close() }()
 
 	server.listener = listener
@@ -321,7 +261,7 @@ func TestServer_RequestContextCancellation(t *testing.T) {
 	case <-requestStarted:
 		// Good, request started
 	case <-time.After(2 * time.Second):
-		t.Fatal("request did not start in time")
+		zhtest.AssertFail(t, "request did not start in time")
 	}
 
 	// Small delay to ensure handler is waiting
@@ -331,20 +271,14 @@ func TestServer_RequestContextCancellation(t *testing.T) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err = server.Shutdown(shutdownCtx)
-	if err != nil {
-		t.Errorf("shutdown error: %v", err)
-	}
+	zhtest.AssertNoError(t, server.Shutdown(shutdownCtx))
 
 	// Wait to see if the handler detected context cancellation
 	select {
 	case wasCancelled := <-ctxCancelled:
-		if !wasCancelled {
-			t.Error("handler did not receive context cancellation signal")
-		}
-		// Success - context was cancelled
+		zhtest.AssertTrue(t, wasCancelled)
 	case <-time.After(2 * time.Second):
-		t.Error("timeout waiting for handler to detect cancellation")
+		zhtest.AssertFail(t, "timeout waiting for handler to detect cancellation")
 	}
 }
 
@@ -369,76 +303,48 @@ func TestServer_MetricsRecordsErrors(t *testing.T) {
 	// Make requests that will result in different status codes
 	// 200 - existing route
 	resp, err := http.Get(server.URL + "/api/users")
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, resp.StatusCode)
 
 	// 404 - non-existent route
 	resp, err = http.Get(server.URL + "/nonexistent")
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusNotFound, resp.StatusCode)
 
 	// 405 - method not allowed (POST to GET-only route)
 	resp, err = http.Post(server.URL+"/api/users", "application/json", nil)
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusMethodNotAllowed, resp.StatusCode)
 
 	// Now check that all status codes are recorded in metrics
 	resp, err = http.Get(server.URL + "/metrics")
-	if err != nil {
-		t.Fatalf("failed to get metrics: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	body, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if err != nil {
-		t.Fatalf("failed to read metrics body: %v", err)
-	}
-	metrics := string(body)
+	zhtest.AssertNoError(t, err)
+	m := string(body)
 
 	// Verify http_requests_total contains all expected status codes
-	if !strings.Contains(metrics, "http_requests_total") {
-		t.Error("metrics should contain http_requests_total")
-	}
+	zhtest.AssertContains(t, m, "http_requests_total")
 
 	// Check for 200 status in metrics
-	if !strings.Contains(metrics, `status="200"`) {
-		t.Error("metrics should contain status=200")
-	}
+	zhtest.AssertContains(t, m, `status="200"`)
 
 	// Check for 404 status in metrics
-	if !strings.Contains(metrics, `status="404"`) {
-		t.Error("metrics should contain status=404")
-	}
+	zhtest.AssertContains(t, m, `status="404"`)
 
 	// Check for 405 status in metrics
-	if !strings.Contains(metrics, `status="405"`) {
-		t.Error("metrics should contain status=405")
-	}
+	zhtest.AssertContains(t, m, `status="405"`)
 
 	// Verify the path is recorded for the existing route
-	if !strings.Contains(metrics, `path="/api/users"`) {
-		t.Error("metrics should contain path=/api/users")
-	}
+	zhtest.AssertContains(t, m, `path="/api/users"`)
 
 	// Verify duration histogram is also present
-	if !strings.Contains(metrics, "http_request_duration_seconds") {
-		t.Error("metrics should contain http_request_duration_seconds")
-	}
+	zhtest.AssertContains(t, m, "http_request_duration_seconds")
 }
 
 // TestServer_MetricsRecordsPanic verifies that panic responses are recorded as 500 in metrics
@@ -462,41 +368,27 @@ func TestServer_MetricsRecordsPanic(t *testing.T) {
 
 	// Make request that will panic
 	resp, err := http.Get(server.URL + "/panic")
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	_ = resp.Body.Close()
 
 	// Should get 500 status from recover middleware
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusInternalServerError, resp.StatusCode)
 
 	// Now check metrics
 	resp, err = http.Get(server.URL + "/metrics")
-	if err != nil {
-		t.Fatalf("failed to get metrics: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	body, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if err != nil {
-		t.Fatalf("failed to read metrics body: %v", err)
-	}
-	metrics := string(body)
+	zhtest.AssertNoError(t, err)
+	m := string(body)
 
 	// Verify http_requests_total contains status 500
-	if !strings.Contains(metrics, `status="500"`) {
-		t.Error("metrics should contain status=500 for panic request")
-	}
+	zhtest.AssertContains(t, m, `status="500"`)
 
 	// Verify recover_panics_total is recorded
-	if !strings.Contains(metrics, "recover_panics_total") {
-		t.Error("metrics should contain recover_panics_total from recover middleware")
-	}
+	zhtest.AssertContains(t, m, "recover_panics_total")
 
 	// Verify the path is recorded
-	if !strings.Contains(metrics, `path="/panic"`) {
-		t.Error("metrics should contain path=/panic")
-	}
+	zhtest.AssertContains(t, m, `path="/panic"`)
 }

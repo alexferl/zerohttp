@@ -1,92 +1,51 @@
 package securityheaders
 
 import (
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestSecurityHeadersConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
 	expectedCSP := "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; frame-ancestors 'self'; form-action 'self';"
-	if cfg.ContentSecurityPolicy != expectedCSP {
-		t.Errorf("expected default CSP to be set")
-	}
-	if cfg.ContentSecurityPolicyReportOnly != false {
-		t.Errorf("expected default CSP report only = false, got %t", cfg.ContentSecurityPolicyReportOnly)
-	}
-	if cfg.CrossOriginEmbedderPolicy != "require-corp" {
-		t.Errorf("expected default COEP = 'require-corp', got %s", cfg.CrossOriginEmbedderPolicy)
-	}
-	if cfg.CrossOriginOpenerPolicy != "same-origin" {
-		t.Errorf("expected default COOP = 'same-origin', got %s", cfg.CrossOriginOpenerPolicy)
-	}
-	if cfg.CrossOriginResourcePolicy != "same-origin" {
-		t.Errorf("expected default CORP = 'same-origin', got %s", cfg.CrossOriginResourcePolicy)
-	}
-	if cfg.PermissionsPolicy == "" {
-		t.Error("expected default permissions policy to be set")
-	}
-	if cfg.ReferrerPolicy != "no-referrer" {
-		t.Errorf("expected default referrer policy = 'no-referrer', got %s", cfg.ReferrerPolicy)
-	}
-	if cfg.Server != "" {
-		t.Errorf("expected default server = '', got %s", cfg.Server)
-	}
-	if cfg.XContentTypeOptions != "nosniff" {
-		t.Errorf("expected default X-Content-Type-Options = 'nosniff', got %s", cfg.XContentTypeOptions)
-	}
-	if cfg.XFrameOptions != "DENY" {
-		t.Errorf("expected default X-Frame-Options = 'DENY', got %s", cfg.XFrameOptions)
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, expectedCSP, cfg.ContentSecurityPolicy)
+	zhtest.AssertFalse(t, cfg.ContentSecurityPolicyReportOnly)
+	zhtest.AssertEqual(t, "require-corp", cfg.CrossOriginEmbedderPolicy)
+	zhtest.AssertEqual(t, "same-origin", cfg.CrossOriginOpenerPolicy)
+	zhtest.AssertEqual(t, "same-origin", cfg.CrossOriginResourcePolicy)
+	zhtest.AssertNotEmpty(t, cfg.PermissionsPolicy)
+	zhtest.AssertEqual(t, "no-referrer", cfg.ReferrerPolicy)
+	zhtest.AssertEqual(t, "", cfg.Server)
+	zhtest.AssertEqual(t, "nosniff", cfg.XContentTypeOptions)
+	zhtest.AssertEqual(t, "DENY", cfg.XFrameOptions)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 
 	// Test default HSTS values
-	if cfg.StrictTransportSecurity.MaxAge != 0 {
-		t.Errorf("expected default HSTS max age = 0, got %d", cfg.StrictTransportSecurity.MaxAge)
-	}
-	if cfg.StrictTransportSecurity.ExcludeSubdomains != false {
-		t.Errorf("expected default HSTS exclude subdomains = false, got %t", cfg.StrictTransportSecurity.ExcludeSubdomains)
-	}
-	if cfg.StrictTransportSecurity.PreloadEnabled != false {
-		t.Errorf("expected default HSTS preload = false, got %t", cfg.StrictTransportSecurity.PreloadEnabled)
-	}
+	zhtest.AssertEqual(t, 0, cfg.StrictTransportSecurity.MaxAge)
+	zhtest.AssertFalse(t, cfg.StrictTransportSecurity.ExcludeSubdomains)
+	zhtest.AssertFalse(t, cfg.StrictTransportSecurity.PreloadEnabled)
 
 	// Test permissions policy
 	expectedPolicy := strings.Join(permissionPolicyFeatures, ", ")
-	if cfg.PermissionsPolicy != expectedPolicy {
-		t.Errorf("expected default permissions policy to match joined features")
-	}
+	zhtest.AssertEqual(t, expectedPolicy, cfg.PermissionsPolicy)
 }
 
 func TestStrictTransportSecurity_DefaultValues(t *testing.T) {
 	hsts := DefaultStrictTransportSecurity
-	if hsts.MaxAge != 0 {
-		t.Errorf("expected default HSTS max age = 0, got %d", hsts.MaxAge)
-	}
-	if hsts.ExcludeSubdomains != false {
-		t.Errorf("expected default HSTS exclude subdomains = false, got %t", hsts.ExcludeSubdomains)
-	}
-	if hsts.PreloadEnabled != false {
-		t.Errorf("expected default HSTS preload = false, got %t", hsts.PreloadEnabled)
-	}
+	zhtest.AssertEqual(t, 0, hsts.MaxAge)
+	zhtest.AssertFalse(t, hsts.ExcludeSubdomains)
+	zhtest.AssertFalse(t, hsts.PreloadEnabled)
 }
 
 func TestPermissionPolicyFeatures(t *testing.T) {
-	if len(permissionPolicyFeatures) == 0 {
-		t.Error("expected permission policy features to not be empty")
-	}
+	zhtest.AssertTrue(t, len(permissionPolicyFeatures) > 0)
 
 	// Test feature format
 	for _, feature := range permissionPolicyFeatures {
-		if !strings.HasSuffix(feature, "=()") {
-			t.Errorf("expected feature %s to end with '=()'", feature)
-		}
+		zhtest.AssertTrue(t, strings.HasSuffix(feature, "=()"))
 	}
 
 	// Test specific expected features
@@ -96,9 +55,7 @@ func TestPermissionPolicyFeatures(t *testing.T) {
 		featureMap[feature] = true
 	}
 	for _, expected := range expectedFeatures {
-		if !featureMap[expected] {
-			t.Errorf("expected feature %s to be in permission policy features", expected)
-		}
+		zhtest.AssertTrue(t, featureMap[expected])
 	}
 }
 
@@ -123,21 +80,11 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			ExcludedPaths:       []string{},
 		}
 
-		if cfg.ContentSecurityPolicy != "default-src 'self'; script-src 'self' 'unsafe-inline'" {
-			t.Errorf("expected CSP to be set correctly")
-		}
-		if cfg.ContentSecurityPolicyReportOnly != true {
-			t.Errorf("expected CSP report only to be true, got %t", cfg.ContentSecurityPolicyReportOnly)
-		}
-		if cfg.CrossOriginEmbedderPolicy != "unsafe-none" {
-			t.Errorf("expected COEP = 'unsafe-none', got %s", cfg.CrossOriginEmbedderPolicy)
-		}
-		if cfg.CrossOriginOpenerPolicy != "unsafe-none" {
-			t.Errorf("expected COOP = 'unsafe-none', got %s", cfg.CrossOriginOpenerPolicy)
-		}
-		if cfg.CrossOriginResourcePolicy != "cross-origin" {
-			t.Errorf("expected CORP = 'cross-origin', got %s", cfg.CrossOriginResourcePolicy)
-		}
+		zhtest.AssertEqual(t, "default-src 'self'; script-src 'self' 'unsafe-inline'", cfg.ContentSecurityPolicy)
+		zhtest.AssertTrue(t, cfg.ContentSecurityPolicyReportOnly)
+		zhtest.AssertEqual(t, "unsafe-none", cfg.CrossOriginEmbedderPolicy)
+		zhtest.AssertEqual(t, "unsafe-none", cfg.CrossOriginOpenerPolicy)
+		zhtest.AssertEqual(t, "cross-origin", cfg.CrossOriginResourcePolicy)
 	})
 
 	t.Run("policy and server fields", func(t *testing.T) {
@@ -156,21 +103,11 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			ExcludedPaths:                   []string{},
 		}
 
-		if cfg.PermissionsPolicy != "camera=(), microphone=(), geolocation=()" {
-			t.Errorf("expected permissions policy = %s, got %s", "camera=(), microphone=(), geolocation=()", cfg.PermissionsPolicy)
-		}
-		if cfg.ReferrerPolicy != "strict-origin" {
-			t.Errorf("expected referrer policy = 'strict-origin', got %s", cfg.ReferrerPolicy)
-		}
-		if cfg.Server != "nginx/1.18.0" {
-			t.Errorf("expected server = 'nginx/1.18.0', got %s", cfg.Server)
-		}
-		if cfg.XContentTypeOptions != "nosniff" {
-			t.Errorf("expected X-Content-Type-Options = 'nosniff', got %s", cfg.XContentTypeOptions)
-		}
-		if cfg.XFrameOptions != "SAMEORIGIN" {
-			t.Errorf("expected X-Frame-Options = 'SAMEORIGIN', got %s", cfg.XFrameOptions)
-		}
+		zhtest.AssertEqual(t, "camera=(), microphone=(), geolocation=()", cfg.PermissionsPolicy)
+		zhtest.AssertEqual(t, "strict-origin", cfg.ReferrerPolicy)
+		zhtest.AssertEqual(t, "nginx/1.18.0", cfg.Server)
+		zhtest.AssertEqual(t, "nosniff", cfg.XContentTypeOptions)
+		zhtest.AssertEqual(t, "SAMEORIGIN", cfg.XFrameOptions)
 	})
 
 	t.Run("HSTS fields", func(t *testing.T) {
@@ -193,15 +130,9 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			ExcludedPaths:       []string{},
 		}
 
-		if cfg.StrictTransportSecurity.MaxAge != 31536000 {
-			t.Errorf("expected HSTS max age = 31536000, got %d", cfg.StrictTransportSecurity.MaxAge)
-		}
-		if cfg.StrictTransportSecurity.ExcludeSubdomains != true {
-			t.Errorf("expected HSTS exclude subdomains = true, got %t", cfg.StrictTransportSecurity.ExcludeSubdomains)
-		}
-		if cfg.StrictTransportSecurity.PreloadEnabled != true {
-			t.Errorf("expected HSTS preload = true, got %t", cfg.StrictTransportSecurity.PreloadEnabled)
-		}
+		zhtest.AssertEqual(t, 31536000, cfg.StrictTransportSecurity.MaxAge)
+		zhtest.AssertTrue(t, cfg.StrictTransportSecurity.ExcludeSubdomains)
+		zhtest.AssertTrue(t, cfg.StrictTransportSecurity.PreloadEnabled)
 	})
 
 	t.Run("excluded paths field", func(t *testing.T) {
@@ -220,12 +151,8 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			XFrameOptions:                   "DENY",
 			ExcludedPaths:                   excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 3 {
-			t.Errorf("expected 3 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.ExcludedPaths))
+		zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("included paths field", func(t *testing.T) {
@@ -244,12 +171,8 @@ func TestSecurityHeadersConfig_StructAssignment(t *testing.T) {
 			XFrameOptions:                   "DENY",
 			IncludedPaths:                   includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertDeepEqual(t, includedPaths, cfg.IncludedPaths)
 	})
 }
 
@@ -272,30 +195,14 @@ func TestSecurityHeadersConfig_MultipleFields(t *testing.T) {
 		IncludedPaths:                   includedPaths,
 	}
 
-	if cfg.ContentSecurityPolicy != "default-src 'self'" {
-		t.Error("expected CSP to be set correctly")
-	}
-	if cfg.ContentSecurityPolicyReportOnly != true {
-		t.Error("expected CSP report only to be true")
-	}
-	if cfg.CrossOriginEmbedderPolicy != "unsafe-none" {
-		t.Error("expected COEP to be set correctly")
-	}
-	if cfg.ReferrerPolicy != "strict-origin" {
-		t.Error("expected referrer policy to be set correctly")
-	}
-	if cfg.Server != "MyServer/1.0" {
-		t.Error("expected server to be set correctly")
-	}
-	if cfg.XFrameOptions != "SAMEORIGIN" {
-		t.Error("expected X-Frame-Options to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-		t.Error("expected excluded paths to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-		t.Error("expected included paths to be set correctly")
-	}
+	zhtest.AssertEqual(t, "default-src 'self'", cfg.ContentSecurityPolicy)
+	zhtest.AssertTrue(t, cfg.ContentSecurityPolicyReportOnly)
+	zhtest.AssertEqual(t, "unsafe-none", cfg.CrossOriginEmbedderPolicy)
+	zhtest.AssertEqual(t, "strict-origin", cfg.ReferrerPolicy)
+	zhtest.AssertEqual(t, "MyServer/1.0", cfg.Server)
+	zhtest.AssertEqual(t, "SAMEORIGIN", cfg.XFrameOptions)
+	zhtest.AssertDeepEqual(t, excludedPaths, cfg.ExcludedPaths)
+	zhtest.AssertDeepEqual(t, includedPaths, cfg.IncludedPaths)
 }
 
 func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
@@ -327,9 +234,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					XFrameOptions:                   "DENY",
 					ExcludedPaths:                   []string{},
 				}
-				if cfg.ContentSecurityPolicy != tt.csp {
-					t.Errorf("expected CSP = %s, got %s", tt.csp, cfg.ContentSecurityPolicy)
-				}
+				zhtest.AssertEqual(t, tt.csp, cfg.ContentSecurityPolicy)
 			})
 		}
 	})
@@ -363,15 +268,9 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					ExcludedPaths:                   []string{},
 				}
 
-				if cfg.CrossOriginEmbedderPolicy != tt.coep {
-					t.Errorf("expected COEP = %s, got %s", tt.coep, cfg.CrossOriginEmbedderPolicy)
-				}
-				if cfg.CrossOriginOpenerPolicy != tt.coop {
-					t.Errorf("expected COOP = %s, got %s", tt.coop, cfg.CrossOriginOpenerPolicy)
-				}
-				if cfg.CrossOriginResourcePolicy != tt.corp {
-					t.Errorf("expected CORP = %s, got %s", tt.corp, cfg.CrossOriginResourcePolicy)
-				}
+				zhtest.AssertEqual(t, tt.coep, cfg.CrossOriginEmbedderPolicy)
+				zhtest.AssertEqual(t, tt.coop, cfg.CrossOriginOpenerPolicy)
+				zhtest.AssertEqual(t, tt.corp, cfg.CrossOriginResourcePolicy)
 			})
 		}
 	})
@@ -398,9 +297,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					XFrameOptions:                   "DENY",
 					ExcludedPaths:                   []string{},
 				}
-				if cfg.ReferrerPolicy != policy {
-					t.Errorf("expected referrer policy = %s, got %s", policy, cfg.ReferrerPolicy)
-				}
+				zhtest.AssertEqual(t, policy, cfg.ReferrerPolicy)
 			})
 		}
 	})
@@ -424,9 +321,7 @@ func TestSecurityHeadersConfig_PolicyVariations(t *testing.T) {
 					XFrameOptions:                   option,
 					ExcludedPaths:                   []string{},
 				}
-				if cfg.XFrameOptions != option {
-					t.Errorf("expected X-Frame-Options = %s, got %s", option, cfg.XFrameOptions)
-				}
+				zhtest.AssertEqual(t, option, cfg.XFrameOptions)
 			})
 		}
 	})
@@ -448,12 +343,8 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 			XFrameOptions:                   "DENY",
 			ExcludedPaths:                   []string{},
 		}
-		if cfg.ExcludedPaths == nil {
-			t.Error("expected excluded paths slice to be initialized, not nil")
-		}
-		if len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 	})
 
 	t.Run("nil excluded paths", func(t *testing.T) {
@@ -471,9 +362,7 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 			XFrameOptions:                   "DENY",
 			ExcludedPaths:                   nil,
 		}
-		if cfg.ExcludedPaths != nil {
-			t.Error("expected excluded paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
 	})
 
 	t.Run("empty included paths", func(t *testing.T) {
@@ -491,12 +380,8 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 			XFrameOptions:                   "DENY",
 			IncludedPaths:                   []string{},
 		}
-		if cfg.IncludedPaths == nil {
-			t.Error("expected included paths slice to be initialized, not nil")
-		}
-		if len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil included paths", func(t *testing.T) {
@@ -514,28 +399,16 @@ func TestSecurityHeadersConfig_EdgeCases(t *testing.T) {
 			XFrameOptions:                   "DENY",
 			IncludedPaths:                   nil,
 		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 
 	t.Run("zero values", func(t *testing.T) {
 		cfg := Config{} // Zero values
-		if cfg.ContentSecurityPolicy != "" {
-			t.Errorf("expected zero CSP = '', got %s", cfg.ContentSecurityPolicy)
-		}
-		if cfg.ContentSecurityPolicyReportOnly != false {
-			t.Errorf("expected zero CSP report only = false, got %t", cfg.ContentSecurityPolicyReportOnly)
-		}
-		if cfg.StrictTransportSecurity.MaxAge != 0 {
-			t.Errorf("expected zero HSTS max age = 0, got %d", cfg.StrictTransportSecurity.MaxAge)
-		}
-		if cfg.ExcludedPaths != nil {
-			t.Errorf("expected zero excluded paths = nil, got %v", cfg.ExcludedPaths)
-		}
-		if cfg.IncludedPaths != nil {
-			t.Errorf("expected zero included paths = nil, got %v", cfg.IncludedPaths)
-		}
+		zhtest.AssertEqual(t, "", cfg.ContentSecurityPolicy)
+		zhtest.AssertFalse(t, cfg.ContentSecurityPolicyReportOnly)
+		zhtest.AssertEqual(t, 0, cfg.StrictTransportSecurity.MaxAge)
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 }
 
@@ -559,16 +432,8 @@ func TestSecurityHeadersConfig_StructCreation(t *testing.T) {
 		ExcludedPaths:       []string{"/public"},
 	}
 
-	if cfg.ContentSecurityPolicy != "default-src 'self'" {
-		t.Error("expected CSP to be set correctly")
-	}
-	if cfg.ContentSecurityPolicyReportOnly != true {
-		t.Error("expected CSP report only to be set correctly")
-	}
-	if cfg.StrictTransportSecurity.MaxAge != 31536000 {
-		t.Error("expected HSTS max age to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.ExcludedPaths, []string{"/public"}) {
-		t.Error("expected excluded paths to be set correctly")
-	}
+	zhtest.AssertEqual(t, "default-src 'self'", cfg.ContentSecurityPolicy)
+	zhtest.AssertTrue(t, cfg.ContentSecurityPolicyReportOnly)
+	zhtest.AssertEqual(t, 31536000, cfg.StrictTransportSecurity.MaxAge)
+	zhtest.AssertDeepEqual(t, []string{"/public"}, cfg.ExcludedPaths)
 }

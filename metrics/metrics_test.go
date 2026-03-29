@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestNewRegistry(t *testing.T) {
 	reg := NewRegistry()
-	if reg == nil {
-		t.Fatal("expected registry to not be nil")
-	}
+	zhtest.AssertNotNil(t, reg)
 }
 
 func TestCounter(t *testing.T) {
@@ -31,14 +31,10 @@ func TestCounter(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "test_counter" {
 			found = true
-			if len(f.Metrics) != 2 {
-				t.Errorf("expected 2 metrics, got %d", len(f.Metrics))
-			}
+			zhtest.AssertEqual(t, 2, len(f.Metrics))
 		}
 	}
-	if !found {
-		t.Error("expected to find test_counter metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestCounterAdd(t *testing.T) {
@@ -53,11 +49,11 @@ func TestCounterAdd(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "test_counter_add" {
 			for _, m := range f.Metrics {
-				if m.Labels["label"] == "a" && m.Counter != 8 {
-					t.Errorf("expected counter a=8, got %d", m.Counter)
+				if m.Labels["label"] == "a" {
+					zhtest.AssertEqual(t, uint64(8), m.Counter)
 				}
-				if m.Labels["label"] == "b" && m.Counter != 10 {
-					t.Errorf("expected counter b=10, got %d", m.Counter)
+				if m.Labels["label"] == "b" {
+					zhtest.AssertEqual(t, uint64(10), m.Counter)
 				}
 			}
 		}
@@ -84,23 +80,19 @@ func TestGauge(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "test_gauge" {
 			found = true
-			if f.Type != GaugeType {
-				t.Errorf("expected gauge type, got %v", f.Type)
-			}
+			zhtest.AssertEqual(t, GaugeType, f.Type)
 			// Check values: a = 10 + 1 + 5 - 2 = 14, b = 20 - 1 = 19
 			for _, m := range f.Metrics {
-				if m.Labels["label"] == "a" && m.Gauge != 14 {
-					t.Errorf("expected gauge a=14, got %f", m.Gauge)
+				if m.Labels["label"] == "a" {
+					zhtest.AssertEqual(t, float64(14), m.Gauge)
 				}
-				if m.Labels["label"] == "b" && m.Gauge != 19 {
-					t.Errorf("expected gauge b=19, got %f", m.Gauge)
+				if m.Labels["label"] == "b" {
+					zhtest.AssertEqual(t, float64(19), m.Gauge)
 				}
 			}
 		}
 	}
-	if !found {
-		t.Error("expected to find test_gauge metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestHistogram(t *testing.T) {
@@ -122,17 +114,11 @@ func TestHistogram(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "test_histogram" {
 			found = true
-			if f.Type != HistogramType {
-				t.Errorf("expected histogram type, got %v", f.Type)
-			}
-			if len(f.Metrics) != 2 {
-				t.Errorf("expected 2 metrics (GET and POST), got %d", len(f.Metrics))
-			}
+			zhtest.AssertEqual(t, HistogramType, f.Type)
+			zhtest.AssertEqual(t, 2, len(f.Metrics))
 		}
 	}
-	if !found {
-		t.Error("expected to find test_histogram metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestContext(t *testing.T) {
@@ -144,15 +130,11 @@ func TestContext(t *testing.T) {
 
 	// Test retrieving from context
 	retrieved := GetRegistry(ctx)
-	if retrieved != reg {
-		t.Error("expected to retrieve the same registry from context")
-	}
+	zhtest.AssertEqual(t, reg, retrieved)
 
 	// Test nil context
 	emptyCtx := context.Background()
-	if GetRegistry(emptyCtx) != nil {
-		t.Error("expected nil when no registry in context")
-	}
+	zhtest.AssertNil(t, GetRegistry(emptyCtx))
 }
 
 func TestCollector(t *testing.T) {
@@ -170,9 +152,7 @@ func TestCollector(t *testing.T) {
 	reg.Gather()
 
 	// Check that the collector was called
-	if !collector.collected {
-		t.Error("expected collector to be called")
-	}
+	zhtest.AssertTrue(t, collector.collected)
 }
 
 type testCollector struct {
@@ -197,19 +177,10 @@ func TestGatherSorting(t *testing.T) {
 	families := reg.Gather()
 
 	// Check families are sorted by name
-	if len(families) != 3 {
-		t.Fatalf("expected 3 families, got %d", len(families))
-	}
-
-	if families[0].Name != "alpha" {
-		t.Errorf("expected first family to be 'alpha', got %s", families[0].Name)
-	}
-	if families[1].Name != "middle" {
-		t.Errorf("expected second family to be 'middle', got %s", families[1].Name)
-	}
-	if families[2].Name != "zebra" {
-		t.Errorf("expected third family to be 'zebra', got %s", families[2].Name)
-	}
+	zhtest.AssertEqual(t, 3, len(families))
+	zhtest.AssertEqual(t, "alpha", families[0].Name)
+	zhtest.AssertEqual(t, "middle", families[1].Name)
+	zhtest.AssertEqual(t, "zebra", families[2].Name)
 }
 
 func TestCounterVecMethods(t *testing.T) {
@@ -229,17 +200,11 @@ func TestCounterVecMethods(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "counter_vec_test" {
 			found = true
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Counter != 6 {
-				t.Errorf("expected counter value 6, got %d", f.Metrics[0].Counter)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, uint64(6), f.Metrics[0].Counter)
 		}
 	}
-	if !found {
-		t.Error("expected to find counter_vec_test metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestGaugeVecMethods(t *testing.T) {
@@ -265,21 +230,15 @@ func TestGaugeVecMethods(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "gauge_vec_test" {
 			found = true
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Gauge != 50 {
-				t.Errorf("expected gauge value 50, got %f", f.Metrics[0].Gauge)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, float64(50), f.Metrics[0].Gauge)
 		}
 	}
-	if !found {
-		t.Error("expected to find gauge_vec_test metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestHistogramVecMethods(t *testing.T) {
-	reg := NewRegistry().(*registry)
+	reg := NewRegistry()
 
 	// Test histogramVec methods that delegate to default histogram
 	hv := reg.Histogram("histogram_vec_test", []float64{0.1, 0.5, 1.0}).(*histogramVec)
@@ -293,17 +252,11 @@ func TestHistogramVecMethods(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "histogram_vec_test" {
 			found = true
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Histogram.Count != 2 {
-				t.Errorf("expected histogram count 2, got %d", f.Metrics[0].Histogram.Count)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, uint64(2), f.Metrics[0].Histogram.Count)
 		}
 	}
-	if !found {
-		t.Error("expected to find histogram_vec_test metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestCounterWithLabelValuesNoLabels(t *testing.T) {
@@ -322,12 +275,8 @@ func TestCounterWithLabelValuesNoLabels(t *testing.T) {
 	families := reg.Gather()
 	for _, f := range families {
 		if f.Name == "no_label_counter" {
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Counter != 2 {
-				t.Errorf("expected counter value 2, got %d", f.Metrics[0].Counter)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, uint64(2), f.Metrics[0].Counter)
 		}
 	}
 }
@@ -348,12 +297,8 @@ func TestGaugeWithLabelValuesNoLabels(t *testing.T) {
 	families := reg.Gather()
 	for _, f := range families {
 		if f.Name == "no_label_gauge" {
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Gauge != 15 {
-				t.Errorf("expected gauge value 15, got %f", f.Metrics[0].Gauge)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, float64(15), f.Metrics[0].Gauge)
 		}
 	}
 }
@@ -374,12 +319,8 @@ func TestHistogramWithLabelValuesNoLabels(t *testing.T) {
 	families := reg.Gather()
 	for _, f := range families {
 		if f.Name == "no_label_histogram" {
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Histogram.Count != 2 {
-				t.Errorf("expected histogram count 2, got %d", f.Metrics[0].Histogram.Count)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, uint64(2), f.Metrics[0].Histogram.Count)
 		}
 	}
 }
@@ -405,12 +346,8 @@ func TestUnregisterCollector(t *testing.T) {
 	// Gather should only call collector2
 	reg.Gather()
 
-	if collector1.collected {
-		t.Error("expected collector1 to not be called after unregister")
-	}
-	if !collector2.collected {
-		t.Error("expected collector2 to be called")
-	}
+	zhtest.AssertFalse(t, collector1.collected)
+	zhtest.AssertTrue(t, collector2.collected)
 }
 
 func TestUnregisterCollector_NotFound(t *testing.T) {
@@ -444,17 +381,11 @@ func TestCounterVec_Concurrent(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "concurrent_counter" {
 			found = true
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Counter != 100 {
-				t.Errorf("expected counter value 100, got %d", f.Metrics[0].Counter)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, uint64(100), f.Metrics[0].Counter)
 		}
 	}
-	if !found {
-		t.Error("expected to find concurrent_counter metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestGaugeVec_Concurrent(t *testing.T) {
@@ -483,18 +414,12 @@ func TestGaugeVec_Concurrent(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "concurrent_gauge" {
 			found = true
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
 			// 50 increments - 25 decrements = 25
-			if f.Metrics[0].Gauge != 25 {
-				t.Errorf("expected gauge value 25, got %f", f.Metrics[0].Gauge)
-			}
+			zhtest.AssertEqual(t, float64(25), f.Metrics[0].Gauge)
 		}
 	}
-	if !found {
-		t.Error("expected to find concurrent_gauge metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestHistogramVec_Concurrent(t *testing.T) {
@@ -516,17 +441,11 @@ func TestHistogramVec_Concurrent(t *testing.T) {
 	for _, f := range families {
 		if f.Name == "concurrent_histogram" {
 			found = true
-			if len(f.Metrics) != 1 {
-				t.Errorf("expected 1 metric, got %d", len(f.Metrics))
-			}
-			if f.Metrics[0].Histogram.Count != 100 {
-				t.Errorf("expected histogram count 100, got %d", f.Metrics[0].Histogram.Count)
-			}
+			zhtest.AssertEqual(t, 1, len(f.Metrics))
+			zhtest.AssertEqual(t, uint64(100), f.Metrics[0].Histogram.Count)
 		}
 	}
-	if !found {
-		t.Error("expected to find concurrent_histogram metric family")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestCounter_CardinalityLimit(t *testing.T) {
@@ -545,9 +464,7 @@ func TestCounter_CardinalityLimit(t *testing.T) {
 			initialCount = len(f.Metrics)
 		}
 	}
-	if initialCount != 3 {
-		t.Errorf("expected 3 metrics, got %d", initialCount)
-	}
+	zhtest.AssertEqual(t, 3, initialCount)
 
 	// Add 4th value - should evict oldest ("a")
 	c.WithLabelValues("d").Inc()
@@ -568,15 +485,9 @@ func TestCounter_CardinalityLimit(t *testing.T) {
 			}
 		}
 	}
-	if finalCount != 3 {
-		t.Errorf("expected 3 metrics after eviction, got %d", finalCount)
-	}
-	if hasA {
-		t.Error("expected 'a' to be evicted (oldest)")
-	}
-	if !hasD {
-		t.Error("expected 'd' to exist")
-	}
+	zhtest.AssertEqual(t, 3, finalCount)
+	zhtest.AssertFalse(t, hasA)
+	zhtest.AssertTrue(t, hasD)
 }
 
 func TestGauge_CardinalityLimit(t *testing.T) {
@@ -604,12 +515,8 @@ func TestGauge_CardinalityLimit(t *testing.T) {
 			}
 		}
 	}
-	if hasX {
-		t.Error("expected 'x' to be evicted (oldest)")
-	}
-	if !hasZ {
-		t.Error("expected 'z' to exist")
-	}
+	zhtest.AssertFalse(t, hasX)
+	zhtest.AssertTrue(t, hasZ)
 }
 
 func TestHistogram_CardinalityLimit(t *testing.T) {
@@ -637,12 +544,8 @@ func TestHistogram_CardinalityLimit(t *testing.T) {
 			}
 		}
 	}
-	if hasGet {
-		t.Error("expected 'GET' to be evicted (oldest)")
-	}
-	if !hasPut {
-		t.Error("expected 'PUT' to exist")
-	}
+	zhtest.AssertFalse(t, hasGet)
+	zhtest.AssertTrue(t, hasPut)
 }
 
 func TestRegistry_DifferentMetricsDifferentLimits(t *testing.T) {
@@ -668,17 +571,13 @@ func TestRegistry_DifferentMetricsDifferentLimits(t *testing.T) {
 	for _, f := range families1 {
 		if f.Name == "test_counter" {
 			// reg1 has limit 5, should have 3 metrics
-			if len(f.Metrics) != 3 {
-				t.Errorf("expected 3 metrics for reg1 test_counter, got %d", len(f.Metrics))
-			}
+			zhtest.AssertEqual(t, 3, len(f.Metrics))
 		}
 	}
 	for _, f := range families2 {
 		if f.Name == "test_counter" {
 			// reg2 has limit 2, should have 2 metrics (evicted oldest)
-			if len(f.Metrics) != 2 {
-				t.Errorf("expected 2 metrics for reg2 test_counter, got %d", len(f.Metrics))
-			}
+			zhtest.AssertEqual(t, 2, len(f.Metrics))
 		}
 	}
 }
@@ -696,9 +595,7 @@ func TestCounter_CardinalityUnlimited(t *testing.T) {
 	families := reg.Gather()
 	for _, f := range families {
 		if f.Name == "unlimited_counter" {
-			if len(f.Metrics) != 100 {
-				t.Errorf("expected 100 metrics with unlimited cardinality, got %d", len(f.Metrics))
-			}
+			zhtest.AssertEqual(t, 100, len(f.Metrics))
 		}
 	}
 }

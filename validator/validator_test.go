@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestIsZeroValue(t *testing.T) {
@@ -42,9 +44,7 @@ func TestIsZeroValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := reflect.ValueOf(tt.input)
 			result := isZeroValue(v)
-			if result != tt.expected {
-				t.Errorf("isZeroValue(%v) = %v, expected %v", tt.input, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 
@@ -52,17 +52,13 @@ func TestIsZeroValue(t *testing.T) {
 	t.Run("interface non-nil", func(t *testing.T) {
 		var iface any = "hello"
 		v := reflect.ValueOf(&iface).Elem()
-		if isZeroValue(v) {
-			t.Error("expected non-empty interface to not be zero")
-		}
+		zhtest.AssertFalse(t, isZeroValue(v))
 	})
 
 	t.Run("interface nil", func(t *testing.T) {
 		var nilIface any
 		v := reflect.ValueOf(&nilIface).Elem()
-		if !isZeroValue(v) {
-			t.Error("expected nil interface to be zero")
-		}
+		zhtest.AssertTrue(t, isZeroValue(v))
 	})
 }
 
@@ -121,9 +117,7 @@ func TestGetJSONFieldName(t *testing.T) {
 			}
 
 			result := getJSONFieldName(field)
-			if result != tt.expected {
-				t.Errorf("expected %q, got %q", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -137,72 +131,54 @@ func TestParseTagEdgeCases(t *testing.T) {
 	input := TestTag{Field: "ab"}
 	err := New().Struct(&input)
 	// Should still validate required and min, skipping empty part
-	if err == nil {
-		t.Error("expected error for min validation")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestStruct_NilCases(t *testing.T) {
 	t.Run("nil value", func(t *testing.T) {
 		err := New().Struct(nil)
-		if err == nil {
-			t.Error("expected error for nil value")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		ok := errors.As(err, &ve)
-		if !ok {
-			t.Fatalf("expected ValidationErrors, got %T", err)
-		}
-		if errs := ve.FieldErrors(""); len(errs) == 0 || errs[0] != "nil value" {
-			t.Errorf("expected nil value error, got %v", errs)
-		}
+		zhtest.AssertTrue(t, ok)
+		errs := ve.FieldErrors("")
+		zhtest.AssertGreater(t, len(errs), 0)
+		zhtest.AssertEqual(t, "nil value", errs[0])
 	})
 
 	t.Run("nil pointer", func(t *testing.T) {
 		var ptr *struct{ Name string }
 		err := New().Struct(ptr)
-		if err == nil {
-			t.Error("expected error for nil pointer")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		ok := errors.As(err, &ve)
-		if !ok {
-			t.Fatalf("expected ValidationErrors, got %T", err)
-		}
-		if errs := ve.FieldErrors(""); len(errs) == 0 || errs[0] != "nil pointer" {
-			t.Errorf("expected nil pointer error, got %v", errs)
-		}
+		zhtest.AssertTrue(t, ok)
+		errs := ve.FieldErrors("")
+		zhtest.AssertGreater(t, len(errs), 0)
+		zhtest.AssertEqual(t, "nil pointer", errs[0])
 	})
 
 	t.Run("non-struct value", func(t *testing.T) {
 		err := New().Struct("not a struct")
-		if err == nil {
-			t.Error("expected error for non-struct value")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		ok := errors.As(err, &ve)
-		if !ok {
-			t.Fatalf("expected ValidationErrors, got %T", err)
-		}
-		if errs := ve.FieldErrors(""); len(errs) == 0 || !strings.Contains(errs[0], "expected struct") {
-			t.Errorf("expected struct error, got %v", errs)
-		}
+		zhtest.AssertTrue(t, ok)
+		errs := ve.FieldErrors("")
+		zhtest.AssertGreater(t, len(errs), 0)
+		zhtest.AssertContains(t, errs[0], "expected struct")
 	})
 
 	t.Run("pointer to non-struct", func(t *testing.T) {
 		s := "hello"
 		err := New().Struct(&s)
-		if err == nil {
-			t.Error("expected error for pointer to non-struct")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		ok := errors.As(err, &ve)
-		if !ok {
-			t.Fatalf("expected ValidationErrors, got %T", err)
-		}
-		if errs := ve.FieldErrors(""); len(errs) == 0 || !strings.Contains(errs[0], "expected struct") {
-			t.Errorf("expected struct error, got %v", errs)
-		}
+		zhtest.AssertTrue(t, ok)
+		errs := ve.FieldErrors("")
+		zhtest.AssertGreater(t, len(errs), 0)
+		zhtest.AssertContains(t, errs[0], "expected struct")
 	})
 }
 
@@ -233,35 +209,25 @@ func TestValidatorInterface(t *testing.T) {
 	t.Run("valid user", func(t *testing.T) {
 		input := TestValidatable{User: ValidatableUser{Name: "John", Email: "john@example.com"}}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("invalid user - missing name", func(t *testing.T) {
 		input := TestValidatable{User: ValidatableUser{Email: "john@example.com"}}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		errors.As(err, &ve)
-		if errs := ve.FieldErrors("User"); len(errs) == 0 {
-			t.Errorf("expected User validation error, got %v", ve)
-		}
+		zhtest.AssertLen(t, ve.FieldErrors("User"), 1)
 	})
 
 	t.Run("invalid user - bad email", func(t *testing.T) {
 		input := TestValidatable{User: ValidatableUser{Name: "John", Email: "not-an-email"}}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		errors.As(err, &ve)
-		if errs := ve.FieldErrors("User"); len(errs) == 0 {
-			t.Errorf("expected User validation error, got %v", ve)
-		}
+		zhtest.AssertLen(t, ve.FieldErrors("User"), 1)
 	})
 }
 
@@ -272,17 +238,10 @@ func TestUnknownValidatorEdgeCases(t *testing.T) {
 		}
 		input := TestUnknown{Value: "test"}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for unknown validator")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
-		if !errors.As(err, &ve) {
-			t.Fatalf("expected ValidationErrors, got %T", err)
-		}
-		errs := ve.FieldErrors("Value")
-		if len(errs) == 0 {
-			t.Errorf("expected error for Value field, got: %v", ve)
-		}
+		zhtest.AssertTrue(t, errors.As(err, &ve))
+		zhtest.AssertLen(t, ve.FieldErrors("Value"), 1)
 	})
 
 	t.Run("unknown validator in each slice", func(t *testing.T) {
@@ -291,17 +250,11 @@ func TestUnknownValidatorEdgeCases(t *testing.T) {
 		}
 		input := TestUnknownEach{Items: []string{"a", "b"}}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for unknown validator in each")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
-		if !errors.As(err, &ve) {
-			t.Fatalf("expected ValidationErrors, got %T", err)
-		}
+		zhtest.AssertTrue(t, errors.As(err, &ve))
 		errs := ve.FieldErrors("Items[0]")
-		if len(errs) == 0 {
-			t.Errorf("expected error for Items[0], got: %v", ve)
-		}
+		zhtest.AssertGreater(t, len(errs), 0)
 	})
 
 	t.Run("unknown validator in each map", func(t *testing.T) {
@@ -310,17 +263,11 @@ func TestUnknownValidatorEdgeCases(t *testing.T) {
 		}
 		input := TestUnknownEachMap{Items: map[string]string{"key": "value"}}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for unknown validator in each map")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
-		if !errors.As(err, &ve) {
-			t.Fatalf("expected ValidationErrors, got %T", err)
-		}
+		zhtest.AssertTrue(t, errors.As(err, &ve))
 		errs := ve.FieldErrors("Items[key]")
-		if len(errs) == 0 {
-			t.Errorf("expected error for Items[key], got: %v", ve)
-		}
+		zhtest.AssertGreater(t, len(errs), 0)
 	})
 }
 
@@ -329,9 +276,7 @@ func TestEmptyStructValidation(t *testing.T) {
 		type EmptyStruct struct{}
 		input := EmptyStruct{}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error for empty struct: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("struct with only untagged fields", func(t *testing.T) {
@@ -341,9 +286,7 @@ func TestEmptyStructValidation(t *testing.T) {
 		}
 		input := UntaggedStruct{Name: "", Value: 0}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error for untagged struct: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("struct with only skipped fields", func(t *testing.T) {
@@ -353,9 +296,7 @@ func TestEmptyStructValidation(t *testing.T) {
 		}
 		input := SkippedStruct{Name: "", Value: 0}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error for skipped struct: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 }
 
@@ -433,11 +374,10 @@ func TestOmitempty(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.Struct(&tt.input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error, got nil")
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("expected no error, got %v", err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -492,16 +432,9 @@ func TestPointerFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.Struct(&tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
+				zhtest.AssertError(t, err)
 				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
+				zhtest.AssertTrue(t, errors.As(err, &ve))
 				for field, expectedErrs := range tt.errors {
 					actualErrs := ve.FieldErrors(field)
 					for _, expected := range expectedErrs {
@@ -513,14 +446,12 @@ func TestPointerFields(t *testing.T) {
 							}
 						}
 						if !found {
-							t.Errorf("expected error containing %q for field %s, got %v", expected, field, actualErrs)
+							zhtest.AssertFailf(t, "expected error containing %q for field %s, got %v", expected, field, actualErrs)
 						}
 					}
 				}
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -559,20 +490,13 @@ func TestNestedStructs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.Struct(&tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
+				zhtest.AssertError(t, err)
 				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
+				zhtest.AssertTrue(t, errors.As(err, &ve))
 				for field, expectedErrs := range tt.errors {
 					actualErrs := ve.FieldErrors(field)
 					if len(actualErrs) == 0 {
-						t.Errorf("expected errors for field %s, got none. All errors: %v", field, ve)
+						zhtest.AssertFailf(t, "expected errors for field %s, got none. All errors: %v", field, ve)
 						continue
 					}
 					for _, expected := range expectedErrs {
@@ -584,14 +508,12 @@ func TestNestedStructs(t *testing.T) {
 							}
 						}
 						if !found {
-							t.Errorf("expected error containing %q for field %s, got %v", expected, field, actualErrs)
+							zhtest.AssertFailf(t, "expected error containing %q for field %s, got %v", expected, field, actualErrs)
 						}
 					}
 				}
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -636,20 +558,13 @@ func TestSliceValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.Struct(&tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
+				zhtest.AssertError(t, err)
 				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
+				zhtest.AssertTrue(t, errors.As(err, &ve))
 				for field, expectedErrs := range tt.errors {
 					actualErrs := ve.FieldErrors(field)
 					if len(actualErrs) == 0 {
-						t.Errorf("expected errors for field %s, got none. All errors: %v", field, ve)
+						zhtest.AssertFailf(t, "expected errors for field %s, got none. All errors: %v", field, ve)
 						continue
 					}
 					for _, expected := range expectedErrs {
@@ -661,14 +576,12 @@ func TestSliceValidation(t *testing.T) {
 							}
 						}
 						if !found {
-							t.Errorf("expected error containing %q for field %s, got %v", expected, field, actualErrs)
+							zhtest.AssertFailf(t, "expected error containing %q for field %s, got %v", expected, field, actualErrs)
 						}
 					}
 				}
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -708,11 +621,10 @@ func TestCustomValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.Struct(&tt.input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error, got nil")
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("expected no error, got %v", err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -751,9 +663,7 @@ func TestRootStructValidate(t *testing.T) {
 			Discount: 5.0,
 		}
 		err := v.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("invalid total - cross field validation fails", func(t *testing.T) {
@@ -762,15 +672,11 @@ func TestRootStructValidate(t *testing.T) {
 			Total: 100.0, // Wrong total
 		}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Error("expected error for mismatched total")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		errors.As(err, &ve)
 		// Root-level validation errors use the struct type name
-		if errs := ve.FieldErrors("rootValidatableOrder"); len(errs) == 0 {
-			t.Errorf("expected root validation error, got %v", ve)
-		}
+		zhtest.AssertLen(t, ve.FieldErrors("rootValidatableOrder"), 1)
 	})
 
 	t.Run("discount exceeds total", func(t *testing.T) {
@@ -780,9 +686,7 @@ func TestRootStructValidate(t *testing.T) {
 			Discount: 20.0, // More than total
 		}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Error("expected error for discount exceeding total")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -800,22 +704,16 @@ func TestEmbeddedStruct(t *testing.T) {
 	t.Run("valid embedded", func(t *testing.T) {
 		input := testEmbedded{Embedded: Embedded{Name: "John"}, Age: 25}
 		err := v.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("invalid embedded field", func(t *testing.T) {
 		input := testEmbedded{Age: 25}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Error("expected error for missing Name in embedded struct")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		errors.As(err, &ve)
-		if errs := ve.FieldErrors("Name"); len(errs) == 0 {
-			t.Errorf("expected Name error, got %v", ve)
-		}
+		zhtest.AssertLen(t, ve.FieldErrors("Name"), 1)
 	})
 }
 
@@ -832,25 +730,19 @@ func TestNestedPointerValidation(t *testing.T) {
 	t.Run("nil required pointer", func(t *testing.T) {
 		input := testNestedPtr{Inner: nil}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Error("expected error for nil required pointer")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("valid pointer", func(t *testing.T) {
 		input := testNestedPtr{Inner: &Inner{Name: "John"}}
 		err := v.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("invalid inner struct", func(t *testing.T) {
 		input := testNestedPtr{Inner: &Inner{Name: ""}}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Error("expected error for invalid inner struct")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -865,9 +757,7 @@ func TestPointerWithOmitEmpty(t *testing.T) {
 	t.Run("nil pointer with omitempty is valid", func(t *testing.T) {
 		input := testPtrOmit{}
 		err := v.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("valid pointer with omitempty", func(t *testing.T) {
@@ -875,18 +765,14 @@ func TestPointerWithOmitEmpty(t *testing.T) {
 		email := "john@example.com"
 		input := testPtrOmit{Name: &name, Email: &email}
 		err := v.Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("invalid short name with omitempty", func(t *testing.T) {
 		name := "J"
 		input := testPtrOmit{Name: &name}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Error("expected error for short name")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -903,30 +789,17 @@ func TestJSONFieldNameInErrors(t *testing.T) {
 	}
 
 	err := v.Struct(&input)
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	zhtest.AssertError(t, err)
 
 	var ve ValidationErrors
-	ok := errors.As(err, &ve)
-	if !ok {
-		t.Fatalf("expected ValidationErrors, got %T", err)
-	}
+	zhtest.AssertTrue(t, errors.As(err, &ve))
 
 	// Errors should use json tag names, not Go field names
-	if errs := ve.FieldErrors("user_name"); len(errs) == 0 {
-		t.Errorf("expected error on 'user_name' (json tag), got errors: %v", ve)
-	}
-	if errs := ve.FieldErrors("Username"); len(errs) > 0 {
-		t.Errorf("should not have error on 'Username' (Go field name), got: %v", errs)
-	}
+	zhtest.AssertGreater(t, len(ve.FieldErrors("user_name")), 0)
+	zhtest.AssertEqual(t, 0, len(ve.FieldErrors("Username")))
 
-	if errs := ve.FieldErrors("email_address"); len(errs) == 0 {
-		t.Errorf("expected error on 'email_address' (json tag), got errors: %v", ve)
-	}
-	if errs := ve.FieldErrors("Email"); len(errs) > 0 {
-		t.Errorf("should not have error on 'Email' (Go field name), got: %v", errs)
-	}
+	zhtest.AssertGreater(t, len(ve.FieldErrors("email_address")), 0)
+	zhtest.AssertEqual(t, 0, len(ve.FieldErrors("Email")))
 }
 
 // TestJSONFieldNameInNestedErrors verifies json tag names in nested structs
@@ -947,23 +820,14 @@ func TestJSONFieldNameInNestedErrors(t *testing.T) {
 	}
 
 	err := v.Struct(&input)
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	zhtest.AssertError(t, err)
 
 	var ve ValidationErrors
-	ok := errors.As(err, &ve)
-	if !ok {
-		t.Fatalf("expected ValidationErrors, got %T", err)
-	}
+	zhtest.AssertTrue(t, errors.As(err, &ve))
 
 	// Check nested paths use json tag names
-	if errs := ve.FieldErrors("full_name"); len(errs) == 0 {
-		t.Errorf("expected error on 'full_name', got errors: %v", ve)
-	}
-	if errs := ve.FieldErrors("home_address.street_address"); len(errs) == 0 {
-		t.Errorf("expected error on 'home_address.street_address', got errors: %v", ve)
-	}
+	zhtest.AssertGreater(t, len(ve.FieldErrors("full_name")), 0)
+	zhtest.AssertGreater(t, len(ve.FieldErrors("home_address.street_address")), 0)
 }
 
 // TestAnonymousEmbeddedStruct tests validation of anonymous embedded structs
@@ -1013,24 +877,13 @@ func TestAnonymousEmbeddedStruct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.Struct(&tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
+				zhtest.AssertError(t, err)
 				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
+				zhtest.AssertTrue(t, errors.As(err, &ve))
 				errs := ve.FieldErrors(tt.errField)
-				if len(errs) == 0 {
-					t.Errorf("expected error for field %s, got none", tt.errField)
-				}
+				zhtest.AssertGreater(t, len(errs), 0)
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -1071,24 +924,13 @@ func TestAnonymousEmbeddedStructWithJSONTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.Struct(&tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
+				zhtest.AssertError(t, err)
 				var ve ValidationErrors
-				ok := errors.As(err, &ve)
-				if !ok {
-					t.Errorf("expected ValidationErrors, got %T", err)
-					return
-				}
+				zhtest.AssertTrue(t, errors.As(err, &ve))
 				errs := ve.FieldErrors(tt.errField)
-				if len(errs) == 0 {
-					t.Errorf("expected error for field %s, got none", tt.errField)
-				}
+				zhtest.AssertGreater(t, len(errs), 0)
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -1103,14 +945,10 @@ func TestValidationErrorsMethods(t *testing.T) {
 		v := New()
 		input := Test{Value: ""}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Fatal("expected error")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		errors.As(err, &ve)
-		if !ve.HasErrors() {
-			t.Error("HasErrors should return true when there are errors")
-		}
+		zhtest.AssertTrue(t, ve.HasErrors())
 	})
 
 	t.Run("FieldErrors for non-existent field", func(t *testing.T) {
@@ -1120,15 +958,11 @@ func TestValidationErrorsMethods(t *testing.T) {
 		v := New()
 		input := Test{Value: ""}
 		err := v.Struct(&input)
-		if err == nil {
-			t.Fatal("expected error")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		errors.As(err, &ve)
 		errs := ve.FieldErrors("nonexistent")
-		if len(errs) != 0 {
-			t.Errorf("expected empty slice for non-existent field, got: %v", errs)
-		}
+		zhtest.AssertEqual(t, 0, len(errs))
 	})
 
 	t.Run("Add error manually", func(t *testing.T) {
@@ -1137,12 +971,8 @@ func TestValidationErrorsMethods(t *testing.T) {
 		ve.Add("field1", "error 2")
 		ve.Add("field2", "error 3")
 
-		if len(ve["field1"]) != 2 {
-			t.Errorf("expected 2 errors for field1, got: %d", len(ve["field1"]))
-		}
-		if len(ve["field2"]) != 1 {
-			t.Errorf("expected 1 error for field2, got: %d", len(ve["field2"]))
-		}
+		zhtest.AssertEqual(t, 2, len(ve["field1"]))
+		zhtest.AssertEqual(t, 1, len(ve["field2"]))
 	})
 
 	t.Run("Error string format", func(t *testing.T) {
@@ -1151,20 +981,14 @@ func TestValidationErrorsMethods(t *testing.T) {
 		ve.Add("field2", "error 2")
 
 		msg := ve.Error()
-		if msg == "" {
-			t.Error("Error() should return non-empty string")
-		}
-		if msg == "validation failed" {
-			t.Error("Error() should include field details when there are errors")
-		}
+		zhtest.AssertNotEmpty(t, msg)
+		zhtest.AssertNotEqual(t, "validation failed", msg)
 	})
 
 	t.Run("Error on empty ValidationErrors", func(t *testing.T) {
 		ve := ValidationErrors{}
 		msg := ve.Error()
-		if msg != "validation failed" {
-			t.Errorf("expected 'validation failed', got: %s", msg)
-		}
+		zhtest.AssertEqual(t, "validation failed", msg)
 	})
 
 	t.Run("ValidationErrors map accessor", func(t *testing.T) {
@@ -1172,9 +996,7 @@ func TestValidationErrorsMethods(t *testing.T) {
 		ve.Add("field", "error")
 
 		m := ve.ValidationErrors()
-		if len(m["field"]) != 1 {
-			t.Errorf("expected 1 error, got: %d", len(m["field"]))
-		}
+		zhtest.AssertEqual(t, 1, len(m["field"]))
 	})
 }
 
@@ -1202,15 +1024,11 @@ func TestDeepNesting(t *testing.T) {
 			},
 		}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for deeply nested validation failure")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		if errors.As(err, &ve) {
 			errs := ve.FieldErrors("Level1.Level2.Level3.Name")
-			if len(errs) == 0 {
-				t.Errorf("expected error for deep path, got: %v", ve)
-			}
+			zhtest.AssertGreater(t, len(errs), 0)
 		}
 	})
 
@@ -1232,9 +1050,7 @@ func TestDeepNesting(t *testing.T) {
 			},
 		}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for nested slice validation failure")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -1251,9 +1067,7 @@ func TestZeroValueNestedStructSkipping(t *testing.T) {
 
 		input := Outer{} // Inner is zero value
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("expected no error for zero-value optional struct, got: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("zero value struct with omitempty is skipped", func(t *testing.T) {
@@ -1266,9 +1080,7 @@ func TestZeroValueNestedStructSkipping(t *testing.T) {
 
 		input := Outer{} // Inner is zero value with omitempty
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("expected no error for zero-value struct with omitempty, got: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("populated struct is validated even without tags", func(t *testing.T) {
@@ -1284,15 +1096,11 @@ func TestZeroValueNestedStructSkipping(t *testing.T) {
 			Inner: Inner{Name: "", ID: 1}, // Inner is non-zero (ID=1) but Name is empty
 		}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for populated struct with invalid fields")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		if errors.As(err, &ve) {
 			errs := ve.FieldErrors("Inner.Name")
-			if len(errs) == 0 {
-				t.Errorf("expected error for Inner.Name, got: %v", ve)
-			}
+			zhtest.AssertGreater(t, len(errs), 0)
 		}
 	})
 
@@ -1306,16 +1114,12 @@ func TestZeroValueNestedStructSkipping(t *testing.T) {
 
 		input := Outer{} // Inner is zero value but field is required
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for required nested struct")
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
 		if errors.As(err, &ve) {
 			// Should have both the "required" error on Inner and field errors
 			errs := ve.FieldErrors("Inner")
-			if len(errs) == 0 {
-				t.Errorf("expected error for Inner field, got: %v", ve)
-			}
+			zhtest.AssertGreater(t, len(errs), 0)
 		}
 	})
 
@@ -1335,8 +1139,6 @@ func TestZeroValueNestedStructSkipping(t *testing.T) {
 
 		input := Root{} // All levels are zero value, should be skipped entirely
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("expected no error when all nested structs are zero and untagged, got: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 }

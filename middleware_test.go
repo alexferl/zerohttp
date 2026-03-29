@@ -34,15 +34,10 @@ func TestDefaultMiddlewares(t *testing.T) {
 
 	middlewares := DefaultMiddlewares(cfg, logger)
 
-	expectedCount := 5
-	if len(middlewares) != expectedCount {
-		t.Errorf("Expected %d middlewares, got %d", expectedCount, len(middlewares))
-	}
+	zhtest.AssertEqual(t, len(middlewares), 5)
 
-	for i, middleware := range middlewares {
-		if middleware == nil {
-			t.Errorf("Middleware at index %d is nil", i)
-		}
+	for _, middleware := range middlewares {
+		zhtest.AssertNotNil(t, middleware)
 	}
 
 	baseHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,39 +49,24 @@ func TestDefaultMiddlewares(t *testing.T) {
 		wrappedHandler = middlewares[i](wrappedHandler)
 	}
 
-	if wrappedHandler == nil {
-		t.Error("Wrapped handler should not be nil")
-	}
+	zhtest.AssertNotNil(t, wrappedHandler)
 
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("Middleware chain panicked: %v", r)
-		}
-	}()
-
-	w := zhtest.Serve(wrappedHandler, req)
-
-	if w.Code == 0 {
-		t.Error("Expected response code to be set")
-	}
+	zhtest.AssertNoPanic(t, func() {
+		w := zhtest.Serve(wrappedHandler, req)
+		zhtest.AssertTrue(t, w.Code != 0)
+	})
 }
 
 func TestDefaultMiddlewares_NilInputs(t *testing.T) {
 	t.Run("nil logger", func(t *testing.T) {
 		cfg := Config{}
 
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("DefaultMiddlewares panicked with nil logger: %v", r)
-			}
-		}()
-
-		middlewares := DefaultMiddlewares(cfg, nil)
-
-		if len(middlewares) == 0 {
-			t.Error("Expected middlewares to be returned even with nil logger")
-		}
+		var middlewares []func(http.Handler) http.Handler
+		zhtest.AssertNoPanic(t, func() {
+			middlewares = DefaultMiddlewares(cfg, nil)
+		})
+		zhtest.AssertNotEmpty(t, middlewares)
 	})
 }

@@ -31,9 +31,7 @@ func TestTrailingSlash_PreferTrailingSlash(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := zhtest.NewRequest(http.MethodGet, tc.requestPath).Build()
 			w := zhtest.Serve(middleware, req)
-			if w.Code != tc.expectedCode {
-				t.Errorf("Expected status %d, got %d", tc.expectedCode, w.Code)
-			}
+			zhtest.AssertEqual(t, tc.expectedCode, w.Code)
 			if tc.expectedCode == http.StatusMovedPermanently {
 				zhtest.AssertWith(t, w).Header("Location", tc.expectedHeader)
 			} else {
@@ -226,15 +224,9 @@ func TestTrailingSlash_ComplexPaths(t *testing.T) {
 
 func TestDefaultTrailingSlashConfig(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Action != RedirectAction {
-		t.Errorf("Expected default action %s, got %s", RedirectAction, cfg.Action)
-	}
-	if cfg.PreferTrailingSlash != false {
-		t.Errorf("Expected default PreferTrailingSlash false, got %t", cfg.PreferTrailingSlash)
-	}
-	if cfg.RedirectCode != http.StatusMovedPermanently {
-		t.Errorf("Expected default redirect code %d, got %d", http.StatusMovedPermanently, cfg.RedirectCode)
-	}
+	zhtest.AssertEqual(t, RedirectAction, cfg.Action)
+	zhtest.AssertFalse(t, cfg.PreferTrailingSlash)
+	zhtest.AssertEqual(t, http.StatusMovedPermanently, cfg.RedirectCode)
 }
 
 func TestTrailingSlash_PreserveRequestData(t *testing.T) {
@@ -254,13 +246,7 @@ func TestTrailingSlash_PreserveRequestData(t *testing.T) {
 		WithHeader(httpx.HeaderAuthorization, "Bearer token123").
 		Build()
 	zhtest.Serve(middleware, req)
-	if capturedMethod != http.MethodPost {
-		t.Errorf("Expected method POST to be preserved, got %s", capturedMethod)
-	}
-	if capturedHeaders.Get(httpx.HeaderContentType) != "application/json" {
-		t.Errorf("Expected Content-Type header to be preserved")
-	}
-	if capturedHeaders.Get(httpx.HeaderAuthorization) != "Bearer token123" {
-		t.Errorf("Expected Authorization header to be preserved")
-	}
+	zhtest.AssertEqual(t, http.MethodPost, capturedMethod)
+	zhtest.AssertEqual(t, "application/json", capturedHeaders.Get(httpx.HeaderContentType))
+	zhtest.AssertEqual(t, "Bearer token123", capturedHeaders.Get(httpx.HeaderAuthorization))
 }

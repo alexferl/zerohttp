@@ -128,9 +128,7 @@ func TestContentCharset(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("Expected nextCalled=%v, got nextCalled=%v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -152,9 +150,7 @@ func TestContentCharsetHTTPMethods(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if !nextCalled {
-				t.Errorf("Next handler should be called for method %s", method)
-			}
+			zhtest.AssertTrue(t, nextCalled)
 			zhtest.AssertWith(t, rr).Status(http.StatusOK)
 		})
 	}
@@ -220,10 +216,7 @@ func TestContentEncodingFunction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := contentEncoding(tt.contentType, tt.charsets...)
-			if result != tt.expected {
-				t.Errorf("contentEncoding(%q, %v) = %v, expected %v",
-					tt.contentType, tt.charsets, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -283,12 +276,8 @@ func TestSplitFunction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a, b := split(tt.str, tt.sep)
-			if a != tt.expectA {
-				t.Errorf("Expected first part %q, got %q", tt.expectA, a)
-			}
-			if b != tt.expectB {
-				t.Errorf("Expected second part %q, got %q", tt.expectB, b)
-			}
+			zhtest.AssertEqual(t, tt.expectA, a)
+			zhtest.AssertEqual(t, tt.expectB, b)
 		})
 	}
 }

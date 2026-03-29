@@ -33,27 +33,21 @@ func TestCache_Basic(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 		zhtest.AssertWith(t, w1).Status(http.StatusOK).Body("response 1")
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 
 		// Second request - should be cached
 		req2 := httptest.NewRequest(http.MethodGet, "/test?id=1", nil)
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 		zhtest.AssertWith(t, w2).Status(http.StatusOK).Body("response 1")
-		if callCount != 1 {
-			t.Errorf("Expected still 1 handler call, got %d (should be cached)", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 
 		// Different query - should hit handler
 		req3 := httptest.NewRequest(http.MethodGet, "/test?id=2", nil)
 		w3 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w3, req3)
 		zhtest.AssertWith(t, w3).Status(http.StatusOK).Body("response 2")
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("does not cache POST requests", func(t *testing.T) {
@@ -76,9 +70,7 @@ func TestCache_Basic(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for POST, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("respects no-cache header", func(t *testing.T) {
@@ -104,9 +96,7 @@ func TestCache_Basic(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls with no-cache, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("respects excluded paths", func(t *testing.T) {
@@ -129,9 +119,7 @@ func TestCache_Basic(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for excluded path, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 }
 
@@ -153,9 +141,7 @@ func TestCache_ConditionalRequests(t *testing.T) {
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
 		etag := w1.Header().Get(httpx.HeaderETag)
-		if etag == "" {
-			t.Fatal("Expected ETag to be set")
-		}
+		zhtest.AssertNotEmpty(t, etag)
 
 		// Second request with If-None-Match
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -164,9 +150,7 @@ func TestCache_ConditionalRequests(t *testing.T) {
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
 		zhtest.AssertWith(t, w2).Status(http.StatusNotModified)
-		if w2.Body.String() != "" {
-			t.Errorf("Expected empty body for 304, got %q", w2.Body.String())
-		}
+		zhtest.AssertEmpty(t, w2.Body.String())
 	})
 
 	t.Run("returns 304 on Last-Modified match", func(t *testing.T) {
@@ -186,9 +170,7 @@ func TestCache_ConditionalRequests(t *testing.T) {
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
 		lastModified := w1.Header().Get(httpx.HeaderLastModified)
-		if lastModified == "" {
-			t.Fatal("Expected Last-Modified to be set")
-		}
+		zhtest.AssertNotEmpty(t, lastModified)
 
 		// Second request with If-Modified-Since
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -227,9 +209,7 @@ func TestCache_VaryHeaders(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for different Accept headers, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 
 		// Same JSON request - should be cached
 		req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -237,9 +217,7 @@ func TestCache_VaryHeaders(t *testing.T) {
 		w3 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w3, req3)
 
-		if callCount != 2 {
-			t.Errorf("Expected still 2 calls, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 }
 
@@ -266,12 +244,8 @@ func TestCache_HEAD(t *testing.T) {
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
 		zhtest.AssertWith(t, w2).Status(http.StatusOK)
-		if w2.Body.String() != "" {
-			t.Errorf("HEAD should have empty body, got %q", w2.Body.String())
-		}
-		if w2.Header().Get("X-Custom") != "value" {
-			t.Error("HEAD should have cached headers")
-		}
+		zhtest.AssertEmpty(t, w2.Body.String())
+		zhtest.AssertEqual(t, "value", w2.Header().Get("X-Custom"))
 	})
 }
 
@@ -316,21 +290,15 @@ func TestCache_Metrics(t *testing.T) {
 				break
 			}
 		}
-		if counter == nil {
-			t.Fatal("expected cache_requests_total metric")
-		}
+		zhtest.AssertNotNil(t, counter)
 
 		results := make(map[string]uint64)
 		for _, m := range counter.Metrics {
 			results[m.Labels["result"]] = m.Counter
 		}
 
-		if results["miss"] != 1 {
-			t.Errorf("expected 1 miss, got %d", results["miss"])
-		}
-		if results["hit"] != 2 {
-			t.Errorf("expected 2 hits, got %d", results["hit"])
-		}
+		zhtest.AssertEqual(t, uint64(1), results["miss"])
+		zhtest.AssertEqual(t, uint64(2), results["hit"])
 	})
 }
 
@@ -349,9 +317,7 @@ func TestCache_XCacheHeader(t *testing.T) {
 		w := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w, req)
 
-		if w.Header().Get(httpx.HeaderXCache) != httpx.XCacheMiss {
-			t.Errorf("expected X-Cache header to be %q, got %q", httpx.XCacheMiss, w.Header().Get(httpx.HeaderXCache))
-		}
+		zhtest.AssertEqual(t, httpx.XCacheMiss, w.Header().Get(httpx.HeaderXCache))
 	})
 
 	t.Run("sets X-Cache header on hit", func(t *testing.T) {
@@ -369,18 +335,14 @@ func TestCache_XCacheHeader(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
-		if w1.Header().Get(httpx.HeaderXCache) != httpx.XCacheMiss {
-			t.Errorf("expected X-Cache header to be %q on first request, got %q", httpx.XCacheMiss, w1.Header().Get(httpx.HeaderXCache))
-		}
+		zhtest.AssertEqual(t, httpx.XCacheMiss, w1.Header().Get(httpx.HeaderXCache))
 
 		// Second request - cache hit
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if w2.Header().Get(httpx.HeaderXCache) != httpx.XCacheHit {
-			t.Errorf("expected X-Cache header to be %q on second request, got %q", httpx.XCacheHit, w2.Header().Get(httpx.HeaderXCache))
-		}
+		zhtest.AssertEqual(t, httpx.XCacheHit, w2.Header().Get(httpx.HeaderXCache))
 	})
 
 	t.Run("does not set X-Cache header on bypassed requests", func(t *testing.T) {
@@ -398,9 +360,7 @@ func TestCache_XCacheHeader(t *testing.T) {
 		w := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w, req)
 
-		if w.Header().Get(httpx.HeaderXCache) != "" {
-			t.Errorf("expected no X-Cache header for POST request, got %q", w.Header().Get(httpx.HeaderXCache))
-		}
+		zhtest.AssertEmpty(t, w.Header().Get(httpx.HeaderXCache))
 	})
 
 	t.Run("custom header name", func(t *testing.T) {
@@ -419,21 +379,15 @@ func TestCache_XCacheHeader(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
-		if w1.Header().Get("X-My-Cache") != httpx.XCacheMiss {
-			t.Errorf("expected X-My-Cache header to be %q on first request, got %q", httpx.XCacheMiss, w1.Header().Get("X-My-Cache"))
-		}
-		if w1.Header().Get(httpx.HeaderXCache) != "" {
-			t.Errorf("expected no X-Cache header, got %q", w1.Header().Get(httpx.HeaderXCache))
-		}
+		zhtest.AssertEqual(t, httpx.XCacheMiss, w1.Header().Get("X-My-Cache"))
+		zhtest.AssertEmpty(t, w1.Header().Get(httpx.HeaderXCache))
 
 		// Second request - cache hit
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if w2.Header().Get("X-My-Cache") != httpx.XCacheHit {
-			t.Errorf("expected X-My-Cache header to be %q on second request, got %q", httpx.XCacheHit, w2.Header().Get("X-My-Cache"))
-		}
+		zhtest.AssertEqual(t, httpx.XCacheHit, w2.Header().Get("X-My-Cache"))
 	})
 
 	t.Run("disabled header", func(t *testing.T) {
@@ -452,18 +406,14 @@ func TestCache_XCacheHeader(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
-		if w1.Header().Get(httpx.HeaderXCache) != "" {
-			t.Errorf("expected no X-Cache header when disabled, got %q", w1.Header().Get(httpx.HeaderXCache))
-		}
+		zhtest.AssertEmpty(t, w1.Header().Get(httpx.HeaderXCache))
 
 		// Second request - cache hit but no header
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if w2.Header().Get(httpx.HeaderXCache) != "" {
-			t.Errorf("expected no X-Cache header when disabled on hit, got %q", w2.Header().Get(httpx.HeaderXCache))
-		}
+		zhtest.AssertEmpty(t, w2.Header().Get(httpx.HeaderXCache))
 	})
 }
 
@@ -527,17 +477,11 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 
 		// Check that headers appear exactly once
 		contentTypeValues := w.Header()["Content-Type"]
-		if len(contentTypeValues) != 1 {
-			t.Errorf("expected Content-Type to appear exactly once, got %d times: %v", len(contentTypeValues), contentTypeValues)
-		}
-		if w.Header().Get(httpx.HeaderContentType) != httpx.MIMEApplicationJSON {
-			t.Errorf("expected Content-Type to be application/json, got %s", w.Header().Get(httpx.HeaderContentType))
-		}
+		zhtest.AssertEqual(t, 1, len(contentTypeValues))
+		zhtest.AssertEqual(t, httpx.MIMEApplicationJSON, w.Header().Get(httpx.HeaderContentType))
 
 		xCustomValues := w.Header()["X-Custom"]
-		if len(xCustomValues) != 1 {
-			t.Errorf("expected X-Custom to appear exactly once, got %d times: %v", len(xCustomValues), xCustomValues)
-		}
+		zhtest.AssertEqual(t, 1, len(xCustomValues))
 	})
 
 	t.Run("does not duplicate middleware-set headers on cache hit", func(t *testing.T) {
@@ -562,9 +506,7 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 
 		cacheMiddleware(handler).ServeHTTP(w1, req1)
 
-		if callCount != 1 {
-			t.Errorf("expected 1 handler call, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 
 		// Second request - cache hit, simulate different request ID from middleware
 		req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -574,29 +516,19 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 1 {
-			t.Errorf("expected still 1 handler call (cached), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 
 		// Verify no duplicate security headers
 		securityHeaders := w2.Header()["X-Security-Header"]
-		if len(securityHeaders) != 1 {
-			t.Errorf("X-Security-Header should appear exactly once, got %d: %v", len(securityHeaders), securityHeaders)
-		}
+		zhtest.AssertEqual(t, 1, len(securityHeaders))
 
 		// Request ID should be the NEW one (from middleware), not cached
 		requestIDs := w2.Header()[httpx.HeaderXRequestId]
-		if len(requestIDs) != 1 {
-			t.Errorf("X-Request-Id should appear exactly once, got %d: %v", len(requestIDs), requestIDs)
-		}
-		if w2.Header().Get(httpx.HeaderXRequestId) != "req-456" {
-			t.Errorf("X-Request-Id should be 'req-456' (from middleware), got %q", w2.Header().Get(httpx.HeaderXRequestId))
-		}
+		zhtest.AssertEqual(t, 1, len(requestIDs))
+		zhtest.AssertEqual(t, "req-456", w2.Header().Get(httpx.HeaderXRequestId))
 
 		// Handler's custom header should be present from cache
-		if w2.Header().Get("X-Custom") != "handler-value" {
-			t.Errorf("X-Custom should be 'handler-value' from cache, got %q", w2.Header().Get("X-Custom"))
-		}
+		zhtest.AssertEqual(t, "handler-value", w2.Header().Get("X-Custom"))
 	})
 
 	t.Run("preserves multi-value headers from cache", func(t *testing.T) {
@@ -627,9 +559,7 @@ func TestCache_NoDuplicateHeaders(t *testing.T) {
 
 		// All three values should be present
 		multiHeaders := w2.Header()["X-Multi"]
-		if len(multiHeaders) != 3 {
-			t.Errorf("X-Multi should have 3 values, got %d: %v", len(multiHeaders), multiHeaders)
-		}
+		zhtest.AssertEqual(t, 3, len(multiHeaders))
 	})
 }
 
@@ -660,9 +590,7 @@ func TestCache_Flush(t *testing.T) {
 		zhtest.AssertWith(t, w).Status(http.StatusOK).Body("before flushafter flush")
 
 		// Content-Type should be set
-		if w.Header().Get(httpx.HeaderContentType) != "text/plain" {
-			t.Errorf("expected Content-Type to be text/plain, got %s", w.Header().Get(httpx.HeaderContentType))
-		}
+		zhtest.AssertEqual(t, "text/plain", w.Header().Get(httpx.HeaderContentType))
 	})
 
 	t.Run("flush does not cache response", func(t *testing.T) {
@@ -692,9 +620,7 @@ func TestCache_Flush(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("expected 2 handler calls (flushed response not cached), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("flush preserves non-200 status code", func(t *testing.T) {
@@ -788,9 +714,7 @@ func TestCache_BodyOverflow(t *testing.T) {
 		// Status should be 206, not 200
 		zhtest.AssertWith(t, w).Status(http.StatusPartialContent)
 		// Body should be complete
-		if w.Body.String() != "this is a long response that exceeds ten bytes" {
-			t.Errorf("unexpected body: %s", w.Body.String())
-		}
+		zhtest.AssertEqual(t, "this is a long response that exceeds ten bytes", w.Body.String())
 	})
 
 	t.Run("flush after body overflow does not double WriteHeader", func(t *testing.T) {
@@ -841,9 +765,7 @@ func TestCache_IncludedPaths(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call for cached path, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 
 		// Request to non-allowed path - should not be cached
 		callCount = 0
@@ -855,9 +777,7 @@ func TestCache_IncludedPaths(t *testing.T) {
 		w4 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w4, req4)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for non-allowed path, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("wildcard included paths", func(t *testing.T) {
@@ -881,22 +801,16 @@ func TestCache_IncludedPaths(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		cacheMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call for wildcard path, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 	})
 }
 
 func TestCache_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		DefaultTTL:    time.Minute,
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			DefaultTTL:    time.Minute,
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

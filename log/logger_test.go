@@ -5,56 +5,37 @@ import (
 	"context"
 	"errors"
 	"log"
-	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestFieldHelpers(t *testing.T) {
 	t.Run("F helper", func(t *testing.T) {
 		f := F("key", "value")
-		if f.Key != "key" {
-			t.Errorf("expected key 'key', got '%s'", f.Key)
-		}
-		if f.Value != "value" {
-			t.Errorf("expected value 'value', got '%v'", f.Value)
-		}
+		zhtest.AssertEqual(t, "key", f.Key)
+		zhtest.AssertEqual(t, "value", f.Value)
 	})
 
 	t.Run("E helper", func(t *testing.T) {
 		e := E("some error")
-		if e.Key != "error" {
-			t.Errorf("expected key 'error', got '%s'", e.Key)
-		}
-		if e.Value != "some error" {
-			t.Errorf("expected value 'some error', got '%v'", e.Value)
-		}
+		zhtest.AssertEqual(t, "error", e.Key)
+		zhtest.AssertEqual(t, "some error", e.Value)
 	})
 
 	t.Run("P helper", func(t *testing.T) {
 		p := P("panic msg")
-		if p.Key != "panic" {
-			t.Errorf("expected key 'panic', got '%s'", p.Key)
-		}
-		if p.Value != "panic msg" {
-			t.Errorf("expected value 'panic msg', got '%v'", p.Value)
-		}
+		zhtest.AssertEqual(t, "panic", p.Key)
+		zhtest.AssertEqual(t, "panic msg", p.Value)
 	})
 }
 
 func TestNewDefaultLogger(t *testing.T) {
 	logger := NewDefaultLogger()
-	if logger == nil {
-		t.Fatal("NewDefaultLogger returned nil")
-	}
-	if logger.logger == nil {
-		t.Error("DefaultLogger.logger is nil")
-	}
-	if logger.fields == nil {
-		t.Error("DefaultLogger.fields is nil")
-	}
-	if len(logger.fields) != 0 {
-		t.Errorf("expected empty fields slice, got length %d", len(logger.fields))
-	}
+	zhtest.AssertNotNil(t, logger)
+	zhtest.AssertNotNil(t, logger.logger)
+	zhtest.AssertNotNil(t, logger.fields)
+	zhtest.AssertEqual(t, 0, len(logger.fields))
 }
 
 func createTestLogger() (*DefaultLogger, *bytes.Buffer) {
@@ -84,12 +65,8 @@ func TestLogLevels(t *testing.T) {
 			tt.logFunc(logger, "test message")
 
 			output := buf.String()
-			if !strings.Contains(output, tt.expected) {
-				t.Errorf("expected output to contain '%s', got '%s'", tt.expected, output)
-			}
-			if !strings.Contains(output, "test message") {
-				t.Errorf("expected output to contain 'test message', got '%s'", output)
-			}
+			zhtest.AssertContains(t, output, tt.expected)
+			zhtest.AssertContains(t, output, "test message")
 		})
 	}
 }
@@ -102,32 +79,20 @@ func TestLogWithFields(t *testing.T) {
 	expected := []string{"[INF]", "test", "key1=value1", "key2=42"}
 
 	for _, exp := range expected {
-		if !strings.Contains(output, exp) {
-			t.Errorf("expected output to contain '%s', got '%s'", exp, output)
-		}
+		zhtest.AssertContains(t, output, exp)
 	}
 }
 
 func TestLogPanic(t *testing.T) {
 	logger, buf := createTestLogger()
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic but none occurred")
-		} else if r != "panic message" {
-			t.Errorf("expected panic message 'panic message', got '%v'", r)
-		}
+	zhtest.AssertPanic(t, func() {
+		logger.Panic("panic message")
+	})
 
-		output := buf.String()
-		if !strings.Contains(output, "[PNC]") {
-			t.Errorf("expected output to contain '[PNC]', got '%s'", output)
-		}
-		if !strings.Contains(output, "panic message") {
-			t.Errorf("expected output to contain 'panic message', got '%s'", output)
-		}
-	}()
-
-	logger.Panic("panic message")
+	output := buf.String()
+	zhtest.AssertContains(t, output, "[PNC]")
+	zhtest.AssertContains(t, output, "panic message")
 }
 
 func TestWithFields(t *testing.T) {
@@ -135,9 +100,7 @@ func TestWithFields(t *testing.T) {
 
 	loggerWithFields := logger.WithFields(F("base", "value"), F("count", 1))
 
-	if loggerWithFields == logger {
-		t.Error("WithFields should return a new logger instance")
-	}
+	zhtest.AssertTrue(t, loggerWithFields != logger)
 
 	loggerWithFields.Info("test message", F("extra", "field"))
 
@@ -145,9 +108,7 @@ func TestWithFields(t *testing.T) {
 	expected := []string{"[INF]", "test message", "base=value", "count=1", "extra=field"}
 
 	for _, exp := range expected {
-		if !strings.Contains(output, exp) {
-			t.Errorf("expected output to contain '%s', got '%s'", exp, output)
-		}
+		zhtest.AssertContains(t, output, exp)
 	}
 }
 
@@ -158,9 +119,7 @@ func TestWithContext(t *testing.T) {
 	loggerWithCtx := logger.WithContext(ctx)
 
 	// For DefaultLogger, should return the same instance
-	if loggerWithCtx != logger {
-		t.Error("WithContext should return the same logger instance for DefaultLogger")
-	}
+	zhtest.AssertEqual(t, logger, loggerWithCtx)
 }
 
 func TestFormatValue(t *testing.T) {
@@ -180,9 +139,7 @@ func TestFormatValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := formatValue(tt.input)
-			if result != tt.expected {
-				t.Errorf("formatValue(%v) = '%s', expected '%s'", tt.input, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -199,9 +156,7 @@ func TestChainedWithFields(t *testing.T) {
 	expected := []string{"step=1", "step=2", "extra=data"}
 
 	for _, exp := range expected {
-		if !strings.Contains(output, exp) {
-			t.Errorf("expected output to contain '%s', got '%s'", exp, output)
-		}
+		zhtest.AssertContains(t, output, exp)
 	}
 }
 
@@ -213,15 +168,9 @@ func TestStdLogger(t *testing.T) {
 	stdLogger.Println("TLS handshake error: test")
 
 	output := buf.String()
-	if !strings.Contains(output, "[ERR]") {
-		t.Errorf("expected output to contain '[ERR]', got '%s'", output)
-	}
-	if !strings.Contains(output, "TLS handshake error: test") {
-		t.Errorf("expected output to contain 'TLS handshake error: test', got '%s'", output)
-	}
-	if strings.Contains(output, "\n\n") {
-		t.Errorf("expected no double newlines, output had double newline: '%s'", output)
-	}
+	zhtest.AssertContains(t, output, "[ERR]")
+	zhtest.AssertContains(t, output, "TLS handshake error: test")
+	zhtest.AssertNotContains(t, output, "\n\n")
 }
 
 func TestLogWriter(t *testing.T) {
@@ -229,23 +178,13 @@ func TestLogWriter(t *testing.T) {
 	writer := &logWriter{logger: logger}
 
 	n, err := writer.Write([]byte("test message\n"))
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if n != 13 {
-		t.Errorf("expected 13 bytes written, got %d", n)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, 13, n)
 
 	output := buf.String()
-	if !strings.Contains(output, "[ERR]") {
-		t.Errorf("expected output to contain '[ERR]', got '%s'", output)
-	}
-	if !strings.Contains(output, "test message") {
-		t.Errorf("expected output to contain 'test message', got '%s'", output)
-	}
-	if strings.Contains(output, "\n\n") {
-		t.Errorf("expected no double newlines from trimming, got: '%s'", output)
-	}
+	zhtest.AssertContains(t, output, "[ERR]")
+	zhtest.AssertContains(t, output, "test message")
+	zhtest.AssertNotContains(t, output, "\n\n")
 }
 
 func TestSetColorize(t *testing.T) {
@@ -256,16 +195,10 @@ func TestSetColorize(t *testing.T) {
 	logger.Info("no color message")
 
 	output := buf.String()
-	if !strings.Contains(output, "[INF]") {
-		t.Errorf("expected output to contain '[INF]', got '%s'", output)
-	}
-	if !strings.Contains(output, "no color message") {
-		t.Errorf("expected output to contain 'no color message', got '%s'", output)
-	}
+	zhtest.AssertContains(t, output, "[INF]")
+	zhtest.AssertContains(t, output, "no color message")
 	// With colors disabled, there should be no ANSI codes
-	if strings.Contains(output, "\033[") {
-		t.Errorf("expected no ANSI codes when colorize is disabled, got '%s'", output)
-	}
+	zhtest.AssertNotContains(t, output, "\033[")
 
 	// Test re-enabling colors
 	buf.Reset()
@@ -273,9 +206,7 @@ func TestSetColorize(t *testing.T) {
 	logger.Info("color message")
 
 	output = buf.String()
-	if !strings.Contains(output, "[INF]") {
-		t.Errorf("expected output to contain '[INF]', got '%s'", output)
-	}
+	zhtest.AssertContains(t, output, "[INF]")
 }
 
 func TestLogWithColorsEnabled(t *testing.T) {
@@ -286,9 +217,7 @@ func TestLogWithColorsEnabled(t *testing.T) {
 	output := buf.String()
 
 	// Should contain ANSI color codes
-	if !strings.Contains(output, "\033[") {
-		t.Errorf("expected ANSI codes when colors enabled, got '%s'", output)
-	}
+	zhtest.AssertContains(t, output, "\033[")
 }
 
 func TestLogWithColorsDisabled(t *testing.T) {
@@ -299,17 +228,13 @@ func TestLogWithColorsDisabled(t *testing.T) {
 	output := buf.String()
 
 	// Should NOT contain ANSI color codes
-	if strings.Contains(output, "\033[") {
-		t.Errorf("expected no ANSI codes when colors disabled, got '%s'", output)
-	}
+	zhtest.AssertNotContains(t, output, "\033[")
 }
 
 func TestShouldColorize_NO_COLOR(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	result := shouldColorize()
-	if result {
-		t.Error("shouldColorize should return false when NO_COLOR is set")
-	}
+	zhtest.AssertFalse(t, result)
 }
 
 func TestShouldColorize_CI(t *testing.T) {
@@ -319,9 +244,7 @@ func TestShouldColorize_CI(t *testing.T) {
 		t.Run(envVar, func(t *testing.T) {
 			t.Setenv(envVar, "true")
 			result := shouldColorize()
-			if result {
-				t.Errorf("shouldColorize should return false when %s is set", envVar)
-			}
+			zhtest.AssertFalse(t, result)
 		})
 	}
 }
@@ -336,9 +259,7 @@ func TestGlobalLogger(t *testing.T) {
 	SetGlobalLogger(testLogger)
 
 	// Test GetGlobalLogger returns our test logger
-	if GetGlobalLogger() != testLogger {
-		t.Error("GetGlobalLogger should return the set global logger")
-	}
+	zhtest.AssertEqual(t, testLogger, GetGlobalLogger())
 }
 
 func TestGlobalLoggerMethods(t *testing.T) {
@@ -388,9 +309,7 @@ func TestLogWithAllLevels(t *testing.T) {
 			buf.Reset()
 			tt.logFunc("test")
 			output := buf.String()
-			if !strings.Contains(output, tt.expected) {
-				t.Errorf("expected output to contain '%s', got '%s'", tt.expected, output)
-			}
+			zhtest.AssertContains(t, output, tt.expected)
 		})
 	}
 }
@@ -403,12 +322,8 @@ func TestLogWithFieldsColorKeys(t *testing.T) {
 	output := buf.String()
 
 	// Should contain the key with cyan color
-	if !strings.Contains(output, "mykey") {
-		t.Errorf("expected output to contain 'mykey', got '%s'", output)
-	}
-	if !strings.Contains(output, "myvalue") {
-		t.Errorf("expected output to contain 'myvalue', got '%s'", output)
-	}
+	zhtest.AssertContains(t, output, "mykey")
+	zhtest.AssertContains(t, output, "myvalue")
 }
 
 func TestLogAllLevelColors(t *testing.T) {
@@ -471,16 +386,10 @@ func TestLogLevelFiltering(t *testing.T) {
 
 			output := buf.String()
 			if tt.shouldLog {
-				if !strings.Contains(output, tt.expectedLevel) {
-					t.Errorf("expected output to contain '%s', got '%s'", tt.expectedLevel, output)
-				}
-				if !strings.Contains(output, "test message") {
-					t.Errorf("expected output to contain 'test message', got '%s'", output)
-				}
+				zhtest.AssertContains(t, output, tt.expectedLevel)
+				zhtest.AssertContains(t, output, "test message")
 			} else {
-				if output != "" {
-					t.Errorf("expected no output, got '%s'", output)
-				}
+				zhtest.AssertEmpty(t, output)
 			}
 		})
 	}
@@ -488,9 +397,7 @@ func TestLogLevelFiltering(t *testing.T) {
 
 func TestDefaultLogLevel(t *testing.T) {
 	logger := NewDefaultLogger()
-	if logger.GetLevel() != InfoLevel {
-		t.Errorf("expected default log level to be InfoLevel, got %v", logger.GetLevel())
-	}
+	zhtest.AssertEqual(t, InfoLevel, logger.GetLevel())
 }
 
 func TestSetAndGetLevel(t *testing.T) {
@@ -500,9 +407,7 @@ func TestSetAndGetLevel(t *testing.T) {
 	levels := []LogLevel{DebugLevel, InfoLevel, WarnLevel, ErrorLevel, PanicLevel, FatalLevel}
 	for _, level := range levels {
 		logger.SetLevel(level)
-		if logger.GetLevel() != level {
-			t.Errorf("expected level %v, got %v", level, logger.GetLevel())
-		}
+		zhtest.AssertEqual(t, level, logger.GetLevel())
 	}
 }
 
@@ -523,9 +428,7 @@ func TestLogLevelString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
 			result := tt.level.String()
-			if result != tt.expected {
-				t.Errorf("expected '%s', got '%s'", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -536,13 +439,9 @@ func TestWithFieldsPreservesLevel(t *testing.T) {
 
 	newLogger := logger.WithFields(F("key", "value"))
 	defaultLogger, ok := newLogger.(*DefaultLogger)
-	if !ok {
-		t.Fatal("WithFields should return *DefaultLogger")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if defaultLogger.GetLevel() != WarnLevel {
-		t.Errorf("expected level to be preserved as WarnLevel, got %v", defaultLogger.GetLevel())
-	}
+	zhtest.AssertEqual(t, WarnLevel, defaultLogger.GetLevel())
 }
 
 func TestPanicWithLevelFiltering(t *testing.T) {
@@ -550,18 +449,13 @@ func TestPanicWithLevelFiltering(t *testing.T) {
 	logger, buf := createTestLogger()
 	logger.SetLevel(FatalLevel) // Set level higher than Panic
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic but none occurred")
-		}
-		// Panic should not have logged since level is Fatal
-		output := buf.String()
-		if strings.Contains(output, "[PNC]") {
-			t.Error("Panic should not log when level is Fatal")
-		}
-	}()
+	zhtest.AssertPanic(t, func() {
+		logger.Panic("panic message")
+	})
 
-	logger.Panic("panic message")
+	// Panic should not have logged since level is Fatal
+	output := buf.String()
+	zhtest.AssertNotContains(t, output, "[PNC]")
 }
 
 func TestFatalWithLevelFiltering(t *testing.T) {

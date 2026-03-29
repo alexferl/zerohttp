@@ -12,129 +12,52 @@ import (
 	"github.com/alexferl/zerohttp/middleware/requestbodysize"
 	"github.com/alexferl/zerohttp/middleware/requestid"
 	"github.com/alexferl/zerohttp/sse"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestDefaultConfigValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Addr != "localhost:8080" {
-		t.Errorf("expected Addr = localhost:8080, got %s", cfg.Addr)
-	}
-	if cfg.TLS.Addr != "localhost:8443" {
-		t.Errorf("expected Addr = localhost:8443, got %s", cfg.TLS.Addr)
-	}
-	if cfg.DisableDefaultMiddlewares {
-		t.Error("expected DisableDefaultMiddlewares to be false")
-	}
-	if cfg.DefaultMiddlewares != nil {
-		t.Error("expected DefaultMiddlewares to be nil")
-	}
-	if cfg.Logger != nil {
-		t.Error("expected Logger to be nil")
-	}
-	if cfg.TLS.CertFile != "" {
-		t.Errorf("expected CertFile to be empty, got %s", cfg.TLS.CertFile)
-	}
-	if cfg.TLS.KeyFile != "" {
-		t.Errorf("expected KeyFile to be empty, got %s", cfg.TLS.KeyFile)
-	}
-	if cfg.Extensions.AutocertManager != nil {
-		t.Error("expected AutocertManager to be nil")
-	}
-	if cfg.Server != nil {
-		t.Error("expected Server to be nil in default config")
-	}
-	if cfg.TLS.Server != nil {
-		t.Error("expected Server to be nil in default config")
-	}
-	if cfg.Listener != nil {
-		t.Error("expected Listener to be nil")
-	}
-	if cfg.TLS.Listener != nil {
-		t.Error("expected Listener to be nil")
-	}
+	zhtest.AssertEqual(t, cfg.Addr, "localhost:8080")
+	zhtest.AssertEqual(t, cfg.TLS.Addr, "localhost:8443")
+	zhtest.AssertFalse(t, cfg.DisableDefaultMiddlewares)
+	zhtest.AssertNil(t, cfg.DefaultMiddlewares)
+	zhtest.AssertNil(t, cfg.Logger)
+	zhtest.AssertEqual(t, cfg.TLS.CertFile, "")
+	zhtest.AssertEqual(t, cfg.TLS.KeyFile, "")
+	zhtest.AssertNil(t, cfg.Extensions.AutocertManager)
+	zhtest.AssertNil(t, cfg.Server)
+	zhtest.AssertNil(t, cfg.TLS.Server)
+	zhtest.AssertNil(t, cfg.Listener)
+	zhtest.AssertNil(t, cfg.TLS.Listener)
 
 	// Test middleware configs are initialized with defaults
-	if cfg.Recover.StackSize != recover.DefaultConfig.StackSize {
-		t.Errorf("expected Recover.StackSize = %d, got %d", recover.DefaultConfig.StackSize, cfg.Recover.StackSize)
-	}
-	if cfg.RequestBodySize.MaxBytes != requestbodysize.DefaultConfig.MaxBytes {
-		t.Errorf("expected RequestBodySize.MaxBytes = %d, got %d", requestbodysize.DefaultConfig.MaxBytes, cfg.RequestBodySize.MaxBytes)
-	}
-	if cfg.RequestID.Header != requestid.DefaultConfig.Header {
-		t.Errorf("expected RequestID.Header = %s, got %s", requestid.DefaultConfig.Header, cfg.RequestID.Header)
-	}
+	zhtest.AssertEqual(t, cfg.Recover.StackSize, recover.DefaultConfig.StackSize)
+	zhtest.AssertEqual(t, cfg.RequestBodySize.MaxBytes, requestbodysize.DefaultConfig.MaxBytes)
+	zhtest.AssertEqual(t, cfg.RequestID.Header, requestid.DefaultConfig.Header)
 }
 
 func TestConfigZeroValues(t *testing.T) {
 	var cfg Config
-	if cfg.Addr != "" {
-		t.Error("expected zero value for Addr to be empty string")
-	}
-	if cfg.TLS.Addr != "" {
-		t.Error("expected zero value for Addr to be empty string")
-	}
-	if cfg.DisableDefaultMiddlewares != false {
-		t.Error("expected zero value for DisableDefaultMiddlewares to be false")
-	}
-	if cfg.DefaultMiddlewares != nil {
-		t.Error("expected zero value for DefaultMiddlewares to be nil")
-	}
-	if cfg.Logger != nil {
-		t.Error("expected zero value for Logger to be nil")
-	}
-	if cfg.Server != nil {
-		t.Error("expected zero value for Server to be nil")
-	}
-	if cfg.TLS.Server != nil {
-		t.Error("expected zero value for Server to be nil")
-	}
-	if cfg.Listener != nil {
-		t.Error("expected zero value for Listener to be nil")
-	}
-	if cfg.TLS.Listener != nil {
-		t.Error("expected zero value for Listener to be nil")
-	}
-	if cfg.TLS.CertFile != "" {
-		t.Error("expected zero value for CertFile to be empty string")
-	}
-	if cfg.TLS.KeyFile != "" {
-		t.Error("expected zero value for KeyFile to be empty string")
-	}
-	if cfg.Extensions.AutocertManager != nil {
-		t.Error("expected zero value for AutocertManager to be nil")
-	}
+	zhtest.AssertEqual(t, cfg.Addr, "")
+	zhtest.AssertEqual(t, cfg.TLS.Addr, "")
+	zhtest.AssertFalse(t, cfg.DisableDefaultMiddlewares)
+	zhtest.AssertNil(t, cfg.DefaultMiddlewares)
+	zhtest.AssertNil(t, cfg.Logger)
+	zhtest.AssertNil(t, cfg.Server)
+	zhtest.AssertNil(t, cfg.TLS.Server)
+	zhtest.AssertNil(t, cfg.Listener)
+	zhtest.AssertNil(t, cfg.TLS.Listener)
+	zhtest.AssertEqual(t, cfg.TLS.CertFile, "")
+	zhtest.AssertEqual(t, cfg.TLS.KeyFile, "")
+	zhtest.AssertNil(t, cfg.Extensions.AutocertManager)
 }
 
-// // mockHTTP3Server is a mock implementation of HTTP3Server for testing
-// type mockHTTP3Server struct{}
-//
-// func (m *mockHTTP3Server) ListenAndServeTLS(certFile, keyFile string) error { return nil }
-// func (m *mockHTTP3Server) Shutdown(ctx context.Context) error               { return nil }
-// func (m *mockHTTP3Server) Close() error                                     { return nil }
-//
-//	func TestWithHTTP3Server(t *testing.T) {
-//		cfg := DefaultConfig
-//		mockServer := &mockHTTP3Server{}
-//		cfg.Extensions.HTTP3Server = mockServer
-//
-//		if cfg.Extensions.HTTP3Server == nil {
-//			t.Error("expected HTTP3Server to be set")
-//		}
-//	}
-//
-// // mockWebTransportServer is a mock implementation of WebTransportServer for testing
-// type mockWebTransportServer struct{}
-//
-// func (m *mockWebTransportServer) ListenAndServeTLS(certFile, keyFile string) error { return nil }
-// func (m *mockWebTransportServer) Close() error                                     { return nil }
 func TestWithWebTransportServer(t *testing.T) {
 	cfg := DefaultConfig
 	mockServer := &mockWebTransportServer{}
 	cfg.Extensions.WebTransportServer = mockServer
 
-	if cfg.Extensions.WebTransportServer == nil {
-		t.Error("expected WebTransportServer to be set")
-	}
+	zhtest.AssertNotNil(t, cfg.Extensions.WebTransportServer)
 }
 
 func TestShutdownHookWithError(t *testing.T) {
@@ -147,9 +70,7 @@ func TestShutdownHookWithError(t *testing.T) {
 	cfg.Lifecycle.ShutdownHooks = []ShutdownHookConfig{{Name: "error-hook", Hook: hook}}
 
 	err := cfg.Lifecycle.ShutdownHooks[0].Hook(context.Background())
-	if !errors.Is(err, expectedErr) {
-		t.Errorf("Expected error '%v', got '%v'", expectedErr, err)
-	}
+	zhtest.AssertErrorIs(t, err, expectedErr)
 }
 
 func TestShutdownHookContextCancellation(t *testing.T) {
@@ -170,9 +91,7 @@ func TestShutdownHookContextCancellation(t *testing.T) {
 	cancel()
 
 	err := cfg.Lifecycle.ShutdownHooks[0].Hook(ctx)
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("Expected context.Canceled error, got %v", err)
-	}
+	zhtest.AssertErrorIs(t, err, context.Canceled)
 }
 
 func TestValidator(t *testing.T) {
@@ -180,30 +99,20 @@ func TestValidator(t *testing.T) {
 	mockVal := &mockValidator{}
 	cfg.Validator = mockVal
 
-	if cfg.Validator == nil {
-		t.Error("expected Validator to be set")
-	}
+	zhtest.AssertNotNil(t, cfg.Validator)
 
 	// Test that the mock works
 	type testStruct struct {
 		Name string
 	}
 	ts := testStruct{Name: "test"}
-	if err := cfg.Validator.Struct(&ts); err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	if !mockVal.structCalled {
-		t.Error("expected Struct to be called")
-	}
+	zhtest.AssertNoError(t, cfg.Validator.Struct(&ts))
+	zhtest.AssertTrue(t, mockVal.structCalled)
 
 	// Test Register
 	cfg.Validator.Register("custom", func(v reflect.Value, s string) error { return nil })
-	if !mockVal.registerCalled {
-		t.Error("expected Register to be called")
-	}
-	if mockVal.lastName != "custom" {
-		t.Errorf("expected name to be 'custom', got %s", mockVal.lastName)
-	}
+	zhtest.AssertTrue(t, mockVal.registerCalled)
+	zhtest.AssertEqual(t, mockVal.lastName, "custom")
 }
 
 func TestWebSocketUpgrader(t *testing.T) {
@@ -211,9 +120,7 @@ func TestWebSocketUpgrader(t *testing.T) {
 	mockUpgrader := &mockWebSocketUpgrader{}
 	cfg.Extensions.WebSocketUpgrader = mockUpgrader
 
-	if cfg.Extensions.WebSocketUpgrader == nil {
-		t.Error("expected WebSocketUpgrader to be set")
-	}
+	zhtest.AssertNotNil(t, cfg.Extensions.WebSocketUpgrader)
 }
 
 // mockSSEConnection is a mock implementation of SSEConnection for testing
@@ -236,7 +143,5 @@ func TestSSEProvider(t *testing.T) {
 	mockProvider := &mockSSEProvider{}
 	cfg.Extensions.SSEProvider = mockProvider
 
-	if cfg.Extensions.SSEProvider == nil {
-		t.Error("expected SSEProvider to be set")
-	}
+	zhtest.AssertNotNil(t, cfg.Extensions.SSEProvider)
 }

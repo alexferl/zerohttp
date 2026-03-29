@@ -8,6 +8,7 @@ import (
 
 	zh "github.com/alexferl/zerohttp"
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // setupPProf creates a test server with pprof endpoints and returns the server and pprof instance.
@@ -86,21 +87,10 @@ func TestNewWithNoConfig(t *testing.T) {
 	app := zh.New()
 	pp := New(app)
 
-	if pp == nil {
-		t.Fatal("expected PProf instance, got nil")
-	}
-
-	if pp.Config.Prefix != "/debug/pprof" {
-		t.Errorf("expected prefix '/debug/pprof', got '%s'", pp.Config.Prefix)
-	}
-
-	if pp.Auth == nil {
-		t.Fatal("expected Auth to be auto-generated")
-	}
-
-	if pp.Auth.Username != "pprof" {
-		t.Errorf("expected default username 'pprof', got '%s'", pp.Auth.Username)
-	}
+	zhtest.AssertNotNil(t, pp)
+	zhtest.AssertEqual(t, "/debug/pprof", pp.Config.Prefix)
+	zhtest.AssertNotNil(t, pp.Auth)
+	zhtest.AssertEqual(t, "pprof", pp.Auth.Username)
 }
 
 func TestNewWithPartialConfig(t *testing.T) {
@@ -112,79 +102,36 @@ func TestNewWithPartialConfig(t *testing.T) {
 		Prefix: "/custom/pprof",
 	})
 
-	if pp.Config.Prefix != "/custom/pprof" {
-		t.Errorf("expected prefix '/custom/pprof', got '%s'", pp.Config.Prefix)
-	}
-
+	zhtest.AssertEqual(t, "/custom/pprof", pp.Config.Prefix)
 	// Auth should still be auto-generated (nil in partial config = use default behavior)
-	if pp.Auth == nil {
-		t.Fatal("expected Auth to be auto-generated")
-	}
-
+	zhtest.AssertNotNil(t, pp.Auth)
 	// Other fields should use defaults
-	if !*pp.Config.EnableIndex {
-		t.Error("expected EnableIndex to be true from defaults")
-	}
-
-	if !*pp.Config.EnableHeap {
-		t.Error("expected EnableHeap to be true from defaults")
-	}
-
-	if len(pp.Config.AllowedIPs) != 2 {
-		t.Errorf("expected 2 allowed IPs from defaults, got %d", len(pp.Config.AllowedIPs))
-	}
+	zhtest.AssertTrue(t, *pp.Config.EnableIndex)
+	zhtest.AssertTrue(t, *pp.Config.EnableHeap)
+	zhtest.AssertEqual(t, 2, len(pp.Config.AllowedIPs))
 }
 
 func TestDefaultConfig(t *testing.T) {
-	if DefaultConfig.Prefix != "/debug/pprof" {
-		t.Errorf("expected prefix '/debug/pprof', got '%s'", DefaultConfig.Prefix)
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableIndex, false) {
-		t.Error("expected EnableIndex to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableCmdline, false) {
-		t.Error("expected EnableCmdline to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableProfile, false) {
-		t.Error("expected EnableProfile to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableSymbol, false) {
-		t.Error("expected EnableSymbol to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableTrace, false) {
-		t.Error("expected EnableTrace to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableHeap, false) {
-		t.Error("expected EnableHeap to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableGoroutine, false) {
-		t.Error("expected EnableGoroutine to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableThreadCreate, false) {
-		t.Error("expected EnableThreadCreate to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableBlock, false) {
-		t.Error("expected EnableBlock to be true")
-	}
-	if !config.BoolOrDefault(DefaultConfig.EnableMutex, false) {
-		t.Error("expected EnableMutex to be true")
-	}
-	if DefaultConfig.Auth != nil {
-		t.Error("expected Auth to be nil")
-	}
-	if len(DefaultConfig.AllowedIPs) != 2 {
-		t.Errorf("expected AllowedIPs to have 2 entries (localhost only), got %d", len(DefaultConfig.AllowedIPs))
-	}
+	zhtest.AssertEqual(t, "/debug/pprof", DefaultConfig.Prefix)
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableIndex, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableCmdline, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableProfile, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableSymbol, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableTrace, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableHeap, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableGoroutine, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableThreadCreate, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableBlock, false))
+	zhtest.AssertTrue(t, config.BoolOrDefault(DefaultConfig.EnableMutex, false))
+	zhtest.AssertNil(t, DefaultConfig.Auth)
+	zhtest.AssertEqual(t, 2, len(DefaultConfig.AllowedIPs))
 }
 
 func TestNewWithDefaultConfig(t *testing.T) {
 	app, _ := setupPProf(t, nil)
 
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/", "", "")
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestNewWithCustomPrefix(t *testing.T) {
@@ -194,15 +141,11 @@ func TestNewWithCustomPrefix(t *testing.T) {
 
 	// Test index endpoint at custom prefix
 	rec := makeRequest(t, app, http.MethodGet, "/admin/pprof/", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Test that default prefix doesn't work
 	rec = makeRequest(t, app, http.MethodGet, "/debug/pprof/", "", "")
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected status %d for unknown path, got %d", http.StatusNotFound, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusNotFound, rec.Code)
 }
 
 func TestNewWithAuth(t *testing.T) {
@@ -210,21 +153,15 @@ func TestNewWithAuth(t *testing.T) {
 
 	// Test without auth
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/", "", "")
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d without auth, got %d", http.StatusUnauthorized, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rec.Code)
 
 	// Test with wrong credentials
 	rec = makeRequest(t, app, http.MethodGet, "/debug/pprof/", "wrong", "wrong")
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d with wrong credentials, got %d", http.StatusUnauthorized, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rec.Code)
 
 	// Test with correct credentials
 	rec = makeRequest(t, app, http.MethodGet, "/debug/pprof/", "admin", "secret")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d with correct credentials, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestNewWithDisabledEndpoints(t *testing.T) {
@@ -235,18 +172,14 @@ func TestNewWithDisabledEndpoints(t *testing.T) {
 
 	// Test disabled index endpoint
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/", "", "")
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected status %d for disabled endpoint, got %d", http.StatusNotFound, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusNotFound, rec.Code)
 }
 
 func TestCmdlineEndpoint(t *testing.T) {
 	app, _ := setupPProf(t, nil)
 
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/cmdline", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestSymbolEndpoint(t *testing.T) {
@@ -254,74 +187,54 @@ func TestSymbolEndpoint(t *testing.T) {
 
 	// Test GET
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/symbol", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d for GET, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Test POST
 	rec = makeRequest(t, app, http.MethodPost, "/debug/pprof/symbol", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d for POST, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestHeapEndpoint(t *testing.T) {
 	app, _ := setupPProf(t, nil)
 
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/heap", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestGoroutineEndpoint(t *testing.T) {
 	app, _ := setupPProf(t, nil)
 
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/goroutine", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestThreadCreateEndpoint(t *testing.T) {
 	app, _ := setupPProf(t, nil)
 
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/threadcreate", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestBlockEndpoint(t *testing.T) {
 	app, _ := setupPProf(t, nil)
 
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/block", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestMutexEndpoint(t *testing.T) {
 	app, _ := setupPProf(t, nil)
 
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/mutex", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestAllEndpointsWithAuth(t *testing.T) {
 	app, pp := setupPProfWithAuth(t, "test", "test")
 
-	if pp.Auth == nil {
-		t.Fatal("expected Auth to be set")
-	}
-	if pp.Auth.Username != "test" {
-		t.Errorf("expected username 'test', got '%s'", pp.Auth.Username)
-	}
-	if pp.Auth.Password != "test" {
-		t.Errorf("expected password 'test', got '%s'", pp.Auth.Password)
-	}
+	zhtest.AssertNotNil(t, pp.Auth)
+	zhtest.AssertEqual(t, "test", pp.Auth.Username)
+	zhtest.AssertEqual(t, "test", pp.Auth.Password)
 
 	endpoints := []string{
 		"/debug/pprof/",
@@ -337,15 +250,11 @@ func TestAllEndpointsWithAuth(t *testing.T) {
 	for _, endpoint := range endpoints {
 		// Without auth
 		rec := makeRequest(t, app, http.MethodGet, endpoint, "", "")
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("endpoint %s: expected status %d without auth, got %d", endpoint, http.StatusUnauthorized, rec.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusUnauthorized, rec.Code)
 
 		// With auth
 		rec = makeRequest(t, app, http.MethodGet, endpoint, "test", "test")
-		if rec.Code != http.StatusOK {
-			t.Errorf("endpoint %s: expected status %d with auth, got %d", endpoint, http.StatusOK, rec.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 	}
 }
 
@@ -354,27 +263,17 @@ func TestAutoGeneratedAuth(t *testing.T) {
 	cfg := DefaultConfig // Auth is nil, so auto-generate
 	pp := New(app, cfg)
 
-	if pp.Auth == nil {
-		t.Fatal("expected Auth to be auto-generated")
-	}
-	if pp.Auth.Username != "pprof" {
-		t.Errorf("expected default username 'pprof', got '%s'", pp.Auth.Username)
-	}
-	if pp.Auth.Password == "" {
-		t.Error("expected auto-generated password to not be empty")
-	}
+	zhtest.AssertNotNil(t, pp.Auth)
+	zhtest.AssertEqual(t, "pprof", pp.Auth.Username)
+	zhtest.AssertNotEmpty(t, pp.Auth.Password)
 
 	// Test that auth is required
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/", "", "")
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d without auth, got %d", http.StatusUnauthorized, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rec.Code)
 
 	// Test with auto-generated credentials
 	rec = makeRequest(t, app, http.MethodGet, "/debug/pprof/", pp.Auth.Username, pp.Auth.Password)
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d with correct credentials, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestDisabledAuth(t *testing.T) {
@@ -383,15 +282,11 @@ func TestDisabledAuth(t *testing.T) {
 	cfg.Auth = &AuthConfig{} // empty = disabled
 	pp := New(app, cfg)
 
-	if pp.Auth != nil {
-		t.Error("expected Auth to be nil when disabled")
-	}
+	zhtest.AssertNil(t, pp.Auth)
 
 	// Test without auth - should succeed (from localhost)
 	rec := makeRequest(t, app, http.MethodGet, "/debug/pprof/", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d with auth disabled, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestIPAllowlistDefault(t *testing.T) {
@@ -403,15 +298,11 @@ func TestIPAllowlistDefault(t *testing.T) {
 
 	// Request from localhost should succeed
 	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "127.0.0.1", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d from localhost, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Request from external IP should be forbidden
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.1.100", "", "")
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("expected status %d from external IP, got %d", http.StatusForbidden, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rec.Code)
 }
 
 func TestIPAllowlistCustom(t *testing.T) {
@@ -423,21 +314,15 @@ func TestIPAllowlistCustom(t *testing.T) {
 
 	// Request from allowed CIDR should succeed
 	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.1.50", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d from allowed CIDR, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Request from allowed single IP should succeed
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "10.0.0.100", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d from allowed IP, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Request from disallowed IP should be forbidden
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.2.1", "", "")
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("expected status %d from disallowed IP, got %d", http.StatusForbidden, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rec.Code)
 }
 
 func TestIPAllowlistDisabled(t *testing.T) {
@@ -450,9 +335,7 @@ func TestIPAllowlistDisabled(t *testing.T) {
 
 	// Request from any IP should succeed
 	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "8.8.8.8", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d when IP allowlist disabled, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestIPAllowlistWithAuth(t *testing.T) {
@@ -465,21 +348,15 @@ func TestIPAllowlistWithAuth(t *testing.T) {
 
 	// Request from disallowed IP should get 403 before auth check
 	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "192.168.1.1", "admin", "secret")
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("expected status %d from disallowed IP, got %d", http.StatusForbidden, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rec.Code)
 
 	// Request from allowed IP with wrong auth should get 401
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "127.0.0.1", "wrong", "wrong")
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d with wrong auth, got %d", http.StatusUnauthorized, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusUnauthorized, rec.Code)
 
 	// Request from allowed IP with correct auth should succeed
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "127.0.0.1", "admin", "secret")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d with correct auth, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestIPAllowlistIPv6(t *testing.T) {
@@ -491,19 +368,13 @@ func TestIPAllowlistIPv6(t *testing.T) {
 
 	// Request from localhost IPv6 should succeed
 	rec := makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "::1", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d from ::1, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Request from allowed IPv6 CIDR should succeed
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "2001:db8::1", "", "")
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d from allowed IPv6, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Request from disallowed IPv6 should be forbidden
 	rec = makeRequestFromIP(t, app, http.MethodGet, "/debug/pprof/", "2001:db9::1", "", "")
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("expected status %d from disallowed IPv6, got %d", http.StatusForbidden, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusForbidden, rec.Code)
 }

@@ -49,9 +49,7 @@ func TestContentEncodingValidation(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -86,9 +84,7 @@ func TestContentEncodingMultipleValues(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -119,9 +115,7 @@ func TestContentEncodingCustomConfig(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -157,9 +151,7 @@ func TestContentEncodingExcludedPaths(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -180,9 +172,7 @@ func TestContentEncodingHTTPMethods(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if !nextCalled {
-				t.Errorf("handler should be called for method %s", method)
-			}
+			zhtest.AssertTrue(t, nextCalled)
 			zhtest.AssertWith(t, rr).Status(http.StatusOK)
 		})
 	}
@@ -200,9 +190,7 @@ func TestContentEncodingNilEncodingsFallback(t *testing.T) {
 	})
 	middleware(next).ServeHTTP(rr, req)
 
-	if !nextCalled {
-		t.Error("handler should be called with default encodings fallback")
-	}
+	zhtest.AssertTrue(t, nextCalled)
 	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
@@ -221,9 +209,7 @@ func TestContentEncodingNilExcludedPathsFallback(t *testing.T) {
 	})
 	middleware(next).ServeHTTP(rr, req)
 
-	if nextCalled {
-		t.Error("handler should not be called with disallowed encoding")
-	}
+	zhtest.AssertFalse(t, nextCalled)
 	zhtest.AssertWith(t, rr).Status(http.StatusUnsupportedMediaType)
 }
 
@@ -257,24 +243,18 @@ func TestContentEncodingIncludedPaths(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
 
 func TestContentEncodingBothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		Encodings:     []string{"gzip"},
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			Encodings:     []string{"gzip"},
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

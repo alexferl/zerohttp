@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestCacheMemoryStore(t *testing.T) {
@@ -17,20 +19,12 @@ func TestCacheMemoryStore(t *testing.T) {
 			Body:       []byte("test"),
 		}
 
-		if err := store.Set(ctx, "key1", record, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, store.Set(ctx, "key1", record, time.Minute))
 
 		retrieved, found, err := store.Get(ctx, "key1")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if !found {
-			t.Error("Expected to find key1")
-		}
-		if string(retrieved.Body) != "test" {
-			t.Errorf("Expected body 'test', got %q", string(retrieved.Body))
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, "test", string(retrieved.Body))
 	})
 
 	t.Run("expired entry not returned", func(t *testing.T) {
@@ -41,79 +35,51 @@ func TestCacheMemoryStore(t *testing.T) {
 			Body:       []byte("test"),
 		}
 
-		if err := store.Set(ctx, "key1", record, 1*time.Millisecond); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, store.Set(ctx, "key1", record, 1*time.Millisecond))
 		time.Sleep(2 * time.Millisecond)
 
 		_, found, err := store.Get(ctx, "key1")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if found {
-			t.Error("Expected expired entry to not be found")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertFalse(t, found)
 	})
 
 	t.Run("LRU eviction", func(t *testing.T) {
 		store := NewMemoryStore(2)
 
-		if err := store.Set(ctx, "key1", Record{StatusCode: 200}, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
-		if err := store.Set(ctx, "key2", Record{StatusCode: 200}, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
-		if err := store.Set(ctx, "key3", Record{StatusCode: 200}, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, store.Set(ctx, "key1", Record{StatusCode: 200}, time.Minute))
+		zhtest.AssertNoError(t, store.Set(ctx, "key2", Record{StatusCode: 200}, time.Minute))
+		zhtest.AssertNoError(t, store.Set(ctx, "key3", Record{StatusCode: 200}, time.Minute))
 
 		// key1 should be evicted
 		_, found, _ := store.Get(ctx, "key1")
-		if found {
-			t.Error("Expected key1 to be evicted")
-		}
+		zhtest.AssertFalse(t, found)
 
 		// key2 and key3 should exist
 		_, found, _ = store.Get(ctx, "key2")
-		if !found {
-			t.Error("Expected key2 to exist")
-		}
+		zhtest.AssertTrue(t, found)
 		_, found, _ = store.Get(ctx, "key3")
-		if !found {
-			t.Error("Expected key3 to exist")
-		}
+		zhtest.AssertTrue(t, found)
 	})
 
 	t.Run("update existing key moves to front", func(t *testing.T) {
 		store := NewMemoryStore(2)
 
-		if err := store.Set(ctx, "key1", Record{StatusCode: 200}, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
-		if err := store.Set(ctx, "key2", Record{StatusCode: 200}, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, store.Set(ctx, "key1", Record{StatusCode: 200}, time.Minute))
+		zhtest.AssertNoError(t, store.Set(ctx, "key2", Record{StatusCode: 200}, time.Minute))
 
 		// Access key1 to make it most recently used
 		_, _, _ = store.Get(ctx, "key1")
 
 		// Add key3 - key2 should be evicted (least recently used)
-		if err := store.Set(ctx, "key3", Record{StatusCode: 200}, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, store.Set(ctx, "key3", Record{StatusCode: 200}, time.Minute))
 
 		// key1 should still exist (was accessed)
 		_, found, _ := store.Get(ctx, "key1")
-		if !found {
-			t.Error("Expected key1 to exist (was accessed recently)")
-		}
+		zhtest.AssertTrue(t, found)
 
 		// key2 should be evicted
 		_, found, _ = store.Get(ctx, "key2")
-		if found {
-			t.Error("Expected key2 to be evicted (was not accessed)")
-		}
+		zhtest.AssertFalse(t, found)
 	})
 
 	t.Run("unlimited capacity when maxEntries is 0", func(t *testing.T) {
@@ -121,17 +87,13 @@ func TestCacheMemoryStore(t *testing.T) {
 
 		// Add many entries
 		for i := 0; i < 100; i++ {
-			if err := store.Set(ctx, string(rune('a'+i)), Record{StatusCode: 200}, time.Minute); err != nil {
-				t.Errorf("Unexpected error setting key: %v", err)
-			}
+			zhtest.AssertNoError(t, store.Set(ctx, string(rune('a'+i)), Record{StatusCode: 200}, time.Minute))
 		}
 
 		// All should exist
 		for i := 0; i < 100; i++ {
 			_, found, _ := store.Get(ctx, string(rune('a'+i)))
-			if !found {
-				t.Errorf("Expected key %c to exist", 'a'+i)
-			}
+			zhtest.AssertTrue(t, found)
 		}
 	})
 
@@ -142,9 +104,7 @@ func TestCacheMemoryStore(t *testing.T) {
 			StatusCode: 200,
 			Body:       []byte("v1"),
 		}
-		if err := store.Set(ctx, "key1", record1, 1*time.Millisecond); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, store.Set(ctx, "key1", record1, 1*time.Millisecond))
 
 		// Wait for original to nearly expire
 		time.Sleep(500 * time.Microsecond)
@@ -154,21 +114,15 @@ func TestCacheMemoryStore(t *testing.T) {
 			StatusCode: 200,
 			Body:       []byte("v2"),
 		}
-		if err := store.Set(ctx, "key1", record2, time.Minute); err != nil {
-			t.Errorf("Unexpected error setting key: %v", err)
-		}
+		zhtest.AssertNoError(t, store.Set(ctx, "key1", record2, time.Minute))
 
 		// Wait for original TTL to expire
 		time.Sleep(1 * time.Millisecond)
 
 		// Should still exist due to updated TTL
 		retrieved, found, _ := store.Get(ctx, "key1")
-		if !found {
-			t.Error("Expected key1 to exist after TTL update")
-		}
-		if string(retrieved.Body) != "v2" {
-			t.Errorf("Expected body 'v2', got %q", string(retrieved.Body))
-		}
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, "v2", string(retrieved.Body))
 	})
 }
 
@@ -181,37 +135,25 @@ func TestCacheMemoryStore_Delete(t *testing.T) {
 		StatusCode: 200,
 		Body:       []byte("test"),
 	}
-	if err := store.Set(ctx, "key1", record, time.Minute); err != nil {
-		t.Fatalf("Unexpected error setting key: %v", err)
-	}
+	zhtest.AssertNoError(t, store.Set(ctx, "key1", record, time.Minute))
 
 	// Verify it exists
 	_, found, _ := store.Get(ctx, "key1")
-	if !found {
-		t.Error("Expected key1 to exist before delete")
-	}
+	zhtest.AssertTrue(t, found)
 
 	// Delete it
-	if err := store.Delete(ctx, "key1"); err != nil {
-		t.Errorf("Unexpected error deleting key: %v", err)
-	}
+	zhtest.AssertNoError(t, store.Delete(ctx, "key1"))
 
 	// Verify it's gone
 	_, found, _ = store.Get(ctx, "key1")
-	if found {
-		t.Error("Expected key1 to be deleted")
-	}
+	zhtest.AssertFalse(t, found)
 
 	// Deleting non-existent key should not error
-	if err := store.Delete(ctx, "nonexistent"); err != nil {
-		t.Errorf("Unexpected error deleting non-existent key: %v", err)
-	}
+	zhtest.AssertNoError(t, store.Delete(ctx, "nonexistent"))
 }
 
 func TestCacheMemoryStore_Close(t *testing.T) {
 	store := NewMemoryStore(100)
 
-	if err := store.Close(); err != nil {
-		t.Errorf("Unexpected error closing store: %v", err)
-	}
+	zhtest.AssertNoError(t, store.Close())
 }

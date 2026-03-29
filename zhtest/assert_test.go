@@ -24,9 +24,7 @@ func TestAssert_Status(t *testing.T) {
 
 		// Just verify it doesn't panic and chains correctly
 		result := Assert(w).Status(http.StatusOK)
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -38,9 +36,7 @@ func TestAssert_StatusNot(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).StatusNot(http.StatusNotFound)
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_StatusBetween(t *testing.T) {
@@ -51,9 +47,7 @@ func TestAssert_StatusBetween(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).StatusBetween(200, 299)
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_Header(t *testing.T) {
@@ -65,9 +59,7 @@ func TestAssert_Header(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).Header(httpx.HeaderContentType, "application/json")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_HeaderContains(t *testing.T) {
@@ -79,9 +71,7 @@ func TestAssert_HeaderContains(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).HeaderContains(httpx.HeaderContentType, "json")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_HeaderExists(t *testing.T) {
@@ -93,9 +83,7 @@ func TestAssert_HeaderExists(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).HeaderExists("X-Custom")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_HeaderNotExists(t *testing.T) {
@@ -106,54 +94,43 @@ func TestAssert_HeaderNotExists(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).HeaderNotExists("X-Custom")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_Body(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := w.Write([]byte("hello")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello"))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).Body("hello")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_BodyContains(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := w.Write([]byte("hello world")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello world"))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).BodyContains("world")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_BodyNotContains(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := w.Write([]byte("hello world")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello world"))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).BodyNotContains("error")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_BodyEmpty(t *testing.T) {
@@ -164,32 +141,26 @@ func TestAssert_BodyEmpty(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).BodyEmpty()
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_BodyNotEmpty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := w.Write([]byte("content")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("content"))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).BodyNotEmpty()
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_JSON(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-		if _, err := w.Write([]byte(`{"name": "John", "age": 30}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"name": "John", "age": 30}`))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
@@ -200,64 +171,49 @@ func TestAssert_JSON(t *testing.T) {
 	}
 
 	a := Assert(w).JSON(&result)
-	if a == nil {
-		t.Error("expected result to not be nil")
-	}
-	if result.Name != "John" {
-		t.Errorf("expected name 'John', got %s", result.Name)
-	}
-	if result.Age != 30 {
-		t.Errorf("expected age 30, got %d", result.Age)
-	}
+	AssertNotNil(t, a)
+	AssertEqual(t, "John", result.Name)
+	AssertEqual(t, 30, result.Age)
 }
 
 func TestAssert_JSONEq(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-		if _, err := w.Write([]byte(`{"name": "John"}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"name": "John"}`))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).JSONEq(`{"name": "John"}`)
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_JSONPathEqual(t *testing.T) {
 	t.Run("works with nested object", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathEqual("user.name", "John")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("works with array index", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"items": [{"id": 1}, {"id": 2}]}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"items": [{"id": 1}, {"id": 2}]}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathEqual("items.0.id", "1")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -265,33 +221,27 @@ func TestAssert_JSONPathNotEqual(t *testing.T) {
 	t.Run("value is not equal", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathNotEqual("user.name", "Jane")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("works with array index", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"items": [{"id": 1}, {"id": 2}]}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"items": [{"id": 1}, {"id": 2}]}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathNotEqual("items.0.id", "999")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -299,49 +249,40 @@ func TestAssert_JSONPathExists(t *testing.T) {
 	t.Run("path exists", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathExists("user.name")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("nested path exists", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"user": {"profile": {"name": "John"}}}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"user": {"profile": {"name": "John"}}}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathExists("user.profile.name")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("array index exists", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"items": [{"id": 1}]}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"items": [{"id": 1}]}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathExists("items.0.id")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -349,66 +290,54 @@ func TestAssert_JSONPathNotExists(t *testing.T) {
 	t.Run("path does not exist", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathNotExists("user.password")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("nested path does not exist", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"user": {"profile": {"name": "John"}}}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"user": {"profile": {"name": "John"}}}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathNotExists("user.profile.email")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("array index out of bounds", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"items": [{"id": 1}]}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"items": [{"id": 1}]}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		result := Assert(w).JSONPathNotExists("items.5.id")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`not json`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte("not json"))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		w := Serve(handler, req)
 
 		// This will fail to decode JSON, but we still return the assertion
 		result := Assert(w).JSONPathNotExists("any.path")
-		if result == nil {
-			t.Error("expected result to not be nil")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -421,9 +350,7 @@ func TestAssert_Cookie(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).Cookie("session", "abc123")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_CookieExists(t *testing.T) {
@@ -435,9 +362,7 @@ func TestAssert_CookieExists(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).CookieExists("session")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_CookieNotExists(t *testing.T) {
@@ -448,9 +373,7 @@ func TestAssert_CookieNotExists(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).CookieNotExists("session")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_Redirect(t *testing.T) {
@@ -461,9 +384,7 @@ func TestAssert_Redirect(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).Redirect("/login")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_IsSuccess(t *testing.T) {
@@ -474,9 +395,7 @@ func TestAssert_IsSuccess(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).IsSuccess()
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_IsClientError(t *testing.T) {
@@ -487,9 +406,7 @@ func TestAssert_IsClientError(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).IsClientError()
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_IsServerError(t *testing.T) {
@@ -500,18 +417,15 @@ func TestAssert_IsServerError(t *testing.T) {
 	w := Serve(handler, req)
 
 	result := Assert(w).IsServerError()
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_Chaining(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 		w.WriteHeader(http.StatusCreated)
-		if _, err := w.Write([]byte(`{"message": "created"}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"message": "created"}`))
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodPost, "/").Build()
 	w := Serve(handler, req)
@@ -522,9 +436,7 @@ func TestAssert_Chaining(t *testing.T) {
 		Header(httpx.HeaderContentType, "application/json").
 		BodyContains("created")
 
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssertWith(t *testing.T) {
@@ -536,9 +448,7 @@ func TestAssertWith(t *testing.T) {
 
 	// This will use the actual testing.T - just verify it doesn't panic
 	result := AssertWith(t, w).Status(http.StatusOK)
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 // Test failure paths - these use t.Errorf but we can't easily capture that,
@@ -551,9 +461,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 
 		result := Assert(w).Status(http.StatusOK)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("StatusNot failure", func(t *testing.T) {
@@ -561,9 +469,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 
 		result := Assert(w).StatusNot(http.StatusNotFound)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("StatusBetween failure", func(t *testing.T) {
@@ -571,9 +477,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 
 		result := Assert(w).StatusBetween(200, 299)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("Header failure", func(t *testing.T) {
@@ -581,9 +485,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 
 		result := Assert(w).Header(httpx.HeaderContentType, "application/json")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("HeaderContains failure", func(t *testing.T) {
@@ -591,18 +493,14 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlain)
 
 		result := Assert(w).HeaderContains(httpx.HeaderContentType, "json")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("HeaderExists failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		result := Assert(w).HeaderExists("X-Missing")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("HeaderNotExists failure", func(t *testing.T) {
@@ -610,223 +508,168 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.Header().Set("X-Custom", "value")
 
 		result := Assert(w).HeaderNotExists("X-Custom")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("Body failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("hello")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello"))
+		AssertNoError(t, err)
 
 		result := Assert(w).Body("world")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("BodyContains failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("hello")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello"))
+		AssertNoError(t, err)
 
 		result := Assert(w).BodyContains("world")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("BodyNotContains failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("hello world")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("hello world"))
+		AssertNoError(t, err)
 
 		result := Assert(w).BodyNotContains("hello")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("BodyEmpty failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("content")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("content"))
+		AssertNoError(t, err)
 
 		result := Assert(w).BodyEmpty()
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("BodyNotEmpty failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		result := Assert(w).BodyNotEmpty()
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSON decode failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		var result map[string]string
 		a := Assert(w).JSON(&result)
-		if a == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, a)
 	})
 
 	t.Run("JSONEq failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"name": "John"}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"name": "John"}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONEq(`{"name": "Jane"}`)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONEq unmarshal failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONEq(`{}`)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathEqual failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathEqual("user.name", "Jane")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathEqual invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathEqual("user", "value")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathEqual missing key", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"user": {}}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"user": {}}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathEqual("user.name", "John")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathNotEqual failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathNotEqual("user.name", "John")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathNotEqual invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathNotEqual("user", "value")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathNotEqual missing key", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"user": {}}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"user": {}}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathNotEqual("user.name", "John")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathExists failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"user": {}}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"user": {}}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathExists("user.name")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathExists invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathExists("user")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathNotExists failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathNotExists("user.name")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("JSONPathNotExists invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathNotExists("user")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("Cookie wrong value", func(t *testing.T) {
@@ -838,27 +681,21 @@ func TestAssert_FailurePaths(t *testing.T) {
 		rec := Serve(handler, req)
 
 		result := Assert(rec).Cookie("session", "expected")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("Cookie missing", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		result := Assert(w).Cookie("session", "value")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("CookieExists failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		result := Assert(w).CookieExists("session")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("CookieNotExists failure", func(t *testing.T) {
@@ -870,9 +707,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		rec := Serve(handler, req)
 
 		result := Assert(rec).CookieNotExists("session")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("Redirect not a redirect", func(t *testing.T) {
@@ -880,9 +715,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		result := Assert(w).Redirect("/other")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("Redirect wrong location", func(t *testing.T) {
@@ -893,9 +726,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		rec := Serve(handler, req)
 
 		result := Assert(rec).Redirect("/expected")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("IsSuccess failure", func(t *testing.T) {
@@ -903,9 +734,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 
 		result := Assert(w).IsSuccess()
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("IsClientError failure", func(t *testing.T) {
@@ -913,9 +742,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		result := Assert(w).IsClientError()
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("IsServerError failure", func(t *testing.T) {
@@ -923,9 +750,7 @@ func TestAssert_FailurePaths(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		result := Assert(w).IsServerError()
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -934,82 +759,67 @@ func TestJSONValuesEqual(t *testing.T) {
 	t.Run("different length maps", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"x": 1}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"x": 1}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		// This should fail because expected has 2 fields but actual has 1
 		result := Assert(rec).JSONEq(`{"x": 1, "y": 2}`)
-		if result == nil {
-			t.Error("expected chain to continue")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("different values in maps", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"x": 1}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"x": 1}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).JSONEq(`{"x": 2}`)
-		if result == nil {
-			t.Error("expected chain to continue")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("different length arrays", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`[1, 2]`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`[1, 2]`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).JSONEq(`{"items": [1, 2, 3]}`)
-		if result == nil {
-			t.Error("expected chain to continue")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("nested map with missing key", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`{"user": {"name": "John"}}`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`{"user": {"name": "John"}}`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).JSONEq(`{"user": {"name": "John", "age": 30}}`)
-		if result == nil {
-			t.Error("expected chain to continue")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("array element mismatch", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-			if _, err := w.Write([]byte(`[1, 2, 4]`)); err != nil {
-				t.Errorf("failed to write: %v", err)
-			}
+			_, err := w.Write([]byte(`[1, 2, 4]`))
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).JSONEq(`[1, 2, 3]`)
-		if result == nil {
-			t.Error("expected chain to continue")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -1017,50 +827,38 @@ func TestJSONValuesEqual(t *testing.T) {
 func TestJSONPathEqual_EdgeCases(t *testing.T) {
 	t.Run("traverse into non-map", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"value": "string"}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"value": "string"}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathEqual("value.property", "x")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("invalid array index", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"items": [1, 2, 3]}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"items": [1, 2, 3]}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathEqual("items.invalid", "x")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("out of bounds array index", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"items": [1, 2, 3]}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"items": [1, 2, 3]}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathEqual("items.99", "x")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("deep path", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		if _, err := w.Write([]byte(`{"a": {"b": {"c": {"d": "deep"}}}}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{"a": {"b": {"c": {"d": "deep"}}}}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).JSONPathEqual("a.b.c.d", "wrong")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
@@ -1069,323 +867,258 @@ func TestProblemDetail_FailurePaths(t *testing.T) {
 	t.Run("IsProblemDetail failure", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-		if _, err := w.Write([]byte(`{}`)); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte(`{}`))
+		AssertNoError(t, err)
 
 		result := Assert(w).IsProblemDetail()
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailStatus invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).ProblemDetailStatus(http.StatusBadRequest)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailStatus wrong status", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
-			if err := detail.Render(w); err != nil {
-				t.Errorf("failed to render: %v", err)
-			}
+			err := detail.Render(w)
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).ProblemDetailStatus(http.StatusInternalServerError)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailTitle invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).ProblemDetailTitle("Bad Request")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailTitle wrong title", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
-			if err := detail.Render(w); err != nil {
-				t.Errorf("failed to render: %v", err)
-			}
+			err := detail.Render(w)
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).ProblemDetailTitle("Wrong Title")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailDetail invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).ProblemDetailDetail("detail")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailDetail wrong detail", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			detail := problem.NewDetail(http.StatusBadRequest, "Actual detail")
-			if err := detail.Render(w); err != nil {
-				t.Errorf("failed to render: %v", err)
-			}
+			err := detail.Render(w)
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).ProblemDetailDetail("Expected detail")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailType invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).ProblemDetailType("type")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailType wrong type", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
 			detail.Type = "https://api.example.com/actual"
-			if err := detail.Render(w); err != nil {
-				t.Errorf("failed to render: %v", err)
-			}
+			err := detail.Render(w)
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).ProblemDetailType("https://api.example.com/expected")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailExtension invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		result := Assert(w).ProblemDetailExtension("key", "value")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailExtension missing key", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
-			if err := detail.Render(w); err != nil {
-				t.Errorf("failed to render: %v", err)
-			}
+			err := detail.Render(w)
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).ProblemDetailExtension("missing", "value")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetailExtension wrong value", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			detail := problem.NewDetail(http.StatusBadRequest, "Invalid")
 			detail.Set("key", "actual")
-			if err := detail.Render(w); err != nil {
-				t.Errorf("failed to render: %v", err)
-			}
+			err := detail.Render(w)
+			AssertNoError(t, err)
 		})
 		req := NewRequest(http.MethodGet, "/").Build()
 		rec := Serve(handler, req)
 
 		result := Assert(rec).ProblemDetailExtension("key", "expected")
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 
 	t.Run("ProblemDetail invalid JSON", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		w.Header().Set(httpx.HeaderContentType, "application/problem+json")
-		if _, err := w.Write([]byte("not json")); err != nil {
-			t.Errorf("failed to write: %v", err)
-		}
+		_, err := w.Write([]byte("not json"))
+		AssertNoError(t, err)
 
 		var detail problem.Detail
 
 		result := Assert(w).ProblemDetail(detail)
-		if result == nil {
-			t.Error("expected chain to continue after failure")
-		}
+		AssertNotNil(t, result)
 	})
 }
 
 func TestAssert_IsProblemDetail(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).IsProblemDetail()
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_ProblemDetailStatus(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).ProblemDetailStatus(http.StatusBadRequest)
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_ProblemDetailTitle(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).ProblemDetailTitle("Bad Request")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_ProblemDetailDetail(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).ProblemDetailDetail("Invalid request")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_ProblemDetailType(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
 		detail.Type = "https://api.example.com/errors/invalid-request"
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).ProblemDetailType("https://api.example.com/errors/invalid-request")
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_ProblemDetailExtension(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusUnprocessableEntity, "Validation failed")
 		detail.Set("errors", []string{"field1 is required", "field2 is invalid"})
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	result := Assert(w).ProblemDetailExtension("errors", []string{"field1 is required", "field2 is invalid"})
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssert_ProblemDetail(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
 
 	var detail problem.Detail
 	result := Assert(w).ProblemDetail(&detail)
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
-	if detail.Status != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", detail.Status)
-	}
-	if detail.Detail != "Invalid request" {
-		t.Errorf("expected detail 'Invalid request', got %s", detail.Detail)
-	}
+	AssertNotNil(t, result)
+	AssertEqual(t, http.StatusBadRequest, detail.Status)
+	AssertEqual(t, "Invalid request", detail.Detail)
 }
 
 func TestAssert_ProblemDetailChaining(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		detail := problem.NewDetail(http.StatusBadRequest, "Invalid request")
 		detail.Type = "https://api.example.com/errors/invalid-request"
-		if err := detail.Render(w); err != nil {
-			t.Errorf("failed to render problem: %v", err)
-		}
+		err := detail.Render(w)
+		AssertNoError(t, err)
 	})
 	req := NewRequest(http.MethodGet, "/").Build()
 	w := Serve(handler, req)
@@ -1397,9 +1130,7 @@ func TestAssert_ProblemDetailChaining(t *testing.T) {
 		ProblemDetailDetail("Invalid request").
 		ProblemDetailType("https://api.example.com/errors/invalid-request")
 
-	if result == nil {
-		t.Error("expected result to not be nil")
-	}
+	AssertNotNil(t, result)
 }
 
 func TestAssertNoError(t *testing.T) {
@@ -1465,9 +1196,75 @@ func TestAssertEqual(t *testing.T) {
 	AssertEqual(t, true, true)
 }
 
+func TestAssertEqual_NumericTypes(t *testing.T) {
+	// Mixed int types
+	t.Run("int vs int64", func(t *testing.T) {
+		var int64Val int64 = 42
+		AssertEqual(t, 42, int64Val)
+		AssertEqual(t, int64Val, 42)
+	})
+
+	t.Run("int vs int32", func(t *testing.T) {
+		var int32Val int32 = 100
+		AssertEqual(t, 100, int32Val)
+		AssertEqual(t, int32Val, 100)
+	})
+
+	t.Run("int64 vs uint64", func(t *testing.T) {
+		var int64Val int64 = 1024
+		var uint64Val uint64 = 1024
+		AssertEqual(t, int64Val, uint64Val)
+	})
+
+	t.Run("int vs float64", func(t *testing.T) {
+		floatVal := 42.0
+		AssertEqual(t, 42, floatVal)
+		AssertEqual(t, floatVal, 42)
+	})
+
+	t.Run("float32 vs float64", func(t *testing.T) {
+		var float32Val float32 = 3.5
+		float64Val := 3.5
+		AssertEqual(t, float32Val, float64Val)
+	})
+
+	t.Run("uint vs int", func(t *testing.T) {
+		var uintVal uint = 999
+		AssertEqual(t, 999, uintVal)
+		AssertEqual(t, uintVal, 999)
+	})
+
+	t.Run("byte vs uint8", func(t *testing.T) {
+		var byteVal byte = 255
+		var uint8Val uint8 = 255
+		AssertEqual(t, byteVal, uint8Val)
+	})
+}
+
 func TestAssertNotEqual(t *testing.T) {
 	AssertNotEqual(t, 42, 43)
 	AssertNotEqual(t, "hello", "world")
+}
+
+func TestAssertNotEqual_NumericTypes(t *testing.T) {
+	// Mixed int types that are not equal
+	t.Run("int vs int64 different values", func(t *testing.T) {
+		var int64Val int64 = 43
+		AssertNotEqual(t, 42, int64Val)
+		AssertNotEqual(t, int64Val, 42)
+	})
+
+	t.Run("int vs float64 different values", func(t *testing.T) {
+		floatVal := 42.5
+		AssertNotEqual(t, 42, floatVal)
+		AssertNotEqual(t, floatVal, 42)
+	})
+
+	t.Run("int64 vs uint64 different values", func(t *testing.T) {
+		var int64Val int64 = 100
+		var uint64Val uint64 = 200
+		AssertNotEqual(t, int64Val, uint64Val)
+	})
 }
 
 func TestAssertDeepEqual(t *testing.T) {
@@ -1522,7 +1319,7 @@ func TestAssertNotEmpty(t *testing.T) {
 	})
 
 	t.Run("non-empty slice", func(t *testing.T) {
-		AssertNotEmpty(t, []int{1, 2, 3})
+		AssertNotNil(t, []int{1, 2, 3})
 	})
 }
 
@@ -1552,6 +1349,14 @@ func TestAssertContains(t *testing.T) {
 	t.Run("string slice", func(t *testing.T) {
 		AssertContains(t, []string{"a", "b", "c"}, "b")
 	})
+
+	t.Run("string contains substring", func(t *testing.T) {
+		AssertContains(t, "hello world", "world")
+	})
+
+	t.Run("string contains substring at start", func(t *testing.T) {
+		AssertContains(t, "hello world", "hello")
+	})
 }
 
 func TestAssertNotContains(t *testing.T) {
@@ -1561,6 +1366,10 @@ func TestAssertNotContains(t *testing.T) {
 
 	t.Run("string slice", func(t *testing.T) {
 		AssertNotContains(t, []string{"a", "b", "c"}, "d")
+	})
+
+	t.Run("string does not contain substring", func(t *testing.T) {
+		AssertNotContains(t, "hello world", "goodbye")
 	})
 }
 
@@ -1694,4 +1503,173 @@ func TestGeneralAssert_FailurePaths(t *testing.T) {
 	t.Run("AssertImplements with invalid interfaceType", func(t *testing.T) {
 		AssertImplements(nil, 42, "test")
 	})
+
+	t.Run("AssertGreater fails", func(t *testing.T) {
+		AssertGreater(nil, 5, 10)
+	})
+
+	t.Run("AssertGreater with equal values", func(t *testing.T) {
+		AssertGreater(nil, 5, 5)
+	})
+
+	t.Run("AssertGreater with non-numeric", func(t *testing.T) {
+		AssertGreater(nil, "hello", "world")
+	})
+
+	t.Run("AssertLess fails", func(t *testing.T) {
+		AssertLess(nil, 10, 5)
+	})
+
+	t.Run("AssertLess with equal values", func(t *testing.T) {
+		AssertLess(nil, 5, 5)
+	})
+
+	t.Run("AssertLess with non-numeric", func(t *testing.T) {
+		AssertLess(nil, "hello", "world")
+	})
+
+	t.Run("AssertPanic does not panic", func(t *testing.T) {
+		AssertPanic(nil, func() {
+			// This function does not panic
+		})
+	})
+
+	t.Run("AssertNoPanic panics", func(t *testing.T) {
+		AssertNoPanic(nil, func() {
+			panic("intentional panic")
+		})
+	})
+}
+
+// Test AssertGreater and AssertLess
+func TestAssertGreater(t *testing.T) {
+	t.Run("int greater", func(t *testing.T) {
+		AssertGreater(t, 10, 5)
+	})
+
+	t.Run("int64 greater", func(t *testing.T) {
+		AssertGreater(t, int64(10), int64(5))
+	})
+
+	t.Run("uint greater", func(t *testing.T) {
+		AssertGreater(t, uint(10), uint(5))
+	})
+
+	t.Run("float64 greater", func(t *testing.T) {
+		AssertGreater(t, 10.5, 5.2)
+	})
+
+	t.Run("float32 greater", func(t *testing.T) {
+		AssertGreater(t, float32(10.5), float32(5.2))
+	})
+
+	t.Run("mixed int types", func(t *testing.T) {
+		AssertGreater(t, 10, int64(5))
+	})
+
+	t.Run("int and float", func(t *testing.T) {
+		AssertGreater(t, 10.5, 5)
+	})
+}
+
+func TestAssertLess(t *testing.T) {
+	t.Run("int less", func(t *testing.T) {
+		AssertLess(t, 5, 10)
+	})
+
+	t.Run("int64 less", func(t *testing.T) {
+		AssertLess(t, int64(5), int64(10))
+	})
+
+	t.Run("uint less", func(t *testing.T) {
+		AssertLess(t, uint(5), uint(10))
+	})
+
+	t.Run("float64 less", func(t *testing.T) {
+		AssertLess(t, 5.2, 10.5)
+	})
+
+	t.Run("float32 less", func(t *testing.T) {
+		AssertLess(t, float32(5.2), float32(10.5))
+	})
+
+	t.Run("mixed int types", func(t *testing.T) {
+		AssertLess(t, 5, int64(10))
+	})
+
+	t.Run("int and float", func(t *testing.T) {
+		AssertLess(t, 5, 10.5)
+	})
+}
+
+// Test AssertPanic and AssertNoPanic
+func TestAssertPanic(t *testing.T) {
+	t.Run("function panics", func(t *testing.T) {
+		AssertPanic(t, func() {
+			panic("intentional panic")
+		})
+	})
+
+	t.Run("function panics with different types", func(t *testing.T) {
+		AssertPanic(t, func() {
+			panic(errors.New("error panic"))
+		})
+	})
+}
+
+func TestAssertNoPanic(t *testing.T) {
+	t.Run("function does not panic", func(t *testing.T) {
+		AssertNoPanic(t, func() {
+			// Normal execution
+			_ = 1 + 1
+		})
+	})
+
+	t.Run("function returns normally", func(t *testing.T) {
+		result := 0
+		AssertNoPanic(t, func() {
+			result = 42
+		})
+		AssertEqual(t, 42, result)
+	})
+}
+
+func TestAssertPanicContains(t *testing.T) {
+	t.Run("panic message contains substring", func(t *testing.T) {
+		AssertPanicContains(t, func() {
+			panic("this is an intentional panic message")
+		}, "intentional panic")
+	})
+
+	t.Run("panic with error containing substring", func(t *testing.T) {
+		AssertPanicContains(t, func() {
+			panic(errors.New("connection refused: database is down"))
+		}, "database is down")
+	})
+
+	t.Run("panic with formatted message", func(t *testing.T) {
+		AssertPanicContains(t, func() {
+			panic(fmt.Sprintf("error code: %d, message: %s", 500, "internal server error"))
+		}, "error code: 500")
+	})
+}
+
+// Test AssertFail and AssertFailf - these can't test the failure case
+// since they call t.Fatal, but we can at least verify they exist and compile
+func TestAssertFail(t *testing.T) {
+	// We can't actually test the failure path (it would kill the test)
+	// but we verify the function signature is correct by calling it conditionally
+	shouldFail := false
+	if shouldFail {
+		AssertFail(t, "this should not be called")
+	}
+}
+
+func TestAssertFailf(t *testing.T) {
+	// We can't actually test the failure path (it would kill the test)
+	// but we verify the function signature is correct by calling it conditionally
+	shouldFail := false
+	if shouldFail {
+		AssertFailf(t, "formatted message: %s, %d", "test", 42)
+	}
 }

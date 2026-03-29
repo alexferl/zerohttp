@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestBinder_JSON(t *testing.T) {
@@ -60,27 +61,21 @@ func TestBinder_JSON(t *testing.T) {
 			err := B.JSON(reader, &result)
 
 			if tt.wantError {
-				if err == nil {
-					t.Fatal("expected error but got none")
-				}
-				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("expected error to contain %q, got %v", tt.errorMsg, err)
+				zhtest.AssertError(t, err)
+				if tt.errorMsg != "" {
+					zhtest.AssertErrorContains(t, err, tt.errorMsg)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			// Verify valid cases
 			if tt.name == "valid JSON" {
-				if result.Name == nil || *result.Name != "John" {
-					t.Errorf("expected name 'John', got %v", result.Name)
-				}
-				if result.Age == nil || *result.Age != 30 {
-					t.Errorf("expected age 30, got %v", result.Age)
-				}
+				zhtest.AssertNotNil(t, result.Name)
+				zhtest.AssertEqual(t, "John", *result.Name)
+				zhtest.AssertNotNil(t, result.Age)
+				zhtest.AssertEqual(t, 30, *result.Age)
 			}
 		})
 	}
@@ -101,12 +96,8 @@ func TestBinder_Form(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testFormStruct) {
-				if result.Name != "John" {
-					t.Errorf("expected Name='John', got %q", result.Name)
-				}
-				if result.Email != "john@example.com" {
-					t.Errorf("expected Email='john@example.com', got %q", result.Email)
-				}
+				zhtest.AssertEqual(t, "John", result.Name)
+				zhtest.AssertEqual(t, "john@example.com", result.Email)
 			},
 		},
 		{
@@ -119,18 +110,10 @@ func TestBinder_Form(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testFormStruct) {
-				if result.Age != 30 {
-					t.Errorf("expected Age=30, got %d", result.Age)
-				}
-				if result.Score != 95.5 {
-					t.Errorf("expected Score=95.5, got %f", result.Score)
-				}
-				if result.Count != 100 {
-					t.Errorf("expected Count=100, got %d", result.Count)
-				}
-				if !result.Active {
-					t.Errorf("expected Active=true, got %v", result.Active)
-				}
+				zhtest.AssertEqual(t, 30, result.Age)
+				zhtest.AssertEqual(t, 95.5, result.Score)
+				zhtest.AssertEqual(t, uint(100), result.Count)
+				zhtest.AssertTrue(t, result.Active)
 			},
 		},
 		{
@@ -141,14 +124,9 @@ func TestBinder_Form(t *testing.T) {
 			wantError: false,
 			expected: func(t *testing.T, result *testFormStruct) {
 				expected := []string{"go", "web", "api"}
-				if len(result.Tags) != len(expected) {
-					t.Errorf("expected %d tags, got %d", len(expected), len(result.Tags))
-					return
-				}
+				zhtest.AssertLen(t, result.Tags, len(expected))
 				for i, tag := range result.Tags {
-					if tag != expected[i] {
-						t.Errorf("expected tag[%d]=%q, got %q", i, expected[i], tag)
-					}
+					zhtest.AssertEqual(t, expected[i], tag)
 				}
 			},
 		},
@@ -159,9 +137,7 @@ func TestBinder_Form(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testFormStruct) {
-				if result.Username != "johndoe" {
-					t.Errorf("expected Username='johndoe', got %q", result.Username)
-				}
+				zhtest.AssertEqual(t, "johndoe", result.Username)
 			},
 		},
 		{
@@ -171,9 +147,7 @@ func TestBinder_Form(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testFormStruct) {
-				if result.Ignored != "" {
-					t.Errorf("expected Ignored to be empty, got %q", result.Ignored)
-				}
+				zhtest.AssertEmpty(t, result.Ignored)
 			},
 		},
 		{
@@ -182,9 +156,7 @@ func TestBinder_Form(t *testing.T) {
 			wantError: false,
 			expected: func(t *testing.T, result *testFormStruct) {
 				// All fields should remain at zero values
-				if result.Name != "" {
-					t.Errorf("expected empty Name, got %q", result.Name)
-				}
+				zhtest.AssertEmpty(t, result.Name)
 			},
 		},
 	}
@@ -198,15 +170,11 @@ func TestBinder_Form(t *testing.T) {
 			err := B.Form(req, &result)
 
 			if tt.wantError {
-				if err == nil {
-					t.Fatal("expected error but got none")
-				}
+				zhtest.AssertError(t, err)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			tt.expected(t, &result)
 		})
@@ -244,12 +212,8 @@ func TestBinder_Form_Errors(t *testing.T) {
 			var result testFormStruct
 			err := B.Form(req, &result)
 
-			if err == nil {
-				t.Fatal("expected error but got none")
-			}
-			if !strings.Contains(err.Error(), tt.errMsg) {
-				t.Errorf("expected error to contain %q, got %v", tt.errMsg, err)
-			}
+			zhtest.AssertError(t, err)
+			zhtest.AssertErrorContains(t, err, tt.errMsg)
 		})
 	}
 }
@@ -285,9 +249,7 @@ func TestBinder_Form_InvalidDestination(t *testing.T) {
 				err = B.Form(req, tt.dst)
 			}
 
-			if err == nil {
-				t.Fatal("expected error but got none")
-			}
+			zhtest.AssertError(t, err)
 		})
 	}
 }
@@ -307,12 +269,8 @@ func TestBinder_MultipartForm(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testMultipartStruct) {
-				if result.Name != "John" {
-					t.Errorf("expected Name='John', got %q", result.Name)
-				}
-				if result.Age != 30 {
-					t.Errorf("expected Age=30, got %d", result.Age)
-				}
+				zhtest.AssertEqual(t, "John", result.Name)
+				zhtest.AssertEqual(t, 30, result.Age)
 			},
 		},
 		{
@@ -324,15 +282,9 @@ func TestBinder_MultipartForm(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testMultipartStruct) {
-				if result.Document == nil {
-					t.Fatal("expected Document to be set")
-				}
-				if result.Document.Filename != "test.txt" {
-					t.Errorf("expected Filename='test.txt', got %q", result.Document.Filename)
-				}
-				if result.Document.Size != 13 {
-					t.Errorf("expected Size=13, got %d", result.Document.Size)
-				}
+				zhtest.AssertNotNil(t, result.Document)
+				zhtest.AssertEqual(t, "test.txt", result.Document.Filename)
+				zhtest.AssertEqual(t, int64(13), result.Document.Size)
 			},
 		},
 		{
@@ -345,15 +297,10 @@ func TestBinder_MultipartForm(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testMultipartStruct) {
-				if len(result.Attachments) != 3 {
-					t.Errorf("expected 3 attachments, got %d", len(result.Attachments))
-					return
-				}
+				zhtest.AssertLen(t, result.Attachments, 3)
 				expectedNames := []string{"file0.txt", "file1.txt", "file2.txt"}
 				for i, fh := range result.Attachments {
-					if fh.Filename != expectedNames[i] {
-						t.Errorf("expected attachment[%d].Filename=%q, got %q", i, expectedNames[i], fh.Filename)
-					}
+					zhtest.AssertEqual(t, expectedNames[i], fh.Filename)
 				}
 			},
 		},
@@ -367,18 +314,10 @@ func TestBinder_MultipartForm(t *testing.T) {
 			},
 			wantError: false,
 			expected: func(t *testing.T, result *testMultipartStruct) {
-				if result.Name != "Mixed Content" {
-					t.Errorf("expected Name='Mixed Content', got %q", result.Name)
-				}
-				if result.Age != 25 {
-					t.Errorf("expected Age=25, got %d", result.Age)
-				}
-				if result.Document == nil {
-					t.Fatal("expected Document to be set")
-				}
-				if result.Document.Filename != "mixed.txt" {
-					t.Errorf("expected Filename='mixed.txt', got %q", result.Document.Filename)
-				}
+				zhtest.AssertEqual(t, "Mixed Content", result.Name)
+				zhtest.AssertEqual(t, 25, result.Age)
+				zhtest.AssertNotNil(t, result.Document)
+				zhtest.AssertEqual(t, "mixed.txt", result.Document.Filename)
 			},
 		},
 	}
@@ -397,15 +336,11 @@ func TestBinder_MultipartForm(t *testing.T) {
 			err := B.MultipartForm(req, &result, 32<<20)
 
 			if tt.wantError {
-				if err == nil {
-					t.Fatal("expected error but got none")
-				}
+				zhtest.AssertError(t, err)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			tt.expected(t, &result)
 
@@ -439,16 +374,10 @@ func TestBindValues_EmbeddedStruct(t *testing.T) {
 
 	var result Container
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Name != "John" {
-		t.Errorf("expected Name='John', got %q", result.Name)
-	}
-	if result.Email != "john@example.com" {
-		t.Errorf("expected Email='john@example.com', got %q", result.Email)
-	}
+	zhtest.AssertEqual(t, "John", result.Name)
+	zhtest.AssertEqual(t, "john@example.com", result.Email)
 }
 
 func TestBindValues_PointerFields(t *testing.T) {
@@ -466,19 +395,14 @@ func TestBindValues_PointerFields(t *testing.T) {
 
 	var result WithPointers
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Name == nil || *result.Name != "John" {
-		t.Errorf("expected Name='John', got %v", result.Name)
-	}
-	if result.Age == nil || *result.Age != 30 {
-		t.Errorf("expected Age=30, got %v", result.Age)
-	}
-	if result.Score == nil || *result.Score != 95.5 {
-		t.Errorf("expected Score=95.5, got %v", result.Score)
-	}
+	zhtest.AssertNotNil(t, result.Name)
+	zhtest.AssertEqual(t, "John", *result.Name)
+	zhtest.AssertNotNil(t, result.Age)
+	zhtest.AssertEqual(t, 30, *result.Age)
+	zhtest.AssertNotNil(t, result.Score)
+	zhtest.AssertEqual(t, 95.5, *result.Score)
 }
 
 func TestBindValues_IntSlice(t *testing.T) {
@@ -492,19 +416,13 @@ func TestBindValues_IntSlice(t *testing.T) {
 
 	var result WithIntSlice
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	expected := []int{1, 2, 3}
-	if len(result.IDs) != len(expected) {
-		t.Fatalf("expected %d IDs, got %d", len(expected), len(result.IDs))
-	}
+	zhtest.AssertLen(t, result.IDs, len(expected))
 
 	for i, id := range result.IDs {
-		if id != expected[i] {
-			t.Errorf("expected IDs[%d]=%d, got %d", i, expected[i], id)
-		}
+		zhtest.AssertEqual(t, expected[i], id)
 	}
 }
 
@@ -574,15 +492,9 @@ func TestBinder_Query(t *testing.T) {
 			query:     "page=1&limit=20&search=hello",
 			wantError: false,
 			expected: func(t *testing.T, result *testQueryStruct) {
-				if result.Page != 1 {
-					t.Errorf("expected Page=1, got %d", result.Page)
-				}
-				if result.Limit != 20 {
-					t.Errorf("expected Limit=20, got %d", result.Limit)
-				}
-				if result.Search != "hello" {
-					t.Errorf("expected Search='hello', got %q", result.Search)
-				}
+				zhtest.AssertEqual(t, 1, result.Page)
+				zhtest.AssertEqual(t, 20, result.Limit)
+				zhtest.AssertEqual(t, "hello", result.Search)
 			},
 		},
 		{
@@ -590,9 +502,7 @@ func TestBinder_Query(t *testing.T) {
 			query:     "active=true",
 			wantError: false,
 			expected: func(t *testing.T, result *testQueryStruct) {
-				if !result.Active {
-					t.Errorf("expected Active=true, got %v", result.Active)
-				}
+				zhtest.AssertTrue(t, result.Active)
 			},
 		},
 		{
@@ -601,14 +511,9 @@ func TestBinder_Query(t *testing.T) {
 			wantError: false,
 			expected: func(t *testing.T, result *testQueryStruct) {
 				expected := []string{"go", "web", "api"}
-				if len(result.Tags) != len(expected) {
-					t.Errorf("expected %d tags, got %d", len(expected), len(result.Tags))
-					return
-				}
+				zhtest.AssertLen(t, result.Tags, len(expected))
 				for i, tag := range result.Tags {
-					if tag != expected[i] {
-						t.Errorf("expected tag[%d]=%q, got %q", i, expected[i], tag)
-					}
+					zhtest.AssertEqual(t, expected[i], tag)
 				}
 			},
 		},
@@ -617,9 +522,7 @@ func TestBinder_Query(t *testing.T) {
 			query:     "ignored=shouldnotset",
 			wantError: false,
 			expected: func(t *testing.T, result *testQueryStruct) {
-				if result.Ignored != "" {
-					t.Errorf("expected Ignored to be empty, got %q", result.Ignored)
-				}
+				zhtest.AssertEmpty(t, result.Ignored)
 			},
 		},
 		{
@@ -627,12 +530,8 @@ func TestBinder_Query(t *testing.T) {
 			query:     "",
 			wantError: false,
 			expected: func(t *testing.T, result *testQueryStruct) {
-				if result.Page != 0 {
-					t.Errorf("expected Page=0, got %d", result.Page)
-				}
-				if result.Search != "" {
-					t.Errorf("expected Search='', got %q", result.Search)
-				}
+				zhtest.AssertEqual(t, 0, result.Page)
+				zhtest.AssertEmpty(t, result.Search)
 			},
 		},
 		{
@@ -657,18 +556,14 @@ func TestBinder_Query(t *testing.T) {
 			err := B.Query(req, &result)
 
 			if tt.wantError {
-				if err == nil {
-					t.Fatal("expected error but got none")
-				}
-				if tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
-					t.Errorf("expected error to contain %q, got %v", tt.errContain, err)
+				zhtest.AssertError(t, err)
+				if tt.errContain != "" {
+					zhtest.AssertErrorContains(t, err, tt.errContain)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			tt.expected(t, &result)
 		})
@@ -680,19 +575,11 @@ func TestBinder_Query_EmbeddedStruct(t *testing.T) {
 
 	var result testQueryContainer
 	err := B.Query(req, &result)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Page != 2 {
-		t.Errorf("expected Page=2, got %d", result.Page)
-	}
-	if result.Limit != 50 {
-		t.Errorf("expected Limit=50, got %d", result.Limit)
-	}
-	if result.Search != "test" {
-		t.Errorf("expected Search='test', got %q", result.Search)
-	}
+	zhtest.AssertEqual(t, 2, result.Page)
+	zhtest.AssertEqual(t, 50, result.Limit)
+	zhtest.AssertEqual(t, "test", result.Search)
 }
 
 func TestBinder_Query_PointerFields(t *testing.T) {
@@ -705,30 +592,22 @@ func TestBinder_Query_PointerFields(t *testing.T) {
 			name:  "all fields provided",
 			query: "name=John&age=30&active=true",
 			expected: func(t *testing.T, result *testQueryPointers) {
-				if result.Name == nil || *result.Name != "John" {
-					t.Errorf("expected Name='John', got %v", result.Name)
-				}
-				if result.Age == nil || *result.Age != 30 {
-					t.Errorf("expected Age=30, got %v", result.Age)
-				}
-				if result.Active == nil || *result.Active != true {
-					t.Errorf("expected Active=true, got %v", result.Active)
-				}
+				zhtest.AssertNotNil(t, result.Name)
+				zhtest.AssertEqual(t, "John", *result.Name)
+				zhtest.AssertNotNil(t, result.Age)
+				zhtest.AssertEqual(t, 30, *result.Age)
+				zhtest.AssertNotNil(t, result.Active)
+				zhtest.AssertEqual(t, true, *result.Active)
 			},
 		},
 		{
 			name:  "some fields missing",
 			query: "name=Jane",
 			expected: func(t *testing.T, result *testQueryPointers) {
-				if result.Name == nil || *result.Name != "Jane" {
-					t.Errorf("expected Name='Jane', got %v", result.Name)
-				}
-				if result.Age != nil {
-					t.Errorf("expected Age=nil, got %v", result.Age)
-				}
-				if result.Active != nil {
-					t.Errorf("expected Active=nil, got %v", result.Active)
-				}
+				zhtest.AssertNotNil(t, result.Name)
+				zhtest.AssertEqual(t, "Jane", *result.Name)
+				zhtest.AssertNil(t, result.Age)
+				zhtest.AssertNil(t, result.Active)
 			},
 		},
 		{
@@ -736,12 +615,8 @@ func TestBinder_Query_PointerFields(t *testing.T) {
 			query: "name=&age=",
 			expected: func(t *testing.T, result *testQueryPointers) {
 				// Per design doc: empty string = not provided for pointers
-				if result.Name != nil {
-					t.Errorf("expected Name=nil for empty value, got %q", *result.Name)
-				}
-				if result.Age != nil {
-					t.Errorf("expected Age=nil for empty value, got %d", *result.Age)
-				}
+				zhtest.AssertNil(t, result.Name)
+				zhtest.AssertNil(t, result.Age)
 			},
 		},
 	}
@@ -752,9 +627,7 @@ func TestBinder_Query_PointerFields(t *testing.T) {
 
 			var result testQueryPointers
 			err := B.Query(req, &result)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			tt.expected(t, &result)
 		})
@@ -772,13 +645,9 @@ func TestBinder_Query_SliceTypes(t *testing.T) {
 			query: "ids=1&ids=2&ids=3",
 			expected: func(t *testing.T, result *testQuerySlices) {
 				expected := []int{1, 2, 3}
-				if len(result.IDs) != len(expected) {
-					t.Fatalf("expected %d IDs, got %d", len(expected), len(result.IDs))
-				}
+				zhtest.AssertLen(t, result.IDs, len(expected))
 				for i, id := range result.IDs {
-					if id != expected[i] {
-						t.Errorf("expected IDs[%d]=%d, got %d", i, expected[i], id)
-					}
+					zhtest.AssertEqual(t, expected[i], id)
 				}
 			},
 		},
@@ -787,13 +656,9 @@ func TestBinder_Query_SliceTypes(t *testing.T) {
 			query: "scores=95.5&scores=87.2&scores=100",
 			expected: func(t *testing.T, result *testQuerySlices) {
 				expected := []float64{95.5, 87.2, 100}
-				if len(result.Scores) != len(expected) {
-					t.Fatalf("expected %d scores, got %d", len(expected), len(result.Scores))
-				}
+				zhtest.AssertLen(t, result.Scores, len(expected))
 				for i, score := range result.Scores {
-					if score != expected[i] {
-						t.Errorf("expected Scores[%d]=%f, got %f", i, expected[i], score)
-					}
+					zhtest.AssertEqual(t, expected[i], score)
 				}
 			},
 		},
@@ -802,13 +667,9 @@ func TestBinder_Query_SliceTypes(t *testing.T) {
 			query: "enabled=true&enabled=false&enabled=1",
 			expected: func(t *testing.T, result *testQuerySlices) {
 				expected := []bool{true, false, true}
-				if len(result.Enabled) != len(expected) {
-					t.Fatalf("expected %d enabled values, got %d", len(expected), len(result.Enabled))
-				}
+				zhtest.AssertLen(t, result.Enabled, len(expected))
 				for i, val := range result.Enabled {
-					if val != expected[i] {
-						t.Errorf("expected Enabled[%d]=%v, got %v", i, expected[i], val)
-					}
+					zhtest.AssertEqual(t, expected[i], val)
 				}
 			},
 		},
@@ -820,9 +681,7 @@ func TestBinder_Query_SliceTypes(t *testing.T) {
 
 			var result testQuerySlices
 			err := B.Query(req, &result)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			tt.expected(t, &result)
 		})
@@ -841,22 +700,12 @@ func TestBinder_Query_ImplicitSnakeCase(t *testing.T) {
 
 	var result ImplicitNaming
 	err := B.Query(req, &result)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.UserName != "johndoe" {
-		t.Errorf("expected UserName='johndoe', got %q", result.UserName)
-	}
-	if result.FirstName != "John" {
-		t.Errorf("expected FirstName='John', got %q", result.FirstName)
-	}
-	if result.LastName != "Doe" {
-		t.Errorf("expected LastName='Doe', got %q", result.LastName)
-	}
-	if result.HTTPMethod != http.MethodGet {
-		t.Errorf("expected HTTPMethod='GET', got %q", result.HTTPMethod)
-	}
+	zhtest.AssertEqual(t, "johndoe", result.UserName)
+	zhtest.AssertEqual(t, "John", result.FirstName)
+	zhtest.AssertEqual(t, "Doe", result.LastName)
+	zhtest.AssertEqual(t, http.MethodGet, result.HTTPMethod)
 }
 
 func TestBinder_Query_InvalidDestination(t *testing.T) {
@@ -889,9 +738,7 @@ func TestBinder_Query_InvalidDestination(t *testing.T) {
 				err = B.Query(req, tt.dst)
 			}
 
-			if err == nil {
-				t.Fatal("expected error but got none")
-			}
+			zhtest.AssertError(t, err)
 		})
 	}
 }
@@ -906,16 +753,10 @@ func TestBinder_Query_URLEncodedValues(t *testing.T) {
 
 	var result URLValues
 	err := B.Query(req, &result)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Search != "hello world" {
-		t.Errorf("expected Search='hello world', got %q", result.Search)
-	}
-	if result.Path != "/foo/bar" {
-		t.Errorf("expected Path='/foo/bar', got %q", result.Path)
-	}
+	zhtest.AssertEqual(t, "hello world", result.Search)
+	zhtest.AssertEqual(t, "/foo/bar", result.Path)
 }
 
 func TestBindEmbeddedStruct_NestedEmbedded(t *testing.T) {
@@ -939,19 +780,11 @@ func TestBindEmbeddedStruct_NestedEmbedded(t *testing.T) {
 
 	var result Container
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Top != "top_value" {
-		t.Errorf("expected Top='top_value', got %q", result.Top)
-	}
-	if result.Middle != "middle_value" {
-		t.Errorf("expected Middle='middle_value', got %q", result.Middle)
-	}
-	if result.Deep != "deep_value" {
-		t.Errorf("expected Deep='deep_value', got %q", result.Deep)
-	}
+	zhtest.AssertEqual(t, "top_value", result.Top)
+	zhtest.AssertEqual(t, "middle_value", result.Middle)
+	zhtest.AssertEqual(t, "deep_value", result.Deep)
 }
 
 func TestBindSliceValue_InvalidElement(t *testing.T) {
@@ -965,12 +798,8 @@ func TestBindSliceValue_InvalidElement(t *testing.T) {
 
 	var result WithIntSlice
 	err := bindValues(values, &result, "form", false)
-	if err == nil {
-		t.Fatal("expected error for invalid slice element")
-	}
-	if !strings.Contains(err.Error(), "invalid integer") {
-		t.Errorf("expected error to contain 'invalid integer', got %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "invalid integer")
 }
 
 func TestBindSliceValue_InvalidFloatSlice(t *testing.T) {
@@ -984,9 +813,7 @@ func TestBindSliceValue_InvalidFloatSlice(t *testing.T) {
 
 	var result WithFloatSlice
 	err := bindValues(values, &result, "form", false)
-	if err == nil {
-		t.Fatal("expected error for invalid float slice element")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestBindSliceValue_InvalidBoolSlice(t *testing.T) {
@@ -1000,9 +827,7 @@ func TestBindSliceValue_InvalidBoolSlice(t *testing.T) {
 
 	var result WithBoolSlice
 	err := bindValues(values, &result, "form", false)
-	if err == nil {
-		t.Fatal("expected error for invalid bool slice element")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestBindFileField_NonPointerFileHeader(t *testing.T) {
@@ -1022,12 +847,8 @@ func TestBindFileField_NonPointerFileHeader(t *testing.T) {
 
 	var result WithNonPointerFileHeader
 	err := B.MultipartForm(req, &result, 32<<20)
-	if err == nil {
-		t.Fatal("expected error for non-pointer FileHeader")
-	}
-	if !strings.Contains(err.Error(), "must be a pointer") {
-		t.Errorf("expected error to contain 'must be a pointer', got %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "must be a pointer")
 }
 
 func TestBindEmbeddedStruct_WithFiles(t *testing.T) {
@@ -1054,22 +875,12 @@ func TestBindEmbeddedStruct_WithFiles(t *testing.T) {
 
 	var result Wrapper
 	err := B.MultipartForm(req, &result, 32<<20)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Name != "TestName" {
-		t.Errorf("expected Name='TestName', got %q", result.Name)
-	}
-	if result.Extra != "ExtraValue" {
-		t.Errorf("expected Extra='ExtraValue', got %q", result.Extra)
-	}
-	if result.Document == nil {
-		t.Fatal("expected Document to be set")
-	}
-	if result.Document.Filename != "embedded.txt" {
-		t.Errorf("expected Filename='embedded.txt', got %q", result.Document.Filename)
-	}
+	zhtest.AssertEqual(t, "TestName", result.Name)
+	zhtest.AssertEqual(t, "ExtraValue", result.Extra)
+	zhtest.AssertNotNil(t, result.Document)
+	zhtest.AssertEqual(t, "embedded.txt", result.Document.Filename)
 }
 
 func TestBindValues_UnexportedFields(t *testing.T) {
@@ -1085,16 +896,10 @@ func TestBindValues_UnexportedFields(t *testing.T) {
 
 	var result WithUnexported
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Name != "John" {
-		t.Errorf("expected Name='John', got %q", result.Name)
-	}
-	if result.ignored != "" {
-		t.Errorf("expected ignored to remain empty, got %q", result.ignored)
-	}
+	zhtest.AssertEqual(t, "John", result.Name)
+	zhtest.AssertEmpty(t, result.ignored)
 }
 
 func TestBindEmbeddedStruct_UnexportedField(t *testing.T) {
@@ -1116,21 +921,13 @@ func TestBindEmbeddedStruct_UnexportedField(t *testing.T) {
 
 	var result Container
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// visible is unexported so it should not be bound
-	if result.visible != "" {
-		t.Errorf("expected visible to remain empty (unexported), got %q", result.visible)
-	}
+	zhtest.AssertEmpty(t, result.visible)
 
-	if result.Name != "container" {
-		t.Errorf("expected Name='container', got %q", result.Name)
-	}
-	if result.Value != "inner_value" {
-		t.Errorf("expected Value='inner_value', got %q", result.Value)
-	}
+	zhtest.AssertEqual(t, "container", result.Name)
+	zhtest.AssertEqual(t, "inner_value", result.Value)
 }
 
 func TestBindEmbeddedStruct_IgnoredField(t *testing.T) {
@@ -1150,16 +947,10 @@ func TestBindEmbeddedStruct_IgnoredField(t *testing.T) {
 
 	var result Container
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.Ignored != "" {
-		t.Errorf("expected Ignored to remain empty, got %q", result.Ignored)
-	}
-	if result.Value != "actual_value" {
-		t.Errorf("expected Value='actual_value', got %q", result.Value)
-	}
+	zhtest.AssertEmpty(t, result.Ignored)
+	zhtest.AssertEqual(t, "actual_value", result.Value)
 }
 
 func TestBindValues_EmptyTagName(t *testing.T) {
@@ -1173,13 +964,9 @@ func TestBindValues_EmptyTagName(t *testing.T) {
 
 	var result NoTag
 	err := bindValues(values, &result, "form", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if result.UserName != "johndoe" {
-		t.Errorf("expected UserName='johndoe', got %q", result.UserName)
-	}
+	zhtest.AssertEqual(t, "johndoe", result.UserName)
 }
 
 func TestBindEmbeddedStruct_ErrorPropagation(t *testing.T) {
@@ -1202,12 +989,8 @@ func TestBindEmbeddedStruct_ErrorPropagation(t *testing.T) {
 
 	var result Container
 	err := bindValues(values, &result, "form", false)
-	if err == nil {
-		t.Fatal("expected error for invalid int conversion in nested embedded struct")
-	}
-	if !strings.Contains(err.Error(), "invalid integer") {
-		t.Errorf("expected 'invalid integer' error, got %v", err)
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "invalid integer")
 }
 
 func TestBinder_Form_ParseFormError(t *testing.T) {
@@ -1218,9 +1001,7 @@ func TestBinder_Form_ParseFormError(t *testing.T) {
 
 	var result testFormStruct
 	err := B.Form(req, &result)
-	if err == nil {
-		t.Fatal("expected error for invalid form data")
-	}
+	zhtest.AssertError(t, err)
 }
 
 // errReader simulates a read error
@@ -1241,9 +1022,7 @@ func TestBinder_MultipartForm_ParseError(t *testing.T) {
 
 	var result testMultipartStruct
 	err := B.MultipartForm(req, &result, 32<<20)
-	if err == nil {
-		t.Fatal("expected error for invalid multipart form")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestBinder_MultipartForm_NoFormData(t *testing.T) {
@@ -1262,18 +1041,14 @@ func TestBinder_MultipartForm_NoFormData(t *testing.T) {
 
 	var result testMultipartStruct
 	err := B.MultipartForm(req, &result, 32<<20)
-	if err == nil {
-		t.Fatal("expected error when MultipartForm is nil")
-	}
+	zhtest.AssertError(t, err)
 }
 
 func TestBindFilesToStruct_NoMultipartForm(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
 	err := BindMultipartFormFiles(req, &testMultipartStruct{})
-	if err != nil {
-		t.Errorf("expected no error when no multipart form, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }
 
 func TestBindFilesToStruct_InvalidDestination(t *testing.T) {
@@ -1304,9 +1079,7 @@ func TestBindFilesToStruct_InvalidDestination(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := BindMultipartFormFiles(req, tt.dst)
-			if err == nil {
-				t.Fatal("expected error but got none")
-			}
+			zhtest.AssertError(t, err)
 		})
 	}
 }

@@ -3,6 +3,8 @@ package config
 import (
 	"reflect"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 type TestMetricsConfig struct {
@@ -30,12 +32,8 @@ func TestConfigMerging(t *testing.T) {
 
 		Merge(&c, userCfg)
 
-		if c.Addr != "localhost:8080" {
-			t.Errorf("expected Addr localhost:8080, got %s", c.Addr)
-		}
-		if c.Metrics.Endpoint != "/metrics" {
-			t.Errorf("expected Metrics.Endpoint /metrics, got %s", c.Metrics.Endpoint)
-		}
+		zhtest.AssertEqual(t, "localhost:8080", c.Addr)
+		zhtest.AssertEqual(t, "/metrics", c.Metrics.Endpoint)
 	})
 
 	t.Run("user values override defaults", func(t *testing.T) {
@@ -49,16 +47,10 @@ func TestConfigMerging(t *testing.T) {
 
 		Merge(&c, userCfg)
 
-		if c.Addr != ":9090" {
-			t.Errorf("expected Addr :9090, got %s", c.Addr)
-		}
-		if c.Metrics.Endpoint != "/custom-metrics" {
-			t.Errorf("expected Metrics.Endpoint /custom-metrics, got %s", c.Metrics.Endpoint)
-		}
+		zhtest.AssertEqual(t, ":9090", c.Addr)
+		zhtest.AssertEqual(t, "/custom-metrics", c.Metrics.Endpoint)
 		// ServerAddr should keep default since not set in user config
-		if c.Metrics.ServerAddr != "localhost:9090" {
-			t.Errorf("expected Metrics.ServerAddr localhost:9090, got %s", c.Metrics.ServerAddr)
-		}
+		zhtest.AssertEqual(t, "localhost:9090", c.Metrics.ServerAddr)
 	})
 
 	t.Run("partial nested config merges", func(t *testing.T) {
@@ -71,21 +63,15 @@ func TestConfigMerging(t *testing.T) {
 
 		Merge(&c, userCfg)
 
-		if c.Metrics.ServerAddr != "custom:9090" {
-			t.Errorf("expected ServerAddr to be custom:9090, got %s", c.Metrics.ServerAddr)
-		}
-		if c.Metrics.Endpoint != "/metrics" {
-			t.Errorf("expected Endpoint to keep default, got %s", c.Metrics.Endpoint)
-		}
+		zhtest.AssertEqual(t, "custom:9090", c.Metrics.ServerAddr)
+		zhtest.AssertEqual(t, "/metrics", c.Metrics.Endpoint)
 	})
 
 	t.Run("nil user config is noop", func(t *testing.T) {
 		c := defaultConfig
 		Merge(&c, TestConfig{})
 
-		if c.Addr != "localhost:8080" {
-			t.Errorf("expected Addr to keep default, got %s", c.Addr)
-		}
+		zhtest.AssertEqual(t, "localhost:8080", c.Addr)
 	})
 
 	t.Run("src pointer dereferencing", func(t *testing.T) {
@@ -96,49 +82,36 @@ func TestConfigMerging(t *testing.T) {
 
 		Merge(&c, userCfg)
 
-		if c.Addr != ":9090" {
-			t.Errorf("expected Addr :9090, got %s", c.Addr)
-		}
+		zhtest.AssertEqual(t, ":9090", c.Addr)
 	})
 }
 
 func TestMergePanics(t *testing.T) {
 	t.Run("dst not pointer panics", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for non-pointer dst")
-			}
-		}()
-		var c TestConfig
-		Merge(c, TestConfig{})
+		zhtest.AssertPanic(t, func() {
+			var c TestConfig
+			Merge(c, TestConfig{})
+		})
 	})
 
 	t.Run("dst nil pointer panics", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for nil dst")
-			}
-		}()
-		var c *TestConfig
-		Merge(c, TestConfig{})
+		zhtest.AssertPanic(t, func() {
+			var c *TestConfig
+			Merge(c, TestConfig{})
+		})
 	})
 
 	t.Run("src not struct panics", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for non-struct src")
-			}
-		}()
-		var c TestConfig
-		Merge(&c, "not a struct")
+		zhtest.AssertPanic(t, func() {
+			var c TestConfig
+			Merge(&c, "not a struct")
+		})
 	})
 
 	t.Run("src nil returns early", func(t *testing.T) {
 		c := defaultConfig
 		Merge(&c, nil)
-		if c.Addr != "localhost:8080" {
-			t.Errorf("expected Addr to keep default, got %s", c.Addr)
-		}
+		zhtest.AssertEqual(t, "localhost:8080", c.Addr)
 	})
 }
 
@@ -205,54 +178,22 @@ func TestAllTypes(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.Str != "user" {
-			t.Errorf("expected Str=user, got %s", c.Str)
-		}
-		if c.Int != 42 {
-			t.Errorf("expected Int=42, got %d", c.Int)
-		}
-		if c.Int8 != 42 {
-			t.Errorf("expected Int8=42, got %d", c.Int8)
-		}
-		if c.Int16 != 42 {
-			t.Errorf("expected Int16=42, got %d", c.Int16)
-		}
-		if c.Int32 != 42 {
-			t.Errorf("expected Int32=42, got %d", c.Int32)
-		}
-		if c.Int64 != 42 {
-			t.Errorf("expected Int64=42, got %d", c.Int64)
-		}
-		if c.Uint != 42 {
-			t.Errorf("expected Uint=42, got %d", c.Uint)
-		}
-		if c.Uint8 != 42 {
-			t.Errorf("expected Uint8=42, got %d", c.Uint8)
-		}
-		if c.Uint16 != 42 {
-			t.Errorf("expected Uint16=42, got %d", c.Uint16)
-		}
-		if c.Uint32 != 42 {
-			t.Errorf("expected Uint32=42, got %d", c.Uint32)
-		}
-		if c.Uint64 != 42 {
-			t.Errorf("expected Uint64=42, got %d", c.Uint64)
-		}
-		if c.Float32 != 42.0 {
-			t.Errorf("expected Float32=42.0, got %f", c.Float32)
-		}
-		if c.Float64 != 42.0 {
-			t.Errorf("expected Float64=42.0, got %f", c.Float64)
-		}
-		if !c.Bool {
-			t.Error("expected Bool=true")
-		}
-		if len(c.Slice) != 3 || c.Slice[0] != 4 {
-			t.Errorf("expected Slice=[4 5 6], got %v", c.Slice)
-		}
-		if len(c.Map) != 1 || c.Map["b"] != 2 {
-			t.Errorf("expected Map={b:2}, got %v", c.Map)
-		}
+		zhtest.AssertEqual(t, "user", c.Str)
+		zhtest.AssertEqual(t, 42, c.Int)
+		zhtest.AssertEqual(t, int8(42), c.Int8)
+		zhtest.AssertEqual(t, int16(42), c.Int16)
+		zhtest.AssertEqual(t, int32(42), c.Int32)
+		zhtest.AssertEqual(t, int64(42), c.Int64)
+		zhtest.AssertEqual(t, uint(42), c.Uint)
+		zhtest.AssertEqual(t, uint8(42), c.Uint8)
+		zhtest.AssertEqual(t, uint16(42), c.Uint16)
+		zhtest.AssertEqual(t, uint32(42), c.Uint32)
+		zhtest.AssertEqual(t, uint64(42), c.Uint64)
+		zhtest.AssertEqual(t, float32(42.0), c.Float32)
+		zhtest.AssertEqual(t, 42.0, c.Float64)
+		zhtest.AssertTrue(t, c.Bool)
+		zhtest.AssertEqual(t, []int{4, 5, 6}, c.Slice)
+		zhtest.AssertEqual(t, map[string]int{"b": 2}, c.Map)
 	})
 
 	t.Run("zero values keep defaults", func(t *testing.T) {
@@ -262,25 +203,15 @@ func TestAllTypes(t *testing.T) {
 		Merge(&c, user)
 
 		// Strings: empty should keep default
-		if c.Str != "default" {
-			t.Errorf("expected Str=default, got %s", c.Str)
-		}
+		zhtest.AssertEqual(t, "default", c.Str)
 		// Numbers: zero should keep default
-		if c.Int != 1 {
-			t.Errorf("expected Int=1, got %d", c.Int)
-		}
+		zhtest.AssertEqual(t, 1, c.Int)
 		// Bools: false should OVERRIDE (always copied)
-		if c.Bool {
-			t.Error("expected Bool=false (zero value should override)")
-		}
+		zhtest.AssertFalse(t, c.Bool)
 		// Slices: nil/empty should keep default
-		if len(c.Slice) != 3 {
-			t.Errorf("expected Slice len 3, got %v", c.Slice)
-		}
+		zhtest.AssertEqual(t, 3, len(c.Slice))
 		// Maps: nil/empty should keep default
-		if len(c.Map) != 1 {
-			t.Errorf("expected Map len 1, got %v", c.Map)
-		}
+		zhtest.AssertEqual(t, 1, len(c.Map))
 	})
 
 	t.Run("empty slice overrides non-empty", func(t *testing.T) {
@@ -292,9 +223,7 @@ func TestAllTypes(t *testing.T) {
 		Merge(&c, user)
 
 		// Empty slice (len 0) should replace non-empty
-		if len(c.Slice) != 0 {
-			t.Errorf("expected empty slice, got %v", c.Slice)
-		}
+		zhtest.AssertEqual(t, 0, len(c.Slice))
 	})
 
 	// Test bool false overriding true default - this was a bug where structs
@@ -310,9 +239,7 @@ func TestAllTypes(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.LogErrors {
-			t.Error("expected LogErrors=false to override true default, got true")
-		}
+		zhtest.AssertFalse(t, c.LogErrors)
 	})
 }
 
@@ -331,9 +258,7 @@ func TestPointerHandling(t *testing.T) {
 
 		Merge(&c, user)
 
-		if *c.Value != "user" {
-			t.Errorf("expected Value=user, got %s", *c.Value)
-		}
+		zhtest.AssertEqual(t, "user", *c.Value)
 	})
 
 	t.Run("nil pointer keeps default", func(t *testing.T) {
@@ -342,12 +267,8 @@ func TestPointerHandling(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.Value == nil {
-			t.Error("expected Value to remain non-nil")
-		}
-		if *c.Value != "default" {
-			t.Errorf("expected Value=default, got %s", *c.Value)
-		}
+		zhtest.AssertNotNil(t, c.Value)
+		zhtest.AssertEqual(t, "default", *c.Value)
 	})
 }
 
@@ -363,9 +284,7 @@ func TestInterfaceHandling(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.Value != "user" {
-			t.Errorf("expected Value=user, got %v", c.Value)
-		}
+		zhtest.AssertEqual(t, "user", c.Value)
 	})
 
 	t.Run("nil interface keeps default", func(t *testing.T) {
@@ -374,9 +293,7 @@ func TestInterfaceHandling(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.Value != "default" {
-			t.Errorf("expected Value=default, got %v", c.Value)
-		}
+		zhtest.AssertEqual(t, "default", c.Value)
 	})
 }
 
@@ -392,13 +309,9 @@ func TestUnexportedFields(t *testing.T) {
 
 	Merge(&c, user)
 
-	if c.Exported != "user" {
-		t.Errorf("expected Exported=user, got %s", c.Exported)
-	}
+	zhtest.AssertEqual(t, "user", c.Exported)
 	// unexported field should keep its original value
-	if c.unexported != "default" {
-		t.Errorf("expected unexported=default, got %s", c.unexported)
-	}
+	zhtest.AssertEqual(t, "default", c.unexported)
 }
 
 // TestStructMismatchPanics tests panic on struct mismatch
@@ -407,50 +320,38 @@ func TestStructMismatchPanics(t *testing.T) {
 		type Small struct{ A string }
 		type Large struct{ A, B string }
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for field count mismatch")
-			}
-		}()
-
-		var dst Small
-		src := Large{A: "a", B: "b"}
-		Merge(&dst, src)
+		zhtest.AssertPanic(t, func() {
+			var dst Small
+			src := Large{A: "a", B: "b"}
+			Merge(&dst, src)
+		})
 	})
 
 	t.Run("dst and src field kinds differ", func(t *testing.T) {
 		type StructA struct{ Field string }
 		type StructB struct{ Field int }
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for field kind mismatch")
-			}
-		}()
-
-		var dst StructA
-		src := StructB{Field: 42}
-		Merge(&dst, src)
+		zhtest.AssertPanic(t, func() {
+			var dst StructA
+			src := StructB{Field: 42}
+			Merge(&dst, src)
+		})
 	})
 
 	t.Run("merge struct into non-struct panics", func(t *testing.T) {
 		type Inner struct{ A string }
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for struct into non-struct")
-			}
-		}()
+		zhtest.AssertPanic(t, func() {
+			dst := struct {
+				Field string // not a struct
+			}{Field: "value"}
 
-		dst := struct {
-			Field string // not a struct
-		}{Field: "value"}
+			src := struct {
+				Field Inner // struct type
+			}{Field: Inner{A: "a"}}
 
-		src := struct {
-			Field Inner // struct type
-		}{Field: Inner{A: "a"}}
-
-		Merge(&dst, src)
+			Merge(&dst, src)
+		})
 	})
 }
 
@@ -486,9 +387,7 @@ func TestNestedStruct(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.Level2.Level3.Value != "user" {
-			t.Errorf("expected nested Value=user, got %s", c.Level2.Level3.Value)
-		}
+		zhtest.AssertEqual(t, "user", c.Level2.Level3.Value)
 	})
 
 	t.Run("partial nested merge keeps defaults", func(t *testing.T) {
@@ -497,9 +396,7 @@ func TestNestedStruct(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.Level2.Level3.Value != "default" {
-			t.Errorf("expected nested Value=default, got %s", c.Level2.Level3.Value)
-		}
+		zhtest.AssertEqual(t, "default", c.Level2.Level3.Value)
 	})
 }
 
@@ -509,9 +406,7 @@ func TestInvalidSrc(t *testing.T) {
 		c := defaultConfig
 		// Create an invalid reflect.Value (zero Value)
 		Merge(&c, TestConfig{}) // Empty struct is valid, just has zero values
-		if c.Addr != "localhost:8080" {
-			t.Errorf("expected Addr to keep default, got %s", c.Addr)
-		}
+		zhtest.AssertEqual(t, "localhost:8080", c.Addr)
 	})
 }
 
@@ -532,13 +427,9 @@ func TestReflectKindCoverage(t *testing.T) {
 		// Should not panic, channel should be ignored
 		Merge(&c, user)
 
-		if c.Str != "user" {
-			t.Errorf("expected Str=user, got %s", c.Str)
-		}
+		zhtest.AssertEqual(t, "user", c.Str)
 		// Channel should remain zero (not copied since channels are skipped)
-		if c.Ch != nil {
-			t.Error("expected Ch to remain nil (channels skipped)")
-		}
+		zhtest.AssertNil(t, c.Ch)
 	})
 
 	t.Run("func is copied", func(t *testing.T) {
@@ -554,18 +445,11 @@ func TestReflectKindCoverage(t *testing.T) {
 		// Should not panic, func should be copied
 		Merge(&c, user)
 
-		if c.Str != "user" {
-			t.Errorf("expected Str=user, got %s", c.Str)
-		}
+		zhtest.AssertEqual(t, "user", c.Str)
 		// Func should be copied
-		if c.Fn == nil {
-			t.Error("expected Fn to be copied, got nil")
-		} else {
-			c.Fn()
-			if !called {
-				t.Error("expected copied func to work")
-			}
-		}
+		zhtest.AssertNotNil(t, c.Fn)
+		c.Fn()
+		zhtest.AssertTrue(t, called)
 	})
 
 	t.Run("nil func is skipped", func(t *testing.T) {
@@ -579,13 +463,9 @@ func TestReflectKindCoverage(t *testing.T) {
 
 		Merge(&c, user)
 
-		if c.Str != "user" {
-			t.Errorf("expected Str=user, got %s", c.Str)
-		}
+		zhtest.AssertEqual(t, "user", c.Str)
 		// Func should remain unchanged
-		if c.Fn == nil {
-			t.Error("expected Fn to remain non-nil")
-		}
+		zhtest.AssertNotNil(t, c.Fn)
 	})
 }
 
@@ -602,12 +482,8 @@ func TestPointerDereference(t *testing.T) {
 
 		Merge(&dst, src)
 
-		if dst.Value == nil {
-			t.Error("expected Value to remain non-nil")
-		}
-		if *dst.Value != "default" {
-			t.Errorf("expected Value=default, got %s", *dst.Value)
-		}
+		zhtest.AssertNotNil(t, dst.Value)
+		zhtest.AssertEqual(t, "default", *dst.Value)
 	})
 }
 
@@ -623,9 +499,7 @@ func TestInterfaceNil(t *testing.T) {
 
 		Merge(&dst, src)
 
-		if dst.Value != "default" {
-			t.Errorf("expected Value=default, got %v", dst.Value)
-		}
+		zhtest.AssertEqual(t, "default", dst.Value)
 	})
 }
 
@@ -642,13 +516,9 @@ func TestArraySkipped(t *testing.T) {
 
 		Merge(&dst, src)
 
-		if dst.Str != "user" {
-			t.Errorf("expected Str=user, got %s", dst.Str)
-		}
+		zhtest.AssertEqual(t, "user", dst.Str)
 		// Arrays are intentionally skipped in the implementation
-		if dst.Arr != [3]int{1, 2, 3} {
-			t.Logf("arrays are skipped (expected: %v, got: %v)", [3]int{1, 2, 3}, dst.Arr)
-		}
+		zhtest.AssertEqual(t, [3]int{1, 2, 3}, dst.Arr)
 	})
 }
 
@@ -674,9 +544,8 @@ func TestMergeValueDirectly(t *testing.T) {
 		mergeValue(dstVal.Field(0), srcVal.Field(0))
 
 		dst := dstVal.Addr().Interface().(*PtrStruct)
-		if dst.P == nil || *dst.P != "user" {
-			t.Error("expected pointer to be copied")
-		}
+		zhtest.AssertNotNil(t, dst.P)
+		zhtest.AssertEqual(t, "user", *dst.P)
 	})
 
 	t.Run("nil pointer src returns early", func(t *testing.T) {
@@ -697,9 +566,8 @@ func TestMergeValueDirectly(t *testing.T) {
 		mergeValue(dstVal, srcVal)
 
 		// dst should remain unchanged
-		if dst.P == nil || *dst.P != "default" {
-			t.Errorf("expected dst.P to remain 'default', got %v", dst.P)
-		}
+		zhtest.AssertNotNil(t, dst.P)
+		zhtest.AssertEqual(t, "default", *dst.P)
 	})
 
 	t.Run("nil interface src returns early", func(t *testing.T) {
@@ -716,9 +584,7 @@ func TestMergeValueDirectly(t *testing.T) {
 		mergeValue(dstVal, srcVal)
 
 		// dst should remain unchanged
-		if dstVal.Interface() != "default" {
-			t.Errorf("expected default, got %v", dstVal.Interface())
-		}
+		zhtest.AssertEqual(t, "default", dstVal.Interface())
 	})
 
 	t.Run("pointer dereference into non-pointer", func(t *testing.T) {
@@ -737,9 +603,7 @@ func TestMergeValueDirectly(t *testing.T) {
 		// This should dereference the pointer and merge the string value
 		mergeValue(dstVal, ptrVal)
 
-		if dstVal.String() != "user" {
-			t.Errorf("expected user, got %s", dstVal.String())
-		}
+		zhtest.AssertEqual(t, "user", dstVal.String())
 	})
 
 	t.Run("struct into non-struct panics", func(t *testing.T) {
@@ -748,19 +612,15 @@ func TestMergeValueDirectly(t *testing.T) {
 			A string
 		}
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for struct into non-struct")
-			}
-		}()
+		zhtest.AssertPanic(t, func() {
+			// Create dst as a string value (non-struct)
+			dstStr := "default"
+			dstVal := reflect.ValueOf(&dstStr).Elem()
 
-		// Create dst as a string value (non-struct)
-		dstStr := "default"
-		dstVal := reflect.ValueOf(&dstStr).Elem()
+			// Create src as a struct value
+			srcVal := reflect.ValueOf(Inner{A: "user"})
 
-		// Create src as a struct value
-		srcVal := reflect.ValueOf(Inner{A: "user"})
-
-		mergeValue(dstVal, srcVal)
+			mergeValue(dstVal, srcVal)
+		})
 	})
 }

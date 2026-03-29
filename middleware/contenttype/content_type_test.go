@@ -55,9 +55,7 @@ func TestContentTypeValidation(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -88,9 +86,7 @@ func TestContentTypeCustomConfig(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -127,9 +123,7 @@ func TestContentTypeExcludedPaths(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
@@ -150,9 +144,7 @@ func TestContentTypeHTTPMethods(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if !nextCalled {
-				t.Errorf("handler should be called for method %s", method)
-			}
+			zhtest.AssertTrue(t, nextCalled)
 			zhtest.AssertWith(t, rr).Status(http.StatusOK)
 		})
 	}
@@ -170,9 +162,7 @@ func TestContentTypeGETRequests(t *testing.T) {
 	})
 	middleware(next).ServeHTTP(rr, req)
 
-	if !nextCalled {
-		t.Error("GET request should skip content type validation")
-	}
+	zhtest.AssertTrue(t, nextCalled)
 	zhtest.AssertWith(t, rr).Status(http.StatusOK)
 }
 
@@ -188,9 +178,7 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 		})
 		middleware(next).ServeHTTP(rr, req)
 
-		if nextCalled {
-			t.Error("next handler should not be called with empty content types config")
-		}
+		zhtest.AssertFalse(t, nextCalled)
 		zhtest.AssertWith(t, rr).Status(http.StatusUnsupportedMediaType)
 	})
 
@@ -206,9 +194,7 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 		})
 		middleware(next).ServeHTTP(rr, req)
 
-		if !nextCalled {
-			t.Error("next handler should be called with default config when nil")
-		}
+		zhtest.AssertTrue(t, nextCalled)
 		zhtest.AssertWith(t, rr).Status(http.StatusOK)
 	})
 
@@ -225,9 +211,8 @@ func TestContentTypeConfigFallbacks(t *testing.T) {
 			called = true
 		})).ServeHTTP(rr, req)
 
-		if called || rr.Code != http.StatusUnsupportedMediaType {
-			t.Error("should fallback to default excluded paths and reject text/plain")
-		}
+		zhtest.AssertFalse(t, called)
+		zhtest.AssertEqual(t, http.StatusUnsupportedMediaType, rr.Code)
 	})
 }
 
@@ -262,24 +247,18 @@ func TestContentTypeIncludedPaths(t *testing.T) {
 			})
 			middleware(next).ServeHTTP(rr, req)
 
-			if nextCalled != tt.expectNext {
-				t.Errorf("expected nextCalled=%v, got %v", tt.expectNext, nextCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
 			zhtest.AssertWith(t, rr).Status(tt.expectCode)
 		})
 	}
 }
 
 func TestContentTypeBothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		ContentTypes:  []string{httpx.MIMEApplicationJSON},
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			ContentTypes:  []string{httpx.MIMEApplicationJSON},
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

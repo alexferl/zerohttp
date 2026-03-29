@@ -11,6 +11,7 @@ import (
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/internal/rwutil"
 	"github.com/alexferl/zerohttp/trace"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // mockTracer is a test tracer that records span creation
@@ -68,14 +69,8 @@ func TestTrace_CreatesSpan(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if len(mock.spans) != 1 {
-		t.Fatalf("Expected 1 span, got %d", len(mock.spans))
-	}
-
-	span := mock.spans[0]
-	if !span.ended {
-		t.Error("Expected span to be ended")
-	}
+	zhtest.AssertEqual(t, 1, len(mock.spans))
+	zhtest.AssertTrue(t, mock.spans[0].ended)
 }
 
 func TestTrace_SetsAttributes(t *testing.T) {
@@ -98,9 +93,7 @@ func TestTrace_SetsAttributes(t *testing.T) {
 	}
 
 	// The status code is set via SetAttributes after Start
-	if attrs["http.status_code"] != 201 {
-		t.Errorf("status_code = %v, want 201", attrs["http.status_code"])
-	}
+	zhtest.AssertEqual(t, 201, attrs["http.status_code"])
 }
 
 func TestTrace_ContentLength(t *testing.T) {
@@ -125,9 +118,7 @@ func TestTrace_ContentLength(t *testing.T) {
 		attrs[attr.Key] = attr.Value
 	}
 
-	if attrs["http.request_content_length"] != int64(9) {
-		t.Errorf("request_content_length = %v, want 9", attrs["http.request_content_length"])
-	}
+	zhtest.AssertEqual(t, int64(9), attrs["http.request_content_length"])
 }
 
 func TestTrace_ExcludedPaths(t *testing.T) {
@@ -145,18 +136,14 @@ func TestTrace_ExcludedPaths(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if len(mock.spans) != 0 {
-		t.Errorf("Expected 0 spans for excluded path, got %d", len(mock.spans))
-	}
+	zhtest.AssertEqual(t, 0, len(mock.spans))
 
 	// Request to non-excluded path should create span
 	req = httptest.NewRequest(http.MethodGet, "/api/users", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	if len(mock.spans) != 1 {
-		t.Errorf("Expected 1 span for non-excluded path, got %d", len(mock.spans))
-	}
+	zhtest.AssertEqual(t, 1, len(mock.spans))
 }
 
 func TestTrace_NilTracer(t *testing.T) {
@@ -201,9 +188,7 @@ func TestTrace_StatusCode(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			span := mock.spans[0]
-			if span.statusCode != tt.wantCode {
-				t.Errorf("statusCode = %d, want %d", span.statusCode, tt.wantCode)
-			}
+			zhtest.AssertEqual(t, tt.wantCode, span.statusCode)
 		})
 	}
 }
@@ -225,9 +210,7 @@ func TestTrace_SpanNameFormatter(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	span := mock.spans[0]
-	if span.name != "custom:GET" {
-		t.Errorf("name = %q, want custom:GET", span.name)
-	}
+	zhtest.AssertEqual(t, "custom:GET", span.name)
 }
 
 func TestScheme(t *testing.T) {
@@ -254,9 +237,7 @@ func TestScheme(t *testing.T) {
 			}
 
 			got := scheme(req)
-			if got != tt.wantScheme {
-				t.Errorf("scheme() = %q, want %q", got, tt.wantScheme)
-			}
+			zhtest.AssertEqual(t, tt.wantScheme, got)
 		})
 	}
 }
@@ -276,19 +257,12 @@ func TestTraceResponseWriter(t *testing.T) {
 	// Write should trigger WriteHeader
 	_, _ = trw.Write([]byte("hello"))
 
-	if trw.StatusCode() != 200 {
-		t.Errorf("statusCode = %d, want 200", trw.StatusCode())
-	}
-
-	if rr.Code != 200 {
-		t.Errorf("recorder code = %d, want 200", rr.Code)
-	}
+	zhtest.AssertEqual(t, 200, trw.StatusCode())
+	zhtest.AssertEqual(t, 200, rr.Code)
 
 	// Multiple WriteHeader calls should be safe
 	trw.WriteHeader(500)
-	if trw.StatusCode() != 200 {
-		t.Error("WriteHeader should not change status after already written")
-	}
+	zhtest.AssertEqual(t, 200, trw.StatusCode())
 }
 
 func TestTrace_IncludedPaths(t *testing.T) {
@@ -322,27 +296,19 @@ func TestTrace_IncludedPaths(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			if tt.expectSpan {
-				if len(mock.spans) != 1 {
-					t.Errorf("Expected 1 span for allowed path, got %d", len(mock.spans))
-				}
+				zhtest.AssertEqual(t, 1, len(mock.spans))
 			} else {
-				if len(mock.spans) != 0 {
-					t.Errorf("Expected 0 spans for non-allowed path, got %d", len(mock.spans))
-				}
+				zhtest.AssertEqual(t, 0, len(mock.spans))
 			}
 		})
 	}
 }
 
 func TestTrace_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(&mockTracer{}, Config{
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(&mockTracer{}, Config{
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

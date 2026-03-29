@@ -2,25 +2,17 @@ package basicauth
 
 import (
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestBasicAuthConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Realm != "Restricted" {
-		t.Errorf("expected default realm = Restricted, got %s", cfg.Realm)
-	}
-	if cfg.Credentials != nil {
-		t.Error("expected default credentials to be nil")
-	}
-	if cfg.Validator != nil {
-		t.Error("expected default validator to be nil")
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, "Restricted", cfg.Realm)
+	zhtest.AssertNil(t, cfg.Credentials)
+	zhtest.AssertNil(t, cfg.Validator)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 }
 
 func TestBasicAuthConfig_CustomValues(t *testing.T) {
@@ -28,9 +20,7 @@ func TestBasicAuthConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			Realm: "Admin Area",
 		}
-		if cfg.Realm != "Admin Area" {
-			t.Errorf("expected realm = Admin Area, got %s", cfg.Realm)
-		}
+		zhtest.AssertEqual(t, "Admin Area", cfg.Realm)
 	})
 
 	t.Run("custom credentials", func(t *testing.T) {
@@ -42,16 +32,10 @@ func TestBasicAuthConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			Credentials: credentials,
 		}
-		if cfg.Credentials == nil {
-			t.Error("expected credentials to be set")
-		}
-		if len(cfg.Credentials) != 3 {
-			t.Errorf("expected 3 credentials, got %d", len(cfg.Credentials))
-		}
+		zhtest.AssertNotNil(t, cfg.Credentials)
+		zhtest.AssertEqual(t, 3, len(cfg.Credentials))
 		for user, pass := range credentials {
-			if cfg.Credentials[user] != pass {
-				t.Errorf("expected %s password = %s, got %s", user, pass, cfg.Credentials[user])
-			}
+			zhtest.AssertEqual(t, pass, cfg.Credentials[user])
 		}
 	})
 
@@ -62,15 +46,9 @@ func TestBasicAuthConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			Validator: mockValidator,
 		}
-		if cfg.Validator == nil {
-			t.Error("expected validator to be set")
-		}
-		if !cfg.Validator("testuser", "testpass") {
-			t.Error("expected validator to return true for valid credentials")
-		}
-		if cfg.Validator("wronguser", "wrongpass") {
-			t.Error("expected validator to return false for invalid credentials")
-		}
+		zhtest.AssertNotNil(t, cfg.Validator)
+		zhtest.AssertTrue(t, cfg.Validator("testuser", "testpass"))
+		zhtest.AssertFalse(t, cfg.Validator("wronguser", "wrongpass"))
 	})
 
 	t.Run("custom excluded paths", func(t *testing.T) {
@@ -78,16 +56,12 @@ func TestBasicAuthConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			ExcludedPaths: excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 4 {
-			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.ExcludedPaths))
 		expectedPaths := map[string]bool{
 			"/health": true, "/metrics": true, "/login": true, "/signup": true,
 		}
 		for _, path := range cfg.ExcludedPaths {
-			if !expectedPaths[path] {
-				t.Errorf("unexpected excluded path: %s", path)
-			}
+			zhtest.AssertTrue(t, expectedPaths[path])
 		}
 	})
 
@@ -96,16 +70,12 @@ func TestBasicAuthConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
 		expectedPaths := map[string]bool{
 			"/admin": true, "/api/private/": true,
 		}
 		for _, path := range cfg.IncludedPaths {
-			if !expectedPaths[path] {
-				t.Errorf("unexpected allowed path: %s", path)
-			}
+			zhtest.AssertTrue(t, expectedPaths[path])
 		}
 	})
 }
@@ -126,27 +96,13 @@ func TestBasicAuthConfig_MultipleFields(t *testing.T) {
 		IncludedPaths: includedPaths,
 	}
 
-	if cfg.Realm != "Custom Realm" {
-		t.Errorf("expected realm = Custom Realm, got %s", cfg.Realm)
-	}
-	if len(cfg.Credentials) != 2 {
-		t.Errorf("expected 2 credentials, got %d", len(cfg.Credentials))
-	}
-	if cfg.Credentials["admin"] != "secret123" {
-		t.Error("expected admin credentials to be set correctly")
-	}
-	if cfg.Validator == nil {
-		t.Error("expected validator to be set")
-	}
-	if !cfg.Validator("custom", "validate") {
-		t.Error("expected custom validator to work")
-	}
-	if len(cfg.ExcludedPaths) != 2 {
-		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 2 {
-		t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, "Custom Realm", cfg.Realm)
+	zhtest.AssertEqual(t, 2, len(cfg.Credentials))
+	zhtest.AssertEqual(t, "secret123", cfg.Credentials["admin"])
+	zhtest.AssertNotNil(t, cfg.Validator)
+	zhtest.AssertTrue(t, cfg.Validator("custom", "validate"))
+	zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
 }
 
 func TestBasicAuthConfig_EdgeCases(t *testing.T) {
@@ -154,63 +110,45 @@ func TestBasicAuthConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Credentials: map[string]string{},
 		}
-		if cfg.Credentials == nil {
-			t.Error("expected credentials map to be initialized, not nil")
-		}
-		if len(cfg.Credentials) != 0 {
-			t.Errorf("expected empty credentials map, got %d entries", len(cfg.Credentials))
-		}
+		zhtest.AssertNotNil(t, cfg.Credentials)
+		zhtest.AssertEqual(t, 0, len(cfg.Credentials))
 	})
 
 	t.Run("nil credentials", func(t *testing.T) {
 		cfg := Config{
 			Credentials: nil,
 		}
-		if cfg.Credentials != nil {
-			t.Error("expected credentials to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.Credentials)
 	})
 
 	t.Run("empty excluded paths", func(t *testing.T) {
 		cfg := Config{
 			ExcludedPaths: []string{},
 		}
-		if cfg.ExcludedPaths == nil {
-			t.Error("expected excluded paths slice to be initialized, not nil")
-		}
-		if len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected empty excluded paths slice, got %d entries", len(cfg.ExcludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 	})
 
 	t.Run("nil excluded paths", func(t *testing.T) {
 		cfg := Config{
 			ExcludedPaths: nil,
 		}
-		if cfg.ExcludedPaths != nil {
-			t.Error("expected excluded paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
 	})
 
 	t.Run("empty included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: []string{},
 		}
-		if cfg.IncludedPaths == nil {
-			t.Error("expected included paths slice to be initialized, not nil")
-		}
-		if len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: nil,
 		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 }
 
@@ -244,9 +182,6 @@ func TestBasicAuthConfig_ValidatorFunctionality(t *testing.T) {
 
 	for _, tc := range testCases {
 		result := cfg.Validator(tc.username, tc.password)
-		if result != tc.expected {
-			t.Errorf("validator(%q, %q) = %v, expected %v",
-				tc.username, tc.password, result, tc.expected)
-		}
+		zhtest.AssertEqual(t, tc.expected, result)
 	}
 }

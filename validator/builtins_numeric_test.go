@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestMinMaxInvalidType(t *testing.T) {
@@ -14,9 +16,7 @@ func TestMinMaxInvalidType(t *testing.T) {
 		}
 		input := TestMin{Value: 10}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for min on complex128")
-		}
+		zhtest.AssertError(t, err)
 	})
 	t.Run("max on invalid type", func(t *testing.T) {
 		type TestMax struct {
@@ -24,9 +24,7 @@ func TestMinMaxInvalidType(t *testing.T) {
 		}
 		input := TestMax{Value: 10}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for max on complex128")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -37,9 +35,7 @@ func TestValidatorErrorCases(t *testing.T) {
 		}
 		input := TestMin{Value: 5}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for invalid min param")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("max with invalid param", func(t *testing.T) {
@@ -48,9 +44,7 @@ func TestValidatorErrorCases(t *testing.T) {
 		}
 		input := TestMax{Value: 5}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for invalid max param")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("len with invalid param", func(t *testing.T) {
@@ -59,9 +53,7 @@ func TestValidatorErrorCases(t *testing.T) {
 		}
 		input := TestLen{Value: "hello"}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for invalid len param")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("eq with invalid param", func(t *testing.T) {
@@ -70,9 +62,7 @@ func TestValidatorErrorCases(t *testing.T) {
 		}
 		input := TestEq{Value: 5}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for invalid eq param")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -150,13 +140,9 @@ func TestUintComparisonValidators(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-				}
+				zhtest.AssertError(t, err)
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -234,13 +220,9 @@ func TestFloatBoundaryValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-				}
+				zhtest.AssertError(t, err)
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -253,22 +235,15 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 		}
 		input := TestMinComplex{Value: 10 + 5i}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for min on complex128")
-			return
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
-		if !errors.As(err, &ve) {
-			t.Errorf("expected ValidationErrors, got %T", err)
-			return
-		}
+		ok := errors.As(err, &ve)
+		zhtest.AssertTrue(t, ok)
 		errs := ve.FieldErrors("Value")
-		if len(errs) == 0 {
-			t.Errorf("expected error on Value field, got: %v", ve)
-		}
+		zhtest.AssertNotEqual(t, 0, len(errs))
 		// Verify error message mentions min
-		if len(errs) > 0 && !strings.Contains(errs[0], "min") {
-			t.Errorf("expected error message to contain 'min', got: %s", errs[0])
+		if len(errs) > 0 {
+			zhtest.AssertTrue(t, strings.Contains(errs[0], "min"))
 		}
 	})
 
@@ -278,22 +253,15 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 		}
 		input := TestMaxComplex{Value: 10 + 5i}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for max on complex128")
-			return
-		}
+		zhtest.AssertError(t, err)
 		var ve ValidationErrors
-		if !errors.As(err, &ve) {
-			t.Errorf("expected ValidationErrors, got %T", err)
-			return
-		}
+		ok := errors.As(err, &ve)
+		zhtest.AssertTrue(t, ok)
 		errs := ve.FieldErrors("Value")
-		if len(errs) == 0 {
-			t.Errorf("expected error on Value field, got: %v", ve)
-		}
+		zhtest.AssertNotEqual(t, 0, len(errs))
 		// Verify error message mentions max
-		if len(errs) > 0 && !strings.Contains(errs[0], "max") {
-			t.Errorf("expected error message to contain 'max', got: %s", errs[0])
+		if len(errs) > 0 {
+			zhtest.AssertTrue(t, strings.Contains(errs[0], "max"))
 		}
 	})
 
@@ -303,9 +271,7 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 		}
 		input := TestMinBool{Value: true}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for min on bool")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("max on boolean", func(t *testing.T) {
@@ -314,9 +280,7 @@ func TestMinMaxOnUnsupportedTypes(t *testing.T) {
 		}
 		input := TestMaxBool{Value: true}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for max on bool")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -393,13 +357,9 @@ func TestInvalidValidatorParams(t *testing.T) {
 			input := tt.setup()
 			err := New().Struct(input)
 			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error for invalid validator param")
-				}
+				zhtest.AssertError(t, err)
 			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -416,9 +376,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 			MinInt32: -2147483648,
 		}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("int overflow attempt", func(t *testing.T) {
@@ -428,9 +386,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 		// Large value should fail
 		input := TestMax{Value: 2147483647}
 		err := New().Struct(&input)
-		if err == nil {
-			t.Error("expected error for large value exceeding max")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("uint64 max", func(t *testing.T) {
@@ -439,9 +395,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 		}
 		input := TestUint64{Value: ^uint64(0)}
 		err := New().Struct(&input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 
 	t.Run("float64 special values", func(t *testing.T) {
@@ -464,9 +418,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 		}
 		input2 := TestInf{Value: math.Inf(1)}
 		err = New().Struct(&input2)
-		if err == nil {
-			t.Error("expected error for +Inf")
-		}
+		zhtest.AssertError(t, err)
 
 		// -Inf should fail gt check (-Inf > -1000 is false)
 		type TestNegInf struct {
@@ -474,9 +426,7 @@ func TestNumericBoundaryValues(t *testing.T) {
 		}
 		input3 := TestNegInf{Value: math.Inf(-1)}
 		err = New().Struct(&input3)
-		if err == nil {
-			t.Error("expected error for -Inf")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("zero comparisons", func(t *testing.T) {
@@ -512,13 +462,9 @@ func TestNumericBoundaryValues(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				err := New().Struct(&tt.input)
 				if tt.wantErr {
-					if err == nil {
-						t.Error("expected error")
-					}
+					zhtest.AssertError(t, err)
 				} else {
-					if err != nil {
-						t.Errorf("unexpected error: %v", err)
-					}
+					zhtest.AssertNoError(t, err)
 				}
 			})
 		}
@@ -536,15 +482,11 @@ func TestMinMaxWithInvalidParams(t *testing.T) {
 
 	// Test min with invalid parameter
 	minInput := TestMinInvalid{Value: "hello"}
-	if err := New().Struct(&minInput); err == nil {
-		t.Error("expected error for min with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&minInput))
 
 	// Test max with invalid parameter
 	maxInput := TestMaxInvalid{Value: "hello"}
-	if err := New().Struct(&maxInput); err == nil {
-		t.Error("expected error for max with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&maxInput))
 }
 
 // TestMinMaxWithCollections tests min/max validators on slices/arrays/maps
@@ -570,64 +512,45 @@ func TestMinMaxWithCollections(t *testing.T) {
 
 	// Test min on slice - too few items
 	minSliceInput := TestMinSlice{Items: []int{1}}
-	if err := New().Struct(&minSliceInput); err == nil {
-		t.Error("expected error for slice with less than min items")
-	}
+	zhtest.AssertError(t, New().Struct(&minSliceInput))
 
 	// Test min on slice - enough items
 	minSliceInputOK := TestMinSlice{Items: []int{1, 2, 3}}
-	if err := New().Struct(&minSliceInputOK); err != nil {
-		t.Errorf("unexpected error for valid slice: %v", err)
-	}
+	zhtest.AssertNoError(t, New().Struct(&minSliceInputOK))
 
 	// Test max on slice - too many items
 	maxSliceInput := TestMaxSlice{Items: []int{1, 2, 3, 4}}
-	if err := New().Struct(&maxSliceInput); err == nil {
-		t.Error("expected error for slice with more than max items")
-	}
+	zhtest.AssertError(t, New().Struct(&maxSliceInput))
 
 	// Test max on slice - within limit
 	maxSliceInputOK := TestMaxSlice{Items: []int{1, 2}}
-	if err := New().Struct(&maxSliceInputOK); err != nil {
-		t.Errorf("unexpected error for valid slice: %v", err)
-	}
+	zhtest.AssertNoError(t, New().Struct(&maxSliceInputOK))
 
 	// Test min on array - too few items (array has fixed size, but we check length)
 	minArrayInput := TestMinArray{Items: [3]int{1, 0, 0}}
-	if err := New().Struct(&minArrayInput); err != nil {
-		// Arrays always have fixed length, so min=2 on [3]int should pass (len=3)
-		t.Logf("Note: arrays have fixed length, validation result: %v", err)
-	}
+	_ = New().Struct(&minArrayInput)
+	// Arrays always have fixed length, so min=2 on [3]int should pass (len=3)
+	// t.Logf("Note: arrays have fixed length, validation result: %v", err)
 
 	// Test max on array
 	maxArrayInput := TestMaxArray{Items: [3]int{1, 2, 3}}
-	if err := New().Struct(&maxArrayInput); err == nil {
-		t.Error("expected error for array with more than max items")
-	}
+	zhtest.AssertError(t, New().Struct(&maxArrayInput))
 
 	// Test min on map - too few items
 	minMapInput := TestMinMap{Items: map[string]int{"a": 1}}
-	if err := New().Struct(&minMapInput); err == nil {
-		t.Error("expected error for map with less than min items")
-	}
+	zhtest.AssertError(t, New().Struct(&minMapInput))
 
 	// Test min on map - enough items
 	minMapInputOK := TestMinMap{Items: map[string]int{"a": 1, "b": 2}}
-	if err := New().Struct(&minMapInputOK); err != nil {
-		t.Errorf("unexpected error for valid map: %v", err)
-	}
+	zhtest.AssertNoError(t, New().Struct(&minMapInputOK))
 
 	// Test max on map - too many items
 	maxMapInput := TestMaxMap{Items: map[string]int{"a": 1, "b": 2, "c": 3}}
-	if err := New().Struct(&maxMapInput); err == nil {
-		t.Error("expected error for map with more than max items")
-	}
+	zhtest.AssertError(t, New().Struct(&maxMapInput))
 
 	// Test max on map - within limit
 	maxMapInputOK := TestMaxMap{Items: map[string]int{"a": 1}}
-	if err := New().Struct(&maxMapInputOK); err != nil {
-		t.Errorf("unexpected error for valid map: %v", err)
-	}
+	zhtest.AssertNoError(t, New().Struct(&maxMapInputOK))
 }
 
 // TestMinMaxWithInvalidParamsOnNumbers tests min/max with invalid params on numeric types
@@ -653,39 +576,27 @@ func TestMinMaxWithInvalidParamsOnNumbers(t *testing.T) {
 
 	// Test min on int with invalid parameter
 	minIntInput := TestMinIntInvalid{Value: 10}
-	if err := New().Struct(&minIntInput); err == nil {
-		t.Error("expected error for min on int with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&minIntInput))
 
 	// Test max on int with invalid parameter
 	maxIntInput := TestMaxIntInvalid{Value: 10}
-	if err := New().Struct(&maxIntInput); err == nil {
-		t.Error("expected error for max on int with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&maxIntInput))
 
 	// Test min on uint with invalid parameter
 	minUintInput := TestMinUintInvalid{Value: 10}
-	if err := New().Struct(&minUintInput); err == nil {
-		t.Error("expected error for min on uint with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&minUintInput))
 
 	// Test max on uint with invalid parameter
 	maxUintInput := TestMaxUintInvalid{Value: 10}
-	if err := New().Struct(&maxUintInput); err == nil {
-		t.Error("expected error for max on uint with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&maxUintInput))
 
 	// Test min on float with invalid parameter
 	minFloatInput := TestMinFloatInvalid{Value: 10.5}
-	if err := New().Struct(&minFloatInput); err == nil {
-		t.Error("expected error for min on float with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&minFloatInput))
 
 	// Test max on float with invalid parameter
 	maxFloatInput := TestMaxFloatInvalid{Value: 10.5}
-	if err := New().Struct(&maxFloatInput); err == nil {
-		t.Error("expected error for max on float with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&maxFloatInput))
 }
 
 // TestMinMaxInvalidParamsOnCollections tests min/max with invalid params on slices/arrays/maps
@@ -705,25 +616,17 @@ func TestMinMaxInvalidParamsOnCollections(t *testing.T) {
 
 	// Test min on slice with invalid parameter
 	minSliceInput := TestMinSliceInvalid{Items: []int{1, 2}}
-	if err := New().Struct(&minSliceInput); err == nil {
-		t.Error("expected error for min on slice with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&minSliceInput))
 
 	// Test max on slice with invalid parameter
 	maxSliceInput := TestMaxSliceInvalid{Items: []int{1, 2}}
-	if err := New().Struct(&maxSliceInput); err == nil {
-		t.Error("expected error for max on slice with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&maxSliceInput))
 
 	// Test min on map with invalid parameter
 	minMapInput := TestMinMapInvalid{Items: map[string]int{"a": 1}}
-	if err := New().Struct(&minMapInput); err == nil {
-		t.Error("expected error for min on map with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&minMapInput))
 
 	// Test max on map with invalid parameter
 	maxMapInput := TestMaxMapInvalid{Items: map[string]int{"a": 1}}
-	if err := New().Struct(&maxMapInput); err == nil {
-		t.Error("expected error for max on map with invalid parameter")
-	}
+	zhtest.AssertError(t, New().Struct(&maxMapInput))
 }

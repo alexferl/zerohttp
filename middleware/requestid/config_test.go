@@ -4,24 +4,19 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRequestIDConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Header != "X-Request-Id" {
-		t.Errorf("expected default header = 'X-Request-Id', got %s", cfg.Header)
-	}
-	if cfg.Generator == nil {
-		t.Error("expected default generator to be set")
-	}
-	if cfg.ContextKey != ContextKey {
-		t.Errorf("expected default context key = RequestIDContextKey, got %v", cfg.ContextKey)
-	}
+	zhtest.AssertEqual(t, "X-Request-Id", cfg.Header)
+	zhtest.AssertNotNil(t, cfg.Generator)
+	zhtest.AssertEqual(t, ContextKey, cfg.ContextKey)
 
 	// Test context key type
-	if _, ok := cfg.ContextKey.(contextKey); !ok {
-		t.Error("expected ContextKey to be of type requestIDContextKey")
-	}
+	_, ok := cfg.ContextKey.(contextKey)
+	zhtest.AssertTrue(t, ok)
 }
 
 func TestGenerateRequestID(t *testing.T) {
@@ -29,12 +24,8 @@ func TestGenerateRequestID(t *testing.T) {
 		hexPattern := regexp.MustCompile("^[a-f0-9]+$")
 		for range 10 {
 			id := GenerateRequestID()
-			if len(id) != 32 {
-				t.Errorf("expected request ID length = 32, got %d for ID: %s", len(id), id)
-			}
-			if !hexPattern.MatchString(id) {
-				t.Errorf("request ID should only contain hex characters, got: %s", id)
-			}
+			zhtest.AssertEqual(t, 32, len(id))
+			zhtest.AssertTrue(t, hexPattern.MatchString(id))
 		}
 	})
 
@@ -43,14 +34,10 @@ func TestGenerateRequestID(t *testing.T) {
 		iterations := 100
 		for range iterations {
 			id := GenerateRequestID()
-			if ids[id] {
-				t.Errorf("found duplicate request ID: %s", id)
-			}
+			zhtest.AssertFalse(t, ids[id])
 			ids[id] = true
 		}
-		if len(ids) != iterations {
-			t.Errorf("expected %d unique IDs, got %d", iterations, len(ids))
-		}
+		zhtest.AssertEqual(t, iterations, len(ids))
 	})
 
 	t.Run("performance", func(t *testing.T) {
@@ -58,9 +45,7 @@ func TestGenerateRequestID(t *testing.T) {
 		iterations := 1000
 		for range iterations {
 			id := GenerateRequestID()
-			if len(id) != 32 {
-				t.Errorf("unexpected ID length: %d", len(id))
-			}
+			zhtest.AssertEqual(t, 32, len(id))
 		}
 		elapsed := time.Since(start)
 		avgTime := elapsed / time.Duration(iterations)
@@ -85,16 +70,12 @@ func TestGenerateRequestID(t *testing.T) {
 		uniqueIDs := make(map[string]bool)
 		for range numGoroutines * numIterations {
 			id := <-ids
-			if uniqueIDs[id] {
-				t.Errorf("found duplicate ID in concurrent generation: %s", id)
-			}
+			zhtest.AssertFalse(t, uniqueIDs[id])
 			uniqueIDs[id] = true
 		}
 
 		expectedCount := numGoroutines * numIterations
-		if len(uniqueIDs) != expectedCount {
-			t.Errorf("expected %d unique IDs, got %d", expectedCount, len(uniqueIDs))
-		}
+		zhtest.AssertEqual(t, expectedCount, len(uniqueIDs))
 	})
 }
 
@@ -105,9 +86,7 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 			Generator:  GenerateRequestID,
 			ContextKey: ContextKey,
 		}
-		if cfg.Header != "X-Trace-Id" {
-			t.Errorf("expected header = 'X-Trace-Id', got %s", cfg.Header)
-		}
+		zhtest.AssertEqual(t, "X-Trace-Id", cfg.Header)
 	})
 
 	t.Run("generator assignment", func(t *testing.T) {
@@ -117,13 +96,8 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 			Generator:  customGenerator,
 			ContextKey: ContextKey,
 		}
-		if cfg.Generator == nil {
-			t.Error("expected generator to be set")
-		}
-		result := cfg.Generator()
-		if result != "custom-id-123" {
-			t.Errorf("expected custom generator result = 'custom-id-123', got %s", result)
-		}
+		zhtest.AssertNotNil(t, cfg.Generator)
+		zhtest.AssertEqual(t, "custom-id-123", cfg.Generator())
 	})
 
 	t.Run("context key assignment", func(t *testing.T) {
@@ -135,9 +109,7 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 			Generator:  GenerateRequestID,
 			ContextKey: customKeyInstance,
 		}
-		if cfg.ContextKey != customKeyInstance {
-			t.Errorf("expected context key to be customKeyInstance, got %v", cfg.ContextKey)
-		}
+		zhtest.AssertEqual(t, customKeyInstance, cfg.ContextKey)
 	})
 
 	t.Run("multiple fields assignment", func(t *testing.T) {
@@ -148,18 +120,10 @@ func TestRequestIDConfig_StructAssignment(t *testing.T) {
 			ContextKey: ContextKey,
 		}
 
-		if cfg.Header != "X-Custom-Request-Id" {
-			t.Errorf("expected header = 'X-Custom-Request-Id', got %s", cfg.Header)
-		}
-		if cfg.Generator == nil {
-			t.Error("expected generator to be set")
-		}
-		if cfg.Generator() != "multi-option-id" {
-			t.Error("expected custom generator to work")
-		}
-		if cfg.ContextKey != ContextKey {
-			t.Errorf("expected context key = RequestIDContextKey, got %v", cfg.ContextKey)
-		}
+		zhtest.AssertEqual(t, "X-Custom-Request-Id", cfg.Header)
+		zhtest.AssertNotNil(t, cfg.Generator)
+		zhtest.AssertEqual(t, "multi-option-id", cfg.Generator())
+		zhtest.AssertEqual(t, ContextKey, cfg.ContextKey)
 	})
 }
 
@@ -173,9 +137,7 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 					Generator:  GenerateRequestID,
 					ContextKey: ContextKey,
 				}
-				if cfg.Header != header {
-					t.Errorf("expected header = %s, got %s", header, cfg.Header)
-				}
+				zhtest.AssertEqual(t, header, cfg.Header)
 			})
 		}
 	})
@@ -199,10 +161,7 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 					Generator:  tt.generator,
 					ContextKey: ContextKey,
 				}
-				result := cfg.Generator()
-				if result != tt.expected {
-					t.Errorf("expected generator result = %s, got %s", tt.expected, result)
-				}
+				zhtest.AssertEqual(t, tt.expected, cfg.Generator())
 			})
 		}
 	})
@@ -224,9 +183,7 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 					Generator:  GenerateRequestID,
 					ContextKey: tt.key,
 				}
-				if cfg.ContextKey != tt.key {
-					t.Errorf("expected context key = %v, got %v", tt.key, cfg.ContextKey)
-				}
+				zhtest.AssertEqual(t, tt.key, cfg.ContextKey)
 			})
 		}
 	})
@@ -245,9 +202,7 @@ func TestRequestIDConfig_CommonScenarios(t *testing.T) {
 					Generator:  GenerateRequestID,
 					ContextKey: ContextKey,
 				}
-				if cfg.Header != header {
-					t.Errorf("expected header = %s, got %s", header, cfg.Header)
-				}
+				zhtest.AssertEqual(t, header, cfg.Header)
 			})
 		}
 	})
@@ -260,9 +215,7 @@ func TestRequestIDConfig_EdgeCases(t *testing.T) {
 			Generator:  nil,
 			ContextKey: ContextKey,
 		}
-		if cfg.Generator != nil {
-			t.Error("expected generator to be nil")
-		}
+		zhtest.AssertNil(t, cfg.Generator)
 	})
 
 	t.Run("empty string context key", func(t *testing.T) {
@@ -271,24 +224,14 @@ func TestRequestIDConfig_EdgeCases(t *testing.T) {
 			Generator:  GenerateRequestID,
 			ContextKey: "",
 		}
-		if cfg.Header != "" {
-			t.Errorf("expected empty header, got %s", cfg.Header)
-		}
-		if cfg.ContextKey != "" {
-			t.Errorf("expected empty context key, got %v", cfg.ContextKey)
-		}
+		zhtest.AssertEmpty(t, cfg.Header)
+		zhtest.AssertEmpty(t, cfg.ContextKey)
 	})
 
 	t.Run("zero values", func(t *testing.T) {
 		cfg := Config{} // Zero values
-		if cfg.Header != "" {
-			t.Errorf("expected zero header = '', got %s", cfg.Header)
-		}
-		if cfg.Generator != nil {
-			t.Error("expected zero generator = nil, got non-nil function")
-		}
-		if cfg.ContextKey != nil {
-			t.Errorf("expected zero context key = nil, got %v", cfg.ContextKey)
-		}
+		zhtest.AssertEmpty(t, cfg.Header)
+		zhtest.AssertNil(t, cfg.Generator)
+		zhtest.AssertNil(t, cfg.ContextKey)
 	})
 }

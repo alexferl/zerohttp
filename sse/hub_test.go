@@ -19,14 +19,10 @@ func TestHub(t *testing.T) {
 		stream, _ := New(w, r)
 		hub.Register(stream)
 
-		if hub.ConnectionCount() != 1 {
-			t.Errorf("expected 1 connection, got %d", hub.ConnectionCount())
-		}
+		zhtest.AssertEqual(t, 1, hub.ConnectionCount())
 
 		hub.Unregister(stream)
-		if hub.ConnectionCount() != 0 {
-			t.Errorf("expected 0 connections, got %d", hub.ConnectionCount())
-		}
+		zhtest.AssertEqual(t, 0, hub.ConnectionCount())
 	})
 
 	t.Run("subscribes to topics", func(t *testing.T) {
@@ -37,14 +33,10 @@ func TestHub(t *testing.T) {
 		stream, _ := New(w, r)
 		hub.Subscribe(stream, "notifications")
 
-		if hub.TopicCount("notifications") != 1 {
-			t.Errorf("expected 1 subscriber, got %d", hub.TopicCount("notifications"))
-		}
+		zhtest.AssertEqual(t, 1, hub.TopicCount("notifications"))
 
 		hub.Unsubscribe(stream, "notifications")
-		if hub.TopicCount("notifications") != 0 {
-			t.Errorf("expected 0 subscribers, got %d", hub.TopicCount("notifications"))
-		}
+		zhtest.AssertEqual(t, 0, hub.TopicCount("notifications"))
 	})
 
 	t.Run("broadcasts to all connections", func(t *testing.T) {
@@ -97,12 +89,8 @@ func TestHub(t *testing.T) {
 
 		hub.Unregister(stream)
 
-		if hub.TopicCount("topic1") != 0 {
-			t.Error("expected stream to be removed from topic1")
-		}
-		if hub.TopicCount("topic2") != 0 {
-			t.Error("expected stream to be removed from topic2")
-		}
+		zhtest.AssertEqual(t, 0, hub.TopicCount("topic1"))
+		zhtest.AssertEqual(t, 0, hub.TopicCount("topic2"))
 	})
 
 	t.Run("auto-unregisters failed connections on broadcast", func(t *testing.T) {
@@ -128,16 +116,12 @@ func TestHub(t *testing.T) {
 		}
 		hub.Register(badStream)
 
-		if hub.ConnectionCount() != 2 {
-			t.Errorf("expected 2 connections, got %d", hub.ConnectionCount())
-		}
+		zhtest.AssertEqual(t, 2, hub.ConnectionCount())
 
 		// Broadcast should auto-unregister the failed connection
 		hub.Broadcast(Event{Data: []byte("test")})
 
-		if hub.ConnectionCount() != 1 {
-			t.Errorf("expected 1 connection after broadcast, got %d", hub.ConnectionCount())
-		}
+		zhtest.AssertEqual(t, 1, hub.ConnectionCount())
 	})
 
 	t.Run("auto-unregisters failed connections on broadcast to topic", func(t *testing.T) {
@@ -163,16 +147,12 @@ func TestHub(t *testing.T) {
 		}
 		hub.Subscribe(badStream, "test-topic")
 
-		if hub.TopicCount("test-topic") != 2 {
-			t.Errorf("expected 2 subscribers, got %d", hub.TopicCount("test-topic"))
-		}
+		zhtest.AssertEqual(t, 2, hub.TopicCount("test-topic"))
 
 		// Broadcast should auto-unregister the failed connection
 		hub.BroadcastTo("test-topic", Event{Data: []byte("test")})
 
-		if hub.TopicCount("test-topic") != 1 {
-			t.Errorf("expected 1 subscriber after broadcast, got %d", hub.TopicCount("test-topic"))
-		}
+		zhtest.AssertEqual(t, 1, hub.TopicCount("test-topic"))
 	})
 }
 
@@ -187,16 +167,12 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 			stream, err := New(w, r)
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 			streams = append(streams, stream)
 			hub.Register(stream)
 		}
 
-		if hub.ConnectionCount() != 10 {
-			t.Errorf("expected 10 connections, got %d", hub.ConnectionCount())
-		}
+		zhtest.AssertEqual(t, 10, hub.ConnectionCount())
 
 		// Run multiple iterations to increase chance of race detection
 		for iter := 0; iter < 100; iter++ {
@@ -237,16 +213,12 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 			stream, err := New(w, r)
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 			streams = append(streams, stream)
 			hub.Subscribe(stream, "test-topic")
 		}
 
-		if hub.TopicCount("test-topic") != 10 {
-			t.Errorf("expected 10 subscribers, got %d", hub.TopicCount("test-topic"))
-		}
+		zhtest.AssertEqual(t, 10, hub.TopicCount("test-topic"))
 
 		// Run multiple iterations to increase chance of race detection
 		for iter := 0; iter < 100; iter++ {
@@ -288,9 +260,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 			stream, err := New(w, r)
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 			streams = append(streams, stream)
 			hub.Register(stream)
 		}

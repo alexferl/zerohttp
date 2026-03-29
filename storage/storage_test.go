@@ -3,13 +3,11 @@ package storage
 import (
 	"errors"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestErrLockNotSupported(t *testing.T) {
-	if ErrLockNotSupported == nil {
-		t.Error("ErrLockNotSupported should not be nil")
-	}
-	if !errors.Is(ErrLockNotSupported, ErrLockNotSupported) {
-		t.Error("ErrLockNotSupported should match itself")
-	}
+	zhtest.AssertNotNil(t, ErrLockNotSupported)
+	zhtest.AssertTrue(t, errors.Is(ErrLockNotSupported, ErrLockNotSupported))
 }

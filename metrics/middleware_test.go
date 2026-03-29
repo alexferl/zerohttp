@@ -9,6 +9,7 @@ import (
 
 	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // flusherRecorder is a test ResponseWriter that implements http.Flusher
@@ -40,19 +41,12 @@ func TestNewMiddleware_NoConfig(t *testing.T) {
 
 	wrapped.ServeHTTP(rec, req)
 
-	if !called {
-		t.Error("handler should have been called")
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertTrue(t, called)
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Metrics should be recorded since we passed a registry
 	families := reg.Gather()
-	if len(families) == 0 {
-		t.Error("expected metrics to be recorded when a registry is provided")
-	}
+	zhtest.AssertGreater(t, len(families), 0)
 }
 
 func TestNewMiddleware_NilRegistry(t *testing.T) {
@@ -72,13 +66,8 @@ func TestNewMiddleware_NilRegistry(t *testing.T) {
 
 	wrapped.ServeHTTP(rec, req)
 
-	if !called {
-		t.Error("handler should have been called")
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertTrue(t, called)
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }
 
 func TestMiddleware_BasicRequest(t *testing.T) {
@@ -104,9 +93,7 @@ func TestMiddleware_BasicRequest(t *testing.T) {
 
 	wrapped.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Check that metrics were recorded
 	families := reg.Gather()
@@ -124,9 +111,7 @@ func TestMiddleware_BasicRequest(t *testing.T) {
 	}
 
 	for _, name := range expectedMetrics {
-		if !metricNames[name] {
-			t.Errorf("expected metric %s to be recorded", name)
-		}
+		zhtest.AssertTrue(t, metricNames[name])
 	}
 }
 
@@ -151,9 +136,7 @@ func TestMiddleware_ExcludedPath(t *testing.T) {
 
 	wrapped.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 
 	// Check that no metrics values were recorded for excluded path
 	families := reg.Gather()
@@ -169,9 +152,7 @@ func TestMiddleware_ExcludedPath(t *testing.T) {
 
 	if requestCounter != nil {
 		for _, m := range requestCounter.Metrics {
-			if m.Labels["path"] == "/health" {
-				t.Error("expected no metrics for excluded /health path")
-			}
+			zhtest.AssertNotEqual(t, "/health", m.Labels["path"])
 		}
 	}
 }
@@ -219,9 +200,7 @@ func TestMiddleware_DifferentStatusCodes(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, requestCounter)
 
 	statuses := make(map[string]int)
 	for _, m := range requestCounter.Metrics {
@@ -230,9 +209,7 @@ func TestMiddleware_DifferentStatusCodes(t *testing.T) {
 		}
 	}
 
-	if len(statuses) != 3 {
-		t.Errorf("expected 3 different status codes, got %d: %v", len(statuses), statuses)
-	}
+	zhtest.AssertEqual(t, 3, len(statuses))
 }
 
 func TestMiddleware_RequestSize(t *testing.T) {
@@ -270,9 +247,7 @@ func TestMiddleware_RequestSize(t *testing.T) {
 		}
 	}
 
-	if !found {
-		t.Error("expected http_request_size_bytes metric")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestMiddleware_ResponseSize(t *testing.T) {
@@ -308,14 +283,9 @@ func TestMiddleware_ResponseSize(t *testing.T) {
 		}
 	}
 
-	if responseSizeHist == nil {
-		t.Fatal("expected http_response_size_bytes metric")
-	}
-
+	zhtest.AssertNotNil(t, responseSizeHist)
 	// Should have at least one metric
-	if len(responseSizeHist.Metrics) == 0 {
-		t.Error("expected at least one histogram metric")
-	}
+	zhtest.AssertGreater(t, len(responseSizeHist.Metrics), 0)
 }
 
 func TestMiddleware_InFlightGauge(t *testing.T) {
@@ -359,9 +329,7 @@ func TestMiddleware_InFlightGauge(t *testing.T) {
 		}
 	}
 
-	if inFlight == nil {
-		t.Fatal("expected http_requests_in_flight metric")
-	}
+	zhtest.AssertNotNil(t, inFlight)
 
 	// Wait for request to complete
 	<-done
@@ -405,9 +373,7 @@ func TestMiddleware_CustomPathLabelFunc(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, requestCounter)
 
 	found := false
 	for _, m := range requestCounter.Metrics {
@@ -417,9 +383,7 @@ func TestMiddleware_CustomPathLabelFunc(t *testing.T) {
 		}
 	}
 
-	if !found {
-		t.Errorf("expected path label to be normalized to /users/{id}")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestMiddleware_DefaultStatusCode(t *testing.T) {
@@ -456,9 +420,7 @@ func TestMiddleware_DefaultStatusCode(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, requestCounter)
 
 	found := false
 	for _, m := range requestCounter.Metrics {
@@ -468,9 +430,7 @@ func TestMiddleware_DefaultStatusCode(t *testing.T) {
 		}
 	}
 
-	if !found {
-		t.Error("expected status 200 to be recorded for implicit OK response")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestResponseWriter_CaptureStatusAndSize(t *testing.T) {
@@ -482,28 +442,18 @@ func TestResponseWriter_CaptureStatusAndSize(t *testing.T) {
 
 	// Test WriteHeader
 	rw.WriteHeader(http.StatusCreated)
-	if rw.statusCode != http.StatusCreated {
-		t.Errorf("expected status %d, got %d", http.StatusCreated, rw.statusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusCreated, rw.statusCode)
 
 	// Test that second WriteHeader doesn't change status
 	rw.WriteHeader(http.StatusInternalServerError)
-	if rw.statusCode != http.StatusCreated {
-		t.Errorf("status should not change after first WriteHeader")
-	}
+	zhtest.AssertEqual(t, http.StatusCreated, rw.statusCode)
 
 	// Test Write
 	data := []byte("hello world")
 	n, err := rw.Write(data)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if n != len(data) {
-		t.Errorf("expected %d bytes written, got %d", len(data), n)
-	}
-	if rw.size != int64(len(data)) {
-		t.Errorf("expected size %d, got %d", len(data), rw.size)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, len(data), n)
+	zhtest.AssertEqual(t, int64(len(data)), rw.size)
 }
 
 func TestResponseWriter_WriteSetsDefaultStatus(t *testing.T) {
@@ -516,9 +466,7 @@ func TestResponseWriter_WriteSetsDefaultStatus(t *testing.T) {
 	// Write without explicit WriteHeader should set 200
 	_, _ = rw.Write([]byte("test"))
 
-	if rw.statusCode != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rw.statusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rw.statusCode)
 }
 
 func TestMiddleware_MultipleMethods(t *testing.T) {
@@ -556,9 +504,7 @@ func TestMiddleware_MultipleMethods(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, requestCounter)
 
 	methodsFound := make(map[string]bool)
 	for _, m := range requestCounter.Metrics {
@@ -568,9 +514,7 @@ func TestMiddleware_MultipleMethods(t *testing.T) {
 	}
 
 	for _, method := range methods {
-		if !methodsFound[method] {
-			t.Errorf("expected method %s to be recorded", method)
-		}
+		zhtest.AssertTrue(t, methodsFound[method])
 	}
 }
 
@@ -606,25 +550,19 @@ func TestMiddleware_Router404And405(t *testing.T) {
 	req1 := httptest.NewRequest(http.MethodGet, "/exists", nil)
 	rec1 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rec1, req1)
-	if rec1.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec1.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec1.Code)
 
 	// Test 405
 	req2 := httptest.NewRequest(http.MethodPost, "/exists", nil)
 	rec2 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rec2, req2)
-	if rec2.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d", rec2.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusMethodNotAllowed, rec2.Code)
 
 	// Test 404
 	req3 := httptest.NewRequest(http.MethodGet, "/not-found", nil)
 	rec3 := httptest.NewRecorder()
 	wrapped.ServeHTTP(rec3, req3)
-	if rec3.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", rec3.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusNotFound, rec3.Code)
 
 	// Check that all status codes are recorded
 	families := reg.Gather()
@@ -637,9 +575,7 @@ func TestMiddleware_Router404And405(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, requestCounter)
 
 	statuses := make(map[string]uint64)
 	for _, m := range requestCounter.Metrics {
@@ -648,15 +584,9 @@ func TestMiddleware_Router404And405(t *testing.T) {
 		}
 	}
 
-	if statuses["200"] != 1 {
-		t.Errorf("expected 1 request with status 200, got %d", statuses["200"])
-	}
-	if statuses["404"] != 1 {
-		t.Errorf("expected 1 request with status 404, got %d", statuses["404"])
-	}
-	if statuses["405"] != 1 {
-		t.Errorf("expected 1 request with status 405, got %d", statuses["405"])
-	}
+	zhtest.AssertEqual(t, uint64(1), statuses["200"])
+	zhtest.AssertEqual(t, uint64(1), statuses["404"])
+	zhtest.AssertEqual(t, uint64(1), statuses["405"])
 }
 
 func TestMiddleware_NotFound(t *testing.T) {
@@ -701,9 +631,7 @@ func TestMiddleware_NotFound(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, requestCounter)
 
 	statuses := make(map[string]uint64)
 	for _, m := range requestCounter.Metrics {
@@ -712,12 +640,8 @@ func TestMiddleware_NotFound(t *testing.T) {
 		}
 	}
 
-	if statuses["200"] != 1 {
-		t.Errorf("expected 1 request with status 200, got %d", statuses["200"])
-	}
-	if statuses["405"] != 1 {
-		t.Errorf("expected 1 request with status 405, got %d", statuses["405"])
-	}
+	zhtest.AssertEqual(t, uint64(1), statuses["200"])
+	zhtest.AssertEqual(t, uint64(1), statuses["405"])
 }
 
 func TestMiddleware_CustomLabels(t *testing.T) {
@@ -759,31 +683,18 @@ func TestMiddleware_CustomLabels(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
-
-	if len(requestCounter.Metrics) != 1 {
-		t.Fatalf("expected 1 metric, got %d", len(requestCounter.Metrics))
-	}
+	zhtest.AssertNotNil(t, requestCounter)
+	zhtest.AssertEqual(t, 1, len(requestCounter.Metrics))
 
 	m := requestCounter.Metrics[0]
 
 	// Check standard labels
-	if m.Labels["method"] != "GET" {
-		t.Errorf("expected method=GET, got %s", m.Labels["method"])
-	}
-	if m.Labels["status"] != "200" {
-		t.Errorf("expected status=200, got %s", m.Labels["status"])
-	}
+	zhtest.AssertEqual(t, "GET", m.Labels["method"])
+	zhtest.AssertEqual(t, "200", m.Labels["status"])
 
 	// Check custom labels
-	if m.Labels["tenant"] != "tenant-123" {
-		t.Errorf("expected tenant=tenant-123, got %s", m.Labels["tenant"])
-	}
-	if m.Labels["region"] != "us-east" {
-		t.Errorf("expected region=us-east, got %s", m.Labels["region"])
-	}
+	zhtest.AssertEqual(t, "tenant-123", m.Labels["tenant"])
+	zhtest.AssertEqual(t, "us-east", m.Labels["region"])
 }
 
 func TestMiddleware_PanicRecords500(t *testing.T) {
@@ -826,9 +737,7 @@ func TestMiddleware_PanicRecords500(t *testing.T) {
 		}
 	}
 
-	if requestCounter == nil {
-		t.Fatal("expected http_requests_total metric")
-	}
+	zhtest.AssertNotNil(t, requestCounter)
 
 	found500 := false
 	for _, m := range requestCounter.Metrics {
@@ -838,9 +747,7 @@ func TestMiddleware_PanicRecords500(t *testing.T) {
 		}
 	}
 
-	if !found500 {
-		t.Error("expected status 500 to be recorded for panic request")
-	}
+	zhtest.AssertTrue(t, found500)
 }
 
 func TestMiddleware_RegistryInContext(t *testing.T) {
@@ -866,13 +773,8 @@ func TestMiddleware_RegistryInContext(t *testing.T) {
 	rec := httptest.NewRecorder()
 	wrapped.ServeHTTP(rec, req)
 
-	if ctxRegistry == nil {
-		t.Error("expected registry to be in context")
-	}
-
-	if ctxRegistry != reg {
-		t.Error("expected context registry to be the same as the one passed to middleware")
-	}
+	zhtest.AssertNotNil(t, ctxRegistry)
+	zhtest.AssertEqual(t, reg, ctxRegistry)
 }
 
 func TestMiddleware_responseWriter_Flush(t *testing.T) {
@@ -916,9 +818,7 @@ func TestMiddleware_responseWriter_Flush(t *testing.T) {
 			// Call Flush
 			rw.Flush()
 
-			if *flushCalled != tt.expectFlushCalled {
-				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectFlushCalled, *flushCalled)
 		})
 	}
 }
@@ -935,10 +835,7 @@ func TestMiddleware_responseWriter_Flush_SupportsSSE(t *testing.T) {
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try to get a Flusher from the writer
 		f, ok := w.(http.Flusher)
-		if !ok {
-			t.Error("expected ResponseWriter to implement http.Flusher")
-			return
-		}
+		zhtest.AssertTrue(t, ok)
 
 		// Write and flush like SSE would
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)
@@ -950,11 +847,6 @@ func TestMiddleware_responseWriter_Flush_SupportsSSE(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/events", nil)
 	handler.ServeHTTP(rec, req)
 
-	if !rec.flushed {
-		t.Error("expected Flush to be called on underlying ResponseWriter")
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertTrue(t, rec.flushed)
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }

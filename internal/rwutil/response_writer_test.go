@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // flusherRecorder is a test ResponseWriter that implements http.Flusher
@@ -22,13 +23,8 @@ func TestNewResponseWriter(t *testing.T) {
 	rec := httptest.NewRecorder()
 	rw := NewResponseWriter(rec)
 
-	if rw.StatusCode() != http.StatusOK {
-		t.Errorf("expected default status code %d, got %d", http.StatusOK, rw.StatusCode())
-	}
-
-	if rw.HeaderWritten() {
-		t.Error("expected HeaderWritten to be false initially")
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rw.StatusCode())
+	zhtest.AssertFalse(t, rw.HeaderWritten())
 }
 
 func TestResponseWriter_WriteHeader(t *testing.T) {
@@ -37,17 +33,9 @@ func TestResponseWriter_WriteHeader(t *testing.T) {
 
 	rw.WriteHeader(http.StatusNotFound)
 
-	if rw.StatusCode() != http.StatusNotFound {
-		t.Errorf("expected status code %d, got %d", http.StatusNotFound, rw.StatusCode())
-	}
-
-	if !rw.HeaderWritten() {
-		t.Error("expected HeaderWritten to be true after WriteHeader")
-	}
-
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected recorder code %d, got %d", http.StatusNotFound, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusNotFound, rw.StatusCode())
+	zhtest.AssertTrue(t, rw.HeaderWritten())
+	zhtest.AssertEqual(t, http.StatusNotFound, rec.Code)
 }
 
 func TestResponseWriter_WriteHeader_MultipleCalls(t *testing.T) {
@@ -57,13 +45,8 @@ func TestResponseWriter_WriteHeader_MultipleCalls(t *testing.T) {
 	rw.WriteHeader(http.StatusNotFound)
 	rw.WriteHeader(http.StatusInternalServerError) // Should be ignored
 
-	if rw.StatusCode() != http.StatusNotFound {
-		t.Errorf("expected status code to remain %d, got %d", http.StatusNotFound, rw.StatusCode())
-	}
-
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected recorder code to remain %d, got %d", http.StatusNotFound, rec.Code)
-	}
+	zhtest.AssertEqual(t, http.StatusNotFound, rw.StatusCode())
+	zhtest.AssertEqual(t, http.StatusNotFound, rec.Code)
 }
 
 func TestResponseWriter_Write(t *testing.T) {
@@ -72,25 +55,12 @@ func TestResponseWriter_Write(t *testing.T) {
 
 	data := []byte("hello world")
 	n, err := rw.Write(data)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if n != len(data) {
-		t.Errorf("expected to write %d bytes, wrote %d", len(data), n)
-	}
-
-	if rw.StatusCode() != http.StatusOK {
-		t.Errorf("expected status code %d after Write, got %d", http.StatusOK, rw.StatusCode())
-	}
-
-	if !rw.HeaderWritten() {
-		t.Error("expected HeaderWritten to be true after Write")
-	}
-
-	if rec.Body.String() != "hello world" {
-		t.Errorf("expected body %q, got %q", "hello world", rec.Body.String())
-	}
+	zhtest.AssertEqual(t, len(data), n)
+	zhtest.AssertEqual(t, http.StatusOK, rw.StatusCode())
+	zhtest.AssertTrue(t, rw.HeaderWritten())
+	zhtest.AssertEqual(t, "hello world", rec.Body.String())
 }
 
 func TestResponseWriter_Write_WithHeader(t *testing.T) {
@@ -99,17 +69,10 @@ func TestResponseWriter_Write_WithHeader(t *testing.T) {
 
 	rw.WriteHeader(http.StatusCreated)
 	n, err := rw.Write([]byte("created"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
-	if n != 7 {
-		t.Errorf("expected to write 7 bytes, wrote %d", n)
-	}
-
-	if rw.StatusCode() != http.StatusCreated {
-		t.Errorf("expected status code %d, got %d", http.StatusCreated, rw.StatusCode())
-	}
+	zhtest.AssertEqual(t, 7, n)
+	zhtest.AssertEqual(t, http.StatusCreated, rw.StatusCode())
 }
 
 func TestResponseWriter_Header(t *testing.T) {
@@ -118,18 +81,14 @@ func TestResponseWriter_Header(t *testing.T) {
 
 	rw.Header().Set("X-Custom-Header", "value")
 
-	if rec.Header().Get("X-Custom-Header") != "value" {
-		t.Error("expected header to be set on underlying recorder")
-	}
+	zhtest.AssertEqual(t, "value", rec.Header().Get("X-Custom-Header"))
 }
 
 func TestNewFlusherResponseWriter(t *testing.T) {
 	rec := httptest.NewRecorder()
 	frw := NewFlusherResponseWriter(rec)
 
-	if frw.StatusCode() != http.StatusOK {
-		t.Errorf("expected default status code %d, got %d", http.StatusOK, frw.StatusCode())
-	}
+	zhtest.AssertEqual(t, http.StatusOK, frw.StatusCode())
 
 	// Should not panic
 	frw.Flush()
@@ -144,9 +103,7 @@ func TestFlusherResponseWriter_Flush(t *testing.T) {
 	frw.Flush()
 
 	// The recorder should have the data
-	if rec.Body.String() != "data" {
-		t.Errorf("expected body %q, got %q", "data", rec.Body.String())
-	}
+	zhtest.AssertEqual(t, "data", rec.Body.String())
 }
 
 func TestResponseWriter_Flush(t *testing.T) {
@@ -188,9 +145,7 @@ func TestResponseWriter_Flush(t *testing.T) {
 			// Call Flush
 			rw.Flush()
 
-			if *flushCalled != tt.expectFlushCalled {
-				t.Errorf("expected flush called=%v, got=%v", tt.expectFlushCalled, *flushCalled)
-			}
+			zhtest.AssertEqual(t, tt.expectFlushCalled, *flushCalled)
 		})
 	}
 }
@@ -204,9 +159,7 @@ func TestResponseWriter_Flush_SupportsSSE(t *testing.T) {
 	// Verify it implements Flusher
 	var f http.Flusher
 	f, ok := interface{}(rw).(http.Flusher)
-	if !ok {
-		t.Fatal("expected ResponseWriter to implement http.Flusher")
-	}
+	zhtest.AssertTrue(t, ok)
 
 	// Write and flush like SSE would
 	rw.Header().Set(httpx.HeaderContentType, httpx.MIMETextEventStream)
@@ -214,11 +167,6 @@ func TestResponseWriter_Flush_SupportsSSE(t *testing.T) {
 	_, _ = rw.Write([]byte("data: hello\n\n"))
 	f.Flush()
 
-	if !rec.flushed {
-		t.Error("expected Flush to be called on underlying ResponseWriter")
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
+	zhtest.AssertTrue(t, rec.flushed)
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 }

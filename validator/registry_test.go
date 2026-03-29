@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // Test structs for registry testing
@@ -76,15 +78,11 @@ func TestGetTypeInfo_CacheHit(t *testing.T) {
 
 	// First call - cache miss
 	info1 := freshRegistry.GetTypeInfo(typ)
-	if info1 == nil {
-		t.Fatal("expected non-nil info")
-	}
+	zhtest.AssertNotNil(t, info1)
 
 	// Second call - cache hit (tests line 46-48)
 	info2 := freshRegistry.GetTypeInfo(typ)
-	if info2 != info1 {
-		t.Error("expected same info from cache")
-	}
+	zhtest.AssertEqual(t, info1, info2)
 }
 
 // TestGetTypeInfo_LoadOrStoreRace tests the LoadOrStore path when another goroutine stores first
@@ -102,9 +100,7 @@ func TestGetTypeInfo_LoadOrStoreRace(t *testing.T) {
 
 	// Now call GetTypeInfo - it should hit the fast path and return pre-populated info
 	info := freshRegistry.GetTypeInfo(typ)
-	if info != prePopulatedInfo {
-		t.Error("expected pre-populated info from cache")
-	}
+	zhtest.AssertEqual(t, prePopulatedInfo, info)
 }
 
 // TestGetTypeInfo_ConcurrentAccess tests concurrent access to the registry
@@ -135,8 +131,8 @@ func TestGetTypeInfo_ConcurrentAccess(t *testing.T) {
 	for info := range results {
 		if firstInfo == nil {
 			firstInfo = info
-		} else if info != firstInfo {
-			t.Error("expected all goroutines to get the same cached info")
+		} else {
+			zhtest.AssertEqual(t, firstInfo, info)
 		}
 	}
 }
@@ -146,43 +142,24 @@ func TestAnalyzeType_SimpleStruct(t *testing.T) {
 	typ := reflect.TypeOf(testSimpleStruct{})
 	info := Registry.GetTypeInfo(typ)
 
-	if info.hasCustomValidate {
-		t.Error("expected no custom validate")
-	}
-
-	if len(info.fields) != 2 {
-		t.Fatalf("expected 2 fields, got %d", len(info.fields))
-	}
+	zhtest.AssertFalse(t, info.hasCustomValidate)
+	zhtest.AssertEqual(t, 2, len(info.fields))
 
 	// Check Name field
 	nameField := info.fields[0]
-	if nameField.index != 0 {
-		t.Errorf("expected index 0, got %d", nameField.index)
-	}
-	if nameField.name != "Name" {
-		t.Errorf("expected name 'Name', got %s", nameField.name)
-	}
-	if !nameField.hasRequired {
-		t.Error("expected hasRequired true")
-	}
-	if len(nameField.rules) != 1 {
-		t.Errorf("expected 1 rule, got %d", len(nameField.rules))
-	}
+	zhtest.AssertEqual(t, 0, nameField.index)
+	zhtest.AssertEqual(t, "Name", nameField.name)
+	zhtest.AssertTrue(t, nameField.hasRequired)
+	zhtest.AssertEqual(t, 1, len(nameField.rules))
 
 	// Check Age field
 	ageField := info.fields[1]
-	if ageField.index != 1 {
-		t.Errorf("expected index 1, got %d", ageField.index)
-	}
-	if len(ageField.rules) != 2 {
-		t.Errorf("expected 2 rules, got %d", len(ageField.rules))
-	}
-	if ageField.rules[0].Name != "min" || ageField.rules[0].Param != "0" {
-		t.Errorf("expected min=0 rule, got %+v", ageField.rules[0])
-	}
-	if ageField.rules[1].Name != "max" || ageField.rules[1].Param != "150" {
-		t.Errorf("expected max=150 rule, got %+v", ageField.rules[1])
-	}
+	zhtest.AssertEqual(t, 1, ageField.index)
+	zhtest.AssertEqual(t, 2, len(ageField.rules))
+	zhtest.AssertEqual(t, "min", ageField.rules[0].Name)
+	zhtest.AssertEqual(t, "0", ageField.rules[0].Param)
+	zhtest.AssertEqual(t, "max", ageField.rules[1].Name)
+	zhtest.AssertEqual(t, "150", ageField.rules[1].Param)
 }
 
 // TestAnalyzeType_EmbeddedStruct tests analysis of embedded structs
@@ -190,30 +167,18 @@ func TestAnalyzeType_EmbeddedStruct(t *testing.T) {
 	typ := reflect.TypeOf(testEmbeddedStruct{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 2 {
-		t.Fatalf("expected 2 fields, got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 2, len(info.fields))
 
 	// Check embedded field
 	embeddedField := info.fields[0]
-	if !embeddedField.isEmbedded {
-		t.Error("expected isEmbedded true")
-	}
-	if embeddedField.isStruct {
-		t.Error("expected isStruct false for embedded (mutually exclusive)")
-	}
-	if embeddedField.isSlice || embeddedField.isArray || embeddedField.isMap {
-		t.Error("expected no collection flags for embedded field")
-	}
+	zhtest.AssertTrue(t, embeddedField.isEmbedded)
+	zhtest.AssertFalse(t, embeddedField.isStruct)
+	zhtest.AssertFalse(t, embeddedField.isSlice || embeddedField.isArray || embeddedField.isMap)
 
 	// Check regular field
 	valueField := info.fields[1]
-	if valueField.isEmbedded {
-		t.Error("expected isEmbedded false")
-	}
-	if valueField.name != "Value" {
-		t.Errorf("expected name 'Value', got %s", valueField.name)
-	}
+	zhtest.AssertFalse(t, valueField.isEmbedded)
+	zhtest.AssertEqual(t, "Value", valueField.name)
 }
 
 // TestAnalyzeType_PointerFields tests pointer field handling
@@ -221,17 +186,11 @@ func TestAnalyzeType_PointerFields(t *testing.T) {
 	typ := reflect.TypeOf(testPtrStruct{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 1 {
-		t.Fatalf("expected 1 field, got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 1, len(info.fields))
 
 	field := info.fields[0]
-	if !field.isPtr {
-		t.Error("expected isPtr true")
-	}
-	if !field.hasRequired {
-		t.Error("expected hasRequired true")
-	}
+	zhtest.AssertTrue(t, field.isPtr)
+	zhtest.AssertTrue(t, field.hasRequired)
 }
 
 // TestAnalyzeType_CollectionFields tests slice, array, and map fields
@@ -239,42 +198,26 @@ func TestAnalyzeType_CollectionFields(t *testing.T) {
 	typ := reflect.TypeOf(testCollectionStruct{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 4 {
-		t.Fatalf("expected 4 fields, got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 4, len(info.fields))
 
 	// Check slice field
 	sliceField := info.fields[0]
-	if !sliceField.isSlice {
-		t.Error("expected isSlice true")
-	}
-	if sliceField.eachIndex != 0 {
-		t.Errorf("expected eachIndex 0, got %d", sliceField.eachIndex)
-	}
+	zhtest.AssertTrue(t, sliceField.isSlice)
+	zhtest.AssertEqual(t, 0, sliceField.eachIndex)
 
 	// Check array field
 	arrayField := info.fields[1]
-	if !arrayField.isArray {
-		t.Error("expected isArray true")
-	}
+	zhtest.AssertTrue(t, arrayField.isArray)
 
 	// Check map field
 	mapField := info.fields[2]
-	if !mapField.isMap {
-		t.Error("expected isMap true")
-	}
-	if !mapField.omitempty {
-		t.Error("expected omitempty true")
-	}
+	zhtest.AssertTrue(t, mapField.isMap)
+	zhtest.AssertTrue(t, mapField.omitempty)
 
 	// Check nested struct field
 	nestedField := info.fields[3]
-	if !nestedField.isStruct {
-		t.Error("expected isStruct true")
-	}
-	if nestedField.isEmbedded {
-		t.Error("expected isEmbedded false for non-embedded struct")
-	}
+	zhtest.AssertTrue(t, nestedField.isStruct)
+	zhtest.AssertFalse(t, nestedField.isEmbedded)
 }
 
 // TestAnalyzeType_TimeField tests time.Time field handling
@@ -282,17 +225,11 @@ func TestAnalyzeType_TimeField(t *testing.T) {
 	typ := reflect.TypeOf(testTimeStruct{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 1 {
-		t.Fatalf("expected 1 field, got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 1, len(info.fields))
 
 	field := info.fields[0]
-	if !field.isStruct {
-		t.Error("expected isStruct true")
-	}
-	if !field.isTimeTime {
-		t.Error("expected isTimeTime true")
-	}
+	zhtest.AssertTrue(t, field.isStruct)
+	zhtest.AssertTrue(t, field.isTimeTime)
 }
 
 // TestAnalyzeType_MixedTags tests various JSON tag combinations
@@ -300,39 +237,25 @@ func TestAnalyzeType_MixedTags(t *testing.T) {
 	typ := reflect.TypeOf(testMixedTags{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 4 {
-		t.Fatalf("expected 4 fields, got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 4, len(info.fields))
 
 	// Check JSON name resolution
 	nameField := info.fields[0]
-	if nameField.name != "name" {
-		t.Errorf("expected json name 'name', got %s", nameField.name)
-	}
+	zhtest.AssertEqual(t, "name", nameField.name)
 
 	// Check skipped JSON field uses struct name
 	skipField := info.fields[1]
-	if skipField.name != "Skip" {
-		t.Errorf("expected struct name 'Skip', got %s", skipField.name)
-	}
+	zhtest.AssertEqual(t, "Skip", skipField.name)
 
 	// Check eachIndex with multiple rules
 	noJSONField := info.fields[2]
-	if noJSONField.eachIndex != 2 {
-		t.Errorf("expected eachIndex 2, got %d", noJSONField.eachIndex)
-	}
-	if !noJSONField.omitempty {
-		t.Error("expected omitempty true")
-	}
-	if !noJSONField.hasRequired {
-		t.Error("expected hasRequired true")
-	}
+	zhtest.AssertEqual(t, 2, noJSONField.eachIndex)
+	zhtest.AssertTrue(t, noJSONField.omitempty)
+	zhtest.AssertTrue(t, noJSONField.hasRequired)
 
 	// Check internal field with omitempty json tag
 	internalField := info.fields[3]
-	if internalField.name != "Internal" {
-		t.Errorf("expected name 'Internal', got %s", internalField.name)
-	}
+	zhtest.AssertEqual(t, "Internal", internalField.name)
 }
 
 // TestAnalyzeType_UnexportedFields tests that unexported fields are skipped
@@ -340,13 +263,8 @@ func TestAnalyzeType_UnexportedFields(t *testing.T) {
 	typ := reflect.TypeOf(testUnexportedFields{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 1 {
-		t.Fatalf("expected 1 field (unexported skipped), got %d", len(info.fields))
-	}
-
-	if info.fields[0].name != "Public" {
-		t.Errorf("expected only 'Public' field, got %s", info.fields[0].name)
-	}
+	zhtest.AssertEqual(t, 1, len(info.fields))
+	zhtest.AssertEqual(t, "Public", info.fields[0].name)
 }
 
 // TestAnalyzeType_SkipField tests that fields with "-" validate tag are skipped
@@ -354,13 +272,8 @@ func TestAnalyzeType_SkipField(t *testing.T) {
 	typ := reflect.TypeOf(testSkipField{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 1 {
-		t.Fatalf("expected 1 field (skipped field omitted), got %d", len(info.fields))
-	}
-
-	if info.fields[0].name != "Keep" {
-		t.Errorf("expected only 'Keep' field, got %s", info.fields[0].name)
-	}
+	zhtest.AssertEqual(t, 1, len(info.fields))
+	zhtest.AssertEqual(t, "Keep", info.fields[0].name)
 }
 
 // TestAnalyzeType_HasCustomValidate tests detection of Validate() method
@@ -368,16 +281,12 @@ func TestAnalyzeType_HasCustomValidate(t *testing.T) {
 	// Struct without Validate()
 	simpleTyp := reflect.TypeOf(testSimpleStruct{})
 	simpleInfo := Registry.GetTypeInfo(simpleTyp)
-	if simpleInfo.hasCustomValidate {
-		t.Error("expected no custom validate for simple struct")
-	}
+	zhtest.AssertFalse(t, simpleInfo.hasCustomValidate)
 
 	// Struct with Validate()
 	customTyp := reflect.TypeOf(testEmbeddedValue{})
 	customInfo := Registry.GetTypeInfo(customTyp)
-	if !customInfo.hasCustomValidate {
-		t.Error("expected hasCustomValidate true for struct with Validate()")
-	}
+	zhtest.AssertTrue(t, customInfo.hasCustomValidate)
 }
 
 // TestEachIndex_Default tests that eachIndex defaults to -1
@@ -386,9 +295,7 @@ func TestEachIndex_Default(t *testing.T) {
 	info := Registry.GetTypeInfo(typ)
 
 	for _, field := range info.fields {
-		if field.eachIndex != -1 {
-			t.Errorf("expected eachIndex -1 for field %s, got %d", field.name, field.eachIndex)
-		}
+		zhtest.AssertEqual(t, -1, field.eachIndex)
 	}
 }
 
@@ -399,12 +306,8 @@ func TestEmptyStruct(t *testing.T) {
 	typ := reflect.TypeOf(emptyStruct{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 0 {
-		t.Errorf("expected 0 fields for empty struct, got %d", len(info.fields))
-	}
-	if info.hasCustomValidate {
-		t.Error("expected no custom validate for empty struct")
-	}
+	zhtest.AssertEqual(t, 0, len(info.fields))
+	zhtest.AssertFalse(t, info.hasCustomValidate)
 }
 
 // TestStructWithOnlyUnexportedFields tests struct with only unexported fields
@@ -417,9 +320,7 @@ func TestStructWithOnlyUnexportedFields(t *testing.T) {
 	typ := reflect.TypeOf(onlyUnexported{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 0 {
-		t.Errorf("expected 0 fields (all unexported), got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 0, len(info.fields))
 }
 
 // TestStructWithOnlySkippedFields tests struct with only skipped fields
@@ -432,9 +333,7 @@ func TestStructWithOnlySkippedFields(t *testing.T) {
 	typ := reflect.TypeOf(onlySkipped{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 0 {
-		t.Errorf("expected 0 fields (all skipped), got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 0, len(info.fields))
 }
 
 // TestNestedPointerStruct tests nested pointer to struct
@@ -446,17 +345,8 @@ func TestNestedPointerStruct(t *testing.T) {
 	typ := reflect.TypeOf(nestedPtr{})
 	info := Registry.GetTypeInfo(typ)
 
-	if len(info.fields) != 1 {
-		t.Fatalf("expected 1 field, got %d", len(info.fields))
-	}
+	zhtest.AssertEqual(t, 1, len(info.fields))
 
 	field := info.fields[0]
-	if !field.isPtr {
-		t.Error("expected isPtr true")
-	}
-	if field.isStruct {
-		// After unwrapping pointer, the underlying type is struct
-		// but we don't set isStruct for pointer fields
-		t.Log("Note: isStruct is false for pointer fields (underlying type is struct after unwrapping)")
-	}
+	zhtest.AssertTrue(t, field.isPtr)
 }

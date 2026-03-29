@@ -3,32 +3,20 @@ package host
 import (
 	"net/http"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestHostValidationConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
 
-	if len(cfg.AllowedHosts) != 0 {
-		t.Errorf("expected default AllowedHosts to be empty, got %d hosts", len(cfg.AllowedHosts))
-	}
-	if cfg.AllowSubdomains != false {
-		t.Errorf("expected default AllowSubdomains to be false, got %t", cfg.AllowSubdomains)
-	}
-	if cfg.StrictPort != false {
-		t.Errorf("expected default StrictPort to be false, got %t", cfg.StrictPort)
-	}
-	if cfg.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected default StatusCode to be %d, got %d", http.StatusBadRequest, cfg.StatusCode)
-	}
-	if cfg.Message != "Invalid Host header" {
-		t.Errorf("expected default Message to be 'Invalid Host header', got '%s'", cfg.Message)
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default ExcludedPaths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default IncludedPaths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, 0, len(cfg.AllowedHosts))
+	zhtest.AssertFalse(t, cfg.AllowSubdomains)
+	zhtest.AssertFalse(t, cfg.StrictPort)
+	zhtest.AssertEqual(t, http.StatusBadRequest, cfg.StatusCode)
+	zhtest.AssertEqual(t, "Invalid Host header", cfg.Message)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 }
 
 func TestHostValidationConfig_CustomValues(t *testing.T) {
@@ -42,33 +30,15 @@ func TestHostValidationConfig_CustomValues(t *testing.T) {
 		IncludedPaths:   []string{"/api/public"},
 	}
 
-	if len(cfg.AllowedHosts) != 2 {
-		t.Errorf("expected 2 allowed hosts, got %d", len(cfg.AllowedHosts))
-	}
-	if cfg.AllowedHosts[0] != "api.example.com" {
-		t.Errorf("expected first host to be 'api.example.com', got '%s'", cfg.AllowedHosts[0])
-	}
-	if cfg.AllowedHosts[1] != "example.com" {
-		t.Errorf("expected second host to be 'example.com', got '%s'", cfg.AllowedHosts[1])
-	}
-	if !cfg.AllowSubdomains {
-		t.Error("expected AllowSubdomains to be true")
-	}
-	if !cfg.StrictPort {
-		t.Error("expected StrictPort to be true")
-	}
-	if cfg.StatusCode != http.StatusForbidden {
-		t.Errorf("expected StatusCode to be %d, got %d", http.StatusForbidden, cfg.StatusCode)
-	}
-	if cfg.Message != "Forbidden host" {
-		t.Errorf("expected Message to be 'Forbidden host', got '%s'", cfg.Message)
-	}
-	if len(cfg.ExcludedPaths) != 2 {
-		t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 1 {
-		t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.AllowedHosts))
+	zhtest.AssertEqual(t, "api.example.com", cfg.AllowedHosts[0])
+	zhtest.AssertEqual(t, "example.com", cfg.AllowedHosts[1])
+	zhtest.AssertTrue(t, cfg.AllowSubdomains)
+	zhtest.AssertTrue(t, cfg.StrictPort)
+	zhtest.AssertEqual(t, http.StatusForbidden, cfg.StatusCode)
+	zhtest.AssertEqual(t, "Forbidden host", cfg.Message)
+	zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
 }
 
 func TestHostValidationConfig_PartialConfig(t *testing.T) {
@@ -77,19 +47,11 @@ func TestHostValidationConfig_PartialConfig(t *testing.T) {
 		StatusCode:   http.StatusUnauthorized,
 	}
 
-	if len(cfg.AllowedHosts) != 1 {
-		t.Errorf("expected 1 allowed host, got %d", len(cfg.AllowedHosts))
-	}
-	if cfg.StatusCode != http.StatusUnauthorized {
-		t.Errorf("expected StatusCode to be %d, got %d", http.StatusUnauthorized, cfg.StatusCode)
-	}
+	zhtest.AssertEqual(t, 1, len(cfg.AllowedHosts))
+	zhtest.AssertEqual(t, http.StatusUnauthorized, cfg.StatusCode)
 	// Unset fields should have zero values
-	if cfg.AllowSubdomains {
-		t.Error("expected AllowSubdomains to be false (zero value)")
-	}
-	if cfg.Message != "" {
-		t.Errorf("expected Message to be empty (zero value), got '%s'", cfg.Message)
-	}
+	zhtest.AssertFalse(t, cfg.AllowSubdomains)
+	zhtest.AssertEqual(t, "", cfg.Message)
 }
 
 func TestHostValidationConfig_EmptyAllowedHosts(t *testing.T) {
@@ -98,9 +60,7 @@ func TestHostValidationConfig_EmptyAllowedHosts(t *testing.T) {
 		AllowedHosts: []string{},
 	}
 
-	if len(cfg.AllowedHosts) != 0 {
-		t.Errorf("expected AllowedHosts to be empty, got %d", len(cfg.AllowedHosts))
-	}
+	zhtest.AssertEqual(t, 0, len(cfg.AllowedHosts))
 }
 
 func TestHostValidationConfig_NilAllowedHosts(t *testing.T) {
@@ -108,9 +68,7 @@ func TestHostValidationConfig_NilAllowedHosts(t *testing.T) {
 		AllowedHosts: nil,
 	}
 
-	if cfg.AllowedHosts != nil {
-		t.Error("expected AllowedHosts to be nil")
-	}
+	zhtest.AssertNil(t, cfg.AllowedHosts)
 }
 
 func TestHostValidationConfig_StatusCodeOptions(t *testing.T) {
@@ -127,9 +85,7 @@ func TestHostValidationConfig_StatusCodeOptions(t *testing.T) {
 		cfg := Config{
 			StatusCode: code,
 		}
-		if cfg.StatusCode != code {
-			t.Errorf("expected StatusCode %d, got %d", code, cfg.StatusCode)
-		}
+		zhtest.AssertEqual(t, code, cfg.StatusCode)
 	}
 }
 
@@ -177,11 +133,9 @@ func TestHostValidationConfig_ExcludedPaths(t *testing.T) {
 			cfg := Config{
 				ExcludedPaths: tt.excludedPaths,
 			}
-			if len(cfg.ExcludedPaths) != tt.expectedLen {
-				t.Errorf("expected %d excluded paths, got %d", tt.expectedLen, len(cfg.ExcludedPaths))
-			}
-			if tt.expectedLen > 0 && cfg.ExcludedPaths[0] != tt.expectedPath {
-				t.Errorf("expected first path to be '%s', got '%s'", tt.expectedPath, cfg.ExcludedPaths[0])
+			zhtest.AssertEqual(t, tt.expectedLen, len(cfg.ExcludedPaths))
+			if tt.expectedLen > 0 {
+				zhtest.AssertEqual(t, tt.expectedPath, cfg.ExcludedPaths[0])
 			}
 		})
 	}
@@ -231,11 +185,9 @@ func TestHostValidationConfig_IncludedPaths(t *testing.T) {
 			cfg := Config{
 				IncludedPaths: tt.includedPaths,
 			}
-			if len(cfg.IncludedPaths) != tt.expectedLen {
-				t.Errorf("expected %d included paths, got %d", tt.expectedLen, len(cfg.IncludedPaths))
-			}
-			if tt.expectedLen > 0 && cfg.IncludedPaths[0] != tt.expectedPath {
-				t.Errorf("expected first path to be '%s', got '%s'", tt.expectedPath, cfg.IncludedPaths[0])
+			zhtest.AssertEqual(t, tt.expectedLen, len(cfg.IncludedPaths))
+			if tt.expectedLen > 0 {
+				zhtest.AssertEqual(t, tt.expectedPath, cfg.IncludedPaths[0])
 			}
 		})
 	}

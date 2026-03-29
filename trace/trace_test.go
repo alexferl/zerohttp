@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestAttributeHelpers(t *testing.T) {
@@ -22,12 +24,8 @@ func TestAttributeHelpers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.attr.Key != tt.wantKey {
-				t.Errorf("Key = %q, want %q", tt.attr.Key, tt.wantKey)
-			}
-			if tt.attr.Value != tt.wantVal {
-				t.Errorf("Value = %v, want %v", tt.attr.Value, tt.wantVal)
-			}
+			zhtest.AssertEqual(t, tt.wantKey, tt.attr.Key)
+			zhtest.AssertEqual(t, tt.wantVal, tt.attr.Value)
 		})
 	}
 }
@@ -47,9 +45,7 @@ func TestNoopTracer(t *testing.T) {
 	span.End()
 
 	// Context should be unchanged
-	if ctx == nil {
-		t.Error("Expected non-nil context")
-	}
+	zhtest.AssertNotNil(t, ctx)
 }
 
 func TestContextWithSpan(t *testing.T) {
@@ -63,20 +59,14 @@ func TestContextWithSpan(t *testing.T) {
 
 	// Retrieve span from context
 	retrieved := SpanFromContext(ctx)
-	if retrieved == nil {
-		t.Error("Expected to retrieve span from context")
-	}
+	zhtest.AssertNotNil(t, retrieved)
 
 	// Nil context should return nil
-	if SpanFromContext(context.TODO()) != nil {
-		t.Error("Expected nil from context without span")
-	}
+	zhtest.AssertNil(t, SpanFromContext(context.TODO()))
 
 	// Context without span should return nil
 	emptyCtx := context.Background()
-	if SpanFromContext(emptyCtx) != nil {
-		t.Error("Expected nil from context without span")
-	}
+	zhtest.AssertNil(t, SpanFromContext(emptyCtx))
 }
 
 func TestSpanConfig(t *testing.T) {
@@ -89,9 +79,7 @@ func TestSpanConfig(t *testing.T) {
 	)
 	opt.apply(cfg)
 
-	if len(cfg.attributes) != 2 {
-		t.Errorf("Expected 2 attributes, got %d", len(cfg.attributes))
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.attributes))
 }
 
 func TestErrorConfig(t *testing.T) {
@@ -101,21 +89,13 @@ func TestErrorConfig(t *testing.T) {
 	opt := WithErrorAttributes(String("error.type", "test"))
 	opt.applyError(cfg)
 
-	if len(cfg.attributes) != 1 {
-		t.Errorf("Expected 1 attribute, got %d", len(cfg.attributes))
-	}
+	zhtest.AssertEqual(t, 1, len(cfg.attributes))
 }
 
 func TestCodeConstants(t *testing.T) {
-	if CodeUnset != 0 {
-		t.Errorf("CodeUnset = %d, want 0", CodeUnset)
-	}
-	if CodeOk != 1 {
-		t.Errorf("CodeOk = %d, want 1", CodeOk)
-	}
-	if CodeError != 2 {
-		t.Errorf("CodeError = %d, want 2", CodeError)
-	}
+	zhtest.AssertEqual(t, 0, int(CodeUnset))
+	zhtest.AssertEqual(t, 1, int(CodeOk))
+	zhtest.AssertEqual(t, 2, int(CodeError))
 }
 
 // mockTracer is a test tracer that records span creation
@@ -171,32 +151,19 @@ func TestMockTracer(t *testing.T) {
 		WithAttributes(String("service", "test")),
 	)
 
-	if len(mock.spans) != 1 {
-		t.Fatalf("Expected 1 span, got %d", len(mock.spans))
-	}
+	zhtest.AssertEqual(t, 1, len(mock.spans))
 
 	mockSpan := mock.spans[0]
-	if mockSpan.name != "test-operation" {
-		t.Errorf("Name = %q, want %q", mockSpan.name, "test-operation")
-	}
-
-	if len(mockSpan.attributes) != 1 {
-		t.Errorf("Expected 1 attribute, got %d", len(mockSpan.attributes))
-	}
+	zhtest.AssertEqual(t, "test-operation", mockSpan.name)
+	zhtest.AssertEqual(t, 1, len(mockSpan.attributes))
 
 	// Test span methods
 	span.SetStatus(CodeOk, "success")
-	if mockSpan.statusCode != CodeOk {
-		t.Errorf("Status code = %d, want %d", mockSpan.statusCode, CodeOk)
-	}
+	zhtest.AssertEqual(t, CodeOk, mockSpan.statusCode)
 
 	span.End()
-	if !mockSpan.ended {
-		t.Error("Expected span to be ended")
-	}
+	zhtest.AssertTrue(t, mockSpan.ended)
 
 	// Verify context has span
-	if SpanFromContext(ctx) == nil {
-		t.Error("Expected span in context")
-	}
+	zhtest.AssertNotNil(t, SpanFromContext(ctx))
 }

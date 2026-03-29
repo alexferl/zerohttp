@@ -5,21 +5,16 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/internal/problem"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestNewProblemDetail(t *testing.T) {
 	t.Run("creates problem detail with status and detail", func(t *testing.T) {
 		pd := NewProblemDetail(http.StatusNotFound, "Resource not found")
 
-		if pd.Status != http.StatusNotFound {
-			t.Errorf("expected status %d, got %d", http.StatusNotFound, pd.Status)
-		}
-		if pd.Title != "Not Found" {
-			t.Errorf("expected title 'Not Found', got '%s'", pd.Title)
-		}
-		if pd.Detail != "Resource not found" {
-			t.Errorf("expected detail 'Resource not found', got '%s'", pd.Detail)
-		}
+		zhtest.AssertEqual(t, http.StatusNotFound, pd.Status)
+		zhtest.AssertEqual(t, "Not Found", pd.Title)
+		zhtest.AssertEqual(t, "Resource not found", pd.Detail)
 	})
 
 	t.Run("creates problem detail with different status codes", func(t *testing.T) {
@@ -36,21 +31,15 @@ func TestNewProblemDetail(t *testing.T) {
 
 		for _, tt := range tests {
 			pd := NewProblemDetail(tt.status, "test detail")
-			if pd.Status != tt.status {
-				t.Errorf("expected status %d, got %d", tt.status, pd.Status)
-			}
-			if pd.Title != tt.want {
-				t.Errorf("expected title '%s', got '%s'", tt.want, pd.Title)
-			}
+			zhtest.AssertEqual(t, tt.status, pd.Status)
+			zhtest.AssertEqual(t, tt.want, pd.Title)
 		}
 	})
 
 	t.Run("problem detail has extensions map", func(t *testing.T) {
 		pd := NewProblemDetail(http.StatusBadRequest, "Bad request")
 
-		if pd.Extensions == nil {
-			t.Error("expected Extensions to be initialized")
-		}
+		zhtest.AssertNotNil(t, pd.Extensions)
 	})
 }
 
@@ -63,15 +52,9 @@ func TestNewValidationProblemDetail(t *testing.T) {
 
 		pd := NewValidationProblemDetail("Validation failed", errors)
 
-		if pd.Status != http.StatusUnprocessableEntity {
-			t.Errorf("expected status %d, got %d", http.StatusUnprocessableEntity, pd.Status)
-		}
-		if pd.Title != "Unprocessable Entity" {
-			t.Errorf("expected title 'Unprocessable Entity', got '%s'", pd.Title)
-		}
-		if pd.Detail != "Validation failed" {
-			t.Errorf("expected detail 'Validation failed', got '%s'", pd.Detail)
-		}
+		zhtest.AssertEqual(t, http.StatusUnprocessableEntity, pd.Status)
+		zhtest.AssertEqual(t, "Unprocessable Entity", pd.Title)
+		zhtest.AssertEqual(t, "Validation failed", pd.Detail)
 	})
 
 	t.Run("has errors extension", func(t *testing.T) {
@@ -81,18 +64,11 @@ func TestNewValidationProblemDetail(t *testing.T) {
 
 		pd := NewValidationProblemDetail("Validation failed", errors)
 
-		if pd.Extensions == nil {
-			t.Fatal("expected Extensions to be initialized")
-		}
+		zhtest.AssertNotNil(t, pd.Extensions)
 
 		extensions, ok := pd.Extensions["errors"]
-		if !ok {
-			t.Error("expected 'errors' key in Extensions")
-		}
-
-		if extensions == nil {
-			t.Error("expected errors to not be nil")
-		}
+		zhtest.AssertTrue(t, ok)
+		zhtest.AssertNotNil(t, extensions)
 	})
 
 	t.Run("works with custom error types", func(t *testing.T) {
@@ -109,8 +85,6 @@ func TestNewValidationProblemDetail(t *testing.T) {
 
 		pd := NewValidationProblemDetail("Custom validation failed", errors)
 
-		if pd.Status != http.StatusUnprocessableEntity {
-			t.Errorf("expected status %d, got %d", http.StatusUnprocessableEntity, pd.Status)
-		}
+		zhtest.AssertEqual(t, http.StatusUnprocessableEntity, pd.Status)
 	})
 }

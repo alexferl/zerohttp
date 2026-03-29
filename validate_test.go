@@ -13,6 +13,7 @@ import (
 
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/validator"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestBindAndValidate(t *testing.T) {
@@ -74,20 +75,14 @@ func TestBindAndValidate(t *testing.T) {
 			err := BindAndValidate(req, &dst)
 
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-					return
-				}
-				if tt.isBindingError && !IsBindError(err) {
-					t.Errorf("expected binding error, got %T: %v", err, err)
-				}
-				if !tt.isBindingError && !IsValidationError(err) {
-					t.Errorf("expected validation error, got %T: %v", err, err)
+				zhtest.AssertError(t, err)
+				if tt.isBindingError {
+					zhtest.AssertTrue(t, IsBindError(err))
+				} else {
+					zhtest.AssertTrue(t, IsValidationError(err))
 				}
 			} else {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -103,43 +98,26 @@ func TestRenderAndValidate(t *testing.T) {
 		w := httptest.NewRecorder()
 		data := TestResponse{Name: "John", Email: "john@example.com"}
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err != nil {
-			t.Errorf("expected no error, got %v", err)
-			return
-		}
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
 		body := w.Body.String()
-		if !strings.Contains(body, `"name":"John"`) {
-			t.Errorf("expected JSON to contain name, got %s", body)
-		}
+		zhtest.AssertContains(t, body, `"name":"John"`)
 	})
 
 	t.Run("invalid data returns error", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		data := TestResponse{Name: "J", Email: "not-an-email"}
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err == nil {
-			t.Errorf("expected error, got nil")
-			return
-		}
-		if !strings.Contains(err.Error(), "invalid response data") {
-			t.Errorf("expected error to contain 'invalid response data', got %v", err)
-		}
+		zhtest.AssertError(t, err)
+		zhtest.AssertContains(t, err.Error(), "invalid response data")
 	})
 
 	t.Run("invalid required field", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		data := TestResponse{Email: "john@example.com"} // missing Name
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err == nil {
-			t.Errorf("expected error for missing required field, got nil")
-			return
-		}
-		if !strings.Contains(err.Error(), "invalid response data") {
-			t.Errorf("expected error to contain 'invalid response data', got %v", err)
-		}
+		zhtest.AssertError(t, err)
+		zhtest.AssertContains(t, err.Error(), "invalid response data")
 	})
 
 	t.Run("valid slice of structs", func(t *testing.T) {
@@ -149,13 +127,8 @@ func TestRenderAndValidate(t *testing.T) {
 			{Name: "Jane", Email: "jane@example.com"},
 		}
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err != nil {
-			t.Errorf("expected no error, got %v", err)
-			return
-		}
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
 	})
 
 	t.Run("invalid slice of structs", func(t *testing.T) {
@@ -165,13 +138,8 @@ func TestRenderAndValidate(t *testing.T) {
 			{Name: "J", Email: "invalid"}, // invalid entry
 		}
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err == nil {
-			t.Errorf("expected error, got nil")
-			return
-		}
-		if !strings.Contains(err.Error(), "invalid response data") {
-			t.Errorf("expected error to contain 'invalid response data', got %v", err)
-		}
+		zhtest.AssertError(t, err)
+		zhtest.AssertContains(t, err.Error(), "invalid response data")
 	})
 
 	t.Run("valid pointer to slice of structs", func(t *testing.T) {
@@ -181,13 +149,8 @@ func TestRenderAndValidate(t *testing.T) {
 			{Name: "Jane", Email: "jane@example.com"},
 		}
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err != nil {
-			t.Errorf("expected no error, got %v", err)
-			return
-		}
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
 	})
 
 	t.Run("valid array of structs", func(t *testing.T) {
@@ -197,26 +160,16 @@ func TestRenderAndValidate(t *testing.T) {
 			{Name: "Jane", Email: "jane@example.com"},
 		}
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err != nil {
-			t.Errorf("expected no error, got %v", err)
-			return
-		}
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
 	})
 
 	t.Run("empty slice", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		data := []TestResponse{}
 		err := RenderAndValidate(w, http.StatusOK, data)
-		if err != nil {
-			t.Errorf("expected no error for empty slice, got %v", err)
-			return
-		}
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertEqual(t, http.StatusOK, w.Code)
 	})
 }
 
@@ -225,22 +178,14 @@ func TestBindError_Unwrap(t *testing.T) {
 	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	var dst struct{ Name string }
 	err := BindAndValidate(req, &dst)
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	zhtest.AssertError(t, err)
 	// Test IsBindError with nil
-	if IsBindError(nil) {
-		t.Error("expected IsBindError(nil) to be false")
-	}
+	zhtest.AssertFalse(t, IsBindError(nil))
 	// Test errors.As works with wrapped error
 	var bindErr *validator.BindError
-	if !errors.As(err, &bindErr) {
-		t.Error("expected error to be BindError")
-	}
+	zhtest.AssertTrue(t, errors.As(err, &bindErr))
 	// Unwrap should return the inner error
-	if bindErr.Unwrap() == nil {
-		t.Error("expected Unwrap to return the inner error")
-	}
+	zhtest.AssertNotNil(t, bindErr.Unwrap())
 }
 
 func TestBindAndValidate_MultipartForm(t *testing.T) {
@@ -249,9 +194,8 @@ func TestBindAndValidate_MultipartForm(t *testing.T) {
 	writer := multipart.NewWriter(&buf)
 	_ = writer.WriteField("name", "John")
 	_ = writer.WriteField("email", "john@example.com")
-	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close multipart writer: %v", err)
-	}
+	err := writer.Close()
+	zhtest.AssertNoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/test", &buf)
 	req.Header.Set(httpx.HeaderContentType, writer.FormDataContentType())
@@ -262,13 +206,9 @@ func TestBindAndValidate_MultipartForm(t *testing.T) {
 	}
 
 	var dst TestRequest
-	err := BindAndValidate(req, &dst)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if dst.Name != "John" {
-		t.Errorf("expected Name=John, got %s", dst.Name)
-	}
+	err = BindAndValidate(req, &dst)
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, "John", dst.Name)
 }
 
 func TestBindAndValidate_QueryBinding(t *testing.T) {
@@ -282,12 +222,8 @@ func TestBindAndValidate_QueryBinding(t *testing.T) {
 
 	var dst TestRequest
 	err := BindAndValidate(req, &dst)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if dst.Name != "John" {
-		t.Errorf("expected Name=John, got %s", dst.Name)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, "John", dst.Name)
 }
 
 func TestBindAndValidate_HeadMethod(t *testing.T) {
@@ -300,12 +236,8 @@ func TestBindAndValidate_HeadMethod(t *testing.T) {
 
 	var dst TestRequest
 	err := BindAndValidate(req, &dst)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if dst.Name != "John" {
-		t.Errorf("expected Name=John, got %s", dst.Name)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, "John", dst.Name)
 }
 
 func TestBindAndValidate_DefaultToJSON(t *testing.T) {
@@ -319,12 +251,8 @@ func TestBindAndValidate_DefaultToJSON(t *testing.T) {
 
 	var dst TestRequest
 	err := BindAndValidate(req, &dst)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if dst.Name != "John" {
-		t.Errorf("expected Name=John, got %s", dst.Name)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, "John", dst.Name)
 }
 
 func TestBindAndValidate_NoContentType(t *testing.T) {
@@ -337,12 +265,8 @@ func TestBindAndValidate_NoContentType(t *testing.T) {
 
 	var dst TestRequest
 	err := BindAndValidate(req, &dst)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if dst.Name != "John" {
-		t.Errorf("expected Name=John, got %s", dst.Name)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, "John", dst.Name)
 }
 
 func TestBindAndValidate_ContentTypeWithCharset(t *testing.T) {
@@ -356,12 +280,8 @@ func TestBindAndValidate_ContentTypeWithCharset(t *testing.T) {
 
 	var dst TestRequest
 	err := BindAndValidate(req, &dst)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if dst.Name != "John" {
-		t.Errorf("expected Name=John, got %s", dst.Name)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, "John", dst.Name)
 }
 
 func TestValidationHTTPResponse(t *testing.T) {
@@ -411,48 +331,35 @@ func TestValidationHTTPResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(tt.body)))
-			if err != nil {
-				t.Fatalf("failed to make request: %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 			defer func() { _ = resp.Body.Close() }()
 
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
-			}
+			zhtest.AssertEqual(t, tt.wantStatus, resp.StatusCode)
 
 			// Check content type for error responses
 			if tt.wantStatus >= 400 {
 				contentType := resp.Header.Get(httpx.HeaderContentType)
-				if contentType != httpx.MIMEApplicationProblemJSON {
-					t.Errorf("expected application/problem+json, got %s", contentType)
-				}
+				zhtest.AssertEqual(t, httpx.MIMEApplicationProblemJSON, contentType)
 
 				var result map[string]any
-				if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-					t.Fatalf("failed to decode response: %v", err)
-				}
+				err := json.NewDecoder(resp.Body).Decode(&result)
+				zhtest.AssertNoError(t, err)
 
 				// Check RFC 7807 format
-				if _, ok := result["title"]; !ok {
-					t.Error("expected title field in error response")
-				}
-				if _, ok := result["status"]; !ok {
-					t.Error("expected status field in error response")
-				}
-				if _, ok := result["detail"]; !ok {
-					t.Error("expected detail field in error response")
-				}
+				_, ok := result["title"]
+				zhtest.AssertTrue(t, ok)
+				_, ok = result["status"]
+				zhtest.AssertTrue(t, ok)
+				_, ok = result["detail"]
+				zhtest.AssertTrue(t, ok)
 
 				// Check specific errors
 				e, ok := result["errors"].(map[string]any)
-				if !ok {
-					t.Fatalf("expected errors object, got %T", result["errors"])
-				}
+				zhtest.AssertTrue(t, ok)
 
 				for field := range tt.wantErrors {
-					if _, ok := e[field]; !ok {
-						t.Errorf("expected error for field %s, got errors: %v", field, e)
-					}
+					_, ok := e[field]
+					zhtest.AssertTrue(t, ok)
 				}
 			}
 		})
@@ -500,14 +407,10 @@ func TestBindingHTTPResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(tt.body)))
-			if err != nil {
-				t.Fatalf("failed to make request: %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 			defer func() { _ = resp.Body.Close() }()
 
-			if resp.StatusCode != tt.wantStatus {
-				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
-			}
+			zhtest.AssertEqual(t, tt.wantStatus, resp.StatusCode)
 		})
 	}
 }
@@ -542,29 +445,21 @@ func TestCrossFieldValidationHTTP(t *testing.T) {
 	// Request with mismatched total
 	body := `{"items":["item1","item2"],"total":100.00}`
 	resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(body)))
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("expected 422 for cross-field validation error, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusUnprocessableEntity, resp.StatusCode)
 
 	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	zhtest.AssertNoError(t, err)
 
 	e, ok := result["errors"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected errors object, got %T", result["errors"])
-	}
+	zhtest.AssertTrue(t, ok)
 
 	// Error should be on crossFieldOrder (the struct type name)
-	if _, ok := e["crossFieldOrder"]; !ok {
-		t.Errorf("expected crossFieldOrder error, got errors: %v", e)
-	}
+	_, ok = e["crossFieldOrder"]
+	zhtest.AssertTrue(t, ok)
 }
 
 func TestEachValidationHTTP(t *testing.T) {
@@ -586,32 +481,23 @@ func TestEachValidationHTTP(t *testing.T) {
 	// Request with invalid tags
 	body := `{"tags":["a","way-too-long"]}`
 	resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(body)))
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("expected 422, got %d", resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusUnprocessableEntity, resp.StatusCode)
 
 	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	zhtest.AssertNoError(t, err)
 
 	e, ok := result["errors"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected errors object, got %T", result["errors"])
-	}
+	zhtest.AssertTrue(t, ok)
 
 	// Check each validation errors use JSON field names with index
-	if _, ok := e["tags[0]"]; !ok {
-		t.Errorf("expected tags[0] error, got errors: %v", e)
-	}
-	if _, ok := e["tags[1]"]; !ok {
-		t.Errorf("expected tags[1] error, got errors: %v", e)
-	}
+	_, ok = e["tags[0]"]
+	zhtest.AssertTrue(t, ok)
+	_, ok = e["tags[1]"]
+	zhtest.AssertTrue(t, ok)
 }
 
 // TestValidationWithAndWithoutRecoverMiddleware verifies that validation errors
@@ -644,67 +530,45 @@ func TestValidationWithAndWithoutRecoverMiddleware(t *testing.T) {
 
 	// Make requests to both servers
 	handlerResp, err := http.Post(handlerServer.URL, "application/json", bytes.NewReader([]byte(body)))
-	if err != nil {
-		t.Fatalf("failed to make request to handler: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = handlerResp.Body.Close() }()
 
 	appResp, err := http.Post(appServer.URL+"/", "application/json", bytes.NewReader([]byte(body)))
-	if err != nil {
-		t.Fatalf("failed to make request to app: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = appResp.Body.Close() }()
 
 	// Compare status codes
-	if handlerResp.StatusCode != appResp.StatusCode {
-		t.Errorf("status codes differ: handler=%d, app=%d", handlerResp.StatusCode, appResp.StatusCode)
-	}
-	if handlerResp.StatusCode != http.StatusUnprocessableEntity {
-		t.Errorf("expected 422, got handler=%d, app=%d", handlerResp.StatusCode, appResp.StatusCode)
-	}
+	zhtest.AssertEqual(t, handlerResp.StatusCode, appResp.StatusCode)
+	zhtest.AssertEqual(t, http.StatusUnprocessableEntity, handlerResp.StatusCode)
 
 	// Compare content types
-	if handlerResp.Header.Get(httpx.HeaderContentType) != appResp.Header.Get(httpx.HeaderContentType) {
-		t.Errorf("content types differ: handler=%s, app=%s",
-			handlerResp.Header.Get(httpx.HeaderContentType), appResp.Header.Get(httpx.HeaderContentType))
-	}
+	zhtest.AssertEqual(t, handlerResp.Header.Get(httpx.HeaderContentType), appResp.Header.Get(httpx.HeaderContentType))
 
 	// Compare response bodies
 	var handlerResult, appResult map[string]any
-	if err := json.NewDecoder(handlerResp.Body).Decode(&handlerResult); err != nil {
-		t.Fatalf("failed to decode handler response: %v", err)
-	}
-	if err := json.NewDecoder(appResp.Body).Decode(&appResult); err != nil {
-		t.Fatalf("failed to decode app response: %v", err)
-	}
+	err = json.NewDecoder(handlerResp.Body).Decode(&handlerResult)
+	zhtest.AssertNoError(t, err)
+	err = json.NewDecoder(appResp.Body).Decode(&appResult)
+	zhtest.AssertNoError(t, err)
 
 	// Compare title
-	if handlerResult["title"] != appResult["title"] {
-		t.Errorf("titles differ: handler=%v, app=%v", handlerResult["title"], appResult["title"])
-	}
+	zhtest.AssertEqual(t, handlerResult["title"], appResult["title"])
 
 	// Compare status
-	if handlerResult["status"] != appResult["status"] {
-		t.Errorf("statuses differ: handler=%v, app=%v", handlerResult["status"], appResult["status"])
-	}
+	zhtest.AssertEqual(t, handlerResult["status"], appResult["status"])
 
 	// Compare detail
-	if handlerResult["detail"] != appResult["detail"] {
-		t.Errorf("details differ: handler=%v, app=%v", handlerResult["detail"], appResult["detail"])
-	}
+	zhtest.AssertEqual(t, handlerResult["detail"], appResult["detail"])
 
 	// Compare errors
 	handlerErrors, _ := handlerResult["errors"].(map[string]any)
 	appErrors, _ := appResult["errors"].(map[string]any)
 
-	if len(handlerErrors) != len(appErrors) {
-		t.Errorf("error counts differ: handler=%d, app=%d", len(handlerErrors), len(appErrors))
-	}
+	zhtest.AssertEqual(t, len(handlerErrors), len(appErrors))
 
 	for field := range handlerErrors {
-		if _, ok := appErrors[field]; !ok {
-			t.Errorf("app response missing error for field %s", field)
-		}
+		_, ok := appErrors[field]
+		zhtest.AssertTrue(t, ok)
 	}
 }
 
@@ -726,18 +590,12 @@ func TestRenderAndValidate_Returns500(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL)
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
 	// Should return 500, NOT 422 - this is a server bug, not client error
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("expected status %d (Internal Server Error), got %d", http.StatusInternalServerError, resp.StatusCode)
-	}
+	zhtest.AssertEqual(t, http.StatusInternalServerError, resp.StatusCode)
 
 	// Verify it's not returning 422 Unprocessable Entity
-	if resp.StatusCode == http.StatusUnprocessableEntity {
-		t.Error("RenderAndValidate incorrectly returned 422 Unprocessable Entity - should be 500 for server-side bugs")
-	}
+	zhtest.AssertNotEqual(t, http.StatusUnprocessableEntity, resp.StatusCode)
 }

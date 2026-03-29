@@ -12,6 +12,7 @@ import (
 
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware/etag"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // TestCompressETag_OrderIndependent verifies correct behavior regardless of
@@ -49,38 +50,24 @@ func TestCompressETag_OrderIndependent(t *testing.T) {
 	chain2.ServeHTTP(rec2, req2)
 
 	// Both should return Content-Encoding: gzip
-	if rec1.Header().Get(httpx.HeaderContentEncoding) != httpx.ContentEncodingGzip {
-		t.Errorf("chain1: expected Content-Encoding=%q, got %q",
-			httpx.ContentEncodingGzip, rec1.Header().Get(httpx.HeaderContentEncoding))
-	}
-	if rec2.Header().Get(httpx.HeaderContentEncoding) != httpx.ContentEncodingGzip {
-		t.Errorf("chain2: expected Content-Encoding=%q, got %q",
-			httpx.ContentEncodingGzip, rec2.Header().Get(httpx.HeaderContentEncoding))
-	}
+	zhtest.AssertEqual(t, httpx.ContentEncodingGzip, rec1.Header().Get(httpx.HeaderContentEncoding))
+	zhtest.AssertEqual(t, httpx.ContentEncodingGzip, rec2.Header().Get(httpx.HeaderContentEncoding))
 
 	// Both should have ETags
 	etag1 := rec1.Header().Get(httpx.HeaderETag)
 	etag2 := rec2.Header().Get(httpx.HeaderETag)
-	if etag1 == "" {
-		t.Error("chain1 (ETag->Compress): expected ETag header")
-	}
-	if etag2 == "" {
-		t.Error("chain2 (Compress->ETag): expected ETag header")
-	}
+	zhtest.AssertNotEmpty(t, etag1)
+	zhtest.AssertNotEmpty(t, etag2)
 
 	// ETags will be different because they're computed on different content:
 	// - chain1 (RECOMMENDED): ETag is for compressed content (correct)
 	// - chain2: ETag is for uncompressed content (incorrect when compressed)
-	if etag1 == etag2 {
-		t.Error("ETags should be different (one for compressed, one for uncompressed)")
-	}
+	zhtest.AssertNotEqual(t, etag1, etag2)
 
 	// Both should return the same compressed body that decompresses to same content
 	body1 := decompressGzip(t, rec1.Body.Bytes())
 	body2 := decompressGzip(t, rec2.Body.Bytes())
-	if body1 != body2 {
-		t.Errorf("Bodies should be identical. Got:\n%s\nvs\n%s", body1, body2)
-	}
+	zhtest.AssertEqual(t, body1, body2)
 }
 
 // TestCompressETag_AlreadyEncoded verifies behavior when response
@@ -104,10 +91,7 @@ func TestCompressETag_AlreadyEncoded(t *testing.T) {
 	chain.ServeHTTP(rec, req)
 
 	// Should preserve the original Content-Encoding (br), not gzip
-	encoding := rec.Header().Get(httpx.HeaderContentEncoding)
-	if encoding != "br" {
-		t.Errorf("expected Content-Encoding to remain 'br', got %q", encoding)
-	}
+	zhtest.AssertEqual(t, "br", rec.Header().Get(httpx.HeaderContentEncoding))
 }
 
 // TestCompressETag_RangeRequest verifies that 206 Partial Content responses
@@ -131,12 +115,8 @@ func TestCompressETag_RangeRequest(t *testing.T) {
 	chain.ServeHTTP(rec, req)
 
 	// 206 responses should not be compressed
-	if rec.Code != http.StatusPartialContent {
-		t.Errorf("expected status %d, got %d", http.StatusPartialContent, rec.Code)
-	}
-	if rec.Header().Get(httpx.HeaderContentEncoding) != "" {
-		t.Error("206 Partial Content should not be compressed")
-	}
+	zhtest.AssertEqual(t, http.StatusPartialContent, rec.Code)
+	zhtest.AssertEqual(t, "", rec.Header().Get(httpx.HeaderContentEncoding))
 }
 
 // TestCompressETag_CacheControlNoTransform verifies that Cache-Control: no-transform
@@ -160,9 +140,7 @@ func TestCompressETag_CacheControlNoTransform(t *testing.T) {
 	chain.ServeHTTP(rec, req)
 
 	// Should not be compressed when no-transform is set
-	if rec.Header().Get(httpx.HeaderContentEncoding) != "" {
-		t.Error("Cache-Control: no-transform should prevent compression")
-	}
+	zhtest.AssertEqual(t, "", rec.Header().Get(httpx.HeaderContentEncoding))
 }
 
 // TestCompressETag_HeadRequest verifies HEAD requests negotiate compression
@@ -186,20 +164,13 @@ func TestCompressETag_HeadRequest(t *testing.T) {
 	chain.ServeHTTP(rec, req)
 
 	// HEAD request should have Content-Encoding header set (negotiated)
-	if rec.Header().Get(httpx.HeaderContentEncoding) != httpx.ContentEncodingGzip {
-		t.Errorf("HEAD request should negotiate Content-Encoding, got %q",
-			rec.Header().Get(httpx.HeaderContentEncoding))
-	}
+	zhtest.AssertEqual(t, httpx.ContentEncodingGzip, rec.Header().Get(httpx.HeaderContentEncoding))
 
 	// HEAD request body should be empty
-	if rec.Body.Len() != 0 {
-		t.Errorf("HEAD request body should be empty, got %d bytes", rec.Body.Len())
-	}
+	zhtest.AssertEqual(t, 0, rec.Body.Len())
 
 	// ETag should be present (reflecting the encoded representation)
-	if rec.Header().Get(httpx.HeaderETag) == "" {
-		t.Error("HEAD request should have ETag header")
-	}
+	zhtest.AssertNotEmpty(t, rec.Header().Get(httpx.HeaderETag))
 }
 
 // TestCompressETag_ETagRecomputedFromCompressedBytes verifies that ETags
@@ -221,9 +192,7 @@ func TestCompressETag_ETagRecomputedFromCompressedBytes(t *testing.T) {
 	chainNoCompress.ServeHTTP(rec1, req1)
 
 	etagNoCompress := rec1.Header().Get(httpx.HeaderETag)
-	if etagNoCompress == "" {
-		t.Fatal("Expected ETag for uncompressed response")
-	}
+	zhtest.AssertNotEmpty(t, etagNoCompress)
 
 	// Now get ETag with compression using RECOMMENDED order (ETag wraps Compress)
 	compressMw := New(Config{
@@ -237,22 +206,14 @@ func TestCompressETag_ETagRecomputedFromCompressedBytes(t *testing.T) {
 	chainWithCompress.ServeHTTP(rec2, req2)
 
 	etagWithCompress := rec2.Header().Get(httpx.HeaderETag)
-	if etagWithCompress == "" {
-		t.Fatal("Expected ETag for compressed response when ETag wraps Compress")
-	}
+	zhtest.AssertNotEmpty(t, etagWithCompress)
 
 	// ETags should be different because content is different (compressed vs uncompressed)
-	if etagNoCompress == etagWithCompress {
-		t.Error("ETag should be different for compressed vs uncompressed content")
-	}
+	zhtest.AssertNotEqual(t, etagNoCompress, etagWithCompress)
 
 	// Both should be strong ETags (no W/ prefix by default)
-	if !strings.HasPrefix(etagNoCompress, `"`) {
-		t.Errorf("Expected strong ETag format for uncompressed, got %s", etagNoCompress)
-	}
-	if !strings.HasPrefix(etagWithCompress, `"`) {
-		t.Errorf("Expected strong ETag format for compressed, got %s", etagWithCompress)
-	}
+	zhtest.AssertTrue(t, strings.HasPrefix(etagNoCompress, `"`))
+	zhtest.AssertTrue(t, strings.HasPrefix(etagWithCompress, `"`))
 }
 
 // TestCompress_StatusCodesWithoutBodies verifies that status codes without
@@ -285,13 +246,9 @@ func TestCompress_StatusCodesWithoutBodies(t *testing.T) {
 			rec := httptest.NewRecorder()
 			chain.ServeHTTP(rec, req)
 
-			if rec.Code != tt.status {
-				t.Errorf("expected status %d, got %d", tt.status, rec.Code)
-			}
+			zhtest.AssertEqual(t, tt.status, rec.Code)
 			// These status codes should not be compressed
-			if rec.Header().Get(httpx.HeaderContentEncoding) != "" {
-				t.Errorf("status %d should not be compressed", tt.status)
-			}
+			zhtest.AssertEqual(t, "", rec.Header().Get(httpx.HeaderContentEncoding))
 		})
 	}
 }
@@ -316,22 +273,16 @@ func TestCompressETag_VaryHeaderAdded(t *testing.T) {
 
 	// Vary header should include Accept-Encoding
 	vary := rec.Header()["Vary"]
-	if !slices.Contains(vary, httpx.HeaderAcceptEncoding) {
-		t.Errorf("Vary header should include %q, got %v", httpx.HeaderAcceptEncoding, vary)
-	}
+	zhtest.AssertTrue(t, slices.Contains(vary, httpx.HeaderAcceptEncoding))
 }
 
 // decompressGzip decompresses gzip-encoded bytes for testing
 func decompressGzip(t *testing.T, data []byte) string {
 	reader, err := gzip.NewReader(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("failed to create gzip reader: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	defer func() { _ = reader.Close() }()
 
 	result, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("failed to decompress: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 	return string(result)
 }

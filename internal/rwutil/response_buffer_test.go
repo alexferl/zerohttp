@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestResponseBuffer_BasicWrite(t *testing.T) {
@@ -17,17 +18,11 @@ func TestResponseBuffer_BasicWrite(t *testing.T) {
 		buf := NewResponseBuffer(rec, 1024)
 
 		n, _ := buf.Write([]byte("hello"))
-		if n != 5 {
-			t.Errorf("expected 5 bytes written, got %d", n)
-		}
+		zhtest.AssertEqual(t, 5, n)
 
 		// Data should be buffered, not written to response
-		if rec.Body.String() != "" {
-			t.Error("expected data to be buffered, not written to response")
-		}
-		if buf.Buf.String() != "hello" {
-			t.Errorf("expected buffer to contain 'hello', got %q", buf.Buf.String())
-		}
+		zhtest.AssertEmpty(t, rec.Body.String())
+		zhtest.AssertEqual(t, "hello", buf.Buf.String())
 	})
 
 	t.Run("implicit WriteHeader with 200 on Write", func(t *testing.T) {
@@ -36,12 +31,8 @@ func TestResponseBuffer_BasicWrite(t *testing.T) {
 
 		_, _ = buf.Write([]byte("hello"))
 
-		if buf.Status != http.StatusOK {
-			t.Errorf("expected status 200, got %d", buf.Status)
-		}
-		if buf.HasWritten != true {
-			t.Error("expected HasWritten to be true")
-		}
+		zhtest.AssertEqual(t, http.StatusOK, buf.Status)
+		zhtest.AssertTrue(t, buf.HasWritten)
 	})
 
 	t.Run("explicit WriteHeader sets status", func(t *testing.T) {
@@ -50,12 +41,8 @@ func TestResponseBuffer_BasicWrite(t *testing.T) {
 
 		buf.WriteHeader(http.StatusCreated)
 
-		if buf.Status != http.StatusCreated {
-			t.Errorf("expected status 201, got %d", buf.Status)
-		}
-		if buf.HasWritten != true {
-			t.Error("expected HasWritten to be true")
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, buf.Status)
+		zhtest.AssertTrue(t, buf.HasWritten)
 	})
 
 	t.Run("WriteHeader is idempotent", func(t *testing.T) {
@@ -65,9 +52,7 @@ func TestResponseBuffer_BasicWrite(t *testing.T) {
 		buf.WriteHeader(http.StatusCreated)
 		buf.WriteHeader(http.StatusOK) // Should be ignored
 
-		if buf.Status != http.StatusCreated {
-			t.Errorf("expected status 201, got %d", buf.Status)
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, buf.Status)
 	})
 }
 
@@ -79,12 +64,8 @@ func TestResponseBuffer_Commit(t *testing.T) {
 		_, _ = buf.Write([]byte("hello"))
 		buf.Commit()
 
-		if rec.Body.String() != "hello" {
-			t.Errorf("expected 'hello', got %q", rec.Body.String())
-		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
-		}
+		zhtest.AssertEqual(t, "hello", rec.Body.String())
+		zhtest.AssertEqual(t, http.StatusOK, rec.Code)
 	})
 
 	t.Run("Commit with custom status", func(t *testing.T) {
@@ -95,9 +76,7 @@ func TestResponseBuffer_Commit(t *testing.T) {
 		_, _ = buf.Write([]byte("created"))
 		buf.Commit()
 
-		if rec.Code != http.StatusCreated {
-			t.Errorf("expected status 201, got %d", rec.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, rec.Code)
 	})
 
 	t.Run("Commit is idempotent", func(t *testing.T) {
@@ -108,9 +87,7 @@ func TestResponseBuffer_Commit(t *testing.T) {
 		buf.Commit()
 		buf.Commit() // Second commit should be no-op
 
-		if rec.Body.String() != "hello" {
-			t.Errorf("expected 'hello', got %q", rec.Body.String())
-		}
+		zhtest.AssertEqual(t, "hello", rec.Body.String())
 	})
 
 	t.Run("CommitHeader only writes headers", func(t *testing.T) {
@@ -121,15 +98,9 @@ func TestResponseBuffer_Commit(t *testing.T) {
 		buf.ResponseWriter.Header().Set("X-Custom", "value")
 		buf.CommitHeader()
 
-		if rec.Code != http.StatusCreated {
-			t.Errorf("expected status 201, got %d", rec.Code)
-		}
-		if rec.Body.String() != "" {
-			t.Error("expected no body written yet")
-		}
-		if rec.Header().Get("X-Custom") != "value" {
-			t.Error("expected header to be written")
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, rec.Code)
+		zhtest.AssertEmpty(t, rec.Body.String())
+		zhtest.AssertEqual(t, "value", rec.Header().Get("X-Custom"))
 	})
 }
 
@@ -144,12 +115,8 @@ func TestResponseBuffer_Overflow(t *testing.T) {
 		// Second write causes overflow
 		_, _ = buf.Write([]byte(" world this is long"))
 
-		if buf.Buffering {
-			t.Error("expected buffering to be false after overflow")
-		}
-		if rec.Body.String() != "hello world this is long" {
-			t.Errorf("expected full response, got %q", rec.Body.String())
-		}
+		zhtest.AssertFalse(t, buf.Buffering)
+		zhtest.AssertEqual(t, "hello world this is long", rec.Body.String())
 	})
 
 	t.Run("single large write triggers overflow", func(t *testing.T) {
@@ -158,12 +125,8 @@ func TestResponseBuffer_Overflow(t *testing.T) {
 
 		_, _ = buf.Write([]byte("hello world"))
 
-		if buf.Buffering {
-			t.Error("expected buffering to be false after overflow")
-		}
-		if rec.Body.String() != "hello world" {
-			t.Errorf("expected full response, got %q", rec.Body.String())
-		}
+		zhtest.AssertFalse(t, buf.Buffering)
+		zhtest.AssertEqual(t, "hello world", rec.Body.String())
 	})
 
 	t.Run("overflow with custom status", func(t *testing.T) {
@@ -173,9 +136,7 @@ func TestResponseBuffer_Overflow(t *testing.T) {
 		buf.WriteHeader(http.StatusCreated)
 		_, _ = buf.Write([]byte("hello world"))
 
-		if rec.Code != http.StatusCreated {
-			t.Errorf("expected status 201, got %d", rec.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, rec.Code)
 	})
 
 	t.Run("zero max size means unlimited", func(t *testing.T) {
@@ -184,12 +145,8 @@ func TestResponseBuffer_Overflow(t *testing.T) {
 
 		_, _ = buf.Write([]byte("this is a long string that would overflow a small buffer"))
 
-		if !buf.Buffering {
-			t.Error("expected buffering to continue with unlimited size")
-		}
-		if rec.Body.String() != "" {
-			t.Error("expected data to still be buffered")
-		}
+		zhtest.AssertTrue(t, buf.Buffering)
+		zhtest.AssertEmpty(t, rec.Body.String())
 	})
 }
 
@@ -201,9 +158,7 @@ func TestResponseBuffer_FlushTo(t *testing.T) {
 		_, _ = buf.Write([]byte("hello"))
 		buf.FlushTo(rec, nil)
 
-		if rec.Body.String() != "hello" {
-			t.Errorf("expected 'hello', got %q", rec.Body.String())
-		}
+		zhtest.AssertEqual(t, "hello", rec.Body.String())
 	})
 
 	t.Run("FlushTo calls onFlush callback", func(t *testing.T) {
@@ -217,12 +172,8 @@ func TestResponseBuffer_FlushTo(t *testing.T) {
 			buf.ResponseWriter.Header().Set("X-Custom", "value")
 		})
 
-		if !callbackCalled {
-			t.Error("expected onFlush callback to be called")
-		}
-		if rec.Header().Get("X-Custom") != "value" {
-			t.Error("expected header set in callback to be present")
-		}
+		zhtest.AssertTrue(t, callbackCalled)
+		zhtest.AssertEqual(t, "value", rec.Header().Get("X-Custom"))
 	})
 
 	t.Run("FlushTo without buffering just flushes", func(t *testing.T) {
@@ -238,9 +189,7 @@ func TestResponseBuffer_FlushTo(t *testing.T) {
 			callbackCalled = true
 		})
 
-		if callbackCalled {
-			t.Error("expected onFlush not to be called when not buffering")
-		}
+		zhtest.AssertFalse(t, callbackCalled)
 	})
 
 	t.Run("FlushTo with nil flusher doesn't panic", func(t *testing.T) {
@@ -251,9 +200,7 @@ func TestResponseBuffer_FlushTo(t *testing.T) {
 		buf.FlushTo(nil, nil) // Should not panic
 
 		// Data should still be committed
-		if rec.Body.String() != "hello" {
-			t.Errorf("expected 'hello', got %q", rec.Body.String())
-		}
+		zhtest.AssertEqual(t, "hello", rec.Body.String())
 	})
 }
 
@@ -286,9 +233,7 @@ func TestResponseBuffer_Hijack(t *testing.T) {
 
 		// httptest.ResponseRecorder doesn't support hijacking, so we expect an error
 		_, _, err := buf.Hijack()
-		if err == nil {
-			t.Error("expected error when hijacking non-hijacker")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("Hijack succeeds with hijacker", func(t *testing.T) {
@@ -296,9 +241,7 @@ func TestResponseBuffer_Hijack(t *testing.T) {
 		buf := NewResponseBuffer(mock, 1024)
 
 		_, _, _ = buf.Hijack()
-		if !mock.hijacked {
-			t.Error("expected Hijack to be called on underlying writer")
-		}
+		zhtest.AssertTrue(t, mock.hijacked)
 	})
 }
 
@@ -309,9 +252,7 @@ func TestResponseBuffer_Push(t *testing.T) {
 
 		// httptest.ResponseRecorder doesn't support push
 		err := buf.Push("/test", nil)
-		if err == nil {
-			t.Error("expected error when pushing to non-pusher")
-		}
+		zhtest.AssertError(t, err)
 	})
 
 	t.Run("Push succeeds with pusher", func(t *testing.T) {
@@ -319,9 +260,7 @@ func TestResponseBuffer_Push(t *testing.T) {
 		buf := NewResponseBuffer(mock, 1024)
 
 		_ = buf.Push("/test", nil)
-		if !mock.pushed {
-			t.Error("expected Push to be called on underlying writer")
-		}
+		zhtest.AssertTrue(t, mock.pushed)
 	})
 }
 
@@ -338,24 +277,12 @@ func TestResponseBuffer_Reset(t *testing.T) {
 		rec2 := httptest.NewRecorder()
 		buf.Reset(rec2)
 
-		if buf.Buf.Len() != 0 {
-			t.Error("expected buffer to be reset")
-		}
-		if buf.Status != http.StatusOK {
-			t.Errorf("expected status reset to 200, got %d", buf.Status)
-		}
-		if buf.HasWritten {
-			t.Error("expected HasWritten to be false")
-		}
-		if buf.HeaderWritten {
-			t.Error("expected HeaderWritten to be false")
-		}
-		if !buf.Buffering {
-			t.Error("expected Buffering to be true")
-		}
-		if buf.ResponseWriter != rec2 {
-			t.Error("expected ResponseWriter to be updated")
-		}
+		zhtest.AssertEqual(t, 0, buf.Buf.Len())
+		zhtest.AssertEqual(t, http.StatusOK, buf.Status)
+		zhtest.AssertFalse(t, buf.HasWritten)
+		zhtest.AssertFalse(t, buf.HeaderWritten)
+		zhtest.AssertTrue(t, buf.Buffering)
+		zhtest.AssertEqual(t, rec2, buf.ResponseWriter)
 	})
 }
 
@@ -369,9 +296,7 @@ func TestResponseBuffer_MultipleWrites(t *testing.T) {
 		_, _ = buf.Write([]byte("world"))
 		buf.Commit()
 
-		if rec.Body.String() != "hello world" {
-			t.Errorf("expected 'hello world', got %q", rec.Body.String())
-		}
+		zhtest.AssertEqual(t, "hello world", rec.Body.String())
 	})
 
 	t.Run("mixed buffered and pass-through writes", func(t *testing.T) {
@@ -382,9 +307,7 @@ func TestResponseBuffer_MultipleWrites(t *testing.T) {
 		_, _ = buf.Write([]byte(" world"))     // triggers overflow
 		_, _ = buf.Write([]byte(" more data")) // pass-through
 
-		if rec.Body.String() != "hello world more data" {
-			t.Errorf("expected 'hello world more data', got %q", rec.Body.String())
-		}
+		zhtest.AssertEqual(t, "hello world more data", rec.Body.String())
 	})
 }
 
@@ -397,9 +320,7 @@ func TestResponseBuffer_HeaderManipulation(t *testing.T) {
 		_, _ = buf.Write([]byte("{}"))
 		buf.Commit()
 
-		if rec.Header().Get(httpx.HeaderContentType) != "application/json" {
-			t.Error("expected Content-Type header to be set")
-		}
+		zhtest.AssertEqual(t, "application/json", rec.Header().Get(httpx.HeaderContentType))
 	})
 
 	t.Run("headers set before WriteHeader are preserved", func(t *testing.T) {
@@ -411,12 +332,8 @@ func TestResponseBuffer_HeaderManipulation(t *testing.T) {
 		buf.ResponseWriter.Header().Set("X-After", "2")
 		buf.Commit()
 
-		if rec.Header().Get("X-Before") != "1" {
-			t.Error("expected X-Before header to be preserved")
-		}
-		if rec.Header().Get("X-After") != "2" {
-			t.Error("expected X-After header to be preserved")
-		}
+		zhtest.AssertEqual(t, "1", rec.Header().Get("X-Before"))
+		zhtest.AssertEqual(t, "2", rec.Header().Get("X-After"))
 	})
 }
 

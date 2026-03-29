@@ -2,11 +2,11 @@ package idempotency
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/alexferl/zerohttp/storage"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // mockStorage is a test implementation of storage.Storage
@@ -86,26 +86,16 @@ func TestNewStorageAdapter(t *testing.T) {
 	t.Run("with locker", func(t *testing.T) {
 		s := newMockStorageWithLocker()
 		adapter, err := NewStorageAdapter(s)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if adapter == nil {
-			t.Fatal("adapter should not be nil")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertNotNil(t, adapter)
 	})
 
 	t.Run("without locker", func(t *testing.T) {
 		s := newMockStorage()
 		adapter, err := NewStorageAdapter(s)
-		if err == nil {
-			t.Error("should error when storage doesn't implement Locker")
-		}
-		if adapter != nil {
-			t.Error("adapter should be nil on error")
-		}
-		if !errors.Is(err, storage.ErrLockNotSupported) {
-			t.Errorf("error should be ErrLockNotSupported, got: %v", err)
-		}
+		zhtest.AssertError(t, err)
+		zhtest.AssertNil(t, adapter)
+		zhtest.AssertErrorIs(t, err, storage.ErrLockNotSupported)
 	})
 }
 
@@ -113,18 +103,14 @@ func TestNewStorageAdapter_WithLockTTL(t *testing.T) {
 	s := newMockStorageWithLocker()
 	customTTL := 5 * time.Minute
 	adapter, err := NewStorageAdapter(s, StorageAdapterConfig{LockTTL: customTTL})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertNotNil(t, adapter)
+
 	// Verify custom TTL is used by checking lock behavior
 	ctx := context.Background()
 	locked, err := adapter.Lock(ctx, "test-key")
-	if err != nil {
-		t.Fatalf("lock failed: %v", err)
-	}
-	if !locked {
-		t.Error("should acquire lock")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, locked)
 	// TTL verification would require checking the mock
 }
 
@@ -134,19 +120,13 @@ func TestNewStorageAdapter_PartialConfig(t *testing.T) {
 
 	// Empty config should use defaults
 	adapter, err := NewStorageAdapter(s, StorageAdapterConfig{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Type assert to check lockTTL was set to default
 	sa, ok := adapter.(*StorageAdapter)
-	if !ok {
-		t.Fatal("adapter should be *StorageAdapter")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if sa.lockTTL != DefaultStorageAdapterConfig.LockTTL {
-		t.Errorf("lockTTL = %v, want default %v", sa.lockTTL, DefaultStorageAdapterConfig.LockTTL)
-	}
+	zhtest.AssertEqual(t, DefaultStorageAdapterConfig.LockTTL, sa.lockTTL)
 }
 
 // mockCodec is a test codec that prepends a prefix
@@ -169,19 +149,14 @@ func TestNewStorageAdapter_WithCodec(t *testing.T) {
 		Codec: mockCodec{},
 	}
 	adapter, err := NewStorageAdapter(s, cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Type assert to check codec was set
 	sa, ok := adapter.(*StorageAdapter)
-	if !ok {
-		t.Fatal("adapter should be *StorageAdapter")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if _, ok := sa.codec.(mockCodec); !ok {
-		t.Error("codec should be mockCodec")
-	}
+	_, isMockCodec := sa.codec.(mockCodec)
+	zhtest.AssertTrue(t, isMockCodec)
 }
 
 func TestStorageAdapter_CustomCodec(t *testing.T) {
@@ -191,30 +166,21 @@ func TestStorageAdapter_CustomCodec(t *testing.T) {
 		Codec: mockCodec{},
 	}
 	adapter, err := NewStorageAdapter(s, cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Store via adapter - should use custom codec
 	rec := Record{StatusCode: 200, Body: []byte("test")}
-	if err := adapter.Set(ctx, "key", rec, time.Hour); err != nil {
-		t.Fatalf("set failed: %v", err)
-	}
+	err = adapter.Set(ctx, "key", rec, time.Hour)
+	zhtest.AssertNoError(t, err)
 
 	// Check that custom codec was used (prepends "MOCK:")
 	data := s.data["key"]
-	if string(data) != "MOCK:" {
-		t.Errorf("expected MOCK: prefix, got %s", string(data))
-	}
+	zhtest.AssertEqual(t, "MOCK:", string(data))
 
 	// Get via adapter - should use custom codec
 	gotRec, _, err := adapter.Get(ctx, "key")
-	if err != nil {
-		t.Fatalf("get failed: %v", err)
-	}
-	if gotRec.StatusCode != 999 {
-		t.Errorf("StatusCode = %d, want 999 (custom codec marker)", gotRec.StatusCode)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, 999, gotRec.StatusCode)
 }
 
 func TestStorageAdapter_Get(t *testing.T) {
@@ -224,15 +190,9 @@ func TestStorageAdapter_Get(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		rec, found, err := adapter.Get(ctx, "missing")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if found {
-			t.Error("should not find missing key")
-		}
-		if rec.StatusCode != 0 {
-			t.Error("record should be zero value")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertFalse(t, found)
+		zhtest.AssertEqual(t, 0, rec.StatusCode)
 	})
 
 	t.Run("found", func(t *testing.T) {
@@ -241,23 +201,14 @@ func TestStorageAdapter_Get(t *testing.T) {
 			Body:       []byte("hello"),
 			CreatedAt:  time.Now(),
 		}
-		if err := adapter.Set(ctx, "test", expected, time.Hour); err != nil {
-			t.Fatalf("set failed: %v", err)
-		}
+		err := adapter.Set(ctx, "test", expected, time.Hour)
+		zhtest.AssertNoError(t, err)
 
 		rec, found, err := adapter.Get(ctx, "test")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if !found {
-			t.Error("should find existing key")
-		}
-		if rec.StatusCode != expected.StatusCode {
-			t.Errorf("StatusCode = %d, want %d", rec.StatusCode, expected.StatusCode)
-		}
-		if string(rec.Body) != string(expected.Body) {
-			t.Errorf("Body = %s, want %s", rec.Body, expected.Body)
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, expected.StatusCode, rec.StatusCode)
+		zhtest.AssertEqual(t, string(expected.Body), string(rec.Body))
 	})
 }
 
@@ -274,16 +225,12 @@ func TestStorageAdapter_Set(t *testing.T) {
 	}
 	ttl := 24 * time.Hour
 
-	if err := adapter.Set(ctx, "key", rec, ttl); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	err := adapter.Set(ctx, "key", rec, ttl)
+	zhtest.AssertNoError(t, err)
 
-	if _, ok := s.data["key"]; !ok {
-		t.Error("key should exist in storage")
-	}
-	if s.ttlVals["key"] != ttl {
-		t.Errorf("TTL = %v, want %v", s.ttlVals["key"], ttl)
-	}
+	_, ok := s.data["key"]
+	zhtest.AssertTrue(t, ok)
+	zhtest.AssertEqual(t, ttl, s.ttlVals["key"])
 }
 
 func TestStorageAdapter_Lock(t *testing.T) {
@@ -295,21 +242,13 @@ func TestStorageAdapter_Lock(t *testing.T) {
 
 		// First lock should succeed
 		got, err := adapter.Lock(ctx, "key")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if !got {
-			t.Error("first lock should succeed")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, got)
 
 		// Second lock should fail (already locked)
 		got, err = adapter.Lock(ctx, "key")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if got {
-			t.Error("second lock should fail")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertFalse(t, got)
 	})
 }
 
@@ -321,20 +260,16 @@ func TestStorageAdapter_Unlock(t *testing.T) {
 		adapter, _ := NewStorageAdapter(s)
 
 		// Lock first
-		if _, err := adapter.Lock(ctx, "key"); err != nil {
-			t.Fatalf("lock failed: %v", err)
-		}
+		_, err := adapter.Lock(ctx, "key")
+		zhtest.AssertNoError(t, err)
 
 		// Unlock should succeed
-		if err := adapter.Unlock(ctx, "key"); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		err = adapter.Unlock(ctx, "key")
+		zhtest.AssertNoError(t, err)
 
 		// Should be able to lock again
 		got, _ := adapter.Lock(ctx, "key")
-		if !got {
-			t.Error("should be able to lock after unlock")
-		}
+		zhtest.AssertTrue(t, got)
 	})
 }
 
@@ -344,11 +279,8 @@ func TestStorageAdapter_Close(t *testing.T) {
 
 	// Type assert to access Close method (not part of Store interface)
 	sa, ok := adapter.(*StorageAdapter)
-	if !ok {
-		t.Fatal("adapter should be *StorageAdapter")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if err := sa.Close(); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	err := sa.Close()
+	zhtest.AssertNoError(t, err)
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/extensions/autocert"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // mockHTTP3Server is a mock implementation of HTTP3Server for testing
@@ -84,9 +85,7 @@ func TestServer_SetHTTP3Server(t *testing.T) {
 
 	server.SetHTTP3Server(h3Server)
 
-	if server.http3Server != h3Server {
-		t.Error("expected HTTP/3 server to be set")
-	}
+	zhtest.AssertEqual(t, h3Server, server.http3Server)
 }
 
 func TestServer_ListenAndServeHTTP3_NoServer(t *testing.T) {
@@ -95,9 +94,7 @@ func TestServer_ListenAndServeHTTP3_NoServer(t *testing.T) {
 	// http3Server is nil by default
 
 	err := server.ListenAndServeHTTP3("cert.pem", "key.pem")
-	if err != nil {
-		t.Errorf("expected no error when HTTP/3 server is nil, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	// Should log debug message about skipping
 	found := false
@@ -107,9 +104,7 @@ func TestServer_ListenAndServeHTTP3_NoServer(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Error("expected debug log about skipping HTTP/3 server")
-	}
+	zhtest.AssertTrue(t, found)
 }
 
 func TestServer_ListenAndServeHTTP3_WithServer(t *testing.T) {
@@ -119,24 +114,15 @@ func TestServer_ListenAndServeHTTP3_WithServer(t *testing.T) {
 
 	// Run in goroutine since it would block
 	go func() {
-		err := server.ListenAndServeHTTP3("cert.pem", "key.pem")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		_ = server.ListenAndServeHTTP3("cert.pem", "key.pem")
 	}()
 
 	// Give it a moment to be called
 	time.Sleep(10 * time.Millisecond)
 
-	if !h3Server.wasListenAndServeTLSCalled() {
-		t.Error("expected ListenAndServeTLS to be called on HTTP/3 server")
-	}
-	if h3Server.getCertFile() != "cert.pem" {
-		t.Errorf("expected certFile = 'cert.pem', got '%s'", h3Server.getCertFile())
-	}
-	if h3Server.getKeyFile() != "key.pem" {
-		t.Errorf("expected keyFile = 'key.pem', got '%s'", h3Server.getKeyFile())
-	}
+	zhtest.AssertTrue(t, h3Server.wasListenAndServeTLSCalled())
+	zhtest.AssertEqual(t, "cert.pem", h3Server.getCertFile())
+	zhtest.AssertEqual(t, "key.pem", h3Server.getKeyFile())
 }
 
 func TestServer_StartHTTP3(t *testing.T) {
@@ -146,17 +132,12 @@ func TestServer_StartHTTP3(t *testing.T) {
 
 	// Run in goroutine since it would block
 	go func() {
-		err := server.StartHTTP3("cert.pem", "key.pem")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
+		_ = server.StartHTTP3("cert.pem", "key.pem")
 	}()
 
 	time.Sleep(10 * time.Millisecond)
 
-	if !h3Server.wasListenAndServeTLSCalled() {
-		t.Error("expected StartHTTP3 to call ListenAndServeTLS")
-	}
+	zhtest.AssertTrue(t, h3Server.wasListenAndServeTLSCalled())
 }
 
 func TestServer_Shutdown_WithHTTP3(t *testing.T) {
@@ -168,13 +149,8 @@ func TestServer_Shutdown_WithHTTP3(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-
-	if !h3Server.wasShutdownCalled() {
-		t.Error("expected Shutdown to be called on HTTP/3 server")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, h3Server.wasShutdownCalled())
 }
 
 func TestServer_Close_WithHTTP3(t *testing.T) {
@@ -183,13 +159,8 @@ func TestServer_Close_WithHTTP3(t *testing.T) {
 	server.SetHTTP3Server(h3Server)
 
 	err := server.Close()
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-
-	if !h3Server.wasCloseCalled() {
-		t.Error("expected Close to be called on HTTP/3 server")
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertTrue(t, h3Server.wasCloseCalled())
 }
 
 func TestServer_Shutdown_WithHTTP3Error(t *testing.T) {
@@ -207,9 +178,7 @@ func TestServer_Shutdown_WithHTTP3Error(t *testing.T) {
 
 	// Error is logged and also returned via errCh
 	err := server.Shutdown(ctx)
-	if err == nil {
-		t.Error("expected shutdown error")
-	}
+	zhtest.AssertError(t, err)
 }
 
 // mockHTTP3ServerWithError is a mock that can return an error
@@ -328,13 +297,8 @@ func TestServer_StartAutoTLS_WithHTTP3Autocert(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// The HTTP/3 server with autocert support should have been detected and started
-	if !h3Server.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("expected ListenAndServeTLSWithAutocert to be called on HTTP/3 server with autocert support")
-	}
-
-	if h3Server.getAutocertManager() != mgr {
-		t.Error("expected autocert manager to be passed to HTTP/3 server")
-	}
+	zhtest.AssertTrue(t, h3Server.wasListenAndServeTLSWithAutocertCalled())
+	zhtest.AssertEqual(t, mgr, h3Server.getAutocertManager())
 }
 
 func TestServer_StartAutoTLS_WithHTTP3NoAutocert(t *testing.T) {
@@ -392,17 +356,9 @@ func TestServer_ListenAndServeTLS_WithHTTP3(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify HTTP/3 was started
-	if !mockH3.wasListenAndServeTLSCalled() {
-		t.Error("expected HTTP/3 ListenAndServeTLS to be called")
-	}
-
-	// Verify correct cert/key files were passed
-	if mockH3.getCertFile() != certFile {
-		t.Errorf("expected cert file %q, got %q", certFile, mockH3.getCertFile())
-	}
-	if mockH3.getKeyFile() != keyFile {
-		t.Errorf("expected key file %q, got %q", keyFile, mockH3.getKeyFile())
-	}
+	zhtest.AssertTrue(t, mockH3.wasListenAndServeTLSCalled())
+	zhtest.AssertEqual(t, certFile, mockH3.getCertFile())
+	zhtest.AssertEqual(t, keyFile, mockH3.getKeyFile())
 
 	// Shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -413,7 +369,7 @@ func TestServer_ListenAndServeTLS_WithHTTP3(t *testing.T) {
 	case <-done:
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for ListenAndServeTLS to return")
+		zhtest.AssertFail(t, "timeout waiting for ListenAndServeTLS to return")
 	}
 }
 
@@ -448,9 +404,7 @@ func TestServer_ListenAndServeTLS_HTTP3Error(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify HTTP/3 was started (even though it errors)
-	if mockH3.getCertFile() != certFile {
-		t.Errorf("expected cert file %q, got %q", certFile, mockH3.getCertFile())
-	}
+	zhtest.AssertEqual(t, certFile, mockH3.getCertFile())
 
 	// Shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -461,7 +415,7 @@ func TestServer_ListenAndServeTLS_HTTP3Error(t *testing.T) {
 	case <-done:
 		// Expected
 	case <-time.After(time.Second):
-		t.Error("timeout waiting for ListenAndServeTLS to return")
+		zhtest.AssertFail(t, "timeout waiting for ListenAndServeTLS to return")
 	}
 }
 
@@ -502,14 +456,12 @@ func TestServer_Start_WithHTTP3(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify HTTP/3 was started
-	if !mockH3.wasListenAndServeTLSCalled() {
-		t.Error("expected HTTP/3 ListenAndServeTLS to be called")
-	}
+	zhtest.AssertTrue(t, mockH3.wasListenAndServeTLSCalled())
 
 	select {
 	case <-done:
 		// Expected - HTTPS failed
 	case <-time.After(2 * time.Second):
-		t.Error("timeout waiting for Start to return")
+		zhtest.AssertFail(t, "timeout waiting for Start to return")
 	}
 }

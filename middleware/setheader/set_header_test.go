@@ -18,10 +18,8 @@ func TestSetHeader_DefaultConfig(t *testing.T) {
 	w := zhtest.TestMiddlewareWithHandler(New(), handler, req)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK).Body("OK")
-	// Content-Length is always present
-	if len(w.Header()) > 1 {
-		t.Errorf("Expected no custom headers with default config, got %d headers", len(w.Header()))
-	}
+	// With default config, there should be at most 1 header (Content-Length)
+	zhtest.AssertTrue(t, len(w.Header()) <= 1)
 }
 
 func TestSetHeader_SingleHeader(t *testing.T) {
@@ -68,13 +66,9 @@ func TestSetHeader_EmptyHeaderValue(t *testing.T) {
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	emptyHeaderValue := w.Header().Get("X-Empty-Header")
-	if emptyHeaderValue != "" {
-		t.Errorf("Expected empty header 'X-Empty-Header' to be '', got '%s'", emptyHeaderValue)
-	}
+	zhtest.AssertEqual(t, "", emptyHeaderValue)
 	_, exists := w.Header()["X-Empty-Header"]
-	if !exists {
-		t.Error("Expected empty header 'X-Empty-Header' to exist")
-	}
+	zhtest.AssertTrue(t, exists)
 	zhtest.AssertWith(t, w).Header("X-Normal-Header", "normal-value")
 }
 
@@ -107,12 +101,8 @@ func TestSetHeader_OverrideExistingHeaders(t *testing.T) {
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
 	// Handler sets headers before middleware, so middleware values should be set
 	// but handler writes them first. The SetHeader middleware runs before handler.
-	if contentType := w.Header().Get(httpx.HeaderContentType); contentType != "text/html" {
-		t.Errorf("Expected Content-Type to be overridden to 'text/html', got '%s'", contentType)
-	}
-	if server := w.Header().Get(httpx.HeaderServer); server != "Default-Server" {
-		t.Errorf("Expected Server to be overridden to 'Default-Server', got '%s'", server)
-	}
+	zhtest.AssertEqual(t, "text/html", w.Header().Get(httpx.HeaderContentType))
+	zhtest.AssertEqual(t, "Default-Server", w.Header().Get(httpx.HeaderServer))
 }
 
 func TestSetHeader_HeadersSetBeforeHandler(t *testing.T) {
@@ -131,9 +121,7 @@ func TestSetHeader_HeadersSetBeforeHandler(t *testing.T) {
 	)
 
 	zhtest.AssertWith(t, w).Status(http.StatusOK)
-	if headerValueInHandler != "middleware-value" {
-		t.Errorf("Expected header to be visible in handler as 'middleware-value', got '%s'", headerValueInHandler)
-	}
+	zhtest.AssertEqual(t, "middleware-value", headerValueInHandler)
 	zhtest.AssertWith(t, w).Header("X-Middleware-Header", "middleware-value")
 }
 
@@ -196,21 +184,15 @@ func TestSetHeader_WithDifferentHTTPMethods(t *testing.T) {
 				req,
 			)
 
-			if headerValue := w.Header().Get("X-Method-Header"); headerValue != "method-test" {
-				t.Errorf("Expected header for %s method to be 'method-test', got '%s'", method, headerValue)
-			}
+			zhtest.AssertEqual(t, "method-test", w.Header().Get("X-Method-Header"))
 		})
 	}
 }
 
 func TestDefaultSetHeaderConfig(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.Headers == nil {
-		t.Error("Expected default headers map to be initialized")
-	}
-	if len(cfg.Headers) != 0 {
-		t.Errorf("Expected default headers map to be empty, got %d headers", len(cfg.Headers))
-	}
+	zhtest.AssertNotNil(t, cfg.Headers)
+	zhtest.AssertEqual(t, 0, len(cfg.Headers))
 }
 
 func TestSetHeader_HeadersNotAffectedByRequestHeaders(t *testing.T) {
@@ -241,8 +223,6 @@ func TestSetHeader_LargeNumberOfHeaders(t *testing.T) {
 	for i := range 100 {
 		expectedKey := fmt.Sprintf("X-Header-%d", i)
 		expectedValue := fmt.Sprintf("value-%d", i)
-		if actualValue := w.Header().Get(expectedKey); actualValue != expectedValue {
-			t.Errorf("Expected header '%s' to be '%s', got '%s'", expectedKey, expectedValue, actualValue)
-		}
+		zhtest.AssertEqual(t, expectedValue, w.Header().Get(expectedKey))
 	}
 }

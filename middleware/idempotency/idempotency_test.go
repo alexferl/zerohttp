@@ -35,12 +35,8 @@ func TestIdempotency_Basic(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w1, req1)
 
 		zhtest.AssertWith(t, w1).Status(http.StatusCreated).Body(`{"id":"123"}`)
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call, got %d", callCount)
-		}
-		if w1.Header().Get(httpx.HeaderXIdempotencyReplay) != "" {
-			t.Error("First request should not have X-Idempotency-Replay header")
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEmpty(t, w1.Header().Get(httpx.HeaderXIdempotencyReplay))
 
 		// Second request with same key - should be cached
 		req2 := httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
@@ -49,15 +45,9 @@ func TestIdempotency_Basic(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
 		zhtest.AssertWith(t, w2).Status(http.StatusCreated).Body(`{"id":"123"}`)
-		if callCount != 1 {
-			t.Errorf("Expected still 1 handler call, got %d (should be cached)", callCount)
-		}
-		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
-			t.Error("Replayed request should have X-Idempotency-Replay: true header")
-		}
-		if w2.Header().Get("X-Custom") != "value" {
-			t.Error("Replayed response should have custom headers")
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, "true", w2.Header().Get(httpx.HeaderXIdempotencyReplay))
+		zhtest.AssertEqual(t, "value", w2.Header().Get("X-Custom"))
 	})
 
 	t.Run("different body creates different cache entry", func(t *testing.T) {
@@ -84,9 +74,7 @@ func TestIdempotency_Basic(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for different bodies, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("does not cache error responses", func(t *testing.T) {
@@ -113,9 +101,7 @@ func TestIdempotency_Basic(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls (errors not cached), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 }
 
@@ -142,9 +128,7 @@ func TestIdempotency_Methods(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for GET (not cached), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("applies to PUT, PATCH, DELETE", func(t *testing.T) {
@@ -173,9 +157,7 @@ func TestIdempotency_Methods(t *testing.T) {
 			w2 := httptest.NewRecorder()
 			idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-			if callCount != 1 {
-				t.Errorf("Expected 1 handler call for %s (cached), got %d", method, callCount)
-			}
+			zhtest.AssertEqual(t, 1, callCount)
 		}
 	})
 }
@@ -195,9 +177,7 @@ func TestIdempotency_Required(t *testing.T) {
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("Expected 400 when key is required, got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusBadRequest, w.Code)
 
 		// Test JSON response
 		req.Header.Set(httpx.HeaderAccept, httpx.MIMEApplicationJSON)
@@ -227,9 +207,7 @@ func TestIdempotency_Required(t *testing.T) {
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
-		if w.Code != http.StatusCreated {
-			t.Errorf("Expected 201 when key is provided, got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, w.Code)
 	})
 }
 
@@ -258,9 +236,7 @@ func TestIdempotency_ExcludedPaths(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls for excluded path, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 }
 
@@ -289,9 +265,7 @@ func TestIdempotency_MaxBodySize(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls (body too large), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 }
 
@@ -320,12 +294,8 @@ func TestIdempotency_CustomHeaderName(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call (cached), got %d", callCount)
-		}
-		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
-			t.Error("Expected X-Idempotency-Replay header on replay")
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, "true", w2.Header().Get(httpx.HeaderXIdempotencyReplay))
 	})
 }
 
@@ -347,9 +317,7 @@ func TestIdempotency_BodyPreservation(t *testing.T) {
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
-		if !bytes.Equal(receivedBody, body) {
-			t.Errorf("Handler received different body. Expected %q, got %q", string(body), string(receivedBody))
-		}
+		zhtest.AssertTrue(t, bytes.Equal(receivedBody, body))
 	})
 }
 
@@ -394,20 +362,12 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 		// Wait for first request to complete
 		<-done
 
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call for concurrent requests, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 
 		// Second request should get replayed response
-		if w2.Code != http.StatusCreated {
-			t.Errorf("Expected 201 for second request, got %d", w2.Code)
-		}
-		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
-			t.Error("Second request should have X-Idempotency-Replay: true header")
-		}
-		if w2.Header().Get("X-Handler") != "first" {
-			t.Error("Second request should have headers from first handler response")
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, w2.Code)
+		zhtest.AssertEqual(t, "true", w2.Header().Get(httpx.HeaderXIdempotencyReplay))
+		zhtest.AssertEqual(t, "first", w2.Header().Get("X-Handler"))
 	})
 
 	t.Run("returns 409 when lock retries exhausted", func(t *testing.T) {
@@ -439,9 +399,7 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if w2.Code != http.StatusConflict {
-			t.Errorf("Expected 409 Conflict, got %d", w2.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusConflict, w2.Code)
 
 		// Test JSON response
 		req2.Header.Set("Accept", "application/json")
@@ -469,36 +427,22 @@ func TestIdempotency_StoreLockUnlock(t *testing.T) {
 
 		// First lock should succeed
 		locked, err := store.Lock(ctx, "test-key")
-		if err != nil {
-			t.Errorf("Unexpected error on first lock: %v", err)
-		}
-		if !locked {
-			t.Error("First lock should succeed")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, locked)
 
 		// Second lock should fail (already locked)
 		locked2, err := store.Lock(ctx, "test-key")
-		if err != nil {
-			t.Errorf("Unexpected error on second lock: %v", err)
-		}
-		if locked2 {
-			t.Error("Second lock should fail when key is already locked")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertFalse(t, locked2)
 
 		// Unlock should succeed
 		err = store.Unlock(ctx, "test-key")
-		if err != nil {
-			t.Errorf("Unexpected error on unlock: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 
 		// Lock should succeed again after unlock
 		locked3, err := store.Lock(ctx, "test-key")
-		if err != nil {
-			t.Errorf("Unexpected error on third lock: %v", err)
-		}
-		if !locked3 {
-			t.Error("Lock should succeed after unlock")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, locked3)
 
 		// Cleanup
 		_ = store.Unlock(ctx, "test-key")
@@ -510,21 +454,13 @@ func TestIdempotency_StoreLockUnlock(t *testing.T) {
 
 		// Lock first key
 		locked1, err := store.Lock(ctx, "key-1")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if !locked1 {
-			t.Error("Lock for key-1 should succeed")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, locked1)
 
 		// Lock second key should also succeed
 		locked2, err := store.Lock(ctx, "key-2")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if !locked2 {
-			t.Error("Lock for key-2 should succeed independently")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, locked2)
 
 		// Cleanup
 		_ = store.Unlock(ctx, "key-1")
@@ -537,9 +473,7 @@ func TestIdempotency_StoreLockUnlock(t *testing.T) {
 
 		// Unlocking a key that was never locked should not panic
 		err := store.Unlock(ctx, "never-locked")
-		if err != nil {
-			t.Errorf("Unexpected error unlocking non-existent key: %v", err)
-		}
+		zhtest.AssertNoError(t, err)
 	})
 }
 
@@ -560,19 +494,13 @@ func TestIdempotencyMemoryStore_MaxKeys(t *testing.T) {
 
 		// key-1 should be gone (expired)
 		_, found, _ := store.Get(ctx, "key-1")
-		if found {
-			t.Error("key-1 should have been removed (expired)")
-		}
+		zhtest.AssertFalse(t, found)
 
 		// key-2 and key-3 should exist
 		_, found2, _ := store.Get(ctx, "key-2")
-		if !found2 {
-			t.Error("key-2 should exist")
-		}
+		zhtest.AssertTrue(t, found2)
 		_, found3, _ := store.Get(ctx, "key-3")
-		if !found3 {
-			t.Error("key-3 should exist")
-		}
+		zhtest.AssertTrue(t, found3)
 	})
 
 	t.Run("removes oldest entry when max keys reached and none expired", func(t *testing.T) {
@@ -589,19 +517,13 @@ func TestIdempotencyMemoryStore_MaxKeys(t *testing.T) {
 
 		// key-1 should be gone (oldest)
 		_, found, _ := store.Get(ctx, "key-1")
-		if found {
-			t.Error("key-1 should have been removed (oldest)")
-		}
+		zhtest.AssertFalse(t, found)
 
 		// key-2 and key-3 should exist
 		_, found2, _ := store.Get(ctx, "key-2")
-		if !found2 {
-			t.Error("key-2 should exist")
-		}
+		zhtest.AssertTrue(t, found2)
 		_, found3, _ := store.Get(ctx, "key-3")
-		if !found3 {
-			t.Error("key-3 should exist")
-		}
+		zhtest.AssertTrue(t, found3)
 	})
 }
 
@@ -643,27 +565,16 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 
 		// Verify no duplicate headers
 		securityHeaders := w2.Header()["X-Security-Header"]
-		if len(securityHeaders) != 1 {
-			t.Errorf("X-Security-Header should appear once, got %d: %v", len(securityHeaders), securityHeaders)
-		}
+		zhtest.AssertEqual(t, 1, len(securityHeaders))
 
 		requestIds := w2.Header()[httpx.HeaderXRequestId]
-		if len(requestIds) != 1 {
-			t.Errorf("X-Request-Id should appear once, got %d: %v", len(requestIds), requestIds)
-		}
+		zhtest.AssertEqual(t, 1, len(requestIds))
 		// Should have the NEW request ID (from middleware), not the cached one
-		if requestIds[0] != "req-456" {
-			t.Errorf("X-Request-Id should be 'req-456' (from middleware), got %q", requestIds[0])
-		}
+		zhtest.AssertEqual(t, "req-456", requestIds[0])
 
 		// Custom header from handler should be present
-		if w2.Header().Get("X-Custom") != "handler-value" {
-			t.Error("X-Custom header should be replayed from cache")
-		}
-
-		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
-			t.Error("Expected X-Idempotency-Replay header on replay")
-		}
+		zhtest.AssertEqual(t, "handler-value", w2.Header().Get("X-Custom"))
+		zhtest.AssertEqual(t, "true", w2.Header().Get(httpx.HeaderXIdempotencyReplay))
 	})
 
 	t.Run("preserves multi-value headers from cache", func(t *testing.T) {
@@ -695,9 +606,7 @@ func TestIdempotency_NoDuplicateHeaders(t *testing.T) {
 
 		// All three values should be present
 		multiHeaders := w2.Header()["X-Multi"]
-		if len(multiHeaders) != 3 {
-			t.Errorf("X-Multi should have 3 values, got %d: %v", len(multiHeaders), multiHeaders)
-		}
+		zhtest.AssertEqual(t, 3, len(multiHeaders))
 	})
 }
 
@@ -725,9 +634,7 @@ func TestIdempotency_HandlerWritesNothing(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 2 {
-			t.Errorf("Expected 2 handler calls (nothing cached), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 2, callCount)
 	})
 
 	t.Run("caches when handler writes explicit 200", func(t *testing.T) {
@@ -754,12 +661,8 @@ func TestIdempotency_HandlerWritesNothing(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call (cached), got %d", callCount)
-		}
-		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
-			t.Error("Expected X-Idempotency-Replay header on replay")
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, "true", w2.Header().Get(httpx.HeaderXIdempotencyReplay))
 	})
 }
 
@@ -824,12 +727,8 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
 		// Should fail open and call handler
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call (fail open), got %d", callCount)
-		}
-		if w.Code != http.StatusCreated {
-			t.Errorf("Expected 201, got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, http.StatusCreated, w.Code)
 	})
 
 	t.Run("continues to handler when store Lock fails", func(t *testing.T) {
@@ -852,12 +751,8 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
 		// Should fail open and call handler
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call (fail open on lock error), got %d", callCount)
-		}
-		if w.Code != http.StatusCreated {
-			t.Errorf("Expected 201, got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, http.StatusCreated, w.Code)
 	})
 
 	t.Run("logs error but does not fail when store Unlock fails", func(t *testing.T) {
@@ -880,12 +775,8 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
 		// Should complete successfully even if unlock fails
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call, got %d", callCount)
-		}
-		if w.Code != http.StatusCreated {
-			t.Errorf("Expected 201, got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, http.StatusCreated, w.Code)
 	})
 
 	t.Run("logs error but does not fail when store Set fails", func(t *testing.T) {
@@ -908,12 +799,8 @@ func TestIdempotency_StoreErrors(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
 		// Should complete successfully even if set fails
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call, got %d", callCount)
-		}
-		if w.Code != http.StatusCreated {
-			t.Errorf("Expected 201, got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, http.StatusCreated, w.Code)
 	})
 }
 
@@ -945,12 +832,8 @@ func TestIdempotency_PanicRecovery(t *testing.T) {
 		// Verify lock was released by trying to lock again
 		ctx := context.Background()
 		locked, err := store.Lock(ctx, "key-panic:POST:/api/payments:fef5c3c40c3c0f3887720d0d0bc7e26d61ebd42d82697109469727e790f35837")
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if !locked {
-			t.Error("Lock should succeed after panic recovery (unlock was called)")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, locked)
 	})
 }
 
@@ -983,16 +866,10 @@ func TestIdempotency_WriteHeaderHopByHop(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
 		// Hop-by-hop headers should not be replayed
-		if w2.Header().Get(httpx.HeaderConnection) != "" {
-			t.Error("Connection header should not be replayed (hop-by-hop)")
-		}
-		if w2.Header().Get(httpx.HeaderKeepAlive) != "" {
-			t.Error("Keep-Alive header should not be replayed (hop-by-hop)")
-		}
+		zhtest.AssertEmpty(t, w2.Header().Get(httpx.HeaderConnection))
+		zhtest.AssertEmpty(t, w2.Header().Get(httpx.HeaderKeepAlive))
 		// Custom header should be replayed
-		if w2.Header().Get("X-Custom") != "value" {
-			t.Error("X-Custom header should be replayed")
-		}
+		zhtest.AssertEqual(t, "value", w2.Header().Get("X-Custom"))
 	})
 }
 
@@ -1015,9 +892,7 @@ func TestIdempotency_WriteHeaderIdempotent(t *testing.T) {
 		w := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 
-		if w.Code != http.StatusCreated {
-			t.Errorf("Expected 201 (first WriteHeader), got %d", w.Code)
-		}
+		zhtest.AssertEqual(t, http.StatusCreated, w.Code)
 	})
 }
 
@@ -1047,12 +922,8 @@ func TestIdempotency_IncludedPaths(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call for allowed path (cached), got %d", callCount)
-		}
-		if w2.Header().Get(httpx.HeaderXIdempotencyReplay) != "true" {
-			t.Error("Replayed request should have X-Idempotency-Replay header")
-		}
+		zhtest.AssertEqual(t, 1, callCount)
+		zhtest.AssertEqual(t, "true", w2.Header().Get(httpx.HeaderXIdempotencyReplay))
 
 		// Request to non-allowed path - should not be cached
 		req3 := httptest.NewRequest(http.MethodPost, "/api/other", bytes.NewReader([]byte(`{"data":"test"}`)))
@@ -1066,9 +937,7 @@ func TestIdempotency_IncludedPaths(t *testing.T) {
 		w4 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w4, req4)
 
-		if callCount != 3 {
-			t.Errorf("Expected 3 handler calls (non-allowed path not cached), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 3, callCount)
 	})
 
 	t.Run("included paths with prefix match", func(t *testing.T) {
@@ -1095,9 +964,7 @@ func TestIdempotency_IncludedPaths(t *testing.T) {
 		w2 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 
-		if callCount != 1 {
-			t.Errorf("Expected 1 handler call for prefix match, got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 1, callCount)
 
 		// Request outside prefix - should not be cached
 		req3 := httptest.NewRequest(http.MethodPost, "/health", bytes.NewReader([]byte(`{}`)))
@@ -1110,22 +977,16 @@ func TestIdempotency_IncludedPaths(t *testing.T) {
 		w4 := httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w4, req4)
 
-		if callCount != 3 {
-			t.Errorf("Expected 3 handler calls (outside prefix not cached), got %d", callCount)
-		}
+		zhtest.AssertEqual(t, 3, callCount)
 	})
 }
 
 func TestIdempotency_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		TTL:           time.Hour,
-		ExcludedPaths: []string{"/webhook"},
-		IncludedPaths: []string{"/api"},
+	zhtest.AssertPanic(t, func() {
+		_ = New(Config{
+			TTL:           time.Hour,
+			ExcludedPaths: []string{"/webhook"},
+			IncludedPaths: []string{"/api"},
+		})
 	})
 }

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestQueryExtractor_QueryParam(t *testing.T) {
@@ -56,15 +58,11 @@ func TestQueryExtractor_QueryParam(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/?"+tt.query, nil)
 
 			result := Query.QueryParam(req, tt.paramName)
-			if result != tt.expectedVal {
-				t.Errorf("QueryParam(%q) = %q, want %q", tt.paramName, result, tt.expectedVal)
-			}
+			zhtest.AssertEqual(t, result, tt.expectedVal)
 
 			// Also test convenience function
 			result2 := QueryParam(req, tt.paramName)
-			if result2 != tt.expectedVal {
-				t.Errorf("QueryParam() convenience function = %q, want %q", result2, tt.expectedVal)
-			}
+			zhtest.AssertEqual(t, result2, tt.expectedVal)
 		})
 	}
 }
@@ -105,16 +103,11 @@ func TestQueryExtractor_QueryParamOrDefault(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/?"+tt.query, nil)
 
 			result := Query.QueryParamOrDefault(req, tt.paramName, tt.defaultVal)
-			if result != tt.expectedVal {
-				t.Errorf("QueryParamOrDefault(%q, %q) = %q, want %q",
-					tt.paramName, tt.defaultVal, result, tt.expectedVal)
-			}
+			zhtest.AssertEqual(t, result, tt.expectedVal)
 
 			// Also test convenience function
 			result2 := QueryParamOrDefault(req, tt.paramName, tt.defaultVal)
-			if result2 != tt.expectedVal {
-				t.Errorf("QueryParamOrDefault() convenience function = %q, want %q", result2, tt.expectedVal)
-			}
+			zhtest.AssertEqual(t, result2, tt.expectedVal)
 		})
 	}
 }
@@ -123,21 +116,13 @@ func TestQueryParamAs_String(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/?name=John", nil)
 
 	result, err := QueryParamAs[string](req, "name")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if result != "John" {
-		t.Errorf("expected 'John', got %q", result)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, result, "John")
 
 	// Missing param returns zero value
 	missing, err := QueryParamAs[string](req, "missing")
-	if err != nil {
-		t.Errorf("unexpected error for missing param: %v", err)
-	}
-	if missing != "" {
-		t.Errorf("expected empty string for missing param, got %q", missing)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, missing, "")
 }
 
 func TestQueryParamAs_IntTypes(t *testing.T) {
@@ -195,12 +180,8 @@ func TestQueryParamAs_IntTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := tt.fn()
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			if result != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, result)
-			}
+			zhtest.AssertNoError(t, err)
+			zhtest.AssertEqual(t, result, tt.expected)
 		})
 	}
 }
@@ -253,12 +234,8 @@ func TestQueryParamAs_UintTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := tt.fn()
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			if result != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, result)
-			}
+			zhtest.AssertNoError(t, err)
+			zhtest.AssertEqual(t, result, tt.expected)
 		})
 	}
 }
@@ -268,21 +245,13 @@ func TestQueryParamAs_FloatTypes(t *testing.T) {
 
 	// float32
 	result32, err := QueryParamAs[float32](req, "pi")
-	if err != nil {
-		t.Errorf("unexpected error for float32: %v", err)
-	}
-	if result32 != 3.14 {
-		t.Errorf("expected 3.14, got %f", result32)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, result32, float32(3.14))
 
 	// float64
 	result64, err := QueryParamAs[float64](req, "pi")
-	if err != nil {
-		t.Errorf("unexpected error for float64: %v", err)
-	}
-	if result64 != 3.14 {
-		t.Errorf("expected 3.14, got %f", result64)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, result64, 3.14)
 }
 
 func TestQueryParamAs_Bool(t *testing.T) {
@@ -309,12 +278,8 @@ func TestQueryParamAs_Bool(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/?active="+tt.value, nil)
 
 			result, err := QueryParamAs[bool](req, "active")
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			if result != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, result)
-			}
+			zhtest.AssertNoError(t, err)
+			zhtest.AssertEqual(t, result, tt.expected)
 		})
 	}
 }
@@ -324,12 +289,8 @@ func TestQueryParamAs_MissingParam(t *testing.T) {
 
 	// Missing param should return zero value and no error
 	result, err := QueryParamAs[int](req, "page")
-	if err != nil {
-		t.Errorf("unexpected error for missing param: %v", err)
-	}
-	if result != 0 {
-		t.Errorf("expected 0 for missing param, got %d", result)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, result, 0)
 }
 
 func TestQueryParamAs_InvalidValues(t *testing.T) {
@@ -422,9 +383,7 @@ func TestQueryParamAs_InvalidValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := tt.fn()
-			if err == nil {
-				t.Error("expected error but got none")
-			}
+			zhtest.AssertError(t, err)
 		})
 	}
 }
@@ -461,10 +420,7 @@ func TestQueryParamAsOrDefault(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := QueryParamAsOrDefault(req, tt.paramName, tt.defaultVal)
-			if result != tt.expectedVal {
-				t.Errorf("QueryParamAsOrDefault(%q, %d) = %d, want %d",
-					tt.paramName, tt.defaultVal, result, tt.expectedVal)
-			}
+			zhtest.AssertEqual(t, result, tt.expectedVal)
 		})
 	}
 }
@@ -474,9 +430,7 @@ func TestQueryParamAsOrDefault_InvalidConversion(t *testing.T) {
 
 	// Invalid conversion returns default
 	result := QueryParamAsOrDefault(req, "page", 1)
-	if result != 1 {
-		t.Errorf("expected default 1 for invalid conversion, got %d", result)
-	}
+	zhtest.AssertEqual(t, result, 1)
 }
 
 func TestQueryParamAsOrDefault_String(t *testing.T) {
@@ -484,15 +438,11 @@ func TestQueryParamAsOrDefault_String(t *testing.T) {
 
 	// Existing value
 	result := QueryParamAsOrDefault(req, "sort", "id")
-	if result != "name" {
-		t.Errorf("expected 'name', got %q", result)
-	}
+	zhtest.AssertEqual(t, result, "name")
 
 	// Missing value
 	result = QueryParamAsOrDefault(req, "order", "asc")
-	if result != "asc" {
-		t.Errorf("expected 'asc', got %q", result)
-	}
+	zhtest.AssertEqual(t, result, "asc")
 }
 
 func TestQueryParamAsOrDefault_Bool(t *testing.T) {
@@ -500,15 +450,11 @@ func TestQueryParamAsOrDefault_Bool(t *testing.T) {
 
 	// Existing true value
 	result := QueryParamAsOrDefault(req, "active", false)
-	if !result {
-		t.Error("expected true")
-	}
+	zhtest.AssertTrue(t, result)
 
 	// Missing value uses default
 	result = QueryParamAsOrDefault(req, "enabled", true)
-	if !result {
-		t.Error("expected default true for missing param")
-	}
+	zhtest.AssertTrue(t, result)
 }
 
 func TestQueryParam_CaseSensitivity(t *testing.T) {
@@ -516,19 +462,13 @@ func TestQueryParam_CaseSensitivity(t *testing.T) {
 
 	// Query params are case-sensitive
 	page := Query.QueryParam(req, "Page")
-	if page != "10" {
-		t.Errorf("expected Page='10', got %q", page)
-	}
+	zhtest.AssertEqual(t, page, "10")
 
 	pageUpper := Query.QueryParam(req, "PAGE")
-	if pageUpper != "20" {
-		t.Errorf("expected PAGE='20', got %q", pageUpper)
-	}
+	zhtest.AssertEqual(t, pageUpper, "20")
 
 	pageLower := Query.QueryParam(req, "page")
-	if pageLower != "" {
-		t.Errorf("expected page='', got %q (query params are case-sensitive)", pageLower)
-	}
+	zhtest.AssertEqual(t, pageLower, "")
 }
 
 func TestQueryParam_MultipleValues(t *testing.T) {
@@ -536,13 +476,9 @@ func TestQueryParam_MultipleValues(t *testing.T) {
 
 	// Query().Get() returns the first value
 	tag := Query.QueryParam(req, "tag")
-	if tag != "go" {
-		t.Errorf("expected first value 'go', got %q", tag)
-	}
+	zhtest.AssertEqual(t, tag, "go")
 
 	// Verify all values are accessible via URL.Query()
 	allTags := req.URL.Query()["tag"]
-	if len(allTags) != 3 {
-		t.Errorf("expected 3 values, got %d", len(allTags))
-	}
+	zhtest.AssertEqual(t, len(allTags), 3)
 }

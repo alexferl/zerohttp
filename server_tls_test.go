@@ -20,23 +20,17 @@ func TestServer_ListenerTLSAddr(t *testing.T) {
 	// Set TLS server address
 	server.tlsServer = &http.Server{Addr: ":8443"}
 	addr := server.ListenerTLSAddr()
-	if addr != ":8443" {
-		t.Errorf("Expected ':8443', got '%s'", addr)
-	}
+	zhtest.AssertEqual(t, ":8443", addr)
 
 	// Set actual TLS listener (takes precedence)
 	listener, _ := net.Listen("tcp", "127.0.0.1:0")
 	server.tlsListener = listener
 	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Errorf("failed to close listener: %v", err)
-		}
+		zhtest.AssertNoError(t, listener.Close())
 	}()
 
 	addr = server.ListenerTLSAddr()
-	if addr == "" {
-		t.Error("Expected non-empty TLS address from actual listener")
-	}
+	zhtest.AssertNotEmpty(t, addr)
 }
 
 func TestServer_CreateHTTPSRedirectHandler(t *testing.T) {
@@ -59,14 +53,8 @@ func TestServer_StartAutoTLS_NoManager(t *testing.T) {
 	server.autocertManager = nil
 
 	err := server.StartAutoTLS()
-	if err == nil {
-		t.Fatal("Expected error when autocert manager is nil")
-	}
-
-	expectedMsg := "autocert manager not configured"
-	if err.Error() != expectedMsg {
-		t.Errorf("Expected error '%s', got '%s'", expectedMsg, err.Error())
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "autocert manager not configured")
 }
 
 // mockAutocertManager is a mock implementation for testing
@@ -95,9 +83,7 @@ func TestServer_StartAutoTLS_WithManager(t *testing.T) {
 	server := New(Config{Extensions: ExtensionsConfig{AutocertManager: mgr}})
 
 	// Verify manager was set (compare using concrete type assertion)
-	if server.autocertManager == nil {
-		t.Error("expected autocert manager to be set on server")
-	}
+	zhtest.AssertNotNil(t, server.autocertManager)
 }
 
 // blockingAutocertManager wraps a manager and signals when GetCertificate is called
@@ -155,14 +141,12 @@ func TestStartAutoTLS_HTTPReadyGatesWarmUp(t *testing.T) {
 	case <-getCertCalled:
 		// Expected
 	case <-time.After(500 * time.Millisecond):
-		t.Error("GetCertificate was not called")
+		zhtest.AssertFail(t, "GetCertificate was not called")
 	}
 
 	// Verify HTTP/3 eventually started
 	time.Sleep(100 * time.Millisecond)
-	if !h3Server.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("HTTP/3 should have started after cert was ready")
-	}
+	zhtest.AssertTrue(t, h3Server.wasListenAndServeTLSWithAutocertCalled())
 }
 
 // TestStartAutoTLS_SyncOnceSignalsOnce verifies certReady is only closed once
@@ -194,12 +178,8 @@ func TestStartAutoTLS_SyncOnceSignalsOnce(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Verify both HTTP/3 and WebTransport started (they both wait on certReady)
-	if !h3Server.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("HTTP/3 server should have started")
-	}
-	if !wtServer.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("WebTransport server should have started")
-	}
+	zhtest.AssertTrue(t, h3Server.wasListenAndServeTLSWithAutocertCalled())
+	zhtest.AssertTrue(t, wtServer.wasListenAndServeTLSWithAutocertCalled())
 }
 
 // TestStartAutoTLS_MultipleConsumersUnblock verifies both HTTP/3 and WebTransport
@@ -231,12 +211,8 @@ func TestStartAutoTLS_MultipleConsumersUnblock(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Both HTTP/3 and WebTransport should have started after cert was signaled
-	if !h3Server.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("HTTP/3 did not start after cert was ready")
-	}
-	if !wtServer.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("WebTransport did not start after cert was ready")
-	}
+	zhtest.AssertTrue(t, h3Server.wasListenAndServeTLSWithAutocertCalled())
+	zhtest.AssertTrue(t, wtServer.wasListenAndServeTLSWithAutocertCalled())
 }
 
 // neverReadyAutocertManager always returns error
@@ -323,9 +299,7 @@ func TestStartAutoTLS_EmptyHostnames(t *testing.T) {
 
 	// HTTP/3 should not have started since warm-up returned early due to empty hostnames
 	// The certReady channel was never signaled, so HTTP/3 is still blocked
-	if h3Server.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("HTTP/3 should not have started with empty hostnames")
-	}
+	zhtest.AssertFalse(t, h3Server.wasListenAndServeTLSWithAutocertCalled())
 }
 
 // TestStartAutoTLS_NoHTTPServer verifies httpReady is closed when no HTTP server
@@ -363,9 +337,7 @@ func TestStartAutoTLS_NoHTTPServer(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// HTTP/3 should have started
-	if !h3Server.wasListenAndServeTLSWithAutocertCalled() {
-		t.Error("HTTP/3 should have started via GetCertificate path")
-	}
+	zhtest.AssertTrue(t, h3Server.wasListenAndServeTLSWithAutocertCalled())
 }
 
 func TestServer_ListenAndServeTLS(t *testing.T) {
@@ -378,9 +350,7 @@ func TestServer_ListenAndServeTLS(t *testing.T) {
 	go func() {
 		err := server.ListenAndServeTLS("cert.pem", "key.pem")
 		// Expected to fail due to missing cert files
-		if err == nil {
-			t.Error("expected error due to missing cert files")
-		}
+		zhtest.AssertError(t, err)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -391,13 +361,8 @@ func TestServer_StartTLS_NoServer(t *testing.T) {
 	server.tlsServer = nil
 
 	err := server.StartTLS("cert.pem", "key.pem")
-	if err == nil {
-		t.Error("expected error when tlsServer is nil")
-	}
-	expectedMsg := "TLS server not configured"
-	if err.Error() != expectedMsg {
-		t.Errorf("expected error '%s', got '%s'", expectedMsg, err.Error())
-	}
+	zhtest.AssertError(t, err)
+	zhtest.AssertErrorContains(t, err, "TLS server not configured")
 }
 
 func TestServer_StartTLS(t *testing.T) {
@@ -408,9 +373,7 @@ func TestServer_StartTLS(t *testing.T) {
 	go func() {
 		err := server.StartTLS("cert.pem", "key.pem")
 		// Expected to fail due to missing cert files
-		if err == nil {
-			t.Error("expected error due to missing cert files")
-		}
+		zhtest.AssertError(t, err)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -428,9 +391,7 @@ func TestServer_ListenAndServeTLS_NoTLSConfig(t *testing.T) {
 	go func() {
 		err := server.ListenAndServeTLS("cert.pem", "key.pem")
 		// Expected to fail due to missing cert files
-		if err == nil {
-			t.Error("expected error due to missing cert files")
-		}
+		zhtest.AssertError(t, err)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -442,9 +403,7 @@ func TestServer_ListenerTLSAddr_Empty(t *testing.T) {
 	server.tlsListener = nil
 
 	addr := server.ListenerTLSAddr()
-	if addr != "" {
-		t.Errorf("Expected empty TLS address, got '%s'", addr)
-	}
+	zhtest.AssertEmpty(t, addr)
 }
 
 func TestServer_Shutdown_WithTLSServer(t *testing.T) {
@@ -462,9 +421,7 @@ func TestServer_Shutdown_WithTLSServer(t *testing.T) {
 	defer cancel()
 
 	err := server.Shutdown(ctx)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 }
 
 func TestServer_NoTLSConfig_TLSServerNil(t *testing.T) {
@@ -472,9 +429,7 @@ func TestServer_NoTLSConfig_TLSServerNil(t *testing.T) {
 	server := New()
 
 	// tlsServer should be nil when no TLS config provided
-	if server.tlsServer != nil {
-		t.Error("Expected tlsServer to be nil when no TLS configured")
-	}
+	zhtest.AssertNil(t, server.tlsServer)
 }
 
 func TestServer_WithCertFile_TLSServerCreated(t *testing.T) {
@@ -487,7 +442,5 @@ func TestServer_WithCertFile_TLSServerCreated(t *testing.T) {
 	})
 
 	// tlsServer should be created when cert files are provided
-	if server.tlsServer == nil {
-		t.Error("Expected tlsServer to be created when cert files provided")
-	}
+	zhtest.AssertNotNil(t, server.tlsServer)
 }

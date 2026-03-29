@@ -2,56 +2,32 @@ package cors
 
 import (
 	"net/http"
-	"reflect"
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestCORSConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if len(cfg.AllowedOrigins) != 1 {
-		t.Errorf("expected 1 default allowed origin, got %d", len(cfg.AllowedOrigins))
-	}
-	if cfg.AllowedOrigins[0] != "*" {
-		t.Errorf("expected default allowed origin = '*', got %s", cfg.AllowedOrigins[0])
-	}
-	if len(cfg.AllowedMethods) != 7 {
-		t.Errorf("expected 7 default allowed methods, got %d", len(cfg.AllowedMethods))
-	}
-	if len(cfg.AllowedHeaders) != 5 {
-		t.Errorf("expected 5 default allowed headers, got %d", len(cfg.AllowedHeaders))
-	}
-	if len(cfg.ExposedHeaders) != 0 {
-		t.Errorf("expected default exposed headers to be empty, got %d headers", len(cfg.ExposedHeaders))
-	}
-	if cfg.AllowCredentials != false {
-		t.Errorf("expected default allow credentials = false, got %t", cfg.AllowCredentials)
-	}
-	if cfg.MaxAge != 86400 {
-		t.Errorf("expected default max age = 86400, got %d", cfg.MaxAge)
-	}
-	if cfg.OptionsPassthrough != false {
-		t.Errorf("expected default options passthrough = false, got %t", cfg.OptionsPassthrough)
-	}
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default excluded paths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default included paths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
+	zhtest.AssertEqual(t, 1, len(cfg.AllowedOrigins))
+	zhtest.AssertEqual(t, "*", cfg.AllowedOrigins[0])
+	zhtest.AssertEqual(t, 7, len(cfg.AllowedMethods))
+	zhtest.AssertEqual(t, 5, len(cfg.AllowedHeaders))
+	zhtest.AssertEqual(t, 0, len(cfg.ExposedHeaders))
+	zhtest.AssertFalse(t, cfg.AllowCredentials)
+	zhtest.AssertEqual(t, 86400, cfg.MaxAge)
+	zhtest.AssertFalse(t, cfg.OptionsPassthrough)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 
 	// Test default method values
 	expectedMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, http.MethodOptions}
-	if !reflect.DeepEqual(cfg.AllowedMethods, expectedMethods) {
-		t.Errorf("expected default methods = %v, got %v", expectedMethods, cfg.AllowedMethods)
-	}
+	zhtest.AssertEqual(t, expectedMethods, cfg.AllowedMethods)
 
 	// Test default header values
 	expectedHeaders := []string{httpx.HeaderAccept, httpx.HeaderAuthorization, httpx.HeaderContentType, httpx.HeaderXCSRFToken, httpx.HeaderXRequestId}
-	if !reflect.DeepEqual(cfg.AllowedHeaders, expectedHeaders) {
-		t.Errorf("expected default headers = %v, got %v", expectedHeaders, cfg.AllowedHeaders)
-	}
+	zhtest.AssertEqual(t, expectedHeaders, cfg.AllowedHeaders)
 }
 
 func TestCORSConfig_StructAssignment(t *testing.T) {
@@ -73,12 +49,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 					AllowedMethods: DefaultConfig.AllowedMethods,
 					AllowedHeaders: DefaultConfig.AllowedHeaders,
 				}
-				if len(cfg.AllowedOrigins) != len(tt.expected) {
-					t.Errorf("expected %d allowed origins, got %d", len(tt.expected), len(cfg.AllowedOrigins))
-				}
-				if !reflect.DeepEqual(cfg.AllowedOrigins, tt.expected) {
-					t.Errorf("expected origins = %v, got %v", tt.expected, cfg.AllowedOrigins)
-				}
+				zhtest.AssertEqual(t, len(tt.expected), len(cfg.AllowedOrigins))
+				zhtest.AssertEqual(t, tt.expected, cfg.AllowedOrigins)
 			})
 		}
 	})
@@ -90,12 +62,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedMethods: methods,
 			AllowedHeaders: DefaultConfig.AllowedHeaders,
 		}
-		if len(cfg.AllowedMethods) != 4 {
-			t.Errorf("expected 4 allowed methods, got %d", len(cfg.AllowedMethods))
-		}
-		if !reflect.DeepEqual(cfg.AllowedMethods, methods) {
-			t.Errorf("expected methods = %v, got %v", methods, cfg.AllowedMethods)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.AllowedMethods))
+		zhtest.AssertEqual(t, methods, cfg.AllowedMethods)
 	})
 
 	t.Run("all HTTP methods", func(t *testing.T) {
@@ -105,12 +73,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedMethods: methods,
 			AllowedHeaders: DefaultConfig.AllowedHeaders,
 		}
-		if len(cfg.AllowedMethods) != 9 {
-			t.Errorf("expected 9 methods, got %d", len(cfg.AllowedMethods))
-		}
-		if !reflect.DeepEqual(cfg.AllowedMethods, methods) {
-			t.Errorf("expected methods = %v, got %v", methods, cfg.AllowedMethods)
-		}
+		zhtest.AssertEqual(t, 9, len(cfg.AllowedMethods))
+		zhtest.AssertEqual(t, methods, cfg.AllowedMethods)
 	})
 
 	t.Run("allowed headers", func(t *testing.T) {
@@ -120,12 +84,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedMethods: DefaultConfig.AllowedMethods,
 			AllowedHeaders: headers,
 		}
-		if len(cfg.AllowedHeaders) != 4 {
-			t.Errorf("expected 4 allowed headers, got %d", len(cfg.AllowedHeaders))
-		}
-		if !reflect.DeepEqual(cfg.AllowedHeaders, headers) {
-			t.Errorf("expected headers = %v, got %v", headers, cfg.AllowedHeaders)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.AllowedHeaders))
+		zhtest.AssertEqual(t, headers, cfg.AllowedHeaders)
 	})
 
 	t.Run("common headers", func(t *testing.T) {
@@ -135,12 +95,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedMethods: DefaultConfig.AllowedMethods,
 			AllowedHeaders: headers,
 		}
-		if len(cfg.AllowedHeaders) != 10 {
-			t.Errorf("expected 10 common headers, got %d", len(cfg.AllowedHeaders))
-		}
-		if !reflect.DeepEqual(cfg.AllowedHeaders, headers) {
-			t.Errorf("expected headers = %v, got %v", headers, cfg.AllowedHeaders)
-		}
+		zhtest.AssertEqual(t, 10, len(cfg.AllowedHeaders))
+		zhtest.AssertEqual(t, headers, cfg.AllowedHeaders)
 	})
 
 	t.Run("exposed headers", func(t *testing.T) {
@@ -151,12 +107,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedHeaders: DefaultConfig.AllowedHeaders,
 			ExposedHeaders: headers,
 		}
-		if len(cfg.ExposedHeaders) != 4 {
-			t.Errorf("expected 4 exposed headers, got %d", len(cfg.ExposedHeaders))
-		}
-		if !reflect.DeepEqual(cfg.ExposedHeaders, headers) {
-			t.Errorf("expected exposed headers = %v, got %v", headers, cfg.ExposedHeaders)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.ExposedHeaders))
+		zhtest.AssertEqual(t, headers, cfg.ExposedHeaders)
 	})
 
 	t.Run("boolean options", func(t *testing.T) {
@@ -167,12 +119,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowCredentials:   true,
 			OptionsPassthrough: true,
 		}
-		if cfg.AllowCredentials != true {
-			t.Errorf("expected allow credentials = true, got %t", cfg.AllowCredentials)
-		}
-		if cfg.OptionsPassthrough != true {
-			t.Errorf("expected options passthrough = true, got %t", cfg.OptionsPassthrough)
-		}
+		zhtest.AssertTrue(t, cfg.AllowCredentials)
+		zhtest.AssertTrue(t, cfg.OptionsPassthrough)
 	})
 
 	t.Run("max age", func(t *testing.T) {
@@ -182,9 +130,7 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedHeaders: DefaultConfig.AllowedHeaders,
 			MaxAge:         3600,
 		}
-		if cfg.MaxAge != 3600 {
-			t.Errorf("expected max age = 3600, got %d", cfg.MaxAge)
-		}
+		zhtest.AssertEqual(t, 3600, cfg.MaxAge)
 	})
 
 	t.Run("excluded paths", func(t *testing.T) {
@@ -195,12 +141,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedHeaders: DefaultConfig.AllowedHeaders,
 			ExcludedPaths:  excludedPaths,
 		}
-		if len(cfg.ExcludedPaths) != 4 {
-			t.Errorf("expected 4 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-			t.Errorf("expected excluded paths = %v, got %v", excludedPaths, cfg.ExcludedPaths)
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	})
 
 	t.Run("included paths", func(t *testing.T) {
@@ -211,12 +153,8 @@ func TestCORSConfig_StructAssignment(t *testing.T) {
 			AllowedHeaders: DefaultConfig.AllowedHeaders,
 			IncludedPaths:  includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-			t.Errorf("expected included paths = %v, got %v", includedPaths, cfg.IncludedPaths)
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertEqual(t, includedPaths, cfg.IncludedPaths)
 	})
 }
 
@@ -239,33 +177,15 @@ func TestCORSConfig_MultipleFields(t *testing.T) {
 		IncludedPaths:      includedPaths,
 	}
 
-	if !reflect.DeepEqual(cfg.AllowedOrigins, origins) {
-		t.Error("expected origins to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.AllowedMethods, methods) {
-		t.Error("expected methods to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.AllowedHeaders, headers) {
-		t.Error("expected headers to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.ExposedHeaders, exposedHeaders) {
-		t.Error("expected exposed headers to be set correctly")
-	}
-	if cfg.AllowCredentials != true {
-		t.Error("expected allow credentials to be true")
-	}
-	if cfg.MaxAge != 7200 {
-		t.Error("expected max age to be 7200")
-	}
-	if cfg.OptionsPassthrough != true {
-		t.Error("expected options passthrough to be true")
-	}
-	if !reflect.DeepEqual(cfg.ExcludedPaths, excludedPaths) {
-		t.Error("expected excluded paths to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.IncludedPaths, includedPaths) {
-		t.Error("expected included paths to be set correctly")
-	}
+	zhtest.AssertEqual(t, origins, cfg.AllowedOrigins)
+	zhtest.AssertEqual(t, methods, cfg.AllowedMethods)
+	zhtest.AssertEqual(t, headers, cfg.AllowedHeaders)
+	zhtest.AssertEqual(t, exposedHeaders, cfg.ExposedHeaders)
+	zhtest.AssertTrue(t, cfg.AllowCredentials)
+	zhtest.AssertEqual(t, 7200, cfg.MaxAge)
+	zhtest.AssertTrue(t, cfg.OptionsPassthrough)
+	zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
+	zhtest.AssertEqual(t, includedPaths, cfg.IncludedPaths)
 }
 
 func TestCORSConfig_EdgeCases(t *testing.T) {
@@ -279,24 +199,18 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 			IncludedPaths:  []string{},
 		}
 
-		if cfg.AllowedOrigins == nil || len(cfg.AllowedOrigins) != 0 {
-			t.Errorf("expected empty allowed origins slice, got %v", cfg.AllowedOrigins)
-		}
-		if cfg.AllowedMethods == nil || len(cfg.AllowedMethods) != 0 {
-			t.Errorf("expected empty allowed methods slice, got %v", cfg.AllowedMethods)
-		}
-		if cfg.AllowedHeaders == nil || len(cfg.AllowedHeaders) != 0 {
-			t.Errorf("expected empty allowed headers slice, got %v", cfg.AllowedHeaders)
-		}
-		if cfg.ExposedHeaders == nil || len(cfg.ExposedHeaders) != 0 {
-			t.Errorf("expected empty exposed headers slice, got %v", cfg.ExposedHeaders)
-		}
-		if cfg.ExcludedPaths == nil || len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected empty excluded paths slice, got %v", cfg.ExcludedPaths)
-		}
-		if cfg.IncludedPaths == nil || len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %v", cfg.IncludedPaths)
-		}
+		zhtest.AssertNotNil(t, cfg.AllowedOrigins)
+		zhtest.AssertEqual(t, 0, len(cfg.AllowedOrigins))
+		zhtest.AssertNotNil(t, cfg.AllowedMethods)
+		zhtest.AssertEqual(t, 0, len(cfg.AllowedMethods))
+		zhtest.AssertNotNil(t, cfg.AllowedHeaders)
+		zhtest.AssertEqual(t, 0, len(cfg.AllowedHeaders))
+		zhtest.AssertNotNil(t, cfg.ExposedHeaders)
+		zhtest.AssertEqual(t, 0, len(cfg.ExposedHeaders))
+		zhtest.AssertNotNil(t, cfg.ExcludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil slices", func(t *testing.T) {
@@ -309,24 +223,12 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 			IncludedPaths:  nil,
 		}
 
-		if cfg.AllowedOrigins != nil {
-			t.Error("expected allowed origins to be nil when nil is passed")
-		}
-		if cfg.AllowedMethods != nil {
-			t.Error("expected allowed methods to be nil when nil is passed")
-		}
-		if cfg.AllowedHeaders != nil {
-			t.Error("expected allowed headers to be nil when nil is passed")
-		}
-		if cfg.ExposedHeaders != nil {
-			t.Error("expected exposed headers to be nil when nil is passed")
-		}
-		if cfg.ExcludedPaths != nil {
-			t.Error("expected excluded paths to be nil when nil is passed")
-		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to be nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.AllowedOrigins)
+		zhtest.AssertNil(t, cfg.AllowedMethods)
+		zhtest.AssertNil(t, cfg.AllowedHeaders)
+		zhtest.AssertNil(t, cfg.ExposedHeaders)
+		zhtest.AssertNil(t, cfg.ExcludedPaths)
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 
 	t.Run("max age boundary values", func(t *testing.T) {
@@ -338,9 +240,7 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 				AllowedHeaders: DefaultConfig.AllowedHeaders,
 				MaxAge:         maxAge,
 			}
-			if cfg.MaxAge != maxAge {
-				t.Errorf("expected max age = %d, got %d", maxAge, cfg.MaxAge)
-			}
+			zhtest.AssertEqual(t, maxAge, cfg.MaxAge)
 		}
 	})
 
@@ -351,13 +251,9 @@ func TestCORSConfig_EdgeCases(t *testing.T) {
 			AllowedMethods: DefaultConfig.AllowedMethods,
 			AllowedHeaders: headers,
 		}
-		if len(cfg.AllowedHeaders) != 4 {
-			t.Errorf("expected 4 headers, got %d", len(cfg.AllowedHeaders))
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.AllowedHeaders))
 		for i, expectedHeader := range headers {
-			if cfg.AllowedHeaders[i] != expectedHeader {
-				t.Errorf("expected header[%d] = %s, got %s", i, expectedHeader, cfg.AllowedHeaders[i])
-			}
+			zhtest.AssertEqual(t, expectedHeader, cfg.AllowedHeaders[i])
 		}
 	})
 }

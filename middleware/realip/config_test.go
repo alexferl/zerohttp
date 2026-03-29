@@ -5,13 +5,12 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRealIPConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.IPExtractor == nil {
-		t.Error("expected default IP extractor to be set")
-	}
+	zhtest.AssertNotNil(t, cfg.IPExtractor)
 }
 
 func TestDefaultIPExtractor(t *testing.T) {
@@ -38,9 +37,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 					req.Header.Set(httpx.HeaderXForwardedFor, tt.xffHeader)
 				}
 				result := DefaultIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -64,9 +61,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 					req.Header.Set(httpx.HeaderXRealIP, tt.xRealIP)
 				}
 				result := DefaultIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -76,9 +71,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 		req.RemoteAddr = "192.168.1.1:8080"
 		req.Header.Set(httpx.HeaderXForwarded, "203.0.113.3")
 		result := DefaultIPExtractor(req)
-		if result != "203.0.113.3" {
-			t.Errorf("expected IP = 203.0.113.3, got %s", result)
-		}
+		zhtest.AssertEqual(t, "203.0.113.3", result)
 	})
 
 	t.Run("Forwarded header", func(t *testing.T) {
@@ -101,9 +94,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 				req.RemoteAddr = tt.remoteAddr
 				req.Header.Set(httpx.HeaderForwarded, tt.forwardedHeader)
 				result := DefaultIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -116,9 +107,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 		req.Header.Set(httpx.HeaderXForwarded, "203.0.113.3")
 		req.Header.Set(httpx.HeaderForwarded, "for=203.0.113.4")
 		result := DefaultIPExtractor(req)
-		if result != "203.0.113.1" {
-			t.Errorf("expected X-Forwarded-For to take priority, got %s", result)
-		}
+		zhtest.AssertEqual(t, "203.0.113.1", result)
 	})
 
 	t.Run("RemoteAddr fallback", func(t *testing.T) {
@@ -138,9 +127,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 				req.RemoteAddr = tt.remoteAddr
 				result := DefaultIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -165,9 +152,7 @@ func TestDefaultIPExtractor(t *testing.T) {
 					req.Header.Set(httpx.HeaderXForwardedFor, tt.xffHeader)
 				}
 				result := DefaultIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -193,9 +178,7 @@ func TestSpecializedIPExtractors(t *testing.T) {
 				req.Header.Set(httpx.HeaderXForwardedFor, "should-be-ignored")
 				req.Header.Set(httpx.HeaderXRealIP, "should-be-ignored")
 				result := RemoteAddrIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -221,9 +204,7 @@ func TestSpecializedIPExtractors(t *testing.T) {
 				}
 				req.Header.Set(httpx.HeaderXRealIP, "should-be-ignored")
 				result := XForwardedForIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -248,9 +229,7 @@ func TestSpecializedIPExtractors(t *testing.T) {
 				}
 				req.Header.Set(httpx.HeaderXForwardedFor, "should-be-ignored")
 				result := XRealIPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -264,23 +243,17 @@ func TestRealIPConfig_CustomExtractors(t *testing.T) {
 		cfg := Config{
 			IPExtractor: customExtractor,
 		}
-		if cfg.IPExtractor == nil {
-			t.Error("expected IP extractor to be set")
-		}
+		zhtest.AssertNotNil(t, cfg.IPExtractor)
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 		result := cfg.IPExtractor(req)
-		if result != "custom-ip" {
-			t.Errorf("expected custom IP = 'custom-ip', got %s", result)
-		}
+		zhtest.AssertEqual(t, "custom-ip", result)
 	})
 
 	t.Run("nil extractor", func(t *testing.T) {
 		cfg := Config{
 			IPExtractor: nil,
 		}
-		if cfg.IPExtractor != nil {
-			t.Error("expected IP extractor to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IPExtractor)
 	})
 
 	t.Run("various custom extractors", func(t *testing.T) {
@@ -342,9 +315,7 @@ func TestRealIPConfig_CustomExtractors(t *testing.T) {
 				req, _ := http.NewRequest(http.MethodGet, "/", nil)
 				tt.setupRequest(req)
 				result := cfg.IPExtractor(req)
-				if result != tt.expectedIP {
-					t.Errorf("expected IP = %s, got %s", tt.expectedIP, result)
-				}
+				zhtest.AssertEqual(t, tt.expectedIP, result)
 			})
 		}
 	})
@@ -355,9 +326,7 @@ func TestRealIPConfig_CustomExtractors(t *testing.T) {
 		req.RemoteAddr = "192.168.1.1:8080"
 		req.Header.Set(httpx.HeaderXForwardedFor, "203.0.113.200")
 		result := cfg.IPExtractor(req)
-		if result != "203.0.113.200" {
-			t.Errorf("expected IP from X-Forwarded-For = 203.0.113.200, got %s", result)
-		}
+		zhtest.AssertEqual(t, "203.0.113.200", result)
 	})
 }
 
@@ -381,9 +350,7 @@ func TestRealIPConfig_ExtractorComparison(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.extractor(req)
-			if result != tt.expected {
-				t.Errorf("%s: expected %s, got %s", tt.name, tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }

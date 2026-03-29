@@ -3,6 +3,8 @@ package websocket
 import (
 	"errors"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestCloseError(t *testing.T) {
@@ -26,9 +28,7 @@ func TestCloseError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.err.Error()
-			if got != tt.want {
-				t.Errorf("CloseError.Error() = %v, want %v", got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -69,9 +69,7 @@ func TestIsCloseError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsCloseError(tt.err, tt.codes...)
-			if got != tt.want {
-				t.Errorf("IsCloseError() = %v, want %v", got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -112,9 +110,7 @@ func TestIsUnexpectedCloseError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsUnexpectedCloseError(tt.err, tt.expectedCodes...)
-			if got != tt.want {
-				t.Errorf("IsUnexpectedCloseError() = %v, want %v", got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -145,9 +141,7 @@ func TestCloseCodeConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if int(tt.code) != tt.want {
-				t.Errorf("%s = %d, want %d", tt.name, tt.code, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, int(tt.code))
 		})
 	}
 }
@@ -168,9 +162,7 @@ func TestMessageTypeConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.got != tt.want {
-				t.Errorf("%s = %d, want %d", tt.name, tt.got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, tt.got)
 		})
 	}
 }

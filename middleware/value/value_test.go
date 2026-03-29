@@ -14,12 +14,8 @@ func TestWithValue(t *testing.T) {
 	// Next handler verifies value is correctly set in context
 	handler := With(key, value)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, ok := Get[string](r, key)
-		if !ok {
-			t.Errorf("expected to find value in context, got none")
-		}
-		if got != value {
-			t.Errorf("got %q, want %q", got, value)
-		}
+		zhtest.AssertTrue(t, ok)
+		zhtest.AssertEqual(t, value, got)
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -38,21 +34,13 @@ func TestGetContextValue_Found(t *testing.T) {
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Test string value
 				str, ok := Get[string](r, "stringKey")
-				if !ok {
-					t.Errorf("expected to find string value")
-				}
-				if str != "hello" {
-					t.Errorf("got %q, want %q", str, "hello")
-				}
+				zhtest.AssertTrue(t, ok)
+				zhtest.AssertEqual(t, "hello", str)
 
 				// Test int value
 				num, ok := Get[int](r, "intKey")
-				if !ok {
-					t.Errorf("expected to find int value")
-				}
-				if num != 42 {
-					t.Errorf("got %d, want %d", num, 42)
-				}
+				zhtest.AssertTrue(t, ok)
+				zhtest.AssertEqual(t, 42, num)
 			}),
 		),
 	)
@@ -65,13 +53,9 @@ func TestGetContextValue_NotFound(t *testing.T) {
 
 	// Try to get a value that does not exist
 	got, ok := Get[string](req, "missingKey")
-	if ok {
-		t.Errorf("expected ok to be false when key is missing")
-	}
+	zhtest.AssertFalse(t, ok)
 	var zero string
-	if got != zero {
-		t.Errorf("expected zero value for type string, got %v", got)
-	}
+	zhtest.AssertEqual(t, zero, got)
 }
 
 func TestGetContextValue_WrongType(t *testing.T) {
@@ -81,12 +65,8 @@ func TestGetContextValue_WrongType(t *testing.T) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Try to get string value as int - should fail
 			got, ok := Get[int](r, "key")
-			if ok {
-				t.Errorf("expected ok to be false when type assertion fails")
-			}
-			if got != 0 {
-				t.Errorf("expected zero value for int, got %v", got)
-			}
+			zhtest.AssertFalse(t, ok)
+			zhtest.AssertEqual(t, 0, got)
 		}),
 	)
 
@@ -99,13 +79,9 @@ func TestGetContextValue_NilValue(t *testing.T) {
 	handler := With("key", nil)(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			got, ok := Get[string](r, "key")
-			if ok {
-				t.Errorf("expected ok to be false when value is nil")
-			}
+			zhtest.AssertFalse(t, ok)
 			var zero string
-			if got != zero {
-				t.Errorf("expected zero value for string, got %v", got)
-			}
+			zhtest.AssertEqual(t, zero, got)
 		}),
 	)
 

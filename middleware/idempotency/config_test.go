@@ -4,59 +4,26 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestDefaultIdempotencyConfig(t *testing.T) {
 	t.Run("default values are set", func(t *testing.T) {
 		cfg := DefaultConfig
 
-		if cfg.HeaderName != "Idempotency-Key" {
-			t.Errorf("expected HeaderName 'Idempotency-Key', got %q", cfg.HeaderName)
-		}
-
-		if cfg.TTL != 24*time.Hour {
-			t.Errorf("expected TTL 24h, got %v", cfg.TTL)
-		}
-
-		if cfg.MaxBodySize != 1024*1024 {
-			t.Errorf("expected MaxBodySize 1MB, got %d", cfg.MaxBodySize)
-		}
-
-		if cfg.Required {
-			t.Error("expected Required to be false by default")
-		}
-
-		if len(cfg.ExcludedPaths) != 0 {
-			t.Errorf("expected ExcludedPaths to be empty, got %v", cfg.ExcludedPaths)
-		}
-
-		if len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected IncludedPaths to be empty, got %v", cfg.IncludedPaths)
-		}
-
-		if cfg.Store != nil {
-			t.Error("expected Store to be nil by default")
-		}
-
-		if cfg.MaxKeys != 10000 {
-			t.Errorf("expected MaxKeys 10000, got %d", cfg.MaxKeys)
-		}
-
-		if cfg.LockRetryInterval != 10*time.Millisecond {
-			t.Errorf("expected LockRetryInterval 10ms, got %v", cfg.LockRetryInterval)
-		}
-
-		if cfg.LockMaxRetries != 300 {
-			t.Errorf("expected LockMaxRetries 300, got %d", cfg.LockMaxRetries)
-		}
-
-		if cfg.LockMaxInterval != 500*time.Millisecond {
-			t.Errorf("expected LockMaxInterval 500ms, got %v", cfg.LockMaxInterval)
-		}
-
-		if cfg.LockBackoffMultiplier != 2.0 {
-			t.Errorf("expected LockBackoffMultiplier 2.0, got %f", cfg.LockBackoffMultiplier)
-		}
+		zhtest.AssertEqual(t, "Idempotency-Key", cfg.HeaderName)
+		zhtest.AssertEqual(t, 24*time.Hour, cfg.TTL)
+		zhtest.AssertEqual(t, 1024*1024, cfg.MaxBodySize)
+		zhtest.AssertFalse(t, cfg.Required)
+		zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
+		zhtest.AssertNil(t, cfg.Store)
+		zhtest.AssertEqual(t, 10000, cfg.MaxKeys)
+		zhtest.AssertEqual(t, 10*time.Millisecond, cfg.LockRetryInterval)
+		zhtest.AssertEqual(t, 300, cfg.LockMaxRetries)
+		zhtest.AssertEqual(t, 500*time.Millisecond, cfg.LockMaxInterval)
+		zhtest.AssertEqual(t, 2.0, cfg.LockBackoffMultiplier)
 	})
 }
 
@@ -69,13 +36,8 @@ func TestIdempotencyRecord(t *testing.T) {
 			CreatedAt:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		}
 
-		if record.StatusCode != 201 {
-			t.Errorf("expected StatusCode 201, got %d", record.StatusCode)
-		}
-
-		if string(record.Body) != `{"id":"123"}` {
-			t.Errorf("expected Body %q, got %q", `{"id":"123"}`, string(record.Body))
-		}
+		zhtest.AssertEqual(t, 201, record.StatusCode)
+		zhtest.AssertEqual(t, `{"id":"123"}`, string(record.Body))
 	})
 }
 
@@ -94,37 +56,14 @@ func TestIdempotencyConfigCustomization(t *testing.T) {
 			MaxKeys:       5000,
 		}
 
-		if cfg.HeaderName != "X-Idempotency-Key" {
-			t.Errorf("expected HeaderName 'X-Idempotency-Key', got %q", cfg.HeaderName)
-		}
-
-		if cfg.TTL != time.Hour {
-			t.Errorf("expected TTL 1h, got %v", cfg.TTL)
-		}
-
-		if cfg.MaxBodySize != 512*1024 {
-			t.Errorf("expected MaxBodySize 512KB, got %d", cfg.MaxBodySize)
-		}
-
-		if cfg.Store != customStore {
-			t.Error("expected custom store to be set")
-		}
-
-		if !cfg.Required {
-			t.Error("expected Required to be true")
-		}
-
-		if len(cfg.ExcludedPaths) != 2 {
-			t.Errorf("expected 2 excluded paths, got %d", len(cfg.ExcludedPaths))
-		}
-
-		if len(cfg.IncludedPaths) != 1 {
-			t.Errorf("expected 1 allowed path, got %d", len(cfg.IncludedPaths))
-		}
-
-		if cfg.MaxKeys != 5000 {
-			t.Errorf("expected MaxKeys 5000, got %d", cfg.MaxKeys)
-		}
+		zhtest.AssertEqual(t, "X-Idempotency-Key", cfg.HeaderName)
+		zhtest.AssertEqual(t, time.Hour, cfg.TTL)
+		zhtest.AssertEqual(t, 512*1024, cfg.MaxBodySize)
+		zhtest.AssertEqual(t, customStore, cfg.Store)
+		zhtest.AssertTrue(t, cfg.Required)
+		zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
+		zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
+		zhtest.AssertEqual(t, 5000, cfg.MaxKeys)
 	})
 }
 
@@ -138,33 +77,23 @@ func TestIdempotencyConfig_IncludedPaths(t *testing.T) {
 			MaxKeys:       DefaultConfig.MaxKeys,
 			IncludedPaths: includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if cfg.IncludedPaths[0] != "/api/public" {
-			t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertEqual(t, "/api/public", cfg.IncludedPaths[0])
 	})
 
 	t.Run("empty included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: []string{},
 		}
-		if cfg.IncludedPaths == nil {
-			t.Error("expected included paths slice to be initialized, not nil")
-		}
-		if len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: nil,
 		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 }
 

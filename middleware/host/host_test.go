@@ -2,7 +2,6 @@ package host
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
@@ -402,19 +401,13 @@ func TestHostValidation_StrictPortPanic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r == nil {
-					t.Error("expected panic, but got none")
-				} else if !strings.Contains(r.(string), tt.expectedMsg) {
-					t.Errorf("expected panic containing %q, got: %v", tt.expectedMsg, r)
-				}
-			}()
-
-			New(Config{
-				AllowedHosts: []string{"example.com"},
-				StrictPort:   true,
-				Port:         tt.port,
-			})
+			zhtest.AssertPanicContains(t, func() {
+				New(Config{
+					AllowedHosts: []string{"example.com"},
+					StrictPort:   true,
+					Port:         tt.port,
+				})
+			}, tt.expectedMsg)
 		})
 	}
 }
@@ -556,10 +549,7 @@ func TestIsValidHost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := isValidHost(tt.host, tt.allowed, tt.allowSubdomains)
-			if got != tt.want {
-				t.Errorf("isValidHost(%q, %v, %v) = %v, want %v",
-					tt.host, tt.allowed, tt.allowSubdomains, got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -597,15 +587,11 @@ func TestHostValidation_IncludedPaths(t *testing.T) {
 }
 
 func TestHostValidation_BothExcludedAndIncludedPathsPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when both ExcludedPaths and IncludedPaths are set")
-		}
-	}()
-
-	_ = New(Config{
-		AllowedHosts:  []string{"example.com"},
-		ExcludedPaths: []string{"/health"},
-		IncludedPaths: []string{"/api"},
-	})
+	zhtest.AssertPanicContains(t, func() {
+		_ = New(Config{
+			AllowedHosts:  []string{"example.com"},
+			ExcludedPaths: []string{"/health"},
+			IncludedPaths: []string{"/api"},
+		})
+	}, "cannot set both ExcludedPaths and IncludedPaths")
 }

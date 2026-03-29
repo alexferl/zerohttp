@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestHandler_NilRegistry(t *testing.T) {
@@ -16,14 +17,9 @@ func TestHandler_NilRegistry(t *testing.T) {
 	handler := Handler(nil)
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
-	}
-
+	zhtest.AssertEqual(t, http.StatusServiceUnavailable, rec.Code)
 	body := rec.Body.String()
-	if !strings.Contains(body, "metrics not enabled") {
-		t.Errorf("expected error message, got: %s", body)
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, "metrics not enabled"))
 }
 
 func TestHandler_EmptyRegistry(t *testing.T) {
@@ -35,14 +31,8 @@ func TestHandler_EmptyRegistry(t *testing.T) {
 	handler := Handler(reg)
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	contentType := rec.Header().Get(httpx.HeaderContentType)
-	if contentType != httpx.MIMETextPlainCharset {
-		t.Errorf("expected text/plain content type, got: %s", contentType)
-	}
+	zhtest.AssertEqual(t, http.StatusOK, rec.Code)
+	zhtest.AssertEqual(t, httpx.MIMETextPlainCharset, rec.Header().Get(httpx.HeaderContentType))
 }
 
 func TestHandler_Counter(t *testing.T) {
@@ -59,21 +49,10 @@ func TestHandler_Counter(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, "# HELP test_counter Total test_counter") {
-		t.Error("expected HELP line for test_counter")
-	}
-
-	if !strings.Contains(body, "# TYPE test_counter counter") {
-		t.Error("expected TYPE line for test_counter")
-	}
-
-	if !strings.Contains(body, `test_counter{label="value1"} 1`) {
-		t.Error("expected counter value1=1")
-	}
-
-	if !strings.Contains(body, `test_counter{label="value2"} 5`) {
-		t.Error("expected counter value2=5")
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, "# HELP test_counter Total test_counter"))
+	zhtest.AssertTrue(t, strings.Contains(body, "# TYPE test_counter counter"))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_counter{label="value1"} 1`))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_counter{label="value2"} 5`))
 }
 
 func TestHandler_Gauge(t *testing.T) {
@@ -91,17 +70,9 @@ func TestHandler_Gauge(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, "# TYPE test_gauge gauge") {
-		t.Error("expected TYPE line for test_gauge")
-	}
-
-	if !strings.Contains(body, `test_gauge{label="a"} 42.5`) {
-		t.Error("expected gauge a=42.5")
-	}
-
-	if !strings.Contains(body, `test_gauge{label="b"} 3.5`) {
-		t.Errorf("expected gauge b=3.5, got body:\n%s", body)
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, "# TYPE test_gauge gauge"))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_gauge{label="a"} 42.5`))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_gauge{label="b"} 3.5`))
 }
 
 func TestHandler_Histogram(t *testing.T) {
@@ -120,30 +91,12 @@ func TestHandler_Histogram(t *testing.T) {
 
 	body := rec.Body.String()
 
-	if !strings.Contains(body, "# TYPE test_histogram histogram") {
-		t.Error("expected TYPE line for test_histogram")
-	}
-
-	// Check bucket lines exist
-	if !strings.Contains(body, `test_histogram_bucket{method="GET",le="0.1"} 1`) {
-		t.Error("expected bucket le=0.1 count=1")
-	}
-
-	if !strings.Contains(body, `test_histogram_bucket{method="GET",le="0.5"} 2`) {
-		t.Error("expected bucket le=0.5 count=2")
-	}
-
-	if !strings.Contains(body, `test_histogram_bucket{method="GET",le="+Inf"} 3`) {
-		t.Error("expected +Inf bucket with cumulative count")
-	}
-
-	if !strings.Contains(body, `test_histogram_sum{method="GET"} 2.35`) {
-		t.Errorf("expected histogram sum, got body:\n%s", body)
-	}
-
-	if !strings.Contains(body, `test_histogram_count{method="GET"} 3`) {
-		t.Error("expected histogram count=3")
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, "# TYPE test_histogram histogram"))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_histogram_bucket{method="GET",le="0.1"} 1`))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_histogram_bucket{method="GET",le="0.5"} 2`))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_histogram_bucket{method="GET",le="+Inf"} 3`))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_histogram_sum{method="GET"} 2.35`))
+	zhtest.AssertTrue(t, strings.Contains(body, `test_histogram_count{method="GET"} 3`))
 }
 
 func TestHandler_NoLabels(t *testing.T) {
@@ -163,13 +116,8 @@ func TestHandler_NoLabels(t *testing.T) {
 	body := rec.Body.String()
 
 	// Metrics without labels should not have curly braces
-	if !strings.Contains(body, "simple_counter 1") {
-		t.Error("expected simple_counter 1 without labels")
-	}
-
-	if !strings.Contains(body, "simple_gauge 100") {
-		t.Error("expected simple_gauge 100 without labels")
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, "simple_counter 1"))
+	zhtest.AssertTrue(t, strings.Contains(body, "simple_gauge 100"))
 }
 
 func TestHandler_LabelEscaping(t *testing.T) {
@@ -188,17 +136,9 @@ func TestHandler_LabelEscaping(t *testing.T) {
 	body := rec.Body.String()
 
 	// Check escaping
-	if !strings.Contains(body, `\"`) {
-		t.Error("expected escaped quotes")
-	}
-
-	if !strings.Contains(body, `\\`) {
-		t.Error("expected escaped backslash")
-	}
-
-	if !strings.Contains(body, `\n`) {
-		t.Error("expected escaped newline")
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, `\"`))
+	zhtest.AssertTrue(t, strings.Contains(body, `\\`))
+	zhtest.AssertTrue(t, strings.Contains(body, `\n`))
 }
 
 func TestHandler_MultipleLabelNames(t *testing.T) {
@@ -216,17 +156,9 @@ func TestHandler_MultipleLabelNames(t *testing.T) {
 	body := rec.Body.String()
 
 	// Labels should be sorted alphabetically
-	if !strings.Contains(body, `method="GET"`) {
-		t.Error("expected method label")
-	}
-
-	if !strings.Contains(body, `path="/api/users"`) {
-		t.Error("expected path label")
-	}
-
-	if !strings.Contains(body, `status="200"`) {
-		t.Error("expected status label")
-	}
+	zhtest.AssertTrue(t, strings.Contains(body, `method="GET"`))
+	zhtest.AssertTrue(t, strings.Contains(body, `path="/api/users"`))
+	zhtest.AssertTrue(t, strings.Contains(body, `status="200"`))
 }
 
 func TestHandler_SortedOutput(t *testing.T) {
@@ -254,13 +186,11 @@ func TestHandler_SortedOutput(t *testing.T) {
 	middleIdx := strings.Index(body, "middle")
 	zebraIdx := strings.Index(body, "zebra")
 
-	if alphaIdx == -1 || middleIdx == -1 || zebraIdx == -1 {
-		t.Fatal("could not find all metric names")
-	}
-
-	if alphaIdx >= middleIdx || middleIdx >= zebraIdx {
-		t.Error("metrics not sorted alphabetically")
-	}
+	zhtest.AssertGreater(t, alphaIdx, -1)
+	zhtest.AssertGreater(t, middleIdx, -1)
+	zhtest.AssertGreater(t, zebraIdx, -1)
+	zhtest.AssertTrue(t, alphaIdx < middleIdx)
+	zhtest.AssertTrue(t, middleIdx < zebraIdx)
 }
 
 func TestFormatLabels(t *testing.T) {
@@ -289,9 +219,7 @@ func TestFormatLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := formatLabels(tt.labels)
-			if result != tt.expected {
-				t.Errorf("formatLabels() = %q, expected %q", result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -311,9 +239,7 @@ func TestEscapeLabel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			result := escapeLabel(tt.input)
-			if result != tt.expected {
-				t.Errorf("escapeLabel(%q) = %q, expected %q", tt.input, result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -344,9 +270,7 @@ func TestMetricKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := metricKey(tt.labels)
-			if result != tt.expected {
-				t.Errorf("metricKey() = %q, expected %q", result, tt.expected)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }

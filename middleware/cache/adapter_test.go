@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 // mockStorage is a test implementation of storage.Storage
@@ -44,9 +46,7 @@ func TestNewStorageAdapter(t *testing.T) {
 	s := newMockStorage()
 	adapter := NewStorageAdapter(s)
 
-	if adapter == nil {
-		t.Fatal("NewStorageAdapter should not return nil")
-	}
+	zhtest.AssertNotNil(t, adapter)
 }
 
 func TestStorageAdapter_Get(t *testing.T) {
@@ -56,15 +56,9 @@ func TestStorageAdapter_Get(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		rec, found, err := adapter.Get(ctx, "missing")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if found {
-			t.Error("should not find missing key")
-		}
-		if rec.StatusCode != 0 {
-			t.Error("record should be zero value")
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertFalse(t, found)
+		zhtest.AssertEqual(t, 0, rec.StatusCode)
 	})
 
 	t.Run("found", func(t *testing.T) {
@@ -74,34 +68,20 @@ func TestStorageAdapter_Get(t *testing.T) {
 			ETag:       "abc123",
 		}
 		// Store via adapter
-		if err := adapter.Set(ctx, "test", expected, time.Minute); err != nil {
-			t.Fatalf("set failed: %v", err)
-		}
+		zhtest.AssertNoError(t, adapter.Set(ctx, "test", expected, time.Minute))
 
 		rec, found, err := adapter.Get(ctx, "test")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if !found {
-			t.Error("should find existing key")
-		}
-		if rec.StatusCode != expected.StatusCode {
-			t.Errorf("StatusCode = %d, want %d", rec.StatusCode, expected.StatusCode)
-		}
-		if string(rec.Body) != string(expected.Body) {
-			t.Errorf("Body = %s, want %s", rec.Body, expected.Body)
-		}
-		if rec.ETag != expected.ETag {
-			t.Errorf("ETag = %s, want %s", rec.ETag, expected.ETag)
-		}
+		zhtest.AssertNoError(t, err)
+		zhtest.AssertTrue(t, found)
+		zhtest.AssertEqual(t, expected.StatusCode, rec.StatusCode)
+		zhtest.AssertEqual(t, string(expected.Body), string(rec.Body))
+		zhtest.AssertEqual(t, expected.ETag, rec.ETag)
 	})
 
 	t.Run("invalid json", func(t *testing.T) {
 		s.data["bad"] = []byte("not json")
 		_, _, err := adapter.Get(ctx, "bad")
-		if err == nil {
-			t.Error("should error on invalid json")
-		}
+		zhtest.AssertError(t, err)
 	})
 }
 
@@ -117,25 +97,17 @@ func TestStorageAdapter_Set(t *testing.T) {
 	}
 	ttl := 5 * time.Minute
 
-	if err := adapter.Set(ctx, "key", rec, ttl); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, adapter.Set(ctx, "key", rec, ttl))
 
 	// Verify raw storage has JSON data
 	data, ok := s.data["key"]
-	if !ok {
-		t.Fatal("key not found in storage")
-	}
+	zhtest.AssertTrue(t, ok)
 
 	// Verify it's valid JSON
-	if len(data) == 0 {
-		t.Error("stored data should not be empty")
-	}
+	zhtest.AssertGreater(t, len(data), 0)
 
 	// Verify TTL is stored
-	if s.ttlVals["key"] != ttl {
-		t.Errorf("TTL = %v, want %v", s.ttlVals["key"], ttl)
-	}
+	zhtest.AssertEqual(t, ttl, s.ttlVals["key"])
 }
 
 func TestStorageAdapter_Delete(t *testing.T) {
@@ -147,16 +119,12 @@ func TestStorageAdapter_Delete(t *testing.T) {
 	s.data["test"] = []byte("value")
 	s.ttlVals["test"] = time.Minute
 
-	if err := adapter.Delete(ctx, "test"); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, adapter.Delete(ctx, "test"))
 
-	if _, ok := s.data["test"]; ok {
-		t.Error("key should be deleted")
-	}
-	if _, ok := s.ttlVals["test"]; ok {
-		t.Error("ttl should be deleted")
-	}
+	_, ok := s.data["test"]
+	zhtest.AssertFalse(t, ok)
+	_, ok = s.ttlVals["test"]
+	zhtest.AssertFalse(t, ok)
 }
 
 func TestStorageAdapter_Close(t *testing.T) {
@@ -165,13 +133,9 @@ func TestStorageAdapter_Close(t *testing.T) {
 
 	// Type assert to access Close method
 	sa, ok := adapter.(*StorageAdapter)
-	if !ok {
-		t.Fatal("adapter should be *StorageAdapter")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if err := sa.Close(); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	zhtest.AssertNoError(t, sa.Close())
 }
 
 // mockCodec is a test codec that prepends a prefix
@@ -198,13 +162,10 @@ func TestNewStorageAdapter_WithConfig(t *testing.T) {
 
 	// Type assert to check codec was set
 	sa, ok := adapter.(*StorageAdapter)
-	if !ok {
-		t.Fatal("adapter should be *StorageAdapter")
-	}
+	zhtest.AssertTrue(t, ok)
 
-	if _, ok := sa.codec.(mockCodec); !ok {
-		t.Error("codec should be mockCodec")
-	}
+	_, ok = sa.codec.(mockCodec)
+	zhtest.AssertTrue(t, ok)
 }
 
 func TestStorageAdapter_CustomCodec(t *testing.T) {
@@ -217,22 +178,14 @@ func TestStorageAdapter_CustomCodec(t *testing.T) {
 
 	// Store via adapter - should use custom codec
 	rec := Record{StatusCode: 200, Body: []byte("test")}
-	if err := adapter.Set(ctx, "key", rec, time.Minute); err != nil {
-		t.Fatalf("set failed: %v", err)
-	}
+	zhtest.AssertNoError(t, adapter.Set(ctx, "key", rec, time.Minute))
 
 	// Check that custom codec was used (prepends "MOCK:")
 	data := s.data["key"]
-	if string(data) != "MOCK:" {
-		t.Errorf("expected MOCK: prefix, got %s", string(data))
-	}
+	zhtest.AssertEqual(t, "MOCK:", string(data))
 
 	// Get via adapter - should use custom codec
 	gotRec, _, err := adapter.Get(ctx, "key")
-	if err != nil {
-		t.Fatalf("get failed: %v", err)
-	}
-	if gotRec.StatusCode != 999 {
-		t.Errorf("StatusCode = %d, want 999 (custom codec marker)", gotRec.StatusCode)
-	}
+	zhtest.AssertNoError(t, err)
+	zhtest.AssertEqual(t, 999, gotRec.StatusCode)
 }

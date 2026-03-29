@@ -2,22 +2,19 @@ package recover
 
 import (
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRecoverConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if cfg.StackSize != 4<<10 {
-		t.Errorf("expected default stack size = %d (4KB), got %d", 4<<10, cfg.StackSize)
-	}
-	if cfg.EnableStackTrace != true {
-		t.Errorf("expected default enable stack trace = true, got %t", cfg.EnableStackTrace)
-	}
+	zhtest.AssertEqual(t, int64(4<<10), cfg.StackSize)
+	zhtest.AssertTrue(t, cfg.EnableStackTrace)
 
 	// Verify the 4KB calculation
 	expectedSize := int64(4096)
-	if cfg.StackSize != expectedSize {
-		t.Errorf("expected default stack size = %d bytes, got %d", expectedSize, cfg.StackSize)
-	}
+	zhtest.AssertEqual(t, expectedSize, cfg.StackSize)
+	zhtest.AssertEqual(t, int64(4096), cfg.StackSize)
 }
 
 func TestRecoverConfig_StackSizeBoundaryValues(t *testing.T) {
@@ -42,9 +39,7 @@ func TestRecoverConfig_StackSizeBoundaryValues(t *testing.T) {
 				StackSize:        tt.stackSize,
 				EnableStackTrace: true,
 			}
-			if cfg.StackSize != tt.stackSize {
-				t.Errorf("expected stack size = %d, got %d", tt.stackSize, cfg.StackSize)
-			}
+			zhtest.AssertEqual(t, tt.stackSize, cfg.StackSize)
 		})
 	}
 }
@@ -74,9 +69,7 @@ func TestRecoverConfig_CommonStackSizes(t *testing.T) {
 				StackSize:        tt.stackSize,
 				EnableStackTrace: true,
 			}
-			if cfg.StackSize != tt.stackSize {
-				t.Errorf("expected %s stack size = %d, got %d", tt.name, tt.stackSize, cfg.StackSize)
-			}
+			zhtest.AssertEqual(t, tt.stackSize, cfg.StackSize)
 		})
 	}
 }
@@ -84,12 +77,8 @@ func TestRecoverConfig_CommonStackSizes(t *testing.T) {
 func TestRecoverConfig_EdgeCases(t *testing.T) {
 	t.Run("zero values", func(t *testing.T) {
 		cfg := Config{} // Zero values
-		if cfg.StackSize != 0 {
-			t.Errorf("expected zero stack size = 0, got %d", cfg.StackSize)
-		}
-		if cfg.EnableStackTrace != false {
-			t.Errorf("expected zero enable stack trace = false, got %t", cfg.EnableStackTrace)
-		}
+		zhtest.AssertEqual(t, int64(0), cfg.StackSize)
+		zhtest.AssertFalse(t, cfg.EnableStackTrace)
 	})
 
 	t.Run("boolean toggling", func(t *testing.T) {
@@ -98,19 +87,13 @@ func TestRecoverConfig_EdgeCases(t *testing.T) {
 			EnableStackTrace: true,
 		}
 		// Start with true
-		if cfg.EnableStackTrace != true {
-			t.Error("expected initial EnableStackTrace = true")
-		}
+		zhtest.AssertTrue(t, cfg.EnableStackTrace)
 		// Toggle to false
 		cfg.EnableStackTrace = false
-		if cfg.EnableStackTrace != false {
-			t.Error("expected EnableStackTrace = false after toggle")
-		}
+		zhtest.AssertFalse(t, cfg.EnableStackTrace)
 		// Toggle back to true
 		cfg.EnableStackTrace = true
-		if cfg.EnableStackTrace != true {
-			t.Error("expected EnableStackTrace = true after toggle back")
-		}
+		zhtest.AssertTrue(t, cfg.EnableStackTrace)
 	})
 }
 
@@ -135,12 +118,8 @@ func TestRecoverConfig_UsageScenarios(t *testing.T) {
 				EnableStackTrace: tt.enableStackTrace,
 			}
 
-			if cfg.StackSize != tt.stackSize {
-				t.Errorf("%s: expected stack size = %d, got %d", tt.description, tt.stackSize, cfg.StackSize)
-			}
-			if cfg.EnableStackTrace != tt.enableStackTrace {
-				t.Errorf("%s: expected enable stack trace = %t, got %t", tt.description, tt.enableStackTrace, cfg.EnableStackTrace)
-			}
+			zhtest.AssertEqual(t, tt.stackSize, cfg.StackSize)
+			zhtest.AssertEqual(t, tt.enableStackTrace, cfg.EnableStackTrace)
 		})
 	}
 }
@@ -152,12 +131,8 @@ func TestRecoverConfig_StructAssignment(t *testing.T) {
 			EnableStackTrace: false,
 		}
 
-		if cfg.StackSize != 8192 {
-			t.Errorf("expected stack size = 8192, got %d", cfg.StackSize)
-		}
-		if cfg.EnableStackTrace != false {
-			t.Errorf("expected enable stack trace = false, got %t", cfg.EnableStackTrace)
-		}
+		zhtest.AssertEqual(t, int64(8192), cfg.StackSize)
+		zhtest.AssertFalse(t, cfg.EnableStackTrace)
 	})
 
 	t.Run("modify struct fields", func(t *testing.T) {
@@ -167,11 +142,7 @@ func TestRecoverConfig_StructAssignment(t *testing.T) {
 		cfg.StackSize = 16384
 		cfg.EnableStackTrace = false
 
-		if cfg.StackSize != 16384 {
-			t.Errorf("expected modified stack size = 16384, got %d", cfg.StackSize)
-		}
-		if cfg.EnableStackTrace != false {
-			t.Errorf("expected modified enable stack trace = false, got %t", cfg.EnableStackTrace)
-		}
+		zhtest.AssertEqual(t, int64(16384), cfg.StackSize)
+		zhtest.AssertFalse(t, cfg.EnableStackTrace)
 	})
 }

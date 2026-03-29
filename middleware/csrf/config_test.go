@@ -5,62 +5,26 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/config"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestCSRFConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
 
-	if cfg.CookieName != "csrf_token" {
-		t.Errorf("expected default CookieName = csrf_token, got %s", cfg.CookieName)
-	}
-
-	if cfg.CookieMaxAge != 86400 {
-		t.Errorf("expected default CookieMaxAge = 86400, got %d", cfg.CookieMaxAge)
-	}
-
-	if cfg.CookiePath != "/" {
-		t.Errorf("expected default CookiePath = /, got %s", cfg.CookiePath)
-	}
-
-	if cfg.CookieDomain != "" {
-		t.Errorf("expected default CookieDomain = empty, got %s", cfg.CookieDomain)
-	}
-
-	if cfg.CookieSecure == nil || !*cfg.CookieSecure {
-		t.Error("expected default CookieSecure = true")
-	}
-
-	if cfg.CookieSameSite != http.SameSiteStrictMode {
-		t.Errorf("expected default CookieSameSite = Strict, got %v", cfg.CookieSameSite)
-	}
-
-	if cfg.TokenLookup != "header:X-CSRF-Token" {
-		t.Errorf("expected default TokenLookup = header:X-CSRF-Token, got %s", cfg.TokenLookup)
-	}
-
-	if cfg.ErrorHandler != nil {
-		t.Error("expected default ErrorHandler to be nil")
-	}
-
-	if len(cfg.ExcludedPaths) != 0 {
-		t.Errorf("expected default ExcludedPaths to be empty, got %d paths", len(cfg.ExcludedPaths))
-	}
-
-	if len(cfg.IncludedPaths) != 0 {
-		t.Errorf("expected default IncludedPaths to be empty, got %d paths", len(cfg.IncludedPaths))
-	}
-
-	if len(cfg.ExcludedMethods) != 4 {
-		t.Errorf("expected default ExcludedMethods to have 4 methods, got %d", len(cfg.ExcludedMethods))
-	}
-
-	if cfg.HMACKey != nil {
-		t.Error("expected default HMACKey to be nil")
-	}
-
-	if cfg.TokenGenerator != nil {
-		t.Error("expected default TokenGenerator to be nil")
-	}
+	zhtest.AssertEqual(t, "csrf_token", cfg.CookieName)
+	zhtest.AssertEqual(t, 86400, cfg.CookieMaxAge)
+	zhtest.AssertEqual(t, "/", cfg.CookiePath)
+	zhtest.AssertEmpty(t, cfg.CookieDomain)
+	zhtest.AssertNotNil(t, cfg.CookieSecure)
+	zhtest.AssertTrue(t, *cfg.CookieSecure)
+	zhtest.AssertEqual(t, http.SameSiteStrictMode, cfg.CookieSameSite)
+	zhtest.AssertEqual(t, "header:X-CSRF-Token", cfg.TokenLookup)
+	zhtest.AssertNil(t, cfg.ErrorHandler)
+	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
+	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
+	zhtest.AssertEqual(t, 4, len(cfg.ExcludedMethods))
+	zhtest.AssertNil(t, cfg.HMACKey)
+	zhtest.AssertNil(t, cfg.TokenGenerator)
 }
 
 func TestCSRFConfig_CustomValues(t *testing.T) {
@@ -68,63 +32,50 @@ func TestCSRFConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			CookieName: "my_csrf",
 		}
-		if cfg.CookieName != "my_csrf" {
-			t.Errorf("expected CookieName = my_csrf, got %s", cfg.CookieName)
-		}
+		zhtest.AssertEqual(t, "my_csrf", cfg.CookieName)
 	})
 
 	t.Run("custom cookie max age", func(t *testing.T) {
 		cfg := Config{
 			CookieMaxAge: 3600,
 		}
-		if cfg.CookieMaxAge != 3600 {
-			t.Errorf("expected CookieMaxAge = 3600, got %d", cfg.CookieMaxAge)
-		}
+		zhtest.AssertEqual(t, 3600, cfg.CookieMaxAge)
 	})
 
 	t.Run("custom cookie path", func(t *testing.T) {
 		cfg := Config{
 			CookiePath: "/api",
 		}
-		if cfg.CookiePath != "/api" {
-			t.Errorf("expected CookiePath = /api, got %s", cfg.CookiePath)
-		}
+		zhtest.AssertEqual(t, "/api", cfg.CookiePath)
 	})
 
 	t.Run("custom cookie domain", func(t *testing.T) {
 		cfg := Config{
 			CookieDomain: "example.com",
 		}
-		if cfg.CookieDomain != "example.com" {
-			t.Errorf("expected CookieDomain = example.com, got %s", cfg.CookieDomain)
-		}
+		zhtest.AssertEqual(t, "example.com", cfg.CookieDomain)
 	})
 
 	t.Run("custom cookie secure", func(t *testing.T) {
 		cfg := Config{
 			CookieSecure: config.Bool(false),
 		}
-		if cfg.CookieSecure == nil || *cfg.CookieSecure != false {
-			t.Error("expected CookieSecure = false")
-		}
+		zhtest.AssertNotNil(t, cfg.CookieSecure)
+		zhtest.AssertFalse(t, *cfg.CookieSecure)
 	})
 
 	t.Run("custom cookie same site", func(t *testing.T) {
 		cfg := Config{
 			CookieSameSite: http.SameSiteLaxMode,
 		}
-		if cfg.CookieSameSite != http.SameSiteLaxMode {
-			t.Errorf("expected CookieSameSite = Lax, got %v", cfg.CookieSameSite)
-		}
+		zhtest.AssertEqual(t, http.SameSiteLaxMode, cfg.CookieSameSite)
 	})
 
 	t.Run("custom token lookup", func(t *testing.T) {
 		cfg := Config{
 			TokenLookup: "form:csrf_token",
 		}
-		if cfg.TokenLookup != "form:csrf_token" {
-			t.Errorf("expected TokenLookup = form:csrf_token, got %s", cfg.TokenLookup)
-		}
+		zhtest.AssertEqual(t, "form:csrf_token", cfg.TokenLookup)
 	})
 
 	t.Run("custom HMAC key", func(t *testing.T) {
@@ -132,9 +83,7 @@ func TestCSRFConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			HMACKey: key,
 		}
-		if string(cfg.HMACKey) != string(key) {
-			t.Error("expected HMACKey to be set correctly")
-		}
+		zhtest.AssertEqual(t, string(key), string(cfg.HMACKey))
 	})
 
 	t.Run("custom token generator", func(t *testing.T) {
@@ -144,9 +93,7 @@ func TestCSRFConfig_CustomValues(t *testing.T) {
 		cfg := Config{
 			TokenGenerator: generator,
 		}
-		if cfg.TokenGenerator == nil {
-			t.Error("expected TokenGenerator to be set")
-		}
+		zhtest.AssertNotNil(t, cfg.TokenGenerator)
 	})
 }
 
@@ -156,36 +103,24 @@ func TestCSRFConfig_IncludedPaths(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: includedPaths,
 		}
-		if len(cfg.IncludedPaths) != 2 {
-			t.Errorf("expected 2 included paths, got %d", len(cfg.IncludedPaths))
-		}
-		if cfg.IncludedPaths[0] != "/api/public" {
-			t.Errorf("expected first allowed path to be /api/public, got %s", cfg.IncludedPaths[0])
-		}
-		if cfg.IncludedPaths[1] != "/health" {
-			t.Errorf("expected second allowed path to be /health, got %s", cfg.IncludedPaths[1])
-		}
+		zhtest.AssertEqual(t, 2, len(cfg.IncludedPaths))
+		zhtest.AssertEqual(t, "/api/public", cfg.IncludedPaths[0])
+		zhtest.AssertEqual(t, "/health", cfg.IncludedPaths[1])
 	})
 
 	t.Run("empty included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: []string{},
 		}
-		if cfg.IncludedPaths == nil {
-			t.Error("expected included paths slice to be initialized, not nil")
-		}
-		if len(cfg.IncludedPaths) != 0 {
-			t.Errorf("expected empty included paths slice, got %d entries", len(cfg.IncludedPaths))
-		}
+		zhtest.AssertNotNil(t, cfg.IncludedPaths)
+		zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 	})
 
 	t.Run("nil included paths", func(t *testing.T) {
 		cfg := Config{
 			IncludedPaths: nil,
 		}
-		if cfg.IncludedPaths != nil {
-			t.Error("expected included paths to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.IncludedPaths)
 	})
 }
 
@@ -200,8 +135,6 @@ func TestCSRFConfig_ExcludedMethods(t *testing.T) {
 	}
 
 	for _, method := range cfg.ExcludedMethods {
-		if !expectedMethods[method] {
-			t.Errorf("unexpected excluded method: %s", method)
-		}
+		zhtest.AssertTrue(t, expectedMethods[method])
 	}
 }

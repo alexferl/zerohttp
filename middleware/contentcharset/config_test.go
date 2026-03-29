@@ -1,25 +1,18 @@
 package contentcharset
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestContentCharsetConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if len(cfg.Charsets) != 2 {
-		t.Errorf("expected 2 default charsets, got %d", len(cfg.Charsets))
-	}
+	zhtest.AssertEqual(t, 2, len(cfg.Charsets))
 	expectedCharsets := []string{"utf-8", ""}
-	if !reflect.DeepEqual(cfg.Charsets, expectedCharsets) {
-		t.Errorf("expected default charsets = %v, got %v", expectedCharsets, cfg.Charsets)
-	}
-	if cfg.Charsets[0] != "utf-8" {
-		t.Errorf("expected first charset = 'utf-8', got %s", cfg.Charsets[0])
-	}
-	if cfg.Charsets[1] != "" {
-		t.Errorf("expected second charset = '', got %s", cfg.Charsets[1])
-	}
+	zhtest.AssertDeepEqual(t, expectedCharsets, cfg.Charsets)
+	zhtest.AssertEqual(t, "utf-8", cfg.Charsets[0])
+	zhtest.AssertEqual(t, "", cfg.Charsets[1])
 }
 
 func TestContentCharsetConfig_StructAssignment(t *testing.T) {
@@ -41,12 +34,8 @@ func TestContentCharsetConfig_StructAssignment(t *testing.T) {
 			cfg := Config{
 				Charsets: tt.input,
 			}
-			if len(cfg.Charsets) != len(tt.expected) {
-				t.Errorf("expected %d charsets, got %d", len(tt.expected), len(cfg.Charsets))
-			}
-			if !reflect.DeepEqual(cfg.Charsets, tt.expected) {
-				t.Errorf("expected charsets = %v, got %v", tt.expected, cfg.Charsets)
-			}
+			zhtest.AssertEqual(t, len(tt.expected), len(cfg.Charsets))
+			zhtest.AssertDeepEqual(t, tt.expected, cfg.Charsets)
 		})
 	}
 }
@@ -56,21 +45,15 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Charsets: []string{},
 		}
-		if cfg.Charsets == nil {
-			t.Error("expected charsets slice to be initialized, not nil")
-		}
-		if len(cfg.Charsets) != 0 {
-			t.Errorf("expected empty charsets slice, got %d entries", len(cfg.Charsets))
-		}
+		zhtest.AssertNotNil(t, cfg.Charsets)
+		zhtest.AssertEqual(t, 0, len(cfg.Charsets))
 	})
 
 	t.Run("nil charsets", func(t *testing.T) {
 		cfg := Config{
 			Charsets: nil,
 		}
-		if cfg.Charsets != nil {
-			t.Error("expected charsets to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.Charsets)
 	})
 
 	t.Run("case sensitivity", func(t *testing.T) {
@@ -78,13 +61,9 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Charsets: charsets,
 		}
-		if len(cfg.Charsets) != 3 {
-			t.Errorf("expected 3 charsets, got %d", len(cfg.Charsets))
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Charsets))
 		for i, expectedCharset := range charsets {
-			if cfg.Charsets[i] != expectedCharset {
-				t.Errorf("expected charset[%d] = %s, got %s", i, expectedCharset, cfg.Charsets[i])
-			}
+			zhtest.AssertEqual(t, expectedCharset, cfg.Charsets[i])
 		}
 	})
 
@@ -93,13 +72,9 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Charsets: charsets,
 		}
-		if len(cfg.Charsets) != 4 {
-			t.Errorf("expected 4 charsets (including duplicates), got %d", len(cfg.Charsets))
-		}
+		zhtest.AssertEqual(t, 4, len(cfg.Charsets))
 		for i, expectedCharset := range charsets {
-			if cfg.Charsets[i] != expectedCharset {
-				t.Errorf("expected charset[%d] = %s, got %s", i, expectedCharset, cfg.Charsets[i])
-			}
+			zhtest.AssertEqual(t, expectedCharset, cfg.Charsets[i])
 		}
 	})
 
@@ -108,13 +83,9 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Charsets: charsets,
 		}
-		if len(cfg.Charsets) != 5 {
-			t.Errorf("expected 5 charsets, got %d", len(cfg.Charsets))
-		}
+		zhtest.AssertEqual(t, 5, len(cfg.Charsets))
 		for i, expectedCharset := range charsets {
-			if cfg.Charsets[i] != expectedCharset {
-				t.Errorf("expected charset[%d] = %q, got %q", i, expectedCharset, cfg.Charsets[i])
-			}
+			zhtest.AssertEqual(t, expectedCharset, cfg.Charsets[i])
 		}
 	})
 
@@ -123,13 +94,9 @@ func TestContentCharsetConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Charsets: charsets,
 		}
-		if len(cfg.Charsets) != 5 {
-			t.Errorf("expected 5 charsets, got %d", len(cfg.Charsets))
-		}
+		zhtest.AssertEqual(t, 5, len(cfg.Charsets))
 		for i, expectedCharset := range charsets {
-			if cfg.Charsets[i] != expectedCharset {
-				t.Errorf("expected charset[%d] = %q, got %q", i, expectedCharset, cfg.Charsets[i])
-			}
+			zhtest.AssertEqual(t, expectedCharset, cfg.Charsets[i])
 		}
 	})
 }

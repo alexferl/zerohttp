@@ -2,6 +2,8 @@ package validator
 
 import (
 	"testing"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestContainsValidator(t *testing.T) {
@@ -24,11 +26,10 @@ func TestContainsValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestContains{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -39,9 +40,7 @@ func TestContainsOnNonString(t *testing.T) {
 		Value int `validate:"contains=test"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for contains on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestStartsWithValidator(t *testing.T) {
@@ -65,11 +64,10 @@ func TestStartsWithValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestStartsWith{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -80,9 +78,7 @@ func TestStartsWithOnNonString(t *testing.T) {
 		Value int `validate:"startswith=hello"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for startswith on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestEndsWithValidator(t *testing.T) {
@@ -106,11 +102,10 @@ func TestEndsWithValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestEndsWith{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -121,9 +116,7 @@ func TestEndsWithOnNonString(t *testing.T) {
 		Value int `validate:"endswith=world"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for endswith on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestExcludesValidator(t *testing.T) {
@@ -147,11 +140,10 @@ func TestExcludesValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestExcludes{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -162,9 +154,7 @@ func TestExcludesOnNonString(t *testing.T) {
 		Value int `validate:"excludes=test"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for excludes on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestLowercaseValidator(t *testing.T) {
@@ -190,11 +180,10 @@ func TestLowercaseValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestLowercase{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -205,9 +194,7 @@ func TestLowercaseOnNonString(t *testing.T) {
 		Value int `validate:"lowercase"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for lowercase on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestUppercaseValidator(t *testing.T) {
@@ -231,11 +218,10 @@ func TestUppercaseValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestUppercase{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -246,9 +232,7 @@ func TestUppercaseOnNonString(t *testing.T) {
 		Value int `validate:"uppercase"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for uppercase on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestASCIIValidator(t *testing.T) {
@@ -274,11 +258,10 @@ func TestASCIIValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestASCII{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -289,9 +272,7 @@ func TestASCIOnNonString(t *testing.T) {
 		Value int `validate:"ascii"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for ascii on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestPrintASCIIValidator(t *testing.T) {
@@ -316,11 +297,10 @@ func TestPrintASCIIValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			input := TestPrintASCII{Value: tt.value}
 			err := New().Struct(&input)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -331,9 +311,7 @@ func TestPrintASCIOnNonString(t *testing.T) {
 		Value int `validate:"printascii"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for printascii on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestBooleanValidator(t *testing.T) {
@@ -368,11 +346,10 @@ func TestBooleanValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestBoolean{Value: tt.value})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -383,9 +360,7 @@ func TestBooleanOnNonString(t *testing.T) {
 		Value int `validate:"boolean"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for boolean on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }
 
 func TestJSONValidator(t *testing.T) {
@@ -412,11 +387,10 @@ func TestJSONValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := New().Struct(&TestJSON{Value: tt.value})
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for %q", tt.value)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error for %q: %v", tt.value, err)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
 			}
 		})
 	}
@@ -427,7 +401,5 @@ func TestJSONOnNonString(t *testing.T) {
 		Value int `validate:"json"`
 	}
 	input := Test{Value: 123}
-	if err := New().Struct(&input); err == nil {
-		t.Error("expected error for json on non-string")
-	}
+	zhtest.AssertError(t, New().Struct(&input))
 }

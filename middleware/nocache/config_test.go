@@ -2,34 +2,23 @@ package nocache
 
 import (
 	"net/http"
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestNoCacheConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
-	if len(cfg.Headers) != 4 {
-		t.Errorf("expected 4 default no-cache headers, got %d", len(cfg.Headers))
-	}
-	if len(cfg.ETagHeaders) != 6 {
-		t.Errorf("expected 6 default ETag headers, got %d", len(cfg.ETagHeaders))
-	}
-	if !reflect.DeepEqual(cfg.Headers, DefaultHeaders) {
-		t.Error("expected default no-cache headers to match DefaultNoCacheHeaders")
-	}
-	if !reflect.DeepEqual(cfg.ETagHeaders, DefaultETagHeaders) {
-		t.Error("expected default ETag headers to match DefaultETagHeaders")
-	}
+	zhtest.AssertEqual(t, 4, len(cfg.Headers))
+	zhtest.AssertEqual(t, 6, len(cfg.ETagHeaders))
+	zhtest.AssertEqual(t, DefaultHeaders, cfg.Headers)
+	zhtest.AssertEqual(t, DefaultETagHeaders, cfg.ETagHeaders)
 
 	// Test Epoch constant
 	expectedEpoch := time.Unix(0, 0).UTC().Format(http.TimeFormat)
-	if Epoch != expectedEpoch {
-		t.Errorf("expected Epoch = %s, got %s", expectedEpoch, Epoch)
-	}
-	if DefaultHeaders["Expires"] != Epoch {
-		t.Error("expected DefaultNoCacheHeaders[Expires] to use Epoch constant")
-	}
+	zhtest.AssertEqual(t, expectedEpoch, Epoch)
+	zhtest.AssertEqual(t, Epoch, DefaultHeaders["Expires"])
 
 	expectedNoCacheHeaders := map[string]string{
 		"Expires":         Epoch,
@@ -37,15 +26,11 @@ func TestNoCacheConfig_DefaultValues(t *testing.T) {
 		"Pragma":          "no-cache",
 		"X-Accel-Expires": "0",
 	}
-	if !reflect.DeepEqual(cfg.Headers, expectedNoCacheHeaders) {
-		t.Errorf("expected no-cache headers = %v, got %v", expectedNoCacheHeaders, cfg.Headers)
-	}
+	zhtest.AssertEqual(t, expectedNoCacheHeaders, cfg.Headers)
 
 	// Test default ETag headers
 	expectedETagHeaders := []string{"ETag", "If-Modified-Since", "If-Match", "If-None-Match", "If-Range", "If-Unmodified-Since"}
-	if !reflect.DeepEqual(cfg.ETagHeaders, expectedETagHeaders) {
-		t.Errorf("expected ETag headers = %v, got %v", expectedETagHeaders, cfg.ETagHeaders)
-	}
+	zhtest.AssertEqual(t, expectedETagHeaders, cfg.ETagHeaders)
 }
 
 func TestNoCacheConfig_StructAssignment(t *testing.T) {
@@ -58,12 +43,8 @@ func TestNoCacheConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			Headers: customHeaders,
 		}
-		if len(cfg.Headers) != 3 {
-			t.Errorf("expected 3 no-cache headers, got %d", len(cfg.Headers))
-		}
-		if !reflect.DeepEqual(cfg.Headers, customHeaders) {
-			t.Errorf("expected no-cache headers = %v, got %v", customHeaders, cfg.Headers)
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Headers))
+		zhtest.AssertEqual(t, customHeaders, cfg.Headers)
 	})
 
 	t.Run("etag headers", func(t *testing.T) {
@@ -71,12 +52,8 @@ func TestNoCacheConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			ETagHeaders: customETagHeaders,
 		}
-		if len(cfg.ETagHeaders) != 3 {
-			t.Errorf("expected 3 ETag headers, got %d", len(cfg.ETagHeaders))
-		}
-		if !reflect.DeepEqual(cfg.ETagHeaders, customETagHeaders) {
-			t.Errorf("expected ETag headers = %v, got %v", customETagHeaders, cfg.ETagHeaders)
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.ETagHeaders))
+		zhtest.AssertEqual(t, customETagHeaders, cfg.ETagHeaders)
 	})
 
 	t.Run("additional headers", func(t *testing.T) {
@@ -92,13 +69,9 @@ func TestNoCacheConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			Headers: customHeaders,
 		}
-		if len(cfg.Headers) != 7 {
-			t.Errorf("expected 7 headers, got %d", len(cfg.Headers))
-		}
+		zhtest.AssertEqual(t, 7, len(cfg.Headers))
 		for key, expectedValue := range customHeaders {
-			if cfg.Headers[key] != expectedValue {
-				t.Errorf("expected header %s = %s, got %s", key, expectedValue, cfg.Headers[key])
-			}
+			zhtest.AssertEqual(t, expectedValue, cfg.Headers[key])
 		}
 	})
 
@@ -107,12 +80,8 @@ func TestNoCacheConfig_StructAssignment(t *testing.T) {
 		cfg := Config{
 			ETagHeaders: allETagHeaders,
 		}
-		if len(cfg.ETagHeaders) != 8 {
-			t.Errorf("expected 8 ETag-related headers, got %d", len(cfg.ETagHeaders))
-		}
-		if !reflect.DeepEqual(cfg.ETagHeaders, allETagHeaders) {
-			t.Errorf("expected ETag headers = %v, got %v", allETagHeaders, cfg.ETagHeaders)
-		}
+		zhtest.AssertEqual(t, 8, len(cfg.ETagHeaders))
+		zhtest.AssertEqual(t, allETagHeaders, cfg.ETagHeaders)
 	})
 }
 
@@ -127,18 +96,10 @@ func TestNoCacheConfig_MultipleFields(t *testing.T) {
 		ETagHeaders: customETagHeaders,
 	}
 
-	if !reflect.DeepEqual(cfg.Headers, customNoCacheHeaders) {
-		t.Error("expected no-cache headers to be set correctly")
-	}
-	if !reflect.DeepEqual(cfg.ETagHeaders, customETagHeaders) {
-		t.Error("expected ETag headers to be set correctly")
-	}
-	if len(cfg.Headers) != 2 {
-		t.Errorf("expected 2 no-cache headers, got %d", len(cfg.Headers))
-	}
-	if len(cfg.ETagHeaders) != 2 {
-		t.Errorf("expected 2 ETag headers, got %d", len(cfg.ETagHeaders))
-	}
+	zhtest.AssertEqual(t, customNoCacheHeaders, cfg.Headers)
+	zhtest.AssertEqual(t, customETagHeaders, cfg.ETagHeaders)
+	zhtest.AssertEqual(t, 2, len(cfg.Headers))
+	zhtest.AssertEqual(t, 2, len(cfg.ETagHeaders))
 }
 
 func TestNoCacheConfig_EdgeCases(t *testing.T) {
@@ -148,12 +109,10 @@ func TestNoCacheConfig_EdgeCases(t *testing.T) {
 			ETagHeaders: []string{},
 		}
 
-		if cfg.Headers == nil || len(cfg.Headers) != 0 {
-			t.Errorf("expected empty no-cache headers map, got %v", cfg.Headers)
-		}
-		if cfg.ETagHeaders == nil || len(cfg.ETagHeaders) != 0 {
-			t.Errorf("expected empty ETag headers slice, got %v", cfg.ETagHeaders)
-		}
+		zhtest.AssertNotNil(t, cfg.Headers)
+		zhtest.AssertEqual(t, 0, len(cfg.Headers))
+		zhtest.AssertNotNil(t, cfg.ETagHeaders)
+		zhtest.AssertEqual(t, 0, len(cfg.ETagHeaders))
 	})
 
 	t.Run("nil headers", func(t *testing.T) {
@@ -162,12 +121,8 @@ func TestNoCacheConfig_EdgeCases(t *testing.T) {
 			ETagHeaders: nil,
 		}
 
-		if cfg.Headers != nil {
-			t.Error("expected no-cache headers to remain nil when nil is passed")
-		}
-		if cfg.ETagHeaders != nil {
-			t.Error("expected ETag headers to remain nil when nil is passed")
-		}
+		zhtest.AssertNil(t, cfg.Headers)
+		zhtest.AssertNil(t, cfg.ETagHeaders)
 	})
 
 	t.Run("case sensitive headers", func(t *testing.T) {
@@ -179,18 +134,10 @@ func TestNoCacheConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			Headers: headers,
 		}
-		if len(cfg.Headers) != 3 {
-			t.Errorf("expected 3 headers (case-sensitive keys), got %d", len(cfg.Headers))
-		}
-		if cfg.Headers["cache-control"] != "no-cache" {
-			t.Error("expected lowercase cache-control to be preserved")
-		}
-		if cfg.Headers["Cache-Control"] != "no-store" {
-			t.Error("expected title-case Cache-Control to be preserved")
-		}
-		if cfg.Headers["CACHE-CONTROL"] != "must-revalidate" {
-			t.Error("expected uppercase CACHE-CONTROL to be preserved")
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Headers))
+		zhtest.AssertEqual(t, "no-cache", cfg.Headers["cache-control"])
+		zhtest.AssertEqual(t, "no-store", cfg.Headers["Cache-Control"])
+		zhtest.AssertEqual(t, "must-revalidate", cfg.Headers["CACHE-CONTROL"])
 	})
 
 	t.Run("etag header variations", func(t *testing.T) {
@@ -198,12 +145,8 @@ func TestNoCacheConfig_EdgeCases(t *testing.T) {
 		cfg := Config{
 			ETagHeaders: etagHeaders,
 		}
-		if len(cfg.ETagHeaders) != 9 {
-			t.Errorf("expected 9 ETag headers, got %d", len(cfg.ETagHeaders))
-		}
-		if !reflect.DeepEqual(cfg.ETagHeaders, etagHeaders) {
-			t.Errorf("expected ETag headers = %v, got %v", etagHeaders, cfg.ETagHeaders)
-		}
+		zhtest.AssertEqual(t, 9, len(cfg.ETagHeaders))
+		zhtest.AssertEqual(t, etagHeaders, cfg.ETagHeaders)
 	})
 
 	t.Run("empty string values", func(t *testing.T) {
@@ -218,22 +161,14 @@ func TestNoCacheConfig_EdgeCases(t *testing.T) {
 			ETagHeaders: etagHeaders,
 		}
 
-		if len(cfg.Headers) != 3 {
-			t.Errorf("expected 3 no-cache headers, got %d", len(cfg.Headers))
-		}
-		if len(cfg.ETagHeaders) != 3 {
-			t.Errorf("expected 3 ETag headers, got %d", len(cfg.ETagHeaders))
-		}
+		zhtest.AssertEqual(t, 3, len(cfg.Headers))
+		zhtest.AssertEqual(t, 3, len(cfg.ETagHeaders))
 
 		for key, value := range headers {
-			if cfg.Headers[key] != value {
-				t.Errorf("expected header %s = %q, got %q", key, value, cfg.Headers[key])
-			}
+			zhtest.AssertEqual(t, value, cfg.Headers[key])
 		}
 		for i, expectedHeader := range etagHeaders {
-			if cfg.ETagHeaders[i] != expectedHeader {
-				t.Errorf("expected ETag header[%d] = %q, got %q", i, expectedHeader, cfg.ETagHeaders[i])
-			}
+			zhtest.AssertEqual(t, expectedHeader, cfg.ETagHeaders[i])
 		}
 	})
 }
@@ -257,9 +192,7 @@ func TestNoCacheConfig_CacheControlDirectives(t *testing.T) {
 			cfg := Config{
 				Headers: headers,
 			}
-			if cfg.Headers["Cache-Control"] != tt.cacheControl {
-				t.Errorf("expected Cache-Control = %s, got %s", tt.cacheControl, cfg.Headers["Cache-Control"])
-			}
+			zhtest.AssertEqual(t, tt.cacheControl, cfg.Headers["Cache-Control"])
 		})
 	}
 }
@@ -282,9 +215,7 @@ func TestNoCacheConfig_ExpiresValues(t *testing.T) {
 			cfg := Config{
 				Headers: headers,
 			}
-			if cfg.Headers["Expires"] != tt.expires {
-				t.Errorf("expected Expires = %s, got %s", tt.expires, cfg.Headers["Expires"])
-			}
+			zhtest.AssertEqual(t, tt.expires, cfg.Headers["Expires"])
 		})
 	}
 }

@@ -13,25 +13,11 @@ import (
 func TestNewDetail(t *testing.T) {
 	detail := NewDetail(http.StatusNotFound, "Not found")
 
-	if detail.Type != "" {
-		t.Errorf("expected empty Type, got %s", detail.Type)
-	}
-
-	if detail.Title != "Not Found" {
-		t.Errorf("expected title 'Not Found', got %s", detail.Title)
-	}
-
-	if detail.Status != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", detail.Status)
-	}
-
-	if detail.Detail != "Not found" {
-		t.Errorf("expected detail 'Not found', got %s", detail.Detail)
-	}
-
-	if detail.Extensions == nil {
-		t.Error("expected Extensions to be initialized")
-	}
+	zhtest.AssertEmpty(t, detail.Type)
+	zhtest.AssertEqual(t, "Not Found", detail.Title)
+	zhtest.AssertEqual(t, http.StatusNotFound, detail.Status)
+	zhtest.AssertEqual(t, "Not found", detail.Detail)
+	zhtest.AssertNotNil(t, detail.Extensions)
 }
 
 func TestDetail_Set(t *testing.T) {
@@ -39,17 +25,9 @@ func TestDetail_Set(t *testing.T) {
 
 	result := detail.Set("field", "email").Set("code", "INVALID")
 
-	if result != detail {
-		t.Error("expected Set to return same detail for chaining")
-	}
-
-	if len(detail.Extensions) != 2 {
-		t.Errorf("expected 2 extensions, got %d", len(detail.Extensions))
-	}
-
-	if detail.Extensions["field"] != "email" {
-		t.Error("expected field extension to be set")
-	}
+	zhtest.AssertEqual(t, detail, result)
+	zhtest.AssertEqual(t, 2, len(detail.Extensions))
+	zhtest.AssertEqual(t, "email", detail.Extensions["field"])
 }
 
 func TestDetail_MarshalJSON(t *testing.T) {
@@ -91,21 +69,15 @@ func TestDetail_MarshalJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			data, err := tt.detail.MarshalJSON()
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			var result map[string]any
-			if err := json.Unmarshal(data, &result); err != nil {
-				t.Fatalf("failed to unmarshal: %v", err)
-			}
+			zhtest.AssertNoError(t, json.Unmarshal(data, &result))
 
 			for key, expected := range tt.expected {
-				if actual, exists := result[key]; !exists {
-					t.Errorf("expected field %s to exist", key)
-				} else if !equalValues(actual, expected) {
-					t.Errorf("expected %s to be %v, got %v", key, expected, actual)
-				}
+				actual, exists := result[key]
+				zhtest.AssertTrue(t, exists)
+				zhtest.AssertTrue(t, equalValues(actual, expected))
 			}
 		})
 	}
@@ -119,27 +91,16 @@ func TestNewValidationDetail(t *testing.T) {
 
 	detail := NewValidationDetail("Validation failed", errs)
 
-	if detail.Status != http.StatusUnprocessableEntity {
-		t.Errorf("expected status 422, got %d", detail.Status)
-	}
-
-	if detail.Title != "Unprocessable Entity" {
-		t.Errorf("expected title 'Unprocessable Entity', got %s", detail.Title)
-	}
+	zhtest.AssertEqual(t, http.StatusUnprocessableEntity, detail.Status)
+	zhtest.AssertEqual(t, "Unprocessable Entity", detail.Title)
 
 	errorsExt, exists := detail.Extensions["errors"]
-	if !exists {
-		t.Fatal("expected errors extension to exist")
-	}
+	zhtest.AssertTrue(t, exists)
 
 	validationErrors, ok := errorsExt.([]ValidationError)
-	if !ok || len(validationErrors) != 2 {
-		t.Fatalf("expected 2 ValidationError items, got %T with len %d", errorsExt, len(validationErrors))
-	}
-
-	if validationErrors[0].Detail != "required" {
-		t.Errorf("expected first error detail 'required', got %s", validationErrors[0].Detail)
-	}
+	zhtest.AssertTrue(t, ok)
+	zhtest.AssertEqual(t, 2, len(validationErrors))
+	zhtest.AssertEqual(t, "required", validationErrors[0].Detail)
 }
 
 func TestNewValidationDetail_Custom(t *testing.T) {
@@ -155,9 +116,8 @@ func TestNewValidationDetail_Custom(t *testing.T) {
 	detail := NewValidationDetail("Custom validation", errs)
 
 	errorsExt := detail.Extensions["errors"].([]CustomError)
-	if len(errorsExt) != 1 || errorsExt[0].Code != "ERR001" {
-		t.Error("expected custom error to be preserved")
-	}
+	zhtest.AssertEqual(t, 1, len(errorsExt))
+	zhtest.AssertEqual(t, "ERR001", errorsExt[0].Code)
 }
 
 func TestDetail_Set_ExtensionsInitialization(t *testing.T) {
@@ -166,33 +126,21 @@ func TestDetail_Set_ExtensionsInitialization(t *testing.T) {
 		Status: http.StatusBadRequest,
 	}
 
-	if p.Extensions != nil {
-		t.Fatal("Expected Extensions to be nil initially")
-	}
+	zhtest.AssertNil(t, p.Extensions)
 
 	result := p.Set("key", "value")
 
-	if p.Extensions == nil {
-		t.Fatal("Expected Extensions to be initialized after Set")
-	}
-
-	if val, ok := p.Extensions["key"]; !ok || val != "value" {
-		t.Errorf("Expected Extensions to contain 'key' with value 'value', got %v", p.Extensions)
-	}
-
-	if result != p {
-		t.Error("Expected Set to return same Detail instance for chaining")
-	}
+	zhtest.AssertNotNil(t, p.Extensions)
+	val, ok := p.Extensions["key"]
+	zhtest.AssertTrue(t, ok)
+	zhtest.AssertEqual(t, "value", val)
+	zhtest.AssertEqual(t, p, result)
 
 	p.Set("another", 123).Set("third", true)
 
-	if len(p.Extensions) != 3 {
-		t.Errorf("Expected Extensions to contain 3 items, got %d", len(p.Extensions))
-	}
-
-	if p.Extensions["another"] != 123 || p.Extensions["third"] != true {
-		t.Error("Expected all extension values to be preserved")
-	}
+	zhtest.AssertEqual(t, 3, len(p.Extensions))
+	zhtest.AssertEqual(t, 123, p.Extensions["another"])
+	zhtest.AssertEqual(t, true, p.Extensions["third"])
 }
 
 func TestDetail_Render(t *testing.T) {
@@ -203,9 +151,7 @@ func TestDetail_Render(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	err := detail.Render(w)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusNotFound).
@@ -225,9 +171,7 @@ func TestDetail_Render_WithExtensions(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	err := detail.Render(w)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusUnprocessableEntity).
@@ -235,15 +179,13 @@ func TestDetail_Render_WithExtensions(t *testing.T) {
 		JSONPathEqual("code", "VALIDATION_ERROR")
 
 	var result map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
-		t.Fatalf("failed to unmarshal response: %v", err)
-	}
+	zhtest.AssertNoError(t, json.Unmarshal(w.Body.Bytes(), &result))
 
-	if errors, exists := result["errors"]; !exists {
-		t.Error("expected errors extension to exist")
-	} else if errorList, ok := errors.([]any); !ok || len(errorList) != 2 {
-		t.Errorf("expected errors to be array of 2 items, got %v", errors)
-	}
+	errors, exists := result["errors"]
+	zhtest.AssertTrue(t, exists)
+	errorList, ok := errors.([]any)
+	zhtest.AssertTrue(t, ok)
+	zhtest.AssertEqual(t, 2, len(errorList))
 }
 
 func TestDetail_RenderAuto(t *testing.T) {
@@ -272,9 +214,7 @@ func TestDetail_RenderAuto(t *testing.T) {
 			}
 
 			err := detail.RenderAuto(w, r)
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			zhtest.AssertNoError(t, err)
 
 			if tt.wantJSON {
 				zhtest.AssertWith(t, w).
@@ -299,9 +239,7 @@ func TestDetail_RenderAuto_FallbackToTitle(t *testing.T) {
 	r.Header.Set(httpx.HeaderAccept, httpx.MIMETextPlain)
 
 	err := detail.RenderAuto(w, r)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	zhtest.AssertNoError(t, err)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusInternalServerError).
@@ -347,9 +285,7 @@ func TestAcceptsJSON(t *testing.T) {
 			if tt.header != "" {
 				req.Header.Set(httpx.HeaderAccept, tt.header)
 			}
-			if got := AcceptsJSON(req); got != tt.want {
-				t.Errorf("AcceptsJSON() = %v, want %v", got, tt.want)
-			}
+			zhtest.AssertEqual(t, tt.want, AcceptsJSON(req))
 		})
 	}
 }
