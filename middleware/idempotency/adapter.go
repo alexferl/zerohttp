@@ -23,6 +23,10 @@ func (JSONCodec) Unmarshal(data []byte, v any) error { return json.Unmarshal(dat
 
 // StorageAdapterConfig configures the StorageAdapter.
 type StorageAdapterConfig struct {
+	// KeyPrefix is the prefix for idempotency keys.
+	// Default: "idemp:"
+	KeyPrefix string
+
 	// LockTTL is the TTL for distributed locks.
 	// Default: 30s
 	LockTTL time.Duration
@@ -34,16 +38,18 @@ type StorageAdapterConfig struct {
 
 // DefaultStorageAdapterConfig is the default configuration for StorageAdapter.
 var DefaultStorageAdapterConfig = StorageAdapterConfig{
-	LockTTL: 30 * time.Second,
-	Codec:   JSONCodec{},
+	KeyPrefix: "idemp:",
+	LockTTL:   30 * time.Second,
+	Codec:     JSONCodec{},
 }
 
 // StorageAdapter wraps a storage.Storage to implement the idempotency.Store interface.
 type StorageAdapter struct {
-	store   storage.Storage
-	locker  storage.Locker
-	lockTTL time.Duration
-	codec   Codec
+	store     storage.Storage
+	locker    storage.Locker
+	keyPrefix string
+	lockTTL   time.Duration
+	codec     Codec
 }
 
 // NewStorageAdapter creates an idempotency.Store from a storage.Storage.
@@ -60,16 +66,21 @@ func NewStorageAdapter(s storage.Storage, cfg ...StorageAdapterConfig) (Store, e
 	}
 
 	return &StorageAdapter{
-		store:   s,
-		locker:  locker,
-		lockTTL: c.LockTTL,
-		codec:   c.Codec,
+		store:     s,
+		locker:    locker,
+		keyPrefix: c.KeyPrefix,
+		lockTTL:   c.LockTTL,
+		codec:     c.Codec,
 	}, nil
+}
+
+func (a *StorageAdapter) prefixKey(key string) string {
+	return a.keyPrefix + key
 }
 
 // Get retrieves a cached response by key.
 func (a *StorageAdapter) Get(ctx context.Context, key string) (Record, bool, error) {
-	data, found, err := a.store.Get(ctx, key)
+	data, found, err := a.store.Get(ctx, a.prefixKey(key))
 	if !found || err != nil {
 		return Record{}, false, err
 	}
@@ -89,7 +100,7 @@ func (a *StorageAdapter) Set(ctx context.Context, key string, rec Record, ttl ti
 		return err
 	}
 
-	return a.store.Set(ctx, key, data, ttl)
+	return a.store.Set(ctx, a.prefixKey(key), data, ttl)
 }
 
 // Close releases resources associated with the underlying storage.
@@ -99,10 +110,10 @@ func (a *StorageAdapter) Close() error {
 
 // Lock acquires an exclusive lock for the given key.
 func (a *StorageAdapter) Lock(ctx context.Context, key string) (bool, error) {
-	return a.locker.Lock(ctx, key, a.lockTTL)
+	return a.locker.Lock(ctx, a.prefixKey(key), a.lockTTL)
 }
 
 // Unlock releases the lock for the given key.
 func (a *StorageAdapter) Unlock(ctx context.Context, key string) error {
-	return a.locker.Unlock(ctx, key)
+	return a.locker.Unlock(ctx, a.prefixKey(key))
 }

@@ -79,7 +79,7 @@ func TestStorageAdapter_Get(t *testing.T) {
 	})
 
 	t.Run("invalid json", func(t *testing.T) {
-		s.data["bad"] = []byte("not json")
+		s.data["cache:bad"] = []byte("not json")
 		_, _, err := adapter.Get(ctx, "bad")
 		zhtest.AssertError(t, err)
 	})
@@ -99,15 +99,15 @@ func TestStorageAdapter_Set(t *testing.T) {
 
 	zhtest.AssertNoError(t, adapter.Set(ctx, "key", rec, ttl))
 
-	// Verify raw storage has JSON data
-	data, ok := s.data["key"]
+	// Verify raw storage has JSON data (with prefix)
+	data, ok := s.data["cache:key"]
 	zhtest.AssertTrue(t, ok)
 
 	// Verify it's valid JSON
 	zhtest.AssertGreater(t, len(data), 0)
 
-	// Verify TTL is stored
-	zhtest.AssertEqual(t, ttl, s.ttlVals["key"])
+	// Verify TTL is stored (with prefix)
+	zhtest.AssertEqual(t, ttl, s.ttlVals["cache:key"])
 }
 
 func TestStorageAdapter_Delete(t *testing.T) {
@@ -115,15 +115,15 @@ func TestStorageAdapter_Delete(t *testing.T) {
 	s := newMockStorage()
 	adapter := NewStorageAdapter(s)
 
-	// Store something first
-	s.data["test"] = []byte("value")
-	s.ttlVals["test"] = time.Minute
+	// Store something first (with prefix that adapter will use)
+	s.data["cache:test"] = []byte("value")
+	s.ttlVals["cache:test"] = time.Minute
 
 	zhtest.AssertNoError(t, adapter.Delete(ctx, "test"))
 
-	_, ok := s.data["test"]
+	_, ok := s.data["cache:test"]
 	zhtest.AssertFalse(t, ok)
-	_, ok = s.ttlVals["test"]
+	_, ok = s.ttlVals["cache:test"]
 	zhtest.AssertFalse(t, ok)
 }
 
@@ -181,7 +181,7 @@ func TestStorageAdapter_CustomCodec(t *testing.T) {
 	zhtest.AssertNoError(t, adapter.Set(ctx, "key", rec, time.Minute))
 
 	// Check that custom codec was used (prepends "MOCK:")
-	data := s.data["key"]
+	data := s.data["cache:key"]
 	zhtest.AssertEqual(t, "MOCK:", string(data))
 
 	// Get via adapter - should use custom codec
