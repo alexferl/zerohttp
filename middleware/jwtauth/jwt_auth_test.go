@@ -2134,6 +2134,45 @@ func TestSetCookie_Defaults(t *testing.T) {
 	zhtest.AssertEqual(t, int(30*time.Minute.Seconds()), cookie.MaxAge)
 }
 
+func TestSetRefreshCookie(t *testing.T) {
+	cfg := Config{
+		RefreshTokenTTL: 7 * 24 * time.Hour,
+		Cookie: CookieConfig{
+			RefreshName: "refresh_token",
+			RefreshPath: "/auth",
+			Secure:      true,
+			HttpOnly:    true,
+			SameSite:    http.SameSiteStrictMode,
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	SetRefreshCookie(rr, "my-refresh-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("refresh_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "my-refresh-token", cookie.Value)
+	zhtest.AssertEqual(t, "/auth", cookie.Path)
+	zhtest.AssertEqual(t, true, cookie.Secure)
+	zhtest.AssertEqual(t, true, cookie.HttpOnly)
+	zhtest.AssertEqual(t, http.SameSiteStrictMode, cookie.SameSite)
+	zhtest.AssertEqual(t, int(7*24*time.Hour.Seconds()), cookie.MaxAge)
+}
+
+func TestSetRefreshCookie_Defaults(t *testing.T) {
+	cfg := Config{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+
+	rr := httptest.NewRecorder()
+	SetRefreshCookie(rr, "my-refresh-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("refresh_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "/auth", cookie.Path)
+	zhtest.AssertEqual(t, int(30*24*time.Hour.Seconds()), cookie.MaxAge)
+}
+
 func TestDeleteCookie(t *testing.T) {
 	cfg := Config{
 		Cookie: CookieConfig{
