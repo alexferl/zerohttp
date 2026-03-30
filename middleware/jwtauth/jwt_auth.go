@@ -391,6 +391,129 @@ func GenerateRefreshToken(r *http.Request, claims JWTClaims, cfg Config) (string
 	return cfg.Store.Generate(r.Context(), claims, RefreshToken, ttl)
 }
 
+// SetCookie sets the JWT token as a cookie with the configured cookie settings.
+// Uses Config.Cookie for cookie attributes. MaxAge defaults to AccessTokenTTL if not set.
+func SetCookie(w http.ResponseWriter, token string, cfg Config) {
+	cookieCfg := cfg.Cookie
+	if cookieCfg.Name == "" {
+		cookieCfg.Name = DefaultCookieConfig.Name
+	}
+	if cookieCfg.Path == "" {
+		cookieCfg.Path = DefaultCookieConfig.Path
+	}
+
+	maxAge := cookieCfg.MaxAge
+	if maxAge == 0 {
+		ttl := cfg.AccessTokenTTL
+		if ttl == 0 {
+			ttl = DefaultConfig.AccessTokenTTL
+		}
+		maxAge = int(ttl.Seconds())
+	}
+
+	cookie := &http.Cookie{
+		Name:     cookieCfg.Name,
+		Value:    token,
+		Path:     cookieCfg.Path,
+		Domain:   cookieCfg.Domain,
+		MaxAge:   maxAge,
+		Secure:   cookieCfg.Secure,
+		HttpOnly: cookieCfg.HttpOnly,
+		SameSite: cookieCfg.SameSite,
+	}
+	http.SetCookie(w, cookie)
+}
+
+// DeleteCookie deletes the JWT cookie by setting MaxAge to -1.
+func DeleteCookie(w http.ResponseWriter, cfg Config) {
+	cookieCfg := cfg.Cookie
+	if cookieCfg.Name == "" {
+		cookieCfg.Name = DefaultCookieConfig.Name
+	}
+	if cookieCfg.Path == "" {
+		cookieCfg.Path = DefaultCookieConfig.Path
+	}
+
+	cookie := &http.Cookie{
+		Name:     cookieCfg.Name,
+		Value:    "",
+		Path:     cookieCfg.Path,
+		Domain:   cookieCfg.Domain,
+		MaxAge:   -1,
+		Secure:   cookieCfg.Secure,
+		HttpOnly: cookieCfg.HttpOnly,
+		SameSite: cookieCfg.SameSite,
+	}
+	http.SetCookie(w, cookie)
+}
+
+// SetRefreshCookie sets the refresh token as a cookie with RefreshPath and RefreshName.
+// Uses Config.Cookie.RefreshPath for the cookie path. MaxAge defaults to RefreshTokenTTL.
+func SetRefreshCookie(w http.ResponseWriter, token string, cfg Config) {
+	cookieCfg := cfg.Cookie
+	name := cookieCfg.RefreshName
+	if name == "" {
+		name = DefaultCookieConfig.RefreshName
+	}
+	path := cookieCfg.RefreshPath
+	if path == "" {
+		path = DefaultCookieConfig.RefreshPath
+	}
+
+	maxAge := cookieCfg.MaxAge
+	if maxAge == 0 {
+		ttl := cfg.RefreshTokenTTL
+		if ttl == 0 {
+			ttl = DefaultConfig.RefreshTokenTTL
+		}
+		maxAge = int(ttl.Seconds())
+	}
+
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    token,
+		Path:     path,
+		Domain:   cookieCfg.Domain,
+		MaxAge:   maxAge,
+		Secure:   cookieCfg.Secure,
+		HttpOnly: cookieCfg.HttpOnly,
+		SameSite: cookieCfg.SameSite,
+	}
+	http.SetCookie(w, cookie)
+}
+
+// CookieExtractor returns an extractor that extracts the JWT token from a cookie.
+// Use this as the Extractor in Config to enable cookie-only authentication.
+func CookieExtractor(cookieName string) func(r *http.Request) string {
+	return func(r *http.Request) string {
+		cookie, err := r.Cookie(cookieName)
+		if err == nil && cookie.Value != "" {
+			return cookie.Value
+		}
+		return ""
+	}
+}
+
+// HeaderOrCookieExtractor returns an extractor that first checks the Authorization header,
+// then falls back to the specified cookie name.
+func HeaderOrCookieExtractor(cookieName string) func(r *http.Request) string {
+	return func(r *http.Request) string {
+		// First try Authorization header
+		token := extractBearerToken(r)
+		if token != "" {
+			return token
+		}
+
+		// Fall back to cookie
+		cookie, err := r.Cookie(cookieName)
+		if err == nil && cookie.Value != "" {
+			return cookie.Value
+		}
+
+		return ""
+	}
+}
+
 // writeJWTError writes a AuthError response
 func writeJWTError(w http.ResponseWriter, r *http.Request, jwtErr *AuthError) {
 	detail := problem.NewDetail(jwtErr.Status, jwtErr.Detail)
@@ -413,20 +536,28 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg Config) (JW
 		return nil, false
 	}
 
+	refreshToken := ""
+
+	// First try to read from request body
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJWTError(w, r, &AuthError{
-			Title:  "Invalid Request",
-			Status: http.StatusBadRequest,
-			Detail: "Request body must contain refresh_token",
-		})
-		return nil, false
+	if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+		refreshToken = req.RefreshToken
 	}
 
-	if req.RefreshToken == "" {
+	// Fall back to refresh token cookie if body didn't have it and cookies are enabled
+	if refreshToken == "" && cfg.Cookie.Enabled {
+		cookieName := cfg.Cookie.RefreshName
+		if cookieName == "" {
+			cookieName = DefaultCookieConfig.RefreshName
+		}
+		if cookie, err := r.Cookie(cookieName); err == nil {
+			refreshToken = cookie.Value
+		}
+	}
+
+	if refreshToken == "" {
 		writeJWTError(w, r, &AuthError{
 			Title:  "Missing Refresh Token",
 			Status: http.StatusUnprocessableEntity,
@@ -435,7 +566,7 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg Config) (JW
 		return nil, false
 	}
 
-	claims, err := cfg.Store.Validate(r.Context(), req.RefreshToken)
+	claims, err := cfg.Store.Validate(r.Context(), refreshToken)
 	if err != nil {
 		writeJWTError(w, r, errInvalidToken)
 		return nil, false
@@ -484,8 +615,9 @@ func tokenHandlerRequest(w http.ResponseWriter, r *http.Request, cfg Config) (JW
 }
 
 // RefreshTokenHandler returns an http.HandlerFunc that handles token refresh.
-// Accepts: { "refresh_token": "..." }
+// Accepts: { "refresh_token": "..." } or reads from cookie if Cookie.Enabled is true
 // Returns: { "access_token": "...", "refresh_token": "...", "token_type": httpx.AuthSchemeBearer, "expires_in": 900 }
+// Also sets the new refresh token as a cookie when Cookie.Enabled is true.
 // Users mount this at their chosen path: app.POST("/auth/refresh", jwtauth.RefreshTokenHandler(cfg))
 func RefreshTokenHandler(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -494,13 +626,18 @@ func RefreshTokenHandler(cfg Config) http.HandlerFunc {
 			return
 		}
 
-		accessToken, err := GenerateAccessToken(r, claims, cfg)
+		// Extract subject to identify user - in production, fetch fresh claims from database here
+		subject := extractSubject(claims)
+		accessClaims := map[string]any{"sub": subject}
+
+		accessToken, err := GenerateAccessToken(r, accessClaims, cfg)
 		if err != nil {
 			writeJWTError(w, r, errTokenGeneratorNotConfigured)
 			return
 		}
 
-		refreshToken, err := GenerateRefreshToken(r, claims, cfg)
+		// Use same user claims but GenerateRefreshToken will add new jti and type
+		refreshToken, err := GenerateRefreshToken(r, accessClaims, cfg)
 		if err != nil {
 			writeJWTError(w, r, errTokenGeneratorNotConfigured)
 			return
@@ -509,6 +646,60 @@ func RefreshTokenHandler(cfg Config) http.HandlerFunc {
 		expiresIn := cfg.AccessTokenTTL
 		if expiresIn == 0 {
 			expiresIn = DefaultConfig.AccessTokenTTL
+		}
+
+		// Set both cookies if enabled (access token with Path: /, refresh token with RefreshPath)
+		if cfg.Cookie.Enabled {
+			cookieCfg := cfg.Cookie
+			if cookieCfg.Name == "" {
+				cookieCfg.Name = DefaultCookieConfig.Name
+			}
+
+			// Access token cookie with Path: /
+			accessTTL := cfg.AccessTokenTTL
+			if accessTTL == 0 {
+				accessTTL = DefaultConfig.AccessTokenTTL
+			}
+			accessPath := cookieCfg.Path
+			if accessPath == "" {
+				accessPath = DefaultCookieConfig.Path
+			}
+			accessCookie := &http.Cookie{
+				Name:     cookieCfg.Name,
+				Value:    accessToken,
+				Path:     accessPath,
+				Domain:   cookieCfg.Domain,
+				MaxAge:   int(accessTTL.Seconds()),
+				Secure:   cookieCfg.Secure,
+				HttpOnly: cookieCfg.HttpOnly,
+				SameSite: cookieCfg.SameSite,
+			}
+			http.SetCookie(w, accessCookie)
+
+			// Refresh token cookie with RefreshPath
+			refreshTTL := cfg.RefreshTokenTTL
+			if refreshTTL == 0 {
+				refreshTTL = DefaultConfig.RefreshTokenTTL
+			}
+			refreshPath := cookieCfg.RefreshPath
+			if refreshPath == "" {
+				refreshPath = DefaultCookieConfig.RefreshPath
+			}
+			refreshName := cookieCfg.RefreshName
+			if refreshName == "" {
+				refreshName = DefaultCookieConfig.RefreshName
+			}
+			refreshCookie := &http.Cookie{
+				Name:     refreshName,
+				Value:    refreshToken,
+				Path:     refreshPath,
+				Domain:   cookieCfg.Domain,
+				MaxAge:   int(refreshTTL.Seconds()),
+				Secure:   cookieCfg.Secure,
+				HttpOnly: cookieCfg.HttpOnly,
+				SameSite: cookieCfg.SameSite,
+			}
+			http.SetCookie(w, refreshCookie)
 		}
 
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
@@ -523,8 +714,9 @@ func RefreshTokenHandler(cfg Config) http.HandlerFunc {
 }
 
 // LogoutTokenHandler returns an http.HandlerFunc that handles token revocation (logout).
-// Accepts: { "refresh_token": "..." }
+// Accepts: { "refresh_token": "..." } or reads from cookie if Cookie.Enabled is true
 // Returns: { "message": "logged out successfully" }
+// Also deletes the cookie when Cookie.Enabled is true.
 // Users mount this at their chosen path: app.POST("/auth/logout", jwtauth.LogoutTokenHandler(cfg))
 // Requires Store to be configured in Config.
 func LogoutTokenHandler(cfg Config) http.HandlerFunc {
@@ -532,6 +724,52 @@ func LogoutTokenHandler(cfg Config) http.HandlerFunc {
 		_, ok := tokenHandlerRequest(w, r, cfg)
 		if !ok {
 			return
+		}
+
+		// Delete both cookies if enabled (access token with Path: /, refresh token with RefreshPath)
+		if cfg.Cookie.Enabled {
+			cookieCfg := cfg.Cookie
+			if cookieCfg.Name == "" {
+				cookieCfg.Name = DefaultCookieConfig.Name
+			}
+
+			// Delete access token cookie with Path: /
+			accessPath := cookieCfg.Path
+			if accessPath == "" {
+				accessPath = DefaultCookieConfig.Path
+			}
+			accessCookie := &http.Cookie{
+				Name:     cookieCfg.Name,
+				Value:    "",
+				Path:     accessPath,
+				Domain:   cookieCfg.Domain,
+				MaxAge:   -1,
+				Secure:   cookieCfg.Secure,
+				HttpOnly: cookieCfg.HttpOnly,
+				SameSite: cookieCfg.SameSite,
+			}
+			http.SetCookie(w, accessCookie)
+
+			// Delete refresh token cookie with RefreshPath
+			refreshPath := cookieCfg.RefreshPath
+			if refreshPath == "" {
+				refreshPath = DefaultCookieConfig.RefreshPath
+			}
+			refreshName := cookieCfg.RefreshName
+			if refreshName == "" {
+				refreshName = DefaultCookieConfig.RefreshName
+			}
+			refreshCookie := &http.Cookie{
+				Name:     refreshName,
+				Value:    "",
+				Path:     refreshPath,
+				Domain:   cookieCfg.Domain,
+				MaxAge:   -1,
+				Secure:   cookieCfg.Secure,
+				HttpOnly: cookieCfg.HttpOnly,
+				SameSite: cookieCfg.SameSite,
+			}
+			http.SetCookie(w, refreshCookie)
 		}
 
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
@@ -765,4 +1003,10 @@ func addTypeToClaims(claims JWTClaims, tokenType string) JWTClaims {
 	default:
 		return claims
 	}
+}
+
+// extractSubject extracts the subject (sub) claim from claims
+// Used during token refresh to identify the user for fetching fresh claims from database
+func extractSubject(claims JWTClaims) string {
+	return getStringClaim(claims, JWTClaimSubject)
 }

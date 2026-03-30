@@ -2094,3 +2094,479 @@ func TestJWTAuth_BothExcludedAndIncludedPathsPanics(t *testing.T) {
 		})
 	})
 }
+
+func TestSetCookie(t *testing.T) {
+	cfg := Config{
+		AccessTokenTTL: 15 * time.Minute,
+		Cookie: CookieConfig{
+			Name:     "auth_token",
+			Path:     "/api",
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	SetCookie(rr, "my-jwt-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("auth_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "my-jwt-token", cookie.Value)
+	zhtest.AssertEqual(t, "/api", cookie.Path)
+	zhtest.AssertEqual(t, true, cookie.Secure)
+	zhtest.AssertEqual(t, true, cookie.HttpOnly)
+	zhtest.AssertEqual(t, http.SameSiteStrictMode, cookie.SameSite)
+	zhtest.AssertEqual(t, int(15*time.Minute.Seconds()), cookie.MaxAge)
+}
+
+func TestSetCookie_Defaults(t *testing.T) {
+	cfg := Config{
+		AccessTokenTTL: 30 * time.Minute,
+	}
+
+	rr := httptest.NewRecorder()
+	SetCookie(rr, "my-jwt-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("access_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "/", cookie.Path)
+	zhtest.AssertEqual(t, int(30*time.Minute.Seconds()), cookie.MaxAge)
+}
+
+func TestSetCookie_DefaultTTL(t *testing.T) {
+	cfg := Config{} // AccessTokenTTL defaults to 15 minutes
+
+	rr := httptest.NewRecorder()
+	SetCookie(rr, "my-jwt-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("access_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, int(15*time.Minute.Seconds()), cookie.MaxAge)
+}
+
+func TestSetRefreshCookie(t *testing.T) {
+	cfg := Config{
+		RefreshTokenTTL: 7 * 24 * time.Hour,
+		Cookie: CookieConfig{
+			RefreshName: "refresh_token",
+			RefreshPath: "/auth",
+			Secure:      true,
+			HttpOnly:    true,
+			SameSite:    http.SameSiteStrictMode,
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	SetRefreshCookie(rr, "my-refresh-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("refresh_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "my-refresh-token", cookie.Value)
+	zhtest.AssertEqual(t, "/auth", cookie.Path)
+	zhtest.AssertEqual(t, true, cookie.Secure)
+	zhtest.AssertEqual(t, true, cookie.HttpOnly)
+	zhtest.AssertEqual(t, http.SameSiteStrictMode, cookie.SameSite)
+	zhtest.AssertEqual(t, int(7*24*time.Hour.Seconds()), cookie.MaxAge)
+}
+
+func TestSetRefreshCookie_Defaults(t *testing.T) {
+	cfg := Config{
+		RefreshTokenTTL: 30 * 24 * time.Hour,
+	}
+
+	rr := httptest.NewRecorder()
+	SetRefreshCookie(rr, "my-refresh-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("refresh_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "/auth", cookie.Path)
+	zhtest.AssertEqual(t, int(30*24*time.Hour.Seconds()), cookie.MaxAge)
+}
+
+func TestSetRefreshCookie_DefaultTTL(t *testing.T) {
+	cfg := Config{} // RefreshTokenTTL defaults to 7 days
+
+	rr := httptest.NewRecorder()
+	SetRefreshCookie(rr, "my-refresh-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("refresh_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, int(7*24*time.Hour.Seconds()), cookie.MaxAge)
+}
+
+func TestDeleteCookie(t *testing.T) {
+	cfg := Config{
+		Cookie: CookieConfig{
+			Name:     "auth_token",
+			Path:     "/api",
+			Secure:   true,
+			HttpOnly: true,
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	DeleteCookie(rr, cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("auth_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "", cookie.Value)
+	zhtest.AssertEqual(t, "/api", cookie.Path)
+	zhtest.AssertEqual(t, -1, cookie.MaxAge)
+}
+
+func TestDeleteCookie_Defaults(t *testing.T) {
+	cfg := Config{}
+
+	rr := httptest.NewRecorder()
+	DeleteCookie(rr, cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("access_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "/", cookie.Path)
+	zhtest.AssertEqual(t, -1, cookie.MaxAge)
+}
+
+func TestCookieExtractor(t *testing.T) {
+	extractor := CookieExtractor("jwt_token")
+
+	t.Run("cookie present", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: "jwt_token", Value: "cookie-token"})
+
+		token := extractor(req)
+		zhtest.AssertEqual(t, "cookie-token", token)
+	})
+
+	t.Run("cookie missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+		token := extractor(req)
+		zhtest.AssertEqual(t, "", token)
+	})
+
+	t.Run("wrong cookie name", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: "other_cookie", Value: "other-token"})
+
+		token := extractor(req)
+		zhtest.AssertEqual(t, "", token)
+	})
+}
+
+func TestHeaderOrCookieExtractor(t *testing.T) {
+	extractor := HeaderOrCookieExtractor("jwt_token")
+
+	t.Run("header takes precedence", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer header-token")
+		req.AddCookie(&http.Cookie{Name: "jwt_token", Value: "cookie-token"})
+
+		token := extractor(req)
+		zhtest.AssertEqual(t, "header-token", token)
+	})
+
+	t.Run("falls back to cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: "jwt_token", Value: "cookie-token"})
+
+		token := extractor(req)
+		zhtest.AssertEqual(t, "cookie-token", token)
+	})
+
+	t.Run("no header no cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+		token := extractor(req)
+		zhtest.AssertEqual(t, "", token)
+	})
+}
+
+func TestJWTAuth_WithCookieExtractor(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (JWTClaims, error) {
+			if token == "cookie-token" {
+				return map[string]any{"sub": "user123"}, nil
+			}
+			return nil, errors.New("invalid token")
+		},
+	}
+
+	mw := New(Config{
+		Store:     store,
+		Extractor: CookieExtractor("jwt_token"),
+	})
+
+	t.Run("valid cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: "jwt_token", Value: "cookie-token"})
+		rr := httptest.NewRecorder()
+
+		var claims Claims
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims = GetClaims(r)
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+		zhtest.AssertEqual(t, "user123", claims.Subject())
+	})
+
+	t.Run("missing cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rr := httptest.NewRecorder()
+
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusUnauthorized, rr.Code)
+	})
+}
+
+func TestJWTAuth_WithHeaderOrCookieExtractor(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (JWTClaims, error) {
+			return map[string]any{"sub": "user123"}, nil
+		},
+	}
+
+	mw := New(Config{
+		Store:     store,
+		Extractor: HeaderOrCookieExtractor("jwt_token"),
+	})
+
+	t.Run("header auth works", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer header-token")
+		rr := httptest.NewRecorder()
+
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("cookie auth works when no header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(&http.Cookie{Name: "jwt_token", Value: "cookie-token"})
+		rr := httptest.NewRecorder()
+
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+	})
+}
+
+func TestRefreshTokenHandler_WithCookieEnabled(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (JWTClaims, error) {
+			if token == "cookie-refresh-token" {
+				return map[string]any{
+					"sub":  "user123",
+					"type": TokenTypeRefresh,
+				}, nil
+			}
+			return nil, errors.New("invalid token")
+		},
+		generateFunc: func(ctx context.Context, claims JWTClaims, tokenType TokenType, ttl time.Duration) (string, error) {
+			if tokenType == AccessToken {
+				return "new-access-token", nil
+			}
+			return "new-refresh-token", nil
+		},
+	}
+
+	cfg := Config{
+		Store:          store,
+		AccessTokenTTL: 15 * time.Minute,
+		Cookie: CookieConfig{
+			Enabled:     true,
+			Name:        "access_token",
+			Path:        "/",
+			RefreshPath: "/auth",
+			RefreshName: "refresh_token",
+			Secure:      true,
+			HttpOnly:    true,
+		},
+	}
+
+	handler := RefreshTokenHandler(cfg)
+
+	t.Run("reads refresh token from cookie when body empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader("{}"))
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+		req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "cookie-refresh-token"})
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+
+		var resp map[string]any
+		zhtest.AssertNoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		zhtest.AssertEqual(t, "new-access-token", resp["access_token"])
+		zhtest.AssertEqual(t, "new-refresh-token", resp["refresh_token"])
+
+		// Verify both cookies are set
+		cookies := rr.Result().Cookies()
+		zhtest.AssertEqual(t, 2, len(cookies))
+
+		// Find access_token cookie (Path: /) and refresh_token cookie (Path: /auth)
+		var accessCookie, refreshCookie *http.Cookie
+		for _, c := range cookies {
+			if c.Name == "access_token" && c.Path == "/" {
+				accessCookie = c
+			}
+			if c.Name == "refresh_token" && c.Path == "/auth" {
+				refreshCookie = c
+			}
+		}
+
+		zhtest.AssertTrue(t, accessCookie != nil)
+		zhtest.AssertEqual(t, "new-access-token", accessCookie.Value)
+
+		zhtest.AssertTrue(t, refreshCookie != nil)
+		zhtest.AssertEqual(t, "new-refresh-token", refreshCookie.Value)
+	})
+
+	t.Run("body takes precedence over cookie", func(t *testing.T) {
+		store.validateFunc = func(ctx context.Context, token string) (JWTClaims, error) {
+			if token == "body-refresh-token" {
+				return map[string]any{
+					"sub":  "user456",
+					"type": TokenTypeRefresh,
+				}, nil
+			}
+			return nil, errors.New("invalid token")
+		}
+
+		body := `{"refresh_token":"body-refresh-token"}`
+		req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+		req.AddCookie(&http.Cookie{Name: "jwt_token", Value: "cookie-refresh-token"})
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+	})
+}
+
+func TestLogoutTokenHandler_WithCookieEnabled(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (JWTClaims, error) {
+			if token == "cookie-refresh-token" {
+				return map[string]any{
+					"sub":  "user123",
+					"type": TokenTypeRefresh,
+				}, nil
+			}
+			return nil, errors.New("invalid token")
+		},
+	}
+
+	cfg := Config{
+		Store: store,
+		Cookie: CookieConfig{
+			Enabled:     true,
+			Name:        "access_token",
+			Path:        "/",
+			RefreshPath: "/auth",
+			RefreshName: "refresh_token",
+			Secure:      true,
+			HttpOnly:    true,
+		},
+	}
+
+	handler := LogoutTokenHandler(cfg)
+
+	t.Run("reads refresh token from cookie and deletes cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader("{}"))
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+		req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "cookie-refresh-token"})
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+
+		var resp map[string]any
+		zhtest.AssertNoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		zhtest.AssertEqual(t, "logged out successfully", resp["message"])
+
+		// Verify both cookies are deleted
+		cookies := rr.Result().Cookies()
+		zhtest.AssertEqual(t, 2, len(cookies))
+
+		// Find deleted access_token cookie (Path: /) and refresh_token cookie (Path: /auth)
+		var accessCookie, refreshCookie *http.Cookie
+		for _, c := range cookies {
+			if c.Name == "access_token" && c.Path == "/" {
+				accessCookie = c
+			}
+			if c.Name == "refresh_token" && c.Path == "/auth" {
+				refreshCookie = c
+			}
+		}
+
+		zhtest.AssertTrue(t, accessCookie != nil)
+		zhtest.AssertEqual(t, "", accessCookie.Value)
+		zhtest.AssertEqual(t, -1, accessCookie.MaxAge)
+
+		zhtest.AssertTrue(t, refreshCookie != nil)
+		zhtest.AssertEqual(t, "", refreshCookie.Value)
+		zhtest.AssertEqual(t, -1, refreshCookie.MaxAge)
+	})
+}
+
+func TestRefreshTokenHandler_CookieDisabled(t *testing.T) {
+	store := &mockTokenStore{
+		validateFunc: func(ctx context.Context, token string) (JWTClaims, error) {
+			return map[string]any{
+				"sub":  "user123",
+				"type": TokenTypeRefresh,
+			}, nil
+		},
+		generateFunc: func(ctx context.Context, claims JWTClaims, tokenType TokenType, ttl time.Duration) (string, error) {
+			return "token", nil
+		},
+	}
+
+	cfg := Config{
+		Store:          store,
+		AccessTokenTTL: 15 * time.Minute,
+		// Cookie.Enabled defaults to false
+	}
+
+	handler := RefreshTokenHandler(cfg)
+
+	t.Run("does not read from cookie when disabled", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader("{}"))
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+		req.AddCookie(&http.Cookie{Name: "jwt_token", Value: "cookie-token"})
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		// Should fail because cookie reading is disabled
+		zhtest.AssertEqual(t, http.StatusUnprocessableEntity, rr.Code)
+	})
+
+	t.Run("does not set cookie when disabled", func(t *testing.T) {
+		body := `{"refresh_token":"valid-refresh-token"}`
+		req := httptest.NewRequest(http.MethodPost, "/auth/refresh", strings.NewReader(body))
+		req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
+
+		// Verify no cookie was set
+		zhtest.AssertWith(t, rr).CookieNotExists("jwt_token")
+	})
+}
