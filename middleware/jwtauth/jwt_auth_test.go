@@ -2134,6 +2134,17 @@ func TestSetCookie_Defaults(t *testing.T) {
 	zhtest.AssertEqual(t, int(30*time.Minute.Seconds()), cookie.MaxAge)
 }
 
+func TestSetCookie_DefaultTTL(t *testing.T) {
+	cfg := Config{} // AccessTokenTTL defaults to 15 minutes
+
+	rr := httptest.NewRecorder()
+	SetCookie(rr, "my-jwt-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("access_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, int(15*time.Minute.Seconds()), cookie.MaxAge)
+}
+
 func TestSetRefreshCookie(t *testing.T) {
 	cfg := Config{
 		RefreshTokenTTL: 7 * 24 * time.Hour,
@@ -2173,6 +2184,17 @@ func TestSetRefreshCookie_Defaults(t *testing.T) {
 	zhtest.AssertEqual(t, int(30*24*time.Hour.Seconds()), cookie.MaxAge)
 }
 
+func TestSetRefreshCookie_DefaultTTL(t *testing.T) {
+	cfg := Config{} // RefreshTokenTTL defaults to 7 days
+
+	rr := httptest.NewRecorder()
+	SetRefreshCookie(rr, "my-refresh-token", cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("refresh_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, int(7*24*time.Hour.Seconds()), cookie.MaxAge)
+}
+
 func TestDeleteCookie(t *testing.T) {
 	cfg := Config{
 		Cookie: CookieConfig{
@@ -2190,6 +2212,18 @@ func TestDeleteCookie(t *testing.T) {
 	cookie := rr.Result().Cookies()[0]
 	zhtest.AssertEqual(t, "", cookie.Value)
 	zhtest.AssertEqual(t, "/api", cookie.Path)
+	zhtest.AssertEqual(t, -1, cookie.MaxAge)
+}
+
+func TestDeleteCookie_Defaults(t *testing.T) {
+	cfg := Config{}
+
+	rr := httptest.NewRecorder()
+	DeleteCookie(rr, cfg)
+
+	zhtest.AssertWith(t, rr).CookieExists("access_token")
+	cookie := rr.Result().Cookies()[0]
+	zhtest.AssertEqual(t, "/", cookie.Path)
 	zhtest.AssertEqual(t, -1, cookie.MaxAge)
 }
 
