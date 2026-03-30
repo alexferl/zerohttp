@@ -63,8 +63,13 @@ type Store interface {
 // Config configures JWT authentication middleware
 type Config struct {
 	// Extractor extracts the JWT token from the request.
-	// Default: extracts from "Authorization: Bearer <token>" header
+	// Default: extracts from "Authorization: Bearer <token>" header, then checks CookieName
 	Extractor func(r *http.Request) string
+
+	// Cookie configures JWT cookie settings.
+	// Used by SetCookie and DeleteCookie helpers.
+	// Default: sensible defaults with HttpOnly, Secure, SameSite=Strict
+	Cookie CookieConfig
 
 	// Store handles all token operations (validate, generate, revoke).
 	// This is the PLUGGABLE INTERFACE - users implement this with their JWT library.
@@ -111,9 +116,71 @@ type Config struct {
 	RefreshTokenTTL time.Duration
 }
 
+// CookieConfig configures JWT cookie settings
+type CookieConfig struct {
+	// Enabled enables cookie support in the middleware and handlers.
+	// When enabled, the middleware can read tokens from cookies and handlers
+	// will set/delete cookies automatically.
+	// Default: false
+	Enabled bool
+
+	// Name is the cookie name for storing the JWT token.
+	// Default: "jwt_token"
+	Name string
+
+	// Path is the cookie path.
+	// Default: "/"
+	Path string
+
+	// Domain is the cookie domain.
+	// Default: "" (current domain)
+	Domain string
+
+	// MaxAge is the cookie max age in seconds.
+	// If 0, uses the token's expiration.
+	// Default: 0
+	MaxAge int
+
+	// Secure indicates if the cookie should only be sent over HTTPS.
+	// Default: true (recommended for production)
+	Secure bool
+
+	// HttpOnly indicates if the cookie should be inaccessible to JavaScript.
+	// Default: true (highly recommended for security)
+	HttpOnly bool
+
+	// SameSite sets the SameSite attribute for the cookie.
+	// Valid values: "Strict", "Lax", "None".
+	// Default: "Strict"
+	SameSite http.SameSite
+
+	// RefreshPath is the path for the refresh token cookie.
+	// The refresh token cookie will only be sent to requests matching this path prefix.
+	// Use this to restrict the refresh token to only the refresh/logout endpoints.
+	// Example: "/auth" will match "/auth/refresh" and "/auth/logout"
+	// Default: "/auth"
+	RefreshPath string
+
+	// RefreshName is the cookie name for the refresh token.
+	// Default: "refresh_token"
+	RefreshName string
+}
+
+// DefaultCookieConfig provides sensible defaults for cookies
+var DefaultCookieConfig = CookieConfig{
+	Name:        "access_token",
+	Path:        "/",
+	Secure:      true,
+	HttpOnly:    true,
+	SameSite:    http.SameSiteStrictMode,
+	RefreshPath: "/auth",
+	RefreshName: "refresh_token",
+}
+
 // DefaultConfig provides sensible defaults
 var DefaultConfig = Config{
 	Extractor:       extractBearerToken,
+	Cookie:          DefaultCookieConfig,
 	ExcludedPaths:   []string{},
 	IncludedPaths:   []string{},
 	ExcludedMethods: []string{},
