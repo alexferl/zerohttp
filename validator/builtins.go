@@ -261,6 +261,60 @@ func (v *defaultValidator) registerBuiltins() {
 		}
 	}
 
+	// anyof - for slices/arrays, at least one element must match one of the specified options
+	validators["anyof"] = func(value reflect.Value, tag string) error {
+		options := strings.Fields(tag)
+		if len(options) == 0 {
+			return nil
+		}
+
+		if value.Kind() != reflect.Slice && value.Kind() != reflect.Array {
+			return fmt.Errorf("anyof only supports slices and arrays")
+		}
+
+		if value.Len() == 0 {
+			return fmt.Errorf("must have at least one element matching: %s", tag)
+		}
+
+		// Determine the element kind
+		elemKind := value.Type().Elem().Kind()
+
+		switch elemKind {
+		case reflect.String:
+			for i := 0; i < value.Len(); i++ {
+				s := value.Index(i).String()
+				for _, opt := range options {
+					if s == opt {
+						return nil
+					}
+				}
+			}
+			return fmt.Errorf("must have at least one element matching: %s", tag)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			for i := 0; i < value.Len(); i++ {
+				n := value.Index(i).Int()
+				for _, opt := range options {
+					if i, err := strconv.ParseInt(opt, 10, 64); err == nil && n == i {
+						return nil
+					}
+				}
+			}
+			return fmt.Errorf("must have at least one element matching: %s", tag)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			for i := 0; i < value.Len(); i++ {
+				n := value.Index(i).Uint()
+				for _, opt := range options {
+					if i, err := strconv.ParseUint(opt, 10, 64); err == nil && n == i {
+						return nil
+					}
+				}
+			}
+			return fmt.Errorf("must have at least one element matching: %s", tag)
+		default:
+			return fmt.Errorf("anyof not supported for element type %s", elemKind)
+		}
+	}
+
 	// eq - equal to value
 	validators["eq"] = func(value reflect.Value, tag string) error {
 		switch value.Kind() {
