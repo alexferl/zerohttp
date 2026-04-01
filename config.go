@@ -125,6 +125,12 @@ type TLSConfig struct {
 	// KeyFile is the file path to the TLS private key (PEM) when serving HTTPS.
 	// Default: "" (no key loaded unless specified)
 	KeyFile string
+
+	// RedirectHTTP enables automatic HTTP to HTTPS redirects when both HTTP and
+	// HTTPS servers are running. When enabled, all HTTP traffic is redirected
+	// to HTTPS with a 301 Moved Permanently status.
+	// Default: false
+	RedirectHTTP bool
 }
 
 type LifecycleConfig struct {

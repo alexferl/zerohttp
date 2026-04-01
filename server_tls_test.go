@@ -34,18 +34,68 @@ func TestServer_ListenerTLSAddr(t *testing.T) {
 }
 
 func TestServer_CreateHTTPSRedirectHandler(t *testing.T) {
-	server := New()
-	handler := server.createHTTPSRedirectHandler()
+	t.Run("default port 443", func(t *testing.T) {
+		server := New()
+		handler := server.createHTTPSRedirectHandler()
 
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/path?query=value", nil)
-	req.Host = "example.com"
-	w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/path?query=value", nil)
+		req.Host = "example.com"
+		w := httptest.NewRecorder()
 
-	handler.ServeHTTP(w, req)
+		handler.ServeHTTP(w, req)
 
-	zhtest.AssertWith(t, w).
-		Status(http.StatusMovedPermanently).
-		Header(httpx.HeaderLocation, "https://example.com/path?query=value")
+		zhtest.AssertWith(t, w).
+			Status(http.StatusMovedPermanently).
+			Header(httpx.HeaderLocation, "https://example.com/path?query=value")
+	})
+
+	t.Run("custom https port", func(t *testing.T) {
+		certFile, keyFile := writeTestCertFiles(t)
+
+		server := New(Config{
+			TLS: TLSConfig{
+				Addr:     "localhost:8443",
+				CertFile: certFile,
+				KeyFile:  keyFile,
+			},
+		})
+		handler := server.createHTTPSRedirectHandler()
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com:8080/path?query=value", nil)
+		req.Host = "example.com:8080"
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		// Should redirect to https with port 8443 (not 8080)
+		zhtest.AssertWith(t, w).
+			Status(http.StatusMovedPermanently).
+			Header(httpx.HeaderLocation, "https://example.com:8443/path?query=value")
+	})
+
+	t.Run("port 443 omitted", func(t *testing.T) {
+		certFile, keyFile := writeTestCertFiles(t)
+
+		server := New(Config{
+			TLS: TLSConfig{
+				Addr:     "example.com:443",
+				CertFile: certFile,
+				KeyFile:  keyFile,
+			},
+		})
+		handler := server.createHTTPSRedirectHandler()
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com:8080/path", nil)
+		req.Host = "example.com:8080"
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		// Port 443 should be omitted from the URL
+		zhtest.AssertWith(t, w).
+			Status(http.StatusMovedPermanently).
+			Header(httpx.HeaderLocation, "https://example.com/path")
+	})
 }
 
 func TestServer_StartAutoTLS_NoManager(t *testing.T) {

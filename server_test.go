@@ -2,6 +2,7 @@ package zerohttp
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
@@ -63,6 +64,25 @@ xzKGQgvxYl3wxq3D3J3tQR3KsZ4ueGmATp7F/AkpBJdk1TJFDdWr9/OsdPyNiIcu
 VrZYW+DzdGqEaVYWCIzyw6CykDvUG9eq3AgHJK3Li87o0jJ9GvvOX1YuiE7/FHY3
 O6lBO0Onq9vJGuITYJtl/t+6
 -----END PRIVATE KEY-----`
+
+// writeTestCertFiles creates temporary certificate and key files for testing.
+// Returns the paths to the cert and key files.
+func writeTestCertFiles(t *testing.T) (certFile, keyFile string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	certFile = tmpDir + "/test.crt"
+	keyFile = tmpDir + "/test.key"
+
+	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
+		t.Fatalf("Failed to write cert file: %v", err)
+	}
+	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
+		t.Fatalf("Failed to write key file: %v", err)
+	}
+
+	return certFile, keyFile
+}
 
 // Mock logger for testing
 type mockServerLogger struct {
@@ -444,18 +464,7 @@ func TestServer_Start_WithCertLoading(t *testing.T) {
 	server := New()
 	server.server = nil // Disable HTTP server
 
-	certFile := "/tmp/test_cert_start.pem"
-	keyFile := "/tmp/test_key_start.pem"
-
-	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
-		t.Skipf("Cannot write cert file: %v", err)
-	}
-	defer func() { _ = os.Remove(certFile) }()
-
-	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
-		t.Skipf("Cannot write key file: %v", err)
-	}
-	defer func() { _ = os.Remove(keyFile) }()
+	certFile, keyFile := writeTestCertFiles(t)
 
 	server.certFile = certFile
 	server.keyFile = keyFile
@@ -576,4 +585,59 @@ func TestServer_DefaultTimeoutsApplied(t *testing.T) {
 	zhtest.AssertEqual(t, DefaultReadTimeout, server.server.ReadTimeout)
 	zhtest.AssertEqual(t, DefaultWriteTimeout, server.server.WriteTimeout)
 	zhtest.AssertEqual(t, DefaultIdleTimeout, server.server.IdleTimeout)
+}
+
+func TestServer_RedirectHTTPConfig(t *testing.T) {
+	// Test that RedirectHTTP is stored correctly
+	server := New(Config{
+		TLS: TLSConfig{
+			RedirectHTTP: true,
+		},
+	})
+
+	zhtest.AssertTrue(t, server.redirectHTTP)
+}
+
+func TestServer_NoRedirectHTTPByDefault(t *testing.T) {
+	// Test that RedirectHTTP is false by default
+	server := New()
+
+	zhtest.AssertFalse(t, server.redirectHTTP)
+}
+
+func TestDefaultHTTPServer(t *testing.T) {
+	srv := DefaultHTTPServer()
+
+	zhtest.AssertEqual(t, DefaultReadTimeout, srv.ReadTimeout)
+	zhtest.AssertEqual(t, DefaultReadHeaderTimeout, srv.ReadHeaderTimeout)
+	zhtest.AssertEqual(t, DefaultWriteTimeout, srv.WriteTimeout)
+	zhtest.AssertEqual(t, DefaultIdleTimeout, srv.IdleTimeout)
+	zhtest.AssertEqual(t, DefaultMaxHeaderBytes, srv.MaxHeaderBytes)
+
+	// Test that modifying the returned server doesn't affect subsequent calls
+	srv.ReadTimeout = 30 * time.Second
+	srv2 := DefaultHTTPServer()
+	zhtest.AssertEqual(t, DefaultReadTimeout, srv2.ReadTimeout)
+}
+
+func TestDefaultTLSServer(t *testing.T) {
+	srv := DefaultTLSServer()
+
+	zhtest.AssertEqual(t, DefaultReadTimeout, srv.ReadTimeout)
+	zhtest.AssertEqual(t, DefaultReadHeaderTimeout, srv.ReadHeaderTimeout)
+	zhtest.AssertEqual(t, DefaultWriteTimeout, srv.WriteTimeout)
+	zhtest.AssertEqual(t, DefaultIdleTimeout, srv.IdleTimeout)
+	zhtest.AssertEqual(t, DefaultMaxHeaderBytes, srv.MaxHeaderBytes)
+
+	// TLS-specific defaults
+	zhtest.AssertNotNil(t, srv.TLSConfig)
+	zhtest.AssertEqual(t, uint16(tls.VersionTLS12), srv.TLSConfig.MinVersion)
+	zhtest.AssertEqual(t, []string{"h2", "http/1.1"}, srv.TLSConfig.NextProtos)
+
+	// Test that modifying the returned server doesn't affect subsequent calls
+	srv.ReadTimeout = 30 * time.Second
+	srv.TLSConfig.MinVersion = tls.VersionTLS13
+	srv2 := DefaultTLSServer()
+	zhtest.AssertEqual(t, DefaultReadTimeout, srv2.ReadTimeout)
+	zhtest.AssertEqual(t, uint16(tls.VersionTLS12), srv2.TLSConfig.MinVersion)
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -331,18 +330,7 @@ func TestServer_ListenAndServeTLS_WithHTTP3(t *testing.T) {
 	mockH3 := &mockHTTP3Server{}
 	server.SetHTTP3Server(mockH3)
 
-	certFile := "/tmp/test_cert_h3.pem"
-	keyFile := "/tmp/test_key_h3.pem"
-
-	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
-		t.Skipf("Cannot write cert file: %v", err)
-	}
-	defer func() { _ = os.Remove(certFile) }()
-
-	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
-		t.Skipf("Cannot write key file: %v", err)
-	}
-	defer func() { _ = os.Remove(keyFile) }()
+	certFile, keyFile := writeTestCertFiles(t)
 
 	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
 
@@ -379,18 +367,7 @@ func TestServer_ListenAndServeTLS_HTTP3Error(t *testing.T) {
 	mockH3 := &mockHTTP3ServerWithError{shouldErr: true, errMsg: "h3 error"}
 	server.SetHTTP3Server(mockH3)
 
-	certFile := "/tmp/test_cert_h3_err.pem"
-	keyFile := "/tmp/test_key_h3_err.pem"
-
-	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
-		t.Skipf("Cannot write cert file: %v", err)
-	}
-	defer func() { _ = os.Remove(certFile) }()
-
-	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
-		t.Skipf("Cannot write key file: %v", err)
-	}
-	defer func() { _ = os.Remove(keyFile) }()
+	certFile, keyFile := writeTestCertFiles(t)
 
 	server.tlsServer = &http.Server{Addr: "127.0.0.1:0"}
 
@@ -427,18 +404,7 @@ func TestServer_Start_WithHTTP3(t *testing.T) {
 	mockH3 := &mockHTTP3Server{}
 	server.SetHTTP3Server(mockH3)
 
-	certFile := "/tmp/test_cert_h3_start.pem"
-	keyFile := "/tmp/test_key_h3_start.pem"
-
-	if err := os.WriteFile(certFile, []byte(testCertPEM), 0o644); err != nil {
-		t.Skipf("Cannot write cert file: %v", err)
-	}
-	defer func() { _ = os.Remove(certFile) }()
-
-	if err := os.WriteFile(keyFile, []byte(testKeyPEM), 0o600); err != nil {
-		t.Skipf("Cannot write key file: %v", err)
-	}
-	defer func() { _ = os.Remove(keyFile) }()
+	certFile, keyFile := writeTestCertFiles(t)
 
 	server.certFile = certFile
 	server.keyFile = keyFile
