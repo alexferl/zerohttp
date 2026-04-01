@@ -64,6 +64,7 @@
 //
 //	unique - Unique elements in slice
 //	each   - Validate each element
+//	anyof  - At least one element matches (space-separated, for slices/arrays)
 //
 // # Usage
 //

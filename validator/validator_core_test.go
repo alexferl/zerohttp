@@ -1028,6 +1028,96 @@ func TestOneOfUnsupportedType(t *testing.T) {
 	zhtest.AssertError(t, err)
 }
 
+func TestAnyOfValidator(t *testing.T) {
+	type TestAnyOf struct {
+		Tags   []string `validate:"anyof=red green blue"`
+		Levels []int    `validate:"anyof=1 2 3"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestAnyOf
+		wantErr bool
+	}{
+		{"one match in strings", TestAnyOf{Tags: []string{"red"}, Levels: []int{1}}, false},
+		{"multiple matches in strings", TestAnyOf{Tags: []string{"red", "green"}, Levels: []int{1}}, false},
+		{"match in middle", TestAnyOf{Tags: []string{"yellow", "green", "orange"}, Levels: []int{1}}, false},
+		{"last element matches", TestAnyOf{Tags: []string{"yellow", "blue"}, Levels: []int{1}}, false},
+		{"no match in strings", TestAnyOf{Tags: []string{"yellow", "orange"}, Levels: []int{1}}, true},
+		{"no match in ints", TestAnyOf{Tags: []string{"red"}, Levels: []int{4, 5}}, true},
+		{"empty slice fails", TestAnyOf{Tags: []string{}, Levels: []int{1}}, true},
+		{"nil slice fails", TestAnyOf{Tags: nil, Levels: []int{1}}, true},
+		{"both valid", TestAnyOf{Tags: []string{"red"}, Levels: []int{2}}, false},
+		{"both invalid", TestAnyOf{Tags: []string{"pink"}, Levels: []int{99}}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := New().Struct(&tt.input)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAnyOfUint(t *testing.T) {
+	type TestAnyOfUint struct {
+		Codes []uint `validate:"anyof=1 2 3"`
+	}
+
+	tests := []struct {
+		name    string
+		codes   []uint
+		wantErr bool
+	}{
+		{"valid match", []uint{1, 4}, false},
+		{"no match", []uint{4, 5}, true},
+		{"empty slice", []uint{}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := TestAnyOfUint{Codes: tt.codes}
+			err := New().Struct(&input)
+			if tt.wantErr {
+				zhtest.AssertError(t, err)
+			} else {
+				zhtest.AssertNoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAnyOfEmptyOptions(t *testing.T) {
+	type TestAnyOfEmpty struct {
+		Values []string `validate:"anyof="`
+	}
+	input := TestAnyOfEmpty{Values: []string{"anything"}}
+	err := New().Struct(&input)
+	zhtest.AssertNoError(t, err)
+}
+
+func TestAnyOfUnsupportedType(t *testing.T) {
+	type TestAnyOfFloat struct {
+		Values []float64 `validate:"anyof=1.5 2.5"`
+	}
+	input := TestAnyOfFloat{Values: []float64{1.5}}
+	err := New().Struct(&input)
+	zhtest.AssertError(t, err)
+}
+
+func TestAnyOfOnNonSlice(t *testing.T) {
+	type TestAnyOfString struct {
+		Value string `validate:"anyof=a b c"`
+	}
+	input := TestAnyOfString{Value: "a"}
+	err := New().Struct(&input)
+	zhtest.AssertError(t, err)
+}
+
 func TestUUIDValidator(t *testing.T) {
 	type TestUUID struct {
 		ID string `validate:"uuid"`
