@@ -306,10 +306,26 @@ func (s *Server) ListenerTLSAddr() string {
 // Returns an http.Handler that performs permanent redirects (301) to HTTPS.
 func (s *Server) createHTTPSRedirectHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract host from the request (without port)
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			// No port in Host, use as-is
+			host = r.Host
+		}
+
+		// Get the HTTPS port from the TLS server config
+		httpsPort := ""
+		if s.tlsServer != nil && s.tlsServer.Addr != "" {
+			_, port, err := net.SplitHostPort(s.tlsServer.Addr)
+			if err == nil && port != "" && port != "443" {
+				httpsPort = ":" + port
+			}
+		}
+
 		// Build HTTPS URL by copying the URL and changing scheme
 		target := *r.URL
 		target.Scheme = "https"
-		target.Host = r.Host
+		target.Host = host + httpsPort
 
 		httpsURL := target.String()
 		s.logger.Debug("Redirecting HTTP to HTTPS",

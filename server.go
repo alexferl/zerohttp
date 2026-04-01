@@ -21,13 +21,64 @@ import (
 	"github.com/alexferl/zerohttp/sse"
 )
 
-// Default server timeout constants
 const (
 	DefaultReadTimeout       = 10 * time.Second
 	DefaultReadHeaderTimeout = 5 * time.Second
 	DefaultWriteTimeout      = 15 * time.Second
-	DefaultIdleTimeout       = 60 * time.Second
+	// DefaultIdleTimeout is explicitly set to 60s.
+	// Note: If IdleTimeout is 0, Go falls back to ReadTimeout. We set this
+	// explicitly to avoid confusion and ensure the intended timeout is used.
+	DefaultIdleTimeout    = 60 * time.Second
+	DefaultMaxHeaderBytes = 16 * 1024 // 16 KB -> actual limit is ~20 KB (Go adds +4096)
 )
+
+// DefaultHTTPServer returns a new http.Server with sensible defaults.
+// Use this as a base when you need to customize only specific server fields
+// while keeping the other defaults.
+//
+// Example:
+//
+//	srv := zerohttp.DefaultHTTPServer()
+//	srv.ReadTimeout = 30 * time.Second
+//	app := zerohttp.New(zerohttp.Config{
+//	    Server: srv,
+//	})
+func DefaultHTTPServer() *http.Server {
+	return &http.Server{
+		ReadTimeout:       DefaultReadTimeout,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
+		MaxHeaderBytes:    DefaultMaxHeaderBytes,
+	}
+}
+
+// DefaultTLSServer returns a new http.Server with sensible defaults for TLS.
+// Use this as a base when you need to customize only specific TLS server fields
+// while keeping the other defaults.
+//
+// Example:
+//
+//	srv := zerohttp.DefaultTLSServer()
+//	srv.ReadTimeout = 30 * time.Second
+//	app := zerohttp.New(zerohttp.Config{
+//	    TLS: TLSConfig{
+//	        Server: srv,
+//	    },
+//	})
+func DefaultTLSServer() *http.Server {
+	return &http.Server{
+		ReadTimeout:       DefaultReadTimeout,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
+		MaxHeaderBytes:    DefaultMaxHeaderBytes,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{"h2", "http/1.1"},
+		},
+	}
+}
 
 // Server represents a zerohttp server instance that wraps Go's standard HTTP server
 // with additional functionality including middleware support, TLS configuration,
@@ -74,6 +125,10 @@ type Server struct {
 	// keyFile is the file path to the TLS private key in PEM format.
 	// Used when serving HTTPS traffic with certificate files.
 	keyFile string
+
+	// redirectHTTP enables automatic HTTP to HTTPS redirects when both HTTP and
+	// HTTPS servers are configured and running.
+	redirectHTTP bool
 
 	// logger is the structured logger used by the server and its middleware
 	// for recording HTTP requests, errors, and server lifecycle events.
@@ -165,13 +220,24 @@ type Server struct {
 // Example - With custom configuration:
 //
 //	app := zh.New(Config{
-//	    Addr:         ":8080",
-//	    ReadTimeout:  10 * time.Second,
-//	    WriteTimeout: 15 * time.Second,
-//	    Logger:       myLogger,
-//	    Metrics: MetricsConfig{
+//	    Addr: ":8080",
+//	    Server: &http.Server{
+//	        ReadTimeout:  10 * time.Second,
+//	        WriteTimeout: 15 * time.Second,
+//	    },
+//	    Logger: myLogger,
+//	    Metrics: metrics.Config{
 //	        Enabled: config.Bool(false), // Disable metrics
 //	    },
+//	})
+//
+// Example - Customizing only specific server fields (keeps other defaults):
+//
+//	srv := zh.DefaultHTTPServer()
+//	srv.ReadTimeout = 30 * time.Second
+//	app := zh.New(Config{
+//	    Addr:   ":8080",
+//	    Server: srv,
 //	})
 //
 // Example - With pluggable validator:
@@ -202,6 +268,7 @@ func New(cfg ...Config) *Server {
 		tlsListener:        c.TLS.Listener,
 		certFile:           c.TLS.CertFile,
 		keyFile:            c.TLS.KeyFile,
+		redirectHTTP:       c.TLS.RedirectHTTP,
 		autocertManager:    c.Extensions.AutocertManager,
 		http3Server:        c.Extensions.HTTP3Server,
 		webTransportServer: c.Extensions.WebTransportServer,
@@ -353,7 +420,13 @@ func (s *Server) Start() error {
 
 	// Start HTTP server
 	if s.server != nil {
-		s.server.Handler = handler
+		// Use redirect handler if configured and TLS is enabled
+		if s.redirectHTTP && shouldStartTLS {
+			s.server.Handler = s.createHTTPSRedirectHandler()
+			s.logger.Info("HTTP to HTTPS redirect enabled", log.F("https_addr", s.tlsServer.Addr))
+		} else {
+			s.server.Handler = handler
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -764,7 +837,7 @@ func createLogger(c Config) log.Logger {
 	return log.NewDefaultLogger()
 }
 
-// createHTTPServer creates the HTTP server from
+// createHTTPServer creates the HTTP server from config.
 func createHTTPServer(c Config, logger log.Logger) *http.Server {
 	if c.Server != nil {
 		if c.Server.ErrorLog == nil {
@@ -772,15 +845,10 @@ func createHTTPServer(c Config, logger log.Logger) *http.Server {
 		}
 		return c.Server
 	}
-	return &http.Server{
-		Addr:              c.Addr,
-		ReadTimeout:       DefaultReadTimeout,
-		ReadHeaderTimeout: DefaultReadHeaderTimeout,
-		WriteTimeout:      DefaultWriteTimeout,
-		IdleTimeout:       DefaultIdleTimeout,
-		MaxHeaderBytes:    1 << 20, // 1 MB
-		ErrorLog:          log.StdLogger(logger),
-	}
+	srv := DefaultHTTPServer()
+	srv.Addr = c.Addr
+	srv.ErrorLog = log.StdLogger(logger)
+	return srv
 }
 
 // createTLSServer creates the TLS server from config if TLS is configured.
@@ -794,19 +862,10 @@ func createTLSServer(c Config, logger log.Logger) *http.Server {
 	if !needsTLSServer(c) {
 		return nil
 	}
-	return &http.Server{
-		Addr:              c.TLS.Addr,
-		ReadTimeout:       DefaultReadTimeout,
-		ReadHeaderTimeout: DefaultReadHeaderTimeout,
-		WriteTimeout:      DefaultWriteTimeout,
-		IdleTimeout:       DefaultIdleTimeout,
-		MaxHeaderBytes:    1 << 20, // 1 MB
-		ErrorLog:          log.StdLogger(logger),
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			NextProtos: []string{"h2", "http/1.1"},
-		},
-	}
+	srv := DefaultTLSServer()
+	srv.Addr = c.TLS.Addr
+	srv.ErrorLog = log.StdLogger(logger)
+	return srv
 }
 
 // needsTLSServer returns true if the config requires a TLS server to be created.
