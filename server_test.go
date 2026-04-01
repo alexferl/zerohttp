@@ -598,9 +598,20 @@ func TestServer_RedirectHTTPConfig(t *testing.T) {
 	zhtest.AssertTrue(t, server.redirectHTTP)
 }
 
-func TestServer_NoRedirectHTTPByDefault(t *testing.T) {
-	// Test that RedirectHTTP is false by default
+func TestServer_RedirectHTTPByDefault(t *testing.T) {
+	// Test that RedirectHTTP is true by default for security
 	server := New()
+
+	zhtest.AssertTrue(t, server.redirectHTTP)
+}
+
+func TestServer_RedirectHTTPCanBeDisabled(t *testing.T) {
+	// Test that RedirectHTTP can be explicitly disabled
+	server := New(Config{
+		TLS: TLSConfig{
+			RedirectHTTP: false,
+		},
+	})
 
 	zhtest.AssertFalse(t, server.redirectHTTP)
 }

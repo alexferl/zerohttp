@@ -5,7 +5,6 @@ This example demonstrates configuring HTTPS/TLS with automatic HTTP to HTTPS red
 ## Features
 
 - HTTPS server on port 8443
-- HTTP redirect middleware
 - TLS certificate configuration
 
 ## Prerequisites
