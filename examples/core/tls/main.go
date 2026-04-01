@@ -12,10 +12,11 @@ func main() {
 		zh.Config{
 			Addr: "localhost:8080",
 			TLS: zh.TLSConfig{
-				Addr:         "localhost:8443",
-				CertFile:     "cert.pem",
-				KeyFile:      "key.pem",
-				RedirectHTTP: true, // Redirect HTTP to HTTPS
+				Addr:     "localhost:8443",
+				CertFile: "cert.pem",
+				KeyFile:  "key.pem",
+				// RedirectHTTP defaults to true for security.
+				// Set to false to disable automatic HTTP to HTTPS redirect.
 			},
 		},
 	)

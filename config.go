@@ -129,7 +129,7 @@ type TLSConfig struct {
 	// RedirectHTTP enables automatic HTTP to HTTPS redirects when both HTTP and
 	// HTTPS servers are running. When enabled, all HTTP traffic is redirected
 	// to HTTPS with a 301 Moved Permanently status.
-	// Default: false
+	// Default: true (for security, redirects to HTTPS by default)
 	RedirectHTTP bool
 }
 
@@ -205,8 +205,9 @@ type ExtensionsConfig struct {
 var DefaultConfig = Config{
 	Addr: "localhost:8080",
 	TLS: TLSConfig{
-		Addr:   "localhost:8443",
-		Server: nil,
+		Addr:         "localhost:8443",
+		Server:       nil,
+		RedirectHTTP: true,
 	},
 	DisableDefaultMiddlewares: false,
 	DefaultMiddlewares:        nil, // means use DefaultMiddlewares
