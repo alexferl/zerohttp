@@ -69,6 +69,7 @@ const (
 	HeaderMaxForwards       = "Max-Forwards"
 	HeaderOrigin            = "Origin"
 	HeaderPragma            = "Pragma"
+	HeaderProxyAuthorization = "Proxy-Authorization"
 	HeaderRange             = "Range"
 	HeaderReferer           = "Referer"
 	HeaderTE                = "TE"
@@ -97,9 +98,8 @@ const (
 	HeaderLastModified       = "Last-Modified"
 	HeaderLink               = "Link"
 	HeaderLocation           = "Location"
-	HeaderProxyAuthenticate  = "Proxy-Authenticate"
-	HeaderProxyAuthorization = "Proxy-Authorization"
-	HeaderRetryAfter         = "Retry-After"
+	HeaderProxyAuthenticate = "Proxy-Authenticate"
+	HeaderRetryAfter        = "Retry-After"
 	HeaderServer             = "Server"
 	HeaderSetCookie          = "Set-Cookie"
 	HeaderTrailer            = "Trailer"
@@ -159,6 +159,12 @@ const (
 	HeaderXRequestId          = "X-Request-Id"
 	HeaderXRequestedWith      = "X-Requested-With"
 	HeaderXTimestamp          = "X-Timestamp"
+	HeaderXTotal              = "X-Total"
+	HeaderXTotalPages         = "X-Total-Pages"
+	HeaderXPage               = "X-Page"
+	HeaderXPerPage            = "X-Per-Page"
+	HeaderXPrevPage           = "X-Prev-Page"
+	HeaderXNextPage           = "X-Next-Page"
 )
 
 // WebSocket Headers
