@@ -277,7 +277,7 @@ func BenchmarkRouter_MiddlewareOverhead(b *testing.B) {
 	})
 
 	b.Run("Zerohttp_5Middleware", func(b *testing.B) {
-		middlewares := make([]func(http.Handler) http.Handler, 5)
+		middlewares := make([]MiddlewareFunc, 5)
 		for i := range 5 {
 			middlewares[i] = simpleMiddleware
 		}

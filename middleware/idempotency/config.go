@@ -87,7 +87,8 @@ type Config struct {
 	IncludedPaths []string
 
 	// MaxKeys limits the number of unique keys stored in the default
-	// in-memory store. Defaults to 10000. Set to 0 for unlimited (not recommended).
+	// in-memory store. Set to 0 for unlimited (not recommended).
+	// Default: 10000
 	MaxKeys int
 
 	// LockRetryInterval is the initial interval between retries when waiting for
@@ -97,11 +98,13 @@ type Config struct {
 
 	// LockMaxRetries is the maximum number of retries when waiting for an
 	// in-flight request to complete. After this is exhausted, a 409 Conflict
-	// is returned. Default: 300 (3 seconds at 10ms intervals)
+	// is returned.
+	// Default: 300 (3 seconds at 10ms intervals)
 	LockMaxRetries int
 
 	// LockMaxInterval is the maximum interval between retries (caps exponential
-	// backoff). Default: 500ms
+	// backoff).
+	// Default: 500ms
 	LockMaxInterval time.Duration
 
 	// LockBackoffMultiplier is the multiplier for exponential backoff.

@@ -36,10 +36,12 @@ type Config struct {
 	// Default: true
 	Enabled *bool
 
-	// LogErrors determines if errors should be logged (defaults to true).
+	// LogErrors determines if errors should be logged.
+	// Default: true
 	LogErrors bool
 
-	// Fields to include in logs (defaults to all fields).
+	// Fields to include in logs.
+	// Default: all fields
 	Fields []LogField
 
 	// ExcludedPaths contains paths to skip logging (e.g., health checks).
@@ -55,22 +57,25 @@ type Config struct {
 	// Default: []
 	IncludedPaths []string
 
-	// LogRequestBody enables logging of request bodies (defaults to false).
+	// LogRequestBody enables logging of request bodies.
 	// This is opt-in due to performance and security considerations.
+	// Default: false
 	LogRequestBody bool
 
-	// LogResponseBody enables logging of response bodies (defaults to false).
+	// LogResponseBody enables logging of response bodies.
 	// This is opt-in due to performance and security considerations.
+	// Default: false
 	LogResponseBody bool
 
 	// MaxBodySize is the maximum number of bytes to log for request/response bodies.
-	// If 0, body logging is disabled (default for safety).
+	// If 0, body logging is disabled.
 	// Must be a positive value to enable body logging.
+	// Default: 1024 (1KB)
 	MaxBodySize int
 
 	// SensitiveFields contains field names (case-insensitive) whose values should be
 	// masked in request/response body logs (e.g., "password", "token", "secret").
-	// Defaults to common sensitive field names if nil.
+	// Default: common sensitive field names
 	SensitiveFields []string
 
 	// CustomFields allows adding arbitrary fields to request logs.

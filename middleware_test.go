@@ -63,7 +63,7 @@ func TestDefaultMiddlewares_NilInputs(t *testing.T) {
 	t.Run("nil logger", func(t *testing.T) {
 		cfg := Config{}
 
-		var middlewares []func(http.Handler) http.Handler
+		var middlewares []MiddlewareFunc
 		zhtest.AssertNoPanic(t, func() {
 			middlewares = DefaultMiddlewares(cfg, nil)
 		})

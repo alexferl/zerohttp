@@ -16,13 +16,16 @@ const (
 
 // Config allows customization of trailing slash handling
 type Config struct {
-	// Action to take when trailing slash doesn't match preference (defaults to redirect)
+	// Action to take when trailing slash doesn't match preference.
+	// Default: RedirectAction
 	Action Action
 
-	// PreferTrailingSlash determines if URLs should have trailing slashes (defaults to false)
+	// PreferTrailingSlash determines if URLs should have trailing slashes.
+	// Default: false
 	PreferTrailingSlash bool
 
-	// RedirectCode for redirects (defaults to 301 Moved Permanently)
+	// RedirectCode for redirects.
+	// Default: 301 (Moved Permanently)
 	RedirectCode int
 }
 

@@ -71,7 +71,7 @@ type Config struct {
 
 	// DefaultMiddlewares is a custom list of middlewares to use. If nil, uses the built-in default middleware list.
 	// Default: nil (means use built-in defaults)
-	DefaultMiddlewares []func(http.Handler) http.Handler
+	DefaultMiddlewares []MiddlewareFunc
 
 	// Recover holds the configuration for the panic recovery middleware.
 	Recover recover.Config
