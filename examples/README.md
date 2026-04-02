@@ -107,6 +107,7 @@ Complete examples with their own `go.mod` files, demonstrating integration with 
 
 - [**`healthcheck/`**](healthcheck/) - Health check endpoints
 - [**`metrics/`**](metrics/) - Prometheus metrics endpoint
+- [**`pagination/`**](pagination/) - Pagination with response headers
 - [**`pprof/`**](pprof/) - Performance profiling endpoints
 - [**`sse/`**](sse/) - Server-Sent Events
 
