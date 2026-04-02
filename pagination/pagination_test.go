@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRequest_Params(t *testing.T) {
@@ -39,12 +40,8 @@ func TestRequest_Params(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.request.Params()
-			if result.Page != tt.expected.Page {
-				t.Errorf("expected Page %d, got %d", tt.expected.Page, result.Page)
-			}
-			if result.PerPage != tt.expected.PerPage {
-				t.Errorf("expected PerPage %d, got %d", tt.expected.PerPage, result.PerPage)
-			}
+			zhtest.AssertEqual(t, tt.expected.Page, result.Page)
+			zhtest.AssertEqual(t, tt.expected.PerPage, result.PerPage)
 		})
 	}
 }
@@ -95,12 +92,8 @@ func TestParams_Defaults(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.input.Defaults()
-			if result.Page != tt.expected.Page {
-				t.Errorf("expected Page %d, got %d", tt.expected.Page, result.Page)
-			}
-			if result.PerPage != tt.expected.PerPage {
-				t.Errorf("expected PerPage %d, got %d", tt.expected.PerPage, result.PerPage)
-			}
+			zhtest.AssertEqual(t, tt.expected.Page, result.Page)
+			zhtest.AssertEqual(t, tt.expected.PerPage, result.PerPage)
 		})
 	}
 }
@@ -136,9 +129,7 @@ func TestParams_Offset(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.params.Offset()
-			if result != tt.expected {
-				t.Errorf("expected offset %d, got %d", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -147,12 +138,8 @@ func TestParams_LimitSkip(t *testing.T) {
 	params := Params{Page: 3, PerPage: 25}
 	limit, skip := params.LimitSkip()
 
-	if limit != 25 {
-		t.Errorf("expected limit 25, got %d", limit)
-	}
-	if skip != 50 {
-		t.Errorf("expected skip 50, got %d", skip)
-	}
+	zhtest.AssertEqual(t, 25, limit)
+	zhtest.AssertEqual(t, 50, skip)
 }
 
 func TestParams_TotalPages(t *testing.T) {
@@ -215,9 +202,7 @@ func TestParams_TotalPages(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.params.TotalPages(tt.total)
-			if result != tt.expected {
-				t.Errorf("expected %d pages, got %d", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -325,30 +310,14 @@ func TestParams_Headers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.params.Headers(tt.total)
 
-			if result.Total != tt.expected.Total {
-				t.Errorf("expected Total %d, got %d", tt.expected.Total, result.Total)
-			}
-			if result.TotalPages != tt.expected.TotalPages {
-				t.Errorf("expected TotalPages %d, got %d", tt.expected.TotalPages, result.TotalPages)
-			}
-			if result.Page != tt.expected.Page {
-				t.Errorf("expected Page %d, got %d", tt.expected.Page, result.Page)
-			}
-			if result.PerPage != tt.expected.PerPage {
-				t.Errorf("expected PerPage %d, got %d", tt.expected.PerPage, result.PerPage)
-			}
-			if result.HasPrev != tt.expected.HasPrev {
-				t.Errorf("expected HasPrev %v, got %v", tt.expected.HasPrev, result.HasPrev)
-			}
-			if result.HasNext != tt.expected.HasNext {
-				t.Errorf("expected HasNext %v, got %v", tt.expected.HasNext, result.HasNext)
-			}
-			if result.PrevPage != tt.expected.PrevPage {
-				t.Errorf("expected PrevPage %d, got %d", tt.expected.PrevPage, result.PrevPage)
-			}
-			if result.NextPage != tt.expected.NextPage {
-				t.Errorf("expected NextPage %d, got %d", tt.expected.NextPage, result.NextPage)
-			}
+			zhtest.AssertEqual(t, tt.expected.Total, result.Total)
+			zhtest.AssertEqual(t, tt.expected.TotalPages, result.TotalPages)
+			zhtest.AssertEqual(t, tt.expected.Page, result.Page)
+			zhtest.AssertEqual(t, tt.expected.PerPage, result.PerPage)
+			zhtest.AssertEqual(t, tt.expected.HasPrev, result.HasPrev)
+			zhtest.AssertEqual(t, tt.expected.HasNext, result.HasNext)
+			zhtest.AssertEqual(t, tt.expected.PrevPage, result.PrevPage)
+			zhtest.AssertEqual(t, tt.expected.NextPage, result.NextPage)
 		})
 	}
 }
@@ -362,27 +331,13 @@ func TestParams_WriteHeaders(t *testing.T) {
 
 	headers := rec.Header()
 
-	if headers.Get(httpx.HeaderXTotal) != "50" {
-		t.Errorf("expected X-Total header '50', got '%s'", headers.Get(httpx.HeaderXTotal))
-	}
-	if headers.Get(httpx.HeaderXTotalPages) != "3" {
-		t.Errorf("expected X-Total-Pages header '3', got '%s'", headers.Get(httpx.HeaderXTotalPages))
-	}
-	if headers.Get(httpx.HeaderXPage) != "2" {
-		t.Errorf("expected X-Page header '2', got '%s'", headers.Get(httpx.HeaderXPage))
-	}
-	if headers.Get(httpx.HeaderXPerPage) != "20" {
-		t.Errorf("expected X-Per-Page header '20', got '%s'", headers.Get(httpx.HeaderXPerPage))
-	}
-	if headers.Get(httpx.HeaderXPrevPage) != "1" {
-		t.Errorf("expected X-Prev-Page header '1', got '%s'", headers.Get(httpx.HeaderXPrevPage))
-	}
-	if headers.Get(httpx.HeaderXNextPage) != "3" {
-		t.Errorf("expected X-Next-Page header '3', got '%s'", headers.Get(httpx.HeaderXNextPage))
-	}
-	if headers.Get("Link") == "" {
-		t.Error("expected Link header to be set")
-	}
+	zhtest.AssertEqual(t, "50", headers.Get(httpx.HeaderXTotal))
+	zhtest.AssertEqual(t, "3", headers.Get(httpx.HeaderXTotalPages))
+	zhtest.AssertEqual(t, "2", headers.Get(httpx.HeaderXPage))
+	zhtest.AssertEqual(t, "20", headers.Get(httpx.HeaderXPerPage))
+	zhtest.AssertEqual(t, "1", headers.Get(httpx.HeaderXPrevPage))
+	zhtest.AssertEqual(t, "3", headers.Get(httpx.HeaderXNextPage))
+	zhtest.AssertNotEmpty(t, headers.Get("Link"))
 }
 
 func TestParams_WriteHeaders_FirstPage(t *testing.T) {
@@ -394,12 +349,8 @@ func TestParams_WriteHeaders_FirstPage(t *testing.T) {
 
 	headers := rec.Header()
 
-	if headers.Get(httpx.HeaderXPrevPage) != "" {
-		t.Errorf("expected no X-Prev-Page header on first page, got '%s'", headers.Get(httpx.HeaderXPrevPage))
-	}
-	if headers.Get(httpx.HeaderXNextPage) != "2" {
-		t.Errorf("expected X-Next-Page header '2', got '%s'", headers.Get(httpx.HeaderXNextPage))
-	}
+	zhtest.AssertEmpty(t, headers.Get(httpx.HeaderXPrevPage))
+	zhtest.AssertEqual(t, "2", headers.Get(httpx.HeaderXNextPage))
 }
 
 func TestParams_WriteHeaders_LastPage(t *testing.T) {
@@ -411,12 +362,8 @@ func TestParams_WriteHeaders_LastPage(t *testing.T) {
 
 	headers := rec.Header()
 
-	if headers.Get(httpx.HeaderXPrevPage) != "2" {
-		t.Errorf("expected X-Prev-Page header '2', got '%s'", headers.Get(httpx.HeaderXPrevPage))
-	}
-	if headers.Get(httpx.HeaderXNextPage) != "" {
-		t.Errorf("expected no X-Next-Page header on last page, got '%s'", headers.Get(httpx.HeaderXNextPage))
-	}
+	zhtest.AssertEqual(t, "2", headers.Get(httpx.HeaderXPrevPage))
+	zhtest.AssertEmpty(t, headers.Get(httpx.HeaderXNextPage))
 }
 
 func TestParams_WriteHeaders_SinglePage(t *testing.T) {
@@ -428,12 +375,8 @@ func TestParams_WriteHeaders_SinglePage(t *testing.T) {
 
 	headers := rec.Header()
 
-	if headers.Get(httpx.HeaderXPrevPage) != "" {
-		t.Errorf("expected no X-Prev-Page header for single page, got '%s'", headers.Get(httpx.HeaderXPrevPage))
-	}
-	if headers.Get(httpx.HeaderXNextPage) != "" {
-		t.Errorf("expected no X-Next-Page header for single page, got '%s'", headers.Get(httpx.HeaderXNextPage))
-	}
+	zhtest.AssertEmpty(t, headers.Get(httpx.HeaderXPrevPage))
+	zhtest.AssertEmpty(t, headers.Get(httpx.HeaderXNextPage))
 }
 
 func TestBuildLinkHeader(t *testing.T) {
@@ -507,9 +450,7 @@ func TestBuildLinkHeader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			u, _ := url.Parse(tt.url)
 			result := BuildLinkHeader(u, tt.page, tt.perPage, tt.totalPages)
-			if result != tt.expected {
-				t.Errorf("expected:\n%s\ngot:\n%s", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
@@ -563,9 +504,7 @@ func TestCloneURLWithParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			u, _ := url.Parse(tt.url)
 			result := cloneURLWithParams(u, tt.page, tt.perPage)
-			if result != tt.expected {
-				t.Errorf("expected '%s', got '%s'", tt.expected, result)
-			}
+			zhtest.AssertEqual(t, tt.expected, result)
 		})
 	}
 }
