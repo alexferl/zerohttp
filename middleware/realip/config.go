@@ -13,7 +13,8 @@ type IPExtractor func(*http.Request) string
 
 // Config allows customization of real IP extraction
 type Config struct {
-	// IPExtractor function to extract real client IP (defaults to DefaultIPExtractor)
+	// IPExtractor function to extract real client IP.
+	// Default: DefaultIPExtractor
 	IPExtractor IPExtractor
 }
 

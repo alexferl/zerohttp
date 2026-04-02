@@ -27,8 +27,13 @@ var DefaultETagHeaders = []string{
 
 // Config allows customization of the set/deleted headers
 type Config struct {
-	Headers     map[string]string // Headers to set for no-cache; defaults provided
-	ETagHeaders []string          // Headers to delete; defaults provided
+	// Headers to set for no-cache.
+	// Default: no-cache headers (Expires, Cache-Control, Pragma, X-Accel-Expires)
+	Headers map[string]string
+
+	// ETagHeaders are headers to delete.
+	// Default: ETag-related headers
+	ETagHeaders []string
 }
 
 // DefaultConfig contains the default values for no-cache configuration.

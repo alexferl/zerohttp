@@ -1,8 +1,6 @@
 package zerohttp
 
 import (
-	"net/http"
-
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware/recover"
 	"github.com/alexferl/zerohttp/middleware/requestbodysize"
@@ -18,12 +16,12 @@ import (
 //   - RequestBodySize: Limits the maximum request body size
 //   - SecurityHeaders: Adds security-related HTTP headers
 //   - RequestLogger: Logs HTTP requests and responses
-func DefaultMiddlewares(cfg Config, logger log.Logger) []func(http.Handler) http.Handler {
+func DefaultMiddlewares(cfg Config, logger log.Logger) []MiddlewareFunc {
 	// Sync RequestID header configuration with Recover config
 	recoverConfig := cfg.Recover
 	recoverConfig.RequestIDHeader = cfg.RequestID.Header
 
-	return []func(http.Handler) http.Handler{
+	return []MiddlewareFunc{
 		requestid.New(cfg.RequestID),
 		recover.New(logger, recoverConfig),
 		requestbodysize.New(cfg.RequestBodySize),

@@ -3,6 +3,7 @@ package requestbodysize
 // Config allows customization of request size limiting.
 type Config struct {
 	// MaxBytes is the maximum request body size in bytes.
+	// Default: 1MB
 	MaxBytes int64
 
 	// ExcludedPaths contains paths that skip body size limiting.

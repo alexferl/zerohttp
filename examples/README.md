@@ -54,6 +54,7 @@ Demonstrations of built-in and custom middleware.
 - [**`contenttype/`**](middleware/contenttype/) - Content type validation/middleware
 - [**`cors/`**](middleware/cors/) - CORS handling
 - [**`csrf/`**](middleware/csrf/) - CSRF protection
+- [**`custom/`**](middleware/custom/) - Writing custom middleware
 - [**`etag/`**](middleware/etag/) - ETag generation
 - [**`hmacauth/`**](middleware/hmacauth/) - HMAC request signing
 - [**`hostvalidation/`**](middleware/host/) - Host header validation

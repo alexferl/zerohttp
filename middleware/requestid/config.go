@@ -13,15 +13,17 @@ var ContextKey = contextKey{}
 
 // Config allows customization of request ID generation.
 type Config struct {
-	// Header is the header name for the request ID (defaults to "X-Request-Id").
+	// Header is the header name for the request ID.
+	// Default: "X-Request-Id"
 	Header string
 
 	// Generator is a custom function to generate request IDs.
 	// The default generator uses crypto/rand (CSPRNG) for 128 bits of entropy.
+	// Default: GenerateRequestID
 	Generator func() string
 
 	// ContextKey is the key to store the request ID in context.
-	// Defaults to the package-provided ContextKey.
+	// Default: package-provided ContextKey
 	ContextKey any
 }
 

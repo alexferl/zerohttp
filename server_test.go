@@ -135,14 +135,14 @@ func TestNew_MiddlewareScenarios(t *testing.T) {
 
 	server := New(Config{
 		DisableDefaultMiddlewares: true,
-		DefaultMiddlewares:        []func(http.Handler) http.Handler{customMiddleware},
+		DefaultMiddlewares:        []MiddlewareFunc{customMiddleware},
 	})
 
 	zhtest.AssertNotNil(t, server)
 
 	// Test with custom default middlewares combined with defaults
 	server2 := New(Config{
-		DefaultMiddlewares: []func(http.Handler) http.Handler{customMiddleware},
+		DefaultMiddlewares: []MiddlewareFunc{customMiddleware},
 	})
 
 	zhtest.AssertNotNil(t, server2)

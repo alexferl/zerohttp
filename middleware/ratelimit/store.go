@@ -65,7 +65,7 @@ func NewMemoryStore(algorithm Algorithm, window time.Duration, rate, maxKeys int
 }
 
 // CheckAndRecord implements Store.
-func (s *MemoryStore) CheckAndRecord(ctx context.Context, key string, now time.Time) (bool, int, time.Time) {
+func (s *MemoryStore) CheckAndRecord(_ context.Context, key string, now time.Time) (bool, int, time.Time) {
 	switch s.algorithm {
 	case TokenBucket:
 		return s.checkTokenBucket(key, now)

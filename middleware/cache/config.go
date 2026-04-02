@@ -99,7 +99,8 @@ type Config struct {
 	StatusCodes []int
 
 	// CacheStatusHeader adds a header to responses indicating cache hit/miss.
-	// Set to empty string to disable. Default: "X-Cache"
+	// Set to empty string to disable.
+	// Default: "X-Cache"
 	CacheStatusHeader *string
 }
 

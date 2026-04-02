@@ -2,7 +2,8 @@ package basicauth
 
 // Config allows customization of basic authentication
 type Config struct {
-	// Realm is the authentication realm (defaults to "Restricted")
+	// Realm is the authentication realm.
+	// Default: "Restricted"
 	Realm string
 
 	// Credentials is a map of username -> password

@@ -19,20 +19,25 @@ const (
 
 // Config allows customization of ETag middleware behavior
 type Config struct {
-	// Algorithm selects the hashing function (defaults to FNV)
+	// Algorithm selects the hashing function.
+	// Default: FNV
 	Algorithm Algorithm
 
-	// Weak determines if ETags should be prefixed with "W/" (defaults to true)
-	// Use a pointer to distinguish between "not set" and "explicitly set to false"
+	// Weak determines if ETags should be prefixed with "W/".
+	// Use a pointer to distinguish between "not set" and "explicitly set to false".
+	// Default: false
 	Weak *bool
 
-	// MaxBufferSize is the maximum response body size to buffer for ETag generation (defaults to 1MB)
+	// MaxBufferSize is the maximum response body size to buffer for ETag generation.
+	// Default: 1MB
 	MaxBufferSize int64
 
-	// SkipStatusCodes contains status codes that should not have ETags generated (defaults to error status codes)
+	// SkipStatusCodes contains status codes that should not have ETags generated.
+	// Default: error status codes (4xx, 5xx, redirects)
 	SkipStatusCodes map[int]struct{}
 
-	// SkipContentTypes contains content types that should not have ETags generated
+	// SkipContentTypes contains content types that should not have ETags generated.
+	// Default: [text/event-stream]
 	SkipContentTypes map[string]struct{}
 
 	// ExcludedPaths contains paths to skip ETag generation.

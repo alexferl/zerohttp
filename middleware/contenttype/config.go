@@ -4,7 +4,8 @@ import "github.com/alexferl/zerohttp/httpx"
 
 // Config allows customization of allowed content types
 type Config struct {
-	// ContentTypes is a list of allowed content types
+	// ContentTypes is a list of allowed content types.
+	// Default: [application/json, application/x-www-form-urlencoded, multipart/form-data]
 	ContentTypes []string
 
 	// ExcludedPaths contains paths that skip content type validation.

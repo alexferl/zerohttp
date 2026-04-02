@@ -77,13 +77,16 @@ type Provider interface {
 
 // Config allows customization of compression behavior
 type Config struct {
-	// Level is the compression level (1-9 for gzip/deflate)
+	// Level is the compression level (1-9 for gzip/deflate).
+	// Default: 6
 	Level int
 
-	// Types are MIME types to compress (defaults to common text types)
+	// Types are MIME types to compress.
+	// Default: common text types (HTML, CSS, JS, JSON, XML, SVG)
 	Types []string
 
-	// Algorithms are compression algorithms to support (defaults to gzip, deflate).
+	// Algorithms are compression algorithms to support.
+	// Default: [Gzip, Deflate]
 	// The order determines precedence when the client accepts multiple encodings -
 	// earlier algorithms are preferred over later ones.
 	Algorithms []Algorithm

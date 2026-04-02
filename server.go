@@ -920,7 +920,7 @@ func createMetricsServer(c Config, registry metrics.Registry, logger log.Logger)
 
 // setupMiddleware configures the middleware chain on the server.
 func setupMiddleware(s *Server, c Config, registry metrics.Registry) {
-	var middlewares []func(http.Handler) http.Handler
+	var middlewares []MiddlewareFunc
 
 	// Add metrics middleware first so it will be innermost after reverse,
 	// running inside Recover and able to capture status codes written by other middleware

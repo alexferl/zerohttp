@@ -12,25 +12,32 @@ type OriginValidator func(origin string) bool
 
 // Config allows customization of CORS behavior
 type Config struct {
-	// AllowedOrigins is a list of allowed origins. Use ["*"] to allow all origins
+	// AllowedOrigins is a list of allowed origins. Use ["*"] to allow all origins.
+	// Default: ["*"]
 	AllowedOrigins []string
 
-	// AllowedMethods is a list of allowed HTTP methods (defaults to common methods)
+	// AllowedMethods is a list of allowed HTTP methods.
+	// Default: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
 	AllowedMethods []string
 
-	// AllowedHeaders is a list of allowed request headers (defaults to common headers)
+	// AllowedHeaders is a list of allowed request headers.
+	// Default: [Accept, Authorization, Content-Type, X-CSRF-Token, X-Request-Id]
 	AllowedHeaders []string
 
-	// ExposedHeaders is a list of headers exposed to the client
+	// ExposedHeaders is a list of headers exposed to the client.
+	// Default: []
 	ExposedHeaders []string
 
-	// AllowCredentials indicates whether credentials are allowed
+	// AllowCredentials indicates whether credentials are allowed.
+	// Default: false
 	AllowCredentials bool
 
-	// MaxAge indicates how long preflight requests can be cached (in seconds)
+	// MaxAge indicates how long preflight requests can be cached (in seconds).
+	// Default: 86400 (24 hours)
 	MaxAge int
 
-	// OptionsPassthrough allows OPTIONS requests to be passed to the next handler
+	// OptionsPassthrough allows OPTIONS requests to be passed to the next handler.
+	// Default: false
 	OptionsPassthrough bool
 
 	// ExcludedPaths contains paths that skip CORS processing.

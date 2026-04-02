@@ -2,8 +2,9 @@ package contentcharset
 
 // Config allows customization of allowed charsets
 type Config struct {
-	// Charsets is a list of allowed character encodings
-	// An empty string allows requests with no charset specified
+	// Charsets is a list of allowed character encodings.
+	// An empty string allows requests with no charset specified.
+	// Default: ["utf-8", ""]
 	Charsets []string
 }
 

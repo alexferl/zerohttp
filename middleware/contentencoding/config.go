@@ -4,7 +4,8 @@ import "github.com/alexferl/zerohttp/httpx"
 
 // Config allows customization of allowed content encodings
 type Config struct {
-	// Encodings is a list of allowed content encodings (gzip, deflate, br, etc.)
+	// Encodings is a list of allowed content encodings (gzip, deflate, br, etc.).
+	// Default: [gzip, deflate]
 	Encodings []string
 
 	// ExcludedPaths contains paths that skip content encoding validation.

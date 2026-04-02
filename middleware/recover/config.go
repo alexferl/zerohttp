@@ -2,14 +2,17 @@ package recover
 
 // Config allows customization of panic recovery
 type Config struct {
-	// StackSize is the maximum size of the stack trace in bytes (defaults to 4KB)
+	// StackSize is the maximum size of the stack trace in bytes.
+	// Default: 4KB
 	StackSize int64
 
-	// EnableStackTrace determines if stack traces should be included (defaults to true)
+	// EnableStackTrace determines if stack traces should be included.
+	// Default: true
 	EnableStackTrace bool
 
-	// RequestIDHeader is the header name for the request ID (defaults to "X-Request-Id")
-	// This should match the header configured in RequestIDConfig
+	// RequestIDHeader is the header name for the request ID.
+	// This should match the header configured in RequestIDConfig.
+	// Default: "X-Request-Id"
 	RequestIDHeader string
 }
 

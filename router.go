@@ -68,7 +68,10 @@ func init() {
 //	    }
 //	    return zh.Render.JSON(w, http.StatusOK, user)
 //	}))
-type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
+type (
+	HandlerFunc    func(w http.ResponseWriter, r *http.Request) error
+	MiddlewareFunc func(http.Handler) http.Handler
+)
 
 // ServeHTTP implements http.Handler interface.
 // It handles all errors directly; no panic propagation is used.
@@ -209,40 +212,40 @@ func (h *headResponseWriter) Unwrap() http.ResponseWriter {
 type Router interface {
 	// DELETE registers a handler for HTTP DELETE requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	DELETE(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	DELETE(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// GET registers a handler for HTTP GET requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	GET(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	GET(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// HEAD registers a handler for HTTP HEAD requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	HEAD(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	HEAD(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// OPTIONS registers a handler for HTTP OPTIONS requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	OPTIONS(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	OPTIONS(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// PATCH registers a handler for HTTP PATCH requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	PATCH(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	PATCH(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// POST registers a handler for HTTP POST requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	POST(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	POST(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// PUT registers a handler for HTTP PUT requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
-	PUT(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	PUT(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// CONNECT registers a handler for HTTP CONNECT requests to the specified path.
 	// Additional middleware can be provided that will be applied only to this route.
 	// CONNECT is typically used for WebSocket and WebTransport upgrades.
-	CONNECT(path string, h http.Handler, mw ...func(http.Handler) http.Handler)
+	CONNECT(path string, h http.Handler, mw ...MiddlewareFunc)
 
 	// Use adds middleware to the router's global middleware chain.
 	// Middleware is applied to all routes registered after this call.
-	Use(mw ...func(http.Handler) http.Handler)
+	Use(mw ...MiddlewareFunc)
 
 	// Group creates a new router scope that inherits the current middleware chain.
 	// This allows for organizing routes and applying middleware to specific groups.
@@ -316,7 +319,7 @@ type defaultRouter struct {
 	mux *http.ServeMux
 
 	// chain contains the middleware functions that will be applied to all routes
-	chain []func(http.Handler) http.Handler
+	chain []MiddlewareFunc
 
 	// handlerMu protects notFoundHandler and methodNotAllowedHandler.
 	// These handlers can be changed at runtime via NotFound() and MethodNotAllowed().
@@ -355,7 +358,7 @@ type defaultRouter struct {
 // Example:
 //
 //	router := NewRouter(loggingMiddleware, authMiddleware)
-func NewRouter(mw ...func(http.Handler) http.Handler) Router {
+func NewRouter(mw ...MiddlewareFunc) Router {
 	cfg := DefaultConfig
 	logger := log.NewDefaultLogger()
 
@@ -382,7 +385,7 @@ func NewRouter(mw ...func(http.Handler) http.Handler) Router {
 // Example:
 //
 //	router.Use(loggingMiddleware, corsMiddleware)
-func (r *defaultRouter) Use(mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) Use(mw ...MiddlewareFunc) {
 	r.chain = append(r.chain, mw...)
 }
 
@@ -418,50 +421,50 @@ func (r *defaultRouter) Group(fn func(Router)) {
 
 // DELETE registers a handler for HTTP DELETE requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) DELETE(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) DELETE(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodDelete, path, h, mw)
 }
 
 // GET registers a handler for HTTP GET requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) GET(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) GET(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodGet, path, h, mw)
 }
 
 // HEAD registers a handler for HTTP HEAD requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) HEAD(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) HEAD(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodHead, path, h, mw)
 }
 
 // OPTIONS registers a handler for HTTP OPTIONS requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) OPTIONS(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) OPTIONS(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodOptions, path, h, mw)
 }
 
 // PATCH registers a handler for HTTP PATCH requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) PATCH(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) PATCH(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodPatch, path, h, mw)
 }
 
 // POST registers a handler for HTTP POST requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) POST(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) POST(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodPost, path, h, mw)
 }
 
 // PUT registers a handler for HTTP PUT requests to the specified path.
 // Additional route-specific middleware can be provided.
-func (r *defaultRouter) PUT(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) PUT(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodPut, path, h, mw)
 }
 
 // CONNECT registers a handler for HTTP CONNECT requests to the specified path.
 // Additional route-specific middleware can be provided.
 // CONNECT is typically used for WebSocket and WebTransport upgrades.
-func (r *defaultRouter) CONNECT(path string, h http.Handler, mw ...func(http.Handler) http.Handler) {
+func (r *defaultRouter) CONNECT(path string, h http.Handler, mw ...MiddlewareFunc) {
 	r.handle(http.MethodConnect, path, h, mw)
 }
 
@@ -709,7 +712,7 @@ func (r *defaultRouter) SetConfig(cfg Config) {
 // It combines the router's global middleware chain with route-specific middleware.
 // Middleware is applied in reverse order so that the first middleware added
 // is the outermost (executed first).
-func (r *defaultRouter) wrap(fn http.Handler, mw []func(http.Handler) http.Handler) (out http.Handler) {
+func (r *defaultRouter) wrap(fn http.Handler, mw []MiddlewareFunc) (out http.Handler) {
 	out = fn
 
 	// Combine global and route-specific middleware
@@ -727,7 +730,7 @@ func (r *defaultRouter) wrap(fn http.Handler, mw []func(http.Handler) http.Handl
 
 // handle is the internal method that registers a handler for a specific HTTP method and path.
 // It tracks registered routes for proper 404/405 handling and registers the handler with ServeMux.
-func (r *defaultRouter) handle(method, path string, fn http.Handler, mw []func(http.Handler) http.Handler) {
+func (r *defaultRouter) handle(method, path string, fn http.Handler, mw []MiddlewareFunc) {
 	// Track the route and method for 404/405 determination
 	r.routesMu.Lock()
 	if r.registeredRoutes[path] == nil {
