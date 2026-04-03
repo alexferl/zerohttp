@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/alexferl/zerohttp/config"
 )
 
 // Store defines the interface for rate limit storage backends.
@@ -58,9 +60,10 @@ type Config struct {
 	// Default: "Rate limit exceeded"
 	Message string
 
-	// Headers to include in response.
+	// IncludeHeaders adds rate limit headers (X-RateLimit-Limit, X-RateLimit-Remaining, etc.)
+	// to responses. Use a pointer to distinguish between "not set" and "explicitly false".
 	// Default: true
-	IncludeHeaders bool
+	IncludeHeaders *bool
 
 	// ExcludedPaths contains paths to skip rate limiting.
 	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
@@ -95,7 +98,7 @@ var DefaultConfig = Config{
 	KeyExtractor:   nil, // Uses ratelimit.IPKeyExtractor() by default
 	StatusCode:     http.StatusTooManyRequests,
 	Message:        "Rate limit exceeded",
-	IncludeHeaders: true,
+	IncludeHeaders: config.Bool(true),
 	ExcludedPaths:  []string{},
 	IncludedPaths:  []string{},
 }

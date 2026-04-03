@@ -146,7 +146,7 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 					VaryHeaders:  extractVaryHeaders(r, c.Vary),
 				}
 
-				if c.ETag {
+				if config.BoolOrDefault(c.ETag, true) {
 					hash := sha256.Sum256(record.Body)
 					eTag = fmt.Sprintf(`"%s"`, hex.EncodeToString(hash[:]))
 					record.ETag = eTag
@@ -160,7 +160,7 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 			}
 
 			// Finalize writes the response with proper headers
-			recorder.Finalize(eTag, c.CacheControl, c.ETag, c.LastModified, lastModified)
+			recorder.Finalize(eTag, c.CacheControl, config.BoolOrDefault(c.ETag, true), config.BoolOrDefault(c.LastModified, true), lastModified)
 		})
 	}
 }

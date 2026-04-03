@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/middleware/recover"
 )
 
@@ -42,8 +43,8 @@ func main() {
 	// Example with custom recover configuration
 	customApp := zh.New()
 	customApp.Use(recover.New(customApp.Logger(), recover.Config{
-		EnableStackTrace: false, // Disable stack traces
-		StackSize:        1024,  // Smaller stack buffer
+		EnableStackTrace: config.Bool(false), // Disable stack traces
+		StackSize:        1024,               // Smaller stack buffer
 	}))
 
 	customApp.GET("/no-stack", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

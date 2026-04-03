@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -16,8 +17,8 @@ func TestDefaultCacheConfig(t *testing.T) {
 		zhtest.AssertEqual(t, time.Minute, cfg.DefaultTTL)
 		zhtest.AssertEqual(t, 10*1024*1024, cfg.MaxBodySize)
 		zhtest.AssertEqual(t, 10000, cfg.MaxEntries)
-		zhtest.AssertTrue(t, cfg.ETag)
-		zhtest.AssertTrue(t, cfg.LastModified)
+		zhtest.AssertTrue(t, *cfg.ETag)
+		zhtest.AssertTrue(t, *cfg.LastModified)
 
 		expectedVary := []string{"Accept", "Accept-Encoding", "Accept-Language"}
 		zhtest.AssertEqual(t, len(expectedVary), len(cfg.Vary))
@@ -57,8 +58,8 @@ func TestCacheConfigCustomization(t *testing.T) {
 			DefaultTTL:    time.Hour,
 			MaxBodySize:   5 * 1024 * 1024,
 			MaxEntries:    5000,
-			ETag:          false,
-			LastModified:  false,
+			ETag:          config.Bool(false),
+			LastModified:  config.Bool(false),
 			Vary:          []string{"Accept"},
 			Store:         customStore,
 			ExcludedPaths: []string{"/api/live", "/health"},
@@ -69,8 +70,8 @@ func TestCacheConfigCustomization(t *testing.T) {
 		zhtest.AssertEqual(t, time.Hour, cfg.DefaultTTL)
 		zhtest.AssertEqual(t, 5*1024*1024, cfg.MaxBodySize)
 		zhtest.AssertEqual(t, 5000, cfg.MaxEntries)
-		zhtest.AssertFalse(t, cfg.ETag)
-		zhtest.AssertFalse(t, cfg.LastModified)
+		zhtest.AssertFalse(t, *cfg.ETag)
+		zhtest.AssertFalse(t, *cfg.LastModified)
 		zhtest.AssertEqual(t, customStore, cfg.Store)
 		zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
 	})

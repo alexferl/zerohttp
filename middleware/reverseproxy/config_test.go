@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -17,7 +18,7 @@ func TestDefaultReverseProxyConfig(t *testing.T) {
 	zhtest.AssertEqual(t, 0, len(cfg.Rewrites))
 	zhtest.AssertEqual(t, 0, len(cfg.SetHeaders))
 	zhtest.AssertEqual(t, 0, len(cfg.RemoveHeaders))
-	zhtest.AssertTrue(t, cfg.ForwardHeaders)
+	zhtest.AssertTrue(t, *cfg.ForwardHeaders)
 	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 }
@@ -38,12 +39,12 @@ func TestBackend(t *testing.T) {
 	b := Backend{
 		Target:  "http://localhost:8081",
 		Weight:  3,
-		Healthy: true,
+		Healthy: config.Bool(true),
 	}
 
 	zhtest.AssertEqual(t, "http://localhost:8081", b.Target)
 	zhtest.AssertEqual(t, 3, b.Weight)
-	zhtest.AssertTrue(t, b.Healthy)
+	zhtest.AssertTrue(t, *b.Healthy)
 }
 
 func TestRewriteRule(t *testing.T) {
@@ -72,7 +73,7 @@ func TestReverseProxyConfig(t *testing.T) {
 			"X-Custom": "value",
 		},
 		RemoveHeaders:  []string{"X-Internal"},
-		ForwardHeaders: true,
+		ForwardHeaders: config.Bool(true),
 		ExcludedPaths:  []string{"/health", "/metrics"},
 		IncludedPaths:  []string{"/api/public"},
 	}
@@ -89,7 +90,7 @@ func TestReverseProxyConfig(t *testing.T) {
 	zhtest.AssertEqual(t, "value", cfg.SetHeaders["X-Custom"])
 	zhtest.AssertEqual(t, 1, len(cfg.RemoveHeaders))
 	zhtest.AssertEqual(t, "X-Internal", cfg.RemoveHeaders[0])
-	zhtest.AssertTrue(t, cfg.ForwardHeaders)
+	zhtest.AssertTrue(t, *cfg.ForwardHeaders)
 	zhtest.AssertEqual(t, 2, len(cfg.ExcludedPaths))
 	zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
 }
@@ -123,9 +124,9 @@ func TestReverseProxyConfig_IncludedPaths(t *testing.T) {
 func TestReverseProxyConfigWithTargets(t *testing.T) {
 	cfg := Config{
 		Targets: []Backend{
-			{Target: "http://backend1:8081", Weight: 1, Healthy: true},
-			{Target: "http://backend2:8081", Weight: 2, Healthy: true},
-			{Target: "http://backend3:8081", Weight: 1, Healthy: false},
+			{Target: "http://backend1:8081", Weight: 1, Healthy: config.Bool(true)},
+			{Target: "http://backend2:8081", Weight: 2, Healthy: config.Bool(true)},
+			{Target: "http://backend3:8081", Weight: 1, Healthy: config.Bool(false)},
 		},
 		LoadBalancer: LeastConnections,
 	}
@@ -133,6 +134,6 @@ func TestReverseProxyConfigWithTargets(t *testing.T) {
 	zhtest.AssertEqual(t, 3, len(cfg.Targets))
 	zhtest.AssertEqual(t, "http://backend1:8081", cfg.Targets[0].Target)
 	zhtest.AssertEqual(t, 1, cfg.Targets[0].Weight)
-	zhtest.AssertTrue(t, cfg.Targets[0].Healthy)
+	zhtest.AssertTrue(t, *cfg.Targets[0].Healthy)
 	zhtest.AssertEqual(t, LeastConnections, cfg.LoadBalancer)
 }

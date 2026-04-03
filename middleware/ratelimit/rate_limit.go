@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/mwutil"
@@ -58,7 +59,7 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 			// Skip headers for SSE connections to avoid interfering with streaming responses
 			isSSE := r.Header.Get(httpx.HeaderAccept) == httpx.MIMETextEventStream
 
-			if c.IncludeHeaders && !isSSE {
+			if config.BoolOrDefault(c.IncludeHeaders, true) && !isSSE {
 				w.Header().Set(httpx.HeaderXRateLimitLimit, strconv.Itoa(c.Rate))
 				w.Header().Set(httpx.HeaderXRateLimitRemaining, strconv.Itoa(remaining))
 				w.Header().Set(httpx.HeaderXRateLimitReset, strconv.FormatInt(resetTime.Unix(), 10))

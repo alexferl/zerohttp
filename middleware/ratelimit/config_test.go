@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -17,7 +18,7 @@ func TestRateLimitConfig_DefaultValues(t *testing.T) {
 	zhtest.AssertNil(t, cfg.KeyExtractor)
 	zhtest.AssertEqual(t, http.StatusTooManyRequests, cfg.StatusCode)
 	zhtest.AssertEqual(t, "Rate limit exceeded", cfg.Message)
-	zhtest.AssertTrue(t, cfg.IncludeHeaders)
+	zhtest.AssertTrue(t, *cfg.IncludeHeaders)
 	zhtest.AssertEqual(t, 0, len(cfg.ExcludedPaths))
 	zhtest.AssertEqual(t, 0, len(cfg.IncludedPaths))
 }
@@ -30,14 +31,14 @@ func TestRateLimitConfig_StructAssignment(t *testing.T) {
 			Algorithm:      SlidingWindow,
 			StatusCode:     http.StatusServiceUnavailable,
 			Message:        "Too many requests, please try again later",
-			IncludeHeaders: false,
+			IncludeHeaders: config.Bool(false),
 		}
 		zhtest.AssertEqual(t, 50, cfg.Rate)
 		zhtest.AssertEqual(t, 30*time.Second, cfg.Window)
 		zhtest.AssertEqual(t, SlidingWindow, cfg.Algorithm)
 		zhtest.AssertEqual(t, http.StatusServiceUnavailable, cfg.StatusCode)
 		zhtest.AssertEqual(t, "Too many requests, please try again later", cfg.Message)
-		zhtest.AssertFalse(t, cfg.IncludeHeaders)
+		zhtest.AssertFalse(t, *cfg.IncludeHeaders)
 	})
 
 	t.Run("key extractor", func(t *testing.T) {
@@ -96,7 +97,7 @@ func TestRateLimitConfig_MultipleFields(t *testing.T) {
 		KeyExtractor:   customExtractor,
 		StatusCode:     http.StatusForbidden,
 		Message:        "Rate limit reached",
-		IncludeHeaders: false,
+		IncludeHeaders: config.Bool(false),
 		ExcludedPaths:  excludedPaths,
 		IncludedPaths:  includedPaths,
 	}
@@ -107,7 +108,7 @@ func TestRateLimitConfig_MultipleFields(t *testing.T) {
 	zhtest.AssertNotNil(t, cfg.KeyExtractor)
 	zhtest.AssertEqual(t, http.StatusForbidden, cfg.StatusCode)
 	zhtest.AssertEqual(t, "Rate limit reached", cfg.Message)
-	zhtest.AssertFalse(t, cfg.IncludeHeaders)
+	zhtest.AssertFalse(t, *cfg.IncludeHeaders)
 	zhtest.AssertEqual(t, excludedPaths, cfg.ExcludedPaths)
 	zhtest.AssertEqual(t, 1, len(cfg.IncludedPaths))
 	zhtest.AssertEqual(t, includedPaths, cfg.IncludedPaths)

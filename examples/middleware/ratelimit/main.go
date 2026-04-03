@@ -6,6 +6,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware/ratelimit"
 )
@@ -25,7 +26,7 @@ func main() {
 		Rate:           10,
 		Window:         time.Second,
 		Algorithm:      ratelimit.SlidingWindow,
-		IncludeHeaders: true,
+		IncludeHeaders: config.Bool(true),
 	}))
 
 	// Example 3: Per-user rate limiting (using header)
@@ -34,7 +35,7 @@ func main() {
 	}), ratelimit.New(ratelimit.Config{
 		Rate:           5,
 		Window:         time.Minute,
-		IncludeHeaders: true,
+		IncludeHeaders: config.Bool(true),
 		KeyExtractor: func(r *http.Request) string {
 			userID := r.Header.Get("X-User-ID")
 			if userID == "" {
@@ -51,7 +52,7 @@ func main() {
 		Rate:           1000,
 		Window:         time.Minute,
 		MaxKeys:        100000,
-		IncludeHeaders: true,
+		IncludeHeaders: config.Bool(true),
 	}))
 
 	// Example 5: Exclude health check from rate limiting
@@ -61,7 +62,7 @@ func main() {
 		Rate:           10,
 		Window:         time.Second,
 		ExcludedPaths:  []string{"/health", "/metrics"},
-		IncludeHeaders: true,
+		IncludeHeaders: config.Bool(true),
 	}))
 
 	log.Fatal(app.Start())

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 )
 
@@ -64,12 +65,14 @@ type Config struct {
 	MaxEntries int
 
 	// ETag enables automatic ETag generation (SHA256 hash of body).
+	// Use a pointer to distinguish between "not set" and "explicitly false".
 	// Default: true
-	ETag bool
+	ETag *bool
 
 	// LastModified enables automatic Last-Modified timestamp.
+	// Use a pointer to distinguish between "not set" and "explicitly false".
 	// Default: true
-	LastModified bool
+	LastModified *bool
 
 	// Vary headers that should be included in the cache key.
 	// Default: ["Accept", "Accept-Encoding", "Accept-Language"]
@@ -110,8 +113,8 @@ var DefaultConfig = Config{
 	DefaultTTL:    time.Minute,
 	MaxBodySize:   10 * 1024 * 1024,
 	MaxEntries:    10000,
-	ETag:          true,
-	LastModified:  true,
+	ETag:          config.Bool(true),
+	LastModified:  config.Bool(true),
 	Vary:          []string{httpx.HeaderAccept, httpx.HeaderAcceptEncoding, httpx.HeaderAcceptLanguage},
 	ExcludedPaths: []string{},
 	IncludedPaths: []string{},

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/alexferl/zerohttp/config"
 )
 
 // BenchmarkReverseProxy_Baseline measures basic proxy overhead
@@ -54,9 +56,9 @@ func BenchmarkReverseProxy_LoadBalancers(b *testing.B) {
 	for _, tc := range algorithms {
 		b.Run(tc.name, func(b *testing.B) {
 			targets := []Backend{
-				{Target: upstreams[0].URL, Weight: 1, Healthy: true},
-				{Target: upstreams[1].URL, Weight: 1, Healthy: true},
-				{Target: upstreams[2].URL, Weight: 1, Healthy: true},
+				{Target: upstreams[0].URL, Weight: 1, Healthy: config.Bool(true)},
+				{Target: upstreams[1].URL, Weight: 1, Healthy: config.Bool(true)},
+				{Target: upstreams[2].URL, Weight: 1, Healthy: config.Bool(true)},
 			}
 
 			mw, cleanup := New(Config{
@@ -93,7 +95,7 @@ func BenchmarkReverseProxy_BackendCount(b *testing.B) {
 					w.WriteHeader(http.StatusOK)
 				}))
 				defer upstreams[i].Close()
-				targets[i] = Backend{Target: upstreams[i].URL, Weight: 1, Healthy: true}
+				targets[i] = Backend{Target: upstreams[i].URL, Weight: 1, Healthy: config.Bool(true)}
 			}
 
 			mw, cleanup := New(Config{
@@ -292,7 +294,7 @@ func BenchmarkReverseProxy_ForwardHeaders(b *testing.B) {
 	b.Run("WithoutForwardHeaders", func(b *testing.B) {
 		mw, cleanup := New(Config{
 			Target:         upstream.URL,
-			ForwardHeaders: false,
+			ForwardHeaders: config.Bool(false),
 		})
 		defer cleanup()
 		handler := mw(nil)
@@ -310,7 +312,7 @@ func BenchmarkReverseProxy_ForwardHeaders(b *testing.B) {
 	b.Run("WithForwardHeaders", func(b *testing.B) {
 		mw, cleanup := New(Config{
 			Target:         upstream.URL,
-			ForwardHeaders: true,
+			ForwardHeaders: config.Bool(true),
 		})
 		defer cleanup()
 		handler := mw(nil)
@@ -417,7 +419,7 @@ func BenchmarkReverseProxy_UnhealthyBackends(b *testing.B) {
 				targets[i] = Backend{
 					Target:  upstreams[i].URL,
 					Weight:  1,
-					Healthy: i < tc.healthyCount,
+					Healthy: config.Bool(i < tc.healthyCount),
 				}
 			}
 
@@ -447,9 +449,9 @@ func BenchmarkReverseProxy_Concurrent(b *testing.B) {
 	defer upstream.Close()
 
 	targets := []Backend{
-		{Target: upstream.URL, Weight: 1, Healthy: true},
-		{Target: upstream.URL, Weight: 1, Healthy: true},
-		{Target: upstream.URL, Weight: 1, Healthy: true},
+		{Target: upstream.URL, Weight: 1, Healthy: config.Bool(true)},
+		{Target: upstream.URL, Weight: 1, Healthy: config.Bool(true)},
+		{Target: upstream.URL, Weight: 1, Healthy: config.Bool(true)},
 	}
 
 	mw, cleanup := New(Config{
@@ -489,7 +491,7 @@ func BenchmarkReverseProxy_BackendSelection(b *testing.B) {
 		targets[i] = Backend{
 			Target:  upstream.URL,
 			Weight:  1,
-			Healthy: true,
+			Healthy: config.Bool(true),
 		}
 	}
 

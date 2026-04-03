@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/internal/mwutil"
 	"github.com/alexferl/zerohttp/metrics"
@@ -76,7 +77,7 @@ func New(cfg Config) (func(http.Handler) http.Handler, func()) {
 			if weight <= 0 {
 				weight = 1
 			}
-			rp.initBackend(b.Target, weight, b.Healthy)
+			rp.initBackend(b.Target, weight, config.BoolOrDefault(b.Healthy, true))
 		}
 	} else {
 		panic("reverse proxy: Target or Targets is required")
@@ -158,7 +159,7 @@ func (rp *reverseProxy) initBackend(target string, weight int, healthy bool) {
 	proxy.Director = nil
 	proxy.Rewrite = func(r *httputil.ProxyRequest) {
 		r.SetURL(targetURL)
-		if rp.cfg.ForwardHeaders {
+		if config.BoolOrDefault(rp.cfg.ForwardHeaders, true) {
 			r.SetXForwarded()
 		}
 		// Preserve query parameters from original request
@@ -285,7 +286,7 @@ func (rp *reverseProxy) applyModifications(r *http.Request) {
 		r.Header.Set(key, value)
 	}
 
-	if cfg.ForwardHeaders {
+	if config.BoolOrDefault(cfg.ForwardHeaders, true) {
 		clientIP := r.RemoteAddr
 		if xff := r.Header.Get(httpx.HeaderXForwardedFor); xff != "" {
 			clientIP = xff + ", " + clientIP

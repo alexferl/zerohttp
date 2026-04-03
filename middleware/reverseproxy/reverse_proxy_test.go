@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/zhtest"
 )
@@ -190,7 +191,7 @@ func TestReverseProxy_ForwardHeaders(t *testing.T) {
 
 	mw, _ := New(Config{
 		Target:         upstream.URL,
-		ForwardHeaders: true,
+		ForwardHeaders: config.Bool(true),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -305,7 +306,7 @@ func TestReverseProxy_ErrorHandler(t *testing.T) {
 func TestReverseProxy_FallbackHandler(t *testing.T) {
 	mw, _ := New(Config{
 		Targets: []Backend{
-			{Target: "http://localhost:1", Healthy: false},
+			{Target: "http://localhost:1", Healthy: config.Bool(false)},
 		},
 		HealthCheckInterval: 0,
 		FallbackHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -335,8 +336,8 @@ func TestReverseProxy_LoadBalancer_RoundRobin(t *testing.T) {
 
 	mw, _ := New(Config{
 		Targets: []Backend{
-			{Target: upstream1.URL, Healthy: true},
-			{Target: upstream2.URL, Healthy: true},
+			{Target: upstream1.URL, Healthy: config.Bool(true)},
+			{Target: upstream2.URL, Healthy: config.Bool(true)},
 		},
 		LoadBalancer: RoundRobin,
 	})
@@ -373,8 +374,8 @@ func TestReverseProxy_LoadBalancer_Random(t *testing.T) {
 
 	mw, _ := New(Config{
 		Targets: []Backend{
-			{Target: upstream1.URL, Healthy: true},
-			{Target: upstream2.URL, Healthy: true},
+			{Target: upstream1.URL, Healthy: config.Bool(true)},
+			{Target: upstream2.URL, Healthy: config.Bool(true)},
 		},
 		LoadBalancer: Random,
 	})
@@ -402,8 +403,8 @@ func TestReverseProxy_LoadBalancer_LeastConnections(t *testing.T) {
 
 	mw, _ := New(Config{
 		Targets: []Backend{
-			{Target: upstream1.URL, Healthy: true},
-			{Target: upstream2.URL, Healthy: true},
+			{Target: upstream1.URL, Healthy: config.Bool(true)},
+			{Target: upstream2.URL, Healthy: config.Bool(true)},
 		},
 		LoadBalancer: LeastConnections,
 	})
@@ -449,7 +450,7 @@ func TestReverseProxy_HealthCheck(t *testing.T) {
 
 	mw, _ := New(Config{
 		Targets: []Backend{
-			{Target: upstream.URL, Healthy: true},
+			{Target: upstream.URL, Healthy: config.Bool(true)},
 		},
 		HealthCheckInterval: 100 * time.Millisecond,
 		HealthCheckPath:     "/health",
@@ -557,7 +558,7 @@ func TestReverseProxy_WithNextHandler(t *testing.T) {
 func TestReverseProxy_NoHealthyBackends(t *testing.T) {
 	mw, _ := New(Config{
 		Targets: []Backend{
-			{Target: "http://localhost:1", Healthy: false},
+			{Target: "http://localhost:1", Healthy: config.Bool(false)},
 		},
 		HealthCheckInterval: 0,
 	})
@@ -634,7 +635,7 @@ func TestReverseProxy_HealthCheckCleanup(t *testing.T) {
 	// Create reverse proxy with health checks
 	mw, cleanup := New(Config{
 		Targets: []Backend{
-			{Target: upstream.URL, Healthy: true},
+			{Target: upstream.URL, Healthy: config.Bool(true)},
 		},
 		HealthCheckInterval: 50 * time.Millisecond,
 		HealthCheckPath:     "/health",

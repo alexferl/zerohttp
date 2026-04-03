@@ -6,6 +6,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/middleware/reverseproxy"
 )
 
@@ -27,8 +28,8 @@ func main() {
 	app.Group(func(lb zh.Router) {
 		rp, cleanup := reverseproxy.New(reverseproxy.Config{
 			Targets: []reverseproxy.Backend{
-				{Target: "http://localhost:8081", Weight: 1, Healthy: true},
-				{Target: "http://localhost:8082", Weight: 1, Healthy: true},
+				{Target: "http://localhost:8081", Weight: 1, Healthy: config.Bool(true)},
+				{Target: "http://localhost:8082", Weight: 1, Healthy: config.Bool(true)},
 			},
 			LoadBalancer:        reverseproxy.RoundRobin,
 			HealthCheckInterval: 10 * time.Second,
