@@ -7,6 +7,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware/cache"
 )
@@ -27,8 +28,8 @@ func main() {
 		cache.New(cache.Config{
 			CacheControl: "public, max-age=30",
 			DefaultTTL:   30 * time.Second,
-			ETag:         true,
-			LastModified: true,
+			ETag:         config.Bool(true),
+			LastModified: config.Bool(true),
 		}),
 	)
 
@@ -47,7 +48,7 @@ func main() {
 		cache.New(cache.Config{
 			CacheControl: "private, max-age=60",
 			DefaultTTL:   time.Minute,
-			ETag:         true,
+			ETag:         config.Bool(true),
 			Vary:         []string{httpx.HeaderAccept, httpx.HeaderAcceptEncoding},
 		}),
 	)

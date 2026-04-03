@@ -1,5 +1,7 @@
 package recover
 
+import "github.com/alexferl/zerohttp/config"
+
 // Config allows customization of panic recovery
 type Config struct {
 	// StackSize is the maximum size of the stack trace in bytes.
@@ -7,8 +9,9 @@ type Config struct {
 	StackSize int64
 
 	// EnableStackTrace determines if stack traces should be included.
+	// Use a pointer to distinguish between "not set" and "explicitly false".
 	// Default: true
-	EnableStackTrace bool
+	EnableStackTrace *bool
 
 	// RequestIDHeader is the header name for the request ID.
 	// This should match the header configured in RequestIDConfig.
@@ -19,6 +22,6 @@ type Config struct {
 // DefaultConfig contains the default panic recovery configuration
 var DefaultConfig = Config{
 	StackSize:        4 << 10, // 4KB
-	EnableStackTrace: true,
+	EnableStackTrace: config.Bool(true),
 	RequestIDHeader:  "X-Request-Id",
 }

@@ -132,7 +132,7 @@ func TestCache_ConditionalRequests(t *testing.T) {
 
 		cacheMiddleware := New(Config{
 			DefaultTTL: time.Minute,
-			ETag:       true,
+			ETag:       config.Bool(true),
 		})
 
 		// First request to cache
@@ -161,7 +161,7 @@ func TestCache_ConditionalRequests(t *testing.T) {
 
 		cacheMiddleware := New(Config{
 			DefaultTTL:   time.Minute,
-			LastModified: true,
+			LastModified: config.Bool(true),
 		})
 
 		// First request

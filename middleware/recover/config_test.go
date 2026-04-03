@@ -3,13 +3,14 @@ package recover
 import (
 	"testing"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
 func TestRecoverConfig_DefaultValues(t *testing.T) {
 	cfg := DefaultConfig
 	zhtest.AssertEqual(t, int64(4<<10), cfg.StackSize)
-	zhtest.AssertTrue(t, cfg.EnableStackTrace)
+	zhtest.AssertTrue(t, *cfg.EnableStackTrace)
 
 	// Verify the 4KB calculation
 	expectedSize := int64(4096)
@@ -37,7 +38,7 @@ func TestRecoverConfig_StackSizeBoundaryValues(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{
 				StackSize:        tt.stackSize,
-				EnableStackTrace: true,
+				EnableStackTrace: config.Bool(true),
 			}
 			zhtest.AssertEqual(t, tt.stackSize, cfg.StackSize)
 		})
@@ -67,7 +68,7 @@ func TestRecoverConfig_CommonStackSizes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{
 				StackSize:        tt.stackSize,
-				EnableStackTrace: true,
+				EnableStackTrace: config.Bool(true),
 			}
 			zhtest.AssertEqual(t, tt.stackSize, cfg.StackSize)
 		})
@@ -78,22 +79,22 @@ func TestRecoverConfig_EdgeCases(t *testing.T) {
 	t.Run("zero values", func(t *testing.T) {
 		cfg := Config{} // Zero values
 		zhtest.AssertEqual(t, int64(0), cfg.StackSize)
-		zhtest.AssertFalse(t, cfg.EnableStackTrace)
+		zhtest.AssertNil(t, cfg.EnableStackTrace)
 	})
 
 	t.Run("boolean toggling", func(t *testing.T) {
 		cfg := Config{
 			StackSize:        4096,
-			EnableStackTrace: true,
+			EnableStackTrace: config.Bool(true),
 		}
 		// Start with true
-		zhtest.AssertTrue(t, cfg.EnableStackTrace)
+		zhtest.AssertTrue(t, *cfg.EnableStackTrace)
 		// Toggle to false
-		cfg.EnableStackTrace = false
-		zhtest.AssertFalse(t, cfg.EnableStackTrace)
+		cfg.EnableStackTrace = config.Bool(false)
+		zhtest.AssertFalse(t, *cfg.EnableStackTrace)
 		// Toggle back to true
-		cfg.EnableStackTrace = true
-		zhtest.AssertTrue(t, cfg.EnableStackTrace)
+		cfg.EnableStackTrace = config.Bool(true)
+		zhtest.AssertTrue(t, *cfg.EnableStackTrace)
 	})
 }
 
@@ -115,11 +116,11 @@ func TestRecoverConfig_UsageScenarios(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{
 				StackSize:        tt.stackSize,
-				EnableStackTrace: tt.enableStackTrace,
+				EnableStackTrace: config.Bool(tt.enableStackTrace),
 			}
 
 			zhtest.AssertEqual(t, tt.stackSize, cfg.StackSize)
-			zhtest.AssertEqual(t, tt.enableStackTrace, cfg.EnableStackTrace)
+			zhtest.AssertEqual(t, tt.enableStackTrace, *cfg.EnableStackTrace)
 		})
 	}
 }
@@ -128,11 +129,11 @@ func TestRecoverConfig_StructAssignment(t *testing.T) {
 	t.Run("direct struct assignment", func(t *testing.T) {
 		cfg := Config{
 			StackSize:        8192,
-			EnableStackTrace: false,
+			EnableStackTrace: config.Bool(false),
 		}
 
 		zhtest.AssertEqual(t, int64(8192), cfg.StackSize)
-		zhtest.AssertFalse(t, cfg.EnableStackTrace)
+		zhtest.AssertFalse(t, *cfg.EnableStackTrace)
 	})
 
 	t.Run("modify struct fields", func(t *testing.T) {
@@ -140,9 +141,9 @@ func TestRecoverConfig_StructAssignment(t *testing.T) {
 
 		// Modify fields directly
 		cfg.StackSize = 16384
-		cfg.EnableStackTrace = false
+		cfg.EnableStackTrace = config.Bool(false)
 
 		zhtest.AssertEqual(t, int64(16384), cfg.StackSize)
-		zhtest.AssertFalse(t, cfg.EnableStackTrace)
+		zhtest.AssertFalse(t, *cfg.EnableStackTrace)
 	})
 }

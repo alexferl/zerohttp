@@ -3,6 +3,8 @@ package reverseproxy
 import (
 	"net/http"
 	"time"
+
+	"github.com/alexferl/zerohttp/config"
 )
 
 // LoadBalancerAlgorithm defines the load balancing strategy
@@ -27,8 +29,9 @@ type Backend struct {
 	Weight int
 
 	// Healthy indicates if the backend is currently healthy.
+	// Use a pointer to distinguish between "not set" and "explicitly false".
 	// Default: true
-	Healthy bool
+	Healthy *bool
 }
 
 // RewriteRule defines a path rewrite pattern
@@ -95,8 +98,9 @@ type Config struct {
 	// X-Forwarded-For: Client IP
 	// X-Forwarded-Proto: Original protocol (http/https)
 	// X-Forwarded-Host: Original host header.
+	// Use a pointer to distinguish between "not set" and "explicitly false".
 	// Default: true
-	ForwardHeaders bool
+	ForwardHeaders *bool
 
 	// ErrorHandler is called when the proxy encounters an error.
 	// If nil, a default error handler is used.
@@ -152,7 +156,7 @@ var DefaultConfig = Config{
 	Rewrites:        []RewriteRule{},
 	SetHeaders:      map[string]string{},
 	RemoveHeaders:   []string{},
-	ForwardHeaders:  true,
+	ForwardHeaders:  config.Bool(true),
 	ExcludedPaths:   []string{},
 	IncludedPaths:   []string{},
 }

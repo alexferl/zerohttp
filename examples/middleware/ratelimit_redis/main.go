@@ -8,6 +8,7 @@ import (
 	"time"
 
 	zh "github.com/alexferl/zerohttp"
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	"github.com/alexferl/zerohttp/middleware/ratelimit"
 	"github.com/redis/go-redis/v9"
@@ -108,7 +109,7 @@ func main() {
 		Store:          store,
 		Rate:           rate,
 		Window:         window,
-		IncludeHeaders: true,
+		IncludeHeaders: config.Bool(true),
 	}))
 
 	app.GET("/", zh.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {

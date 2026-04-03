@@ -164,7 +164,7 @@ func TestRateLimitHeaders(t *testing.T) {
 		Rate:           5,
 		Window:         time.Minute,
 		Algorithm:      TokenBucket,
-		IncludeHeaders: true,
+		IncludeHeaders: config.Bool(true),
 	})
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()
@@ -184,7 +184,7 @@ func TestRateLimitNoHeaders(t *testing.T) {
 		Rate:           2,
 		Window:         time.Second,
 		Algorithm:      TokenBucket,
-		IncludeHeaders: false,
+		IncludeHeaders: config.Bool(false),
 	})
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	req := zhtest.NewRequest(http.MethodGet, "/test").Build()

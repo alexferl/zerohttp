@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/alexferl/zerohttp/config"
 	"github.com/alexferl/zerohttp/httpx"
 	zconfig "github.com/alexferl/zerohttp/internal/config"
 	"github.com/alexferl/zerohttp/internal/problem"
@@ -46,7 +47,7 @@ func New(logger log.Logger, cfg ...Config) func(http.Handler) http.Handler {
 						log.F("request_id", reqID),
 					}
 
-					if c.EnableStackTrace {
+					if config.BoolOrDefault(c.EnableStackTrace, true) {
 						stack := make([]byte, c.StackSize)
 						length := runtime.Stack(stack, false)
 						fields = append(fields, log.F("stack", string(stack[:length])))

@@ -117,7 +117,7 @@ func TestRecover_CustomConfig(t *testing.T) {
 	logger := &mockLogger{}
 	handler := New(logger, Config{
 		StackSize:        1024,
-		EnableStackTrace: true,
+		EnableStackTrace: config.Bool(true),
 	})(panicHandler("custom config panic"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
@@ -140,7 +140,7 @@ func TestRecover_DisabledStackTrace(t *testing.T) {
 	logger := &mockLogger{}
 	handler := New(logger, Config{
 		StackSize:        4096,
-		EnableStackTrace: false,
+		EnableStackTrace: config.Bool(false),
 	})(panicHandler("no stack panic"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
@@ -159,7 +159,7 @@ func TestRecover_InvalidStackSize(t *testing.T) {
 	logger := &mockLogger{}
 	handler := New(logger, Config{
 		StackSize:        0,
-		EnableStackTrace: true,
+		EnableStackTrace: config.Bool(true),
 	})(panicHandler("invalid stack size"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
@@ -220,14 +220,14 @@ func TestDefaultRecoverConfig(t *testing.T) {
 	cfg := DefaultConfig
 	expectedStackSize := int64(4 << 10)
 	zhtest.AssertEqual(t, expectedStackSize, cfg.StackSize)
-	zhtest.AssertTrue(t, cfg.EnableStackTrace)
+	zhtest.AssertTrue(t, *cfg.EnableStackTrace)
 }
 
 func TestRecover_MultipleOptions(t *testing.T) {
 	logger := &mockLogger{}
 	handler := New(logger, Config{
 		StackSize:        1024,
-		EnableStackTrace: true,
+		EnableStackTrace: config.Bool(true),
 	})(panicHandler("multiple options"))
 	req := zhtest.NewRequest(http.MethodGet, "/").Build()
 	zhtest.Serve(handler, req)
@@ -334,7 +334,7 @@ func TestRecover_CustomRequestIDHeader(t *testing.T) {
 
 	cfg := Config{
 		RequestIDHeader:  customHeader,
-		EnableStackTrace: false,
+		EnableStackTrace: config.Bool(false),
 	}
 
 	handler := New(logger, cfg)(panicHandler("test panic"))
