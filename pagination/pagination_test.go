@@ -46,6 +46,100 @@ func TestRequest_Params(t *testing.T) {
 	}
 }
 
+func TestDefaultPerPage(t *testing.T) {
+	// Save original values and restore after test
+	originalDefault := DefaultPerPage
+	originalMax := DefaultMaxPerPage
+	defer func() {
+		DefaultPerPage = originalDefault
+		DefaultMaxPerPage = originalMax
+	}()
+
+	tests := []struct {
+		name           string
+		defaultPerPage int
+		input          Params
+		expectedPage   int
+	}{
+		{
+			name:           "custom default per page is applied",
+			defaultPerPage: 50,
+			input:          Params{},
+			expectedPage:   50,
+		},
+		{
+			name:           "custom default of 10",
+			defaultPerPage: 10,
+			input:          Params{Page: 2},
+			expectedPage:   10,
+		},
+		{
+			name:           "explicit per_page is not overridden",
+			defaultPerPage: 50,
+			input:          Params{PerPage: 30},
+			expectedPage:   30,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			DefaultPerPage = tt.defaultPerPage
+			result := tt.input.Defaults()
+			zhtest.AssertEqual(t, tt.expectedPage, result.PerPage)
+		})
+	}
+}
+
+func TestDefaultMaxPerPage(t *testing.T) {
+	// Save original values and restore after test
+	originalDefault := DefaultPerPage
+	originalMax := DefaultMaxPerPage
+	defer func() {
+		DefaultPerPage = originalDefault
+		DefaultMaxPerPage = originalMax
+	}()
+
+	tests := []struct {
+		name        string
+		maxPerPage  int
+		input       Params
+		expectedMax int
+	}{
+		{
+			name:        "custom max per page caps value",
+			maxPerPage:  50,
+			input:       Params{Page: 1, PerPage: 100},
+			expectedMax: 50,
+		},
+		{
+			name:        "custom max of 200",
+			maxPerPage:  200,
+			input:       Params{Page: 1, PerPage: 250},
+			expectedMax: 200,
+		},
+		{
+			name:        "value under custom max is allowed",
+			maxPerPage:  50,
+			input:       Params{Page: 1, PerPage: 30},
+			expectedMax: 30,
+		},
+		{
+			name:        "value at custom max is allowed",
+			maxPerPage:  50,
+			input:       Params{Page: 1, PerPage: 50},
+			expectedMax: 50,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			DefaultMaxPerPage = tt.maxPerPage
+			result := tt.input.Defaults()
+			zhtest.AssertEqual(t, tt.expectedMax, result.PerPage)
+		})
+	}
+}
+
 func TestParams_Defaults(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -55,7 +149,7 @@ func TestParams_Defaults(t *testing.T) {
 		{
 			name:     "zero values get defaults",
 			input:    Params{},
-			expected: Params{Page: 1, PerPage: 20},
+			expected: Params{Page: 1, PerPage: 25},
 		},
 		{
 			name:     "negative page gets default",
@@ -65,7 +159,7 @@ func TestParams_Defaults(t *testing.T) {
 		{
 			name:     "negative per_page gets default",
 			input:    Params{Page: 5, PerPage: -5},
-			expected: Params{Page: 5, PerPage: 20},
+			expected: Params{Page: 5, PerPage: 25},
 		},
 		{
 			name:     "per_page over max gets capped",
@@ -84,8 +178,8 @@ func TestParams_Defaults(t *testing.T) {
 		},
 		{
 			name:     "page 1 is valid",
-			input:    Params{Page: 1, PerPage: 20},
-			expected: Params{Page: 1, PerPage: 20},
+			input:    Params{Page: 1, PerPage: 25},
+			expected: Params{Page: 1, PerPage: 25},
 		},
 	}
 
