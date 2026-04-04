@@ -373,6 +373,109 @@ func TestContentTypeValidationChunked(t *testing.T) {
 	zhtest.AssertWith(t, rr).Status(http.StatusUnsupportedMediaType)
 }
 
+func TestMediaTypeResponseTypeHeader(t *testing.T) {
+	tests := []struct {
+		name               string
+		responseTypeHeader string
+		responseTypeValue  string
+		defaultType        string
+		expectHeader       string
+		expectValue        string
+	}{
+		{"header with explicit value", "X-Media-Type", "v1", "", "X-Media-Type", "v1"},
+		{"header falls back to default type", "X-Media-Type", "", "application/json", "X-Media-Type", "application/json"},
+		{"header with value takes precedence over default", "X-Media-Type", "custom.v2", "application/json", "X-Media-Type", "custom.v2"},
+		{"no header when responseTypeHeader empty", "", "", "application/json", "", ""},
+		{"no header when both value and default empty", "X-Media-Type", "", "", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			middleware := New(Config{
+				AllowedTypes:       []string{"application/json"},
+				DefaultType:        tt.defaultType,
+				ResponseTypeHeader: tt.responseTypeHeader,
+				ResponseTypeValue:  tt.responseTypeValue,
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set(httpx.HeaderAccept, "application/json")
+
+			rr := httptest.NewRecorder()
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			middleware(next).ServeHTTP(rr, req)
+
+			zhtest.AssertWith(t, rr).Status(http.StatusOK)
+			if tt.expectHeader != "" {
+				zhtest.AssertWith(t, rr).Header(tt.expectHeader, tt.expectValue)
+			} else {
+				zhtest.AssertWith(t, rr).HeaderNotExists("X-Media-Type")
+			}
+		})
+	}
+}
+
+func TestMediaTypeResponseTypeHeaderWithWildcardAccept(t *testing.T) {
+	middleware := New(Config{
+		AllowedTypes:       []string{"application/json", "application/xml"},
+		DefaultType:        "application/json",
+		ResponseTypeHeader: "X-Response-Type",
+	})
+
+	tests := []struct {
+		name         string
+		accept       string
+		expectHeader string
+	}{
+		{"*/* accept gets default", "*/*", "application/json"},
+		{"no accept header gets default", "", "application/json"},
+		{"specific accept is allowed", "application/xml", "application/json"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.accept != "" {
+				req.Header.Set(httpx.HeaderAccept, tt.accept)
+			}
+
+			rr := httptest.NewRecorder()
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			middleware(next).ServeHTTP(rr, req)
+
+			zhtest.AssertWith(t, rr).Status(http.StatusOK)
+			zhtest.AssertWith(t, rr).Header("X-Response-Type", tt.expectHeader)
+		})
+	}
+}
+
+func TestMediaTypeResponseTypeHeaderWithValidationFailure(t *testing.T) {
+	// ResponseTypeHeader should still be set even when validation fails
+	middleware := New(Config{
+		AllowedTypes:       []string{"application/json"},
+		ResponseTypeHeader: "X-Media-Type",
+		ResponseTypeValue:  "api.v1",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set(httpx.HeaderAccept, "text/plain")
+
+	rr := httptest.NewRecorder()
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next should not be called when validation fails")
+	})
+	middleware(next).ServeHTTP(rr, req)
+
+	// Header should be set BEFORE the error response is returned
+	zhtest.AssertWith(t, rr).Status(http.StatusNotAcceptable)
+	// Header is set before validation check, so it should exist
+	zhtest.AssertWith(t, rr).Header("X-Media-Type", "api.v1")
+}
+
 // TestSymmetricSuffixMatching tests that suffix matching is symmetric
 func TestSymmetricSuffixMatching(t *testing.T) {
 	tests := []struct {

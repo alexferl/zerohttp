@@ -23,6 +23,16 @@ type Config struct {
 	// Default: false
 	ValidateContentType bool
 
+	// ResponseTypeHeader is the response header name to set with the effective
+	// media type. e.g. "X-App-Media-Type"
+	// Default: ""
+	ResponseTypeHeader string
+
+	// ResponseTypeValue is the value written to ResponseTypeHeader.
+	// Can be a short alias (e.g. "app.v1") or a full media type.
+	// Falls back to DefaultType if empty.
+	ResponseTypeValue string
+
 	// ExcludedPaths contains paths that skip media type validation.
 	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
 	// Cannot be used with IncludedPaths - setting both will panic.
@@ -43,6 +53,8 @@ var DefaultConfig = Config{
 	AllowedTypes:        []string{},
 	DefaultType:         "",
 	ValidateContentType: false,
+	ResponseTypeHeader:  "",
+	ResponseTypeValue:   "",
 	ExcludedPaths:       []string{},
 	IncludedPaths:       []string{},
 }

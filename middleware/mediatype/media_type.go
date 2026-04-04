@@ -32,11 +32,23 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 
 	allowedPatterns := normalizePatterns(c.AllowedTypes)
 
+	// Determine the effective media type at construction time.
+	// ResponseTypeValue takes precedence, falls back to DefaultType.
+	effectiveType := c.ResponseTypeValue
+	if effectiveType == "" {
+		effectiveType = c.DefaultType
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !mwutil.ShouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
 				next.ServeHTTP(w, r)
 				return
+			}
+
+			// Set response header early so it's present even in error responses.
+			if c.ResponseTypeHeader != "" && effectiveType != "" {
+				w.Header().Set(c.ResponseTypeHeader, effectiveType)
 			}
 
 			accept := r.Header.Get(httpx.HeaderAccept)
