@@ -12,8 +12,9 @@ type Config struct {
 	AllowedTypes []string
 
 	// DefaultType is the media type to use when the client accepts any type (*/*)
-	// or when no Accept header is provided. This is set as the response Content-Type.
-	// If empty, no Content-Type is set automatically.
+	// or when no Accept header is provided. This value is set as the Accept header
+	// on the request, allowing handlers to perform content negotiation.
+	// If empty, the Accept header is left as-is.
 	// Default: ""
 	DefaultType string
 
