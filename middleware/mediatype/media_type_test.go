@@ -377,16 +377,17 @@ func TestMediaTypeResponseTypeHeader(t *testing.T) {
 	tests := []struct {
 		name               string
 		responseTypeHeader string
-		responseTypeValue  string
+		responseTypeFunc   func(string) string
 		defaultType        string
+		accept             string
 		expectHeader       string
 		expectValue        string
 	}{
-		{"header with explicit value", "X-Media-Type", "v1", "", "X-Media-Type", "v1"},
-		{"header falls back to default type", "X-Media-Type", "", "application/json", "X-Media-Type", "application/json"},
-		{"header with value takes precedence over default", "X-Media-Type", "custom.v2", "application/json", "X-Media-Type", "custom.v2"},
-		{"no header when responseTypeHeader empty", "", "", "application/json", "", ""},
-		{"no header when both value and default empty", "X-Media-Type", "", "", "", ""},
+		{name: "header with func returning custom value", responseTypeHeader: "X-Media-Type", responseTypeFunc: func(t string) string { return "v1" }, defaultType: "", accept: "application/json", expectHeader: "X-Media-Type", expectValue: "v1"},
+		{name: "header reflects negotiated type from accept", responseTypeHeader: "X-Media-Type", responseTypeFunc: nil, defaultType: "application/json", accept: "application/json", expectHeader: "X-Media-Type", expectValue: "application/json"},
+		{name: "header with func transforms negotiated type", responseTypeHeader: "X-Media-Type", responseTypeFunc: func(t string) string { return "custom.v2" }, defaultType: "application/json", accept: "application/json", expectHeader: "X-Media-Type", expectValue: "custom.v2"},
+		{name: "no header when responseTypeHeader empty", responseTypeHeader: "", responseTypeFunc: nil, defaultType: "application/json", accept: "application/json", expectHeader: "", expectValue: ""},
+		{name: "no header when nothing to negotiate and default empty", responseTypeHeader: "X-Media-Type", responseTypeFunc: nil, defaultType: "", accept: "", expectHeader: "", expectValue: ""},
 	}
 
 	for _, tt := range tests {
@@ -395,11 +396,13 @@ func TestMediaTypeResponseTypeHeader(t *testing.T) {
 				AllowedTypes:       []string{"application/json"},
 				DefaultType:        tt.defaultType,
 				ResponseTypeHeader: tt.responseTypeHeader,
-				ResponseTypeValue:  tt.responseTypeValue,
+				ResponseTypeFunc:   tt.responseTypeFunc,
 			})
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set(httpx.HeaderAccept, "application/json")
+			if tt.accept != "" {
+				req.Header.Set(httpx.HeaderAccept, tt.accept)
+			}
 
 			rr := httptest.NewRecorder()
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -431,7 +434,7 @@ func TestMediaTypeResponseTypeHeaderWithWildcardAccept(t *testing.T) {
 	}{
 		{"*/* accept gets default", "*/*", "application/json"},
 		{"no accept header gets default", "", "application/json"},
-		{"specific accept is allowed", "application/xml", "application/json"},
+		{"specific accept returns matched type", "application/xml", "application/xml"},
 	}
 
 	for _, tt := range tests {
@@ -454,11 +457,11 @@ func TestMediaTypeResponseTypeHeaderWithWildcardAccept(t *testing.T) {
 }
 
 func TestMediaTypeResponseTypeHeaderWithValidationFailure(t *testing.T) {
-	// ResponseTypeHeader should still be set even when validation fails
+	// ResponseTypeHeader is only set when validation passes (or no validation needed)
 	middleware := New(Config{
 		AllowedTypes:       []string{"application/json"},
 		ResponseTypeHeader: "X-Media-Type",
-		ResponseTypeValue:  "api.v1",
+		ResponseTypeFunc:   func(t string) string { return "api.v1" },
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -470,10 +473,9 @@ func TestMediaTypeResponseTypeHeaderWithValidationFailure(t *testing.T) {
 	})
 	middleware(next).ServeHTTP(rr, req)
 
-	// Header should be set BEFORE the error response is returned
 	zhtest.AssertWith(t, rr).Status(http.StatusNotAcceptable)
-	// Header is set before validation check, so it should exist
-	zhtest.AssertWith(t, rr).Header("X-Media-Type", "api.v1")
+	// Header is not set when validation fails (negotiated type is unknown)
+	zhtest.AssertWith(t, rr).HeaderNotExists("X-Media-Type")
 }
 
 // TestSymmetricSuffixMatching tests that suffix matching is symmetric
@@ -518,6 +520,91 @@ func TestSymmetricSuffixMatching(t *testing.T) {
 			tt.middleware(next).ServeHTTP(rr, req)
 
 			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
+		})
+	}
+}
+
+func TestVendorShortType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"vendor type with version", "application/vnd.vinystore.v1+json", "vinystore.v1"},
+		{"different vendor", "application/vnd.discogs.v2+json", "discogs.v2"},
+		{"no suffix", "application/vnd.api.v1", "api.v1"},
+		{"non-vendor type returns as-is", "application/json", "application/json"},
+		{"text plain returns as-is", "text/plain", "text/plain"},
+		{"vendor with hyphenated name", "application/vnd.my-app.v3+json", "my-app.v3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := VendorShortType(tt.input)
+			zhtest.AssertEqual(t, tt.expected, result)
+		})
+	}
+}
+
+func TestVendorShortTypeIntegration(t *testing.T) {
+	// Test that VendorShortType works as a ResponseTypeFunc
+	middleware := New(Config{
+		AllowedTypes:       []string{"application/vnd.app.v1+json"},
+		DefaultType:        "application/vnd.app.v1+json",
+		ResponseTypeHeader: "X-API-Version",
+		ResponseTypeFunc:   VendorShortType,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set(httpx.HeaderAccept, "*/*")
+
+	rr := httptest.NewRecorder()
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	middleware(next).ServeHTTP(rr, req)
+
+	zhtest.AssertWith(t, rr).Status(http.StatusOK)
+	zhtest.AssertWith(t, rr).Header("X-API-Version", "app.v1")
+}
+
+// TestResponseTypeFuncReflectsNegotiatedVersion verifies that when a client
+// requests a specific version (e.g., v2), the response header reflects that
+// version, not the default (v1).
+func TestResponseTypeFuncReflectsNegotiatedVersion(t *testing.T) {
+	middleware := New(Config{
+		AllowedTypes:       []string{"application/vnd.app.v1+json", "application/vnd.app.v2+json"},
+		DefaultType:        "application/vnd.app.v1+json",
+		ResponseTypeHeader: "X-API-Version",
+		ResponseTypeFunc:   VendorShortType,
+	})
+
+	tests := []struct {
+		name         string
+		accept       string
+		expectHeader string
+	}{
+		{"client requests v1", "application/vnd.app.v1+json", "app.v1"},
+		{"client requests v2", "application/vnd.app.v2+json", "app.v2"},
+		{"*/* gets default (v1)", "*/*", "app.v1"},
+		{"no accept gets default (v1)", "", "app.v1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.accept != "" {
+				req.Header.Set(httpx.HeaderAccept, tt.accept)
+			}
+
+			rr := httptest.NewRecorder()
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			middleware(next).ServeHTTP(rr, req)
+
+			zhtest.AssertWith(t, rr).Status(http.StatusOK)
+			zhtest.AssertWith(t, rr).Header("X-API-Version", tt.expectHeader)
 		})
 	}
 }

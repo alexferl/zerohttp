@@ -28,10 +28,21 @@ type Config struct {
 	// Default: ""
 	ResponseTypeHeader string
 
-	// ResponseTypeValue is the value written to ResponseTypeHeader.
-	// Can be a short alias (e.g. "app.v1") or a full media type.
-	// Falls back to DefaultType if empty.
-	ResponseTypeValue string
+	// ResponseTypeFunc transforms the negotiated media type into the response header value.
+	// The negotiated type is either the client's requested type (if matched) or DefaultType.
+	// If nil, the negotiated type is used as-is.
+	//
+	// Use VendorShortType to extract short identifiers from vendor types:
+	//
+	//    "application/vnd.app.v1+json" -> "app.v1"
+	//
+	// Or provide a custom function for different formatting:
+	//
+	//    ResponseTypeFunc: func(t string) string {
+	//        return "version=" + t
+	//    }
+	//    // "application/vnd.app.v1+json" -> "version=application/vnd.app.v1+json"
+	ResponseTypeFunc func(string) string
 
 	// ExcludedPaths contains paths that skip media type validation.
 	// Supports exact matches, prefixes (ending with /), and wildcards (ending with *).
@@ -54,7 +65,7 @@ var DefaultConfig = Config{
 	DefaultType:         "",
 	ValidateContentType: false,
 	ResponseTypeHeader:  "",
-	ResponseTypeValue:   "",
+	ResponseTypeFunc:    nil,
 	ExcludedPaths:       []string{},
 	IncludedPaths:       []string{},
 }

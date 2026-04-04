@@ -32,13 +32,6 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 
 	allowedPatterns := normalizePatterns(c.AllowedTypes)
 
-	// Determine the effective media type at construction time.
-	// ResponseTypeValue takes precedence, falls back to DefaultType.
-	effectiveType := c.ResponseTypeValue
-	if effectiveType == "" {
-		effectiveType = c.DefaultType
-	}
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !mwutil.ShouldProcessMiddleware(r.URL.Path, c.IncludedPaths, c.ExcludedPaths) {
@@ -46,12 +39,10 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Set response header early so it's present even in error responses.
-			if c.ResponseTypeHeader != "" && effectiveType != "" {
-				w.Header().Set(c.ResponseTypeHeader, effectiveType)
-			}
-
 			accept := r.Header.Get(httpx.HeaderAccept)
+
+			// Determine the negotiated media type for the response header.
+			negotiatedType := c.DefaultType
 			if accept != "" && accept != "*/*" {
 				if !matchAcceptHeader(accept, allowedPatterns) {
 					detail := problem.NewDetail(http.StatusNotAcceptable, "Not Acceptable")
@@ -62,6 +53,22 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 					_ = detail.RenderAuto(w, r)
 					return
 				}
+				// Client specified a concrete type - find what matched
+				negotiatedType = findMatchingType(accept, allowedPatterns)
+				if negotiatedType == "" {
+					negotiatedType = c.DefaultType
+				}
+			}
+
+			// Compute effective type for response header
+			effectiveType := negotiatedType
+			if c.ResponseTypeFunc != nil {
+				effectiveType = c.ResponseTypeFunc(negotiatedType)
+			}
+
+			// Set response header early so it's present even in error responses.
+			if c.ResponseTypeHeader != "" && effectiveType != "" {
+				w.Header().Set(c.ResponseTypeHeader, effectiveType)
 			}
 
 			// ValidateContentType check: ContentLength != 0 covers both explicit sizes (> 0)
@@ -121,6 +128,29 @@ func normalizePatterns(patterns []string) []pattern {
 		})
 	}
 	return result
+}
+
+// findMatchingType parses the Accept header and returns the first matching
+// allowed type (normalized to lowercase). Returns empty string if no match.
+func findMatchingType(accept string, allowed []pattern) string {
+	for _, part := range strings.Split(accept, ",") {
+		part = strings.TrimSpace(part)
+		if idx := strings.Index(part, ";"); idx != -1 {
+			part = strings.TrimSpace(part[:idx])
+		}
+		if part == "" {
+			continue
+		}
+		if part == "*/*" {
+			continue // skip wildcard, we want a concrete type
+		}
+
+		lowerPart := strings.ToLower(part)
+		if matchMediaType(lowerPart, allowed) {
+			return lowerPart
+		}
+	}
+	return ""
 }
 
 // matchAcceptHeader checks if any of the accepted types match allowed patterns
@@ -249,4 +279,20 @@ func matchWildcard(mediaType, pattern string) bool {
 
 	// If we've consumed the entire media type, it's a match
 	return mediaType == ""
+}
+
+// VendorShortType extracts a short identifier from a vendor media type.
+// It is intended for use as a ResponseTypeFunc.
+//
+//	"application/vnd.app.v1+json" -> "app.v1"
+//	"application/vnd.app.v2+json" -> "app.v2"
+//	"application/json"            -> "application/json" (not a vendor type, returned as-is)
+func VendorShortType(mediaType string) string {
+	s := strings.TrimPrefix(mediaType, "application/vnd.")
+	if s == mediaType {
+		// Not a vnd type, return as-is
+		return mediaType
+	}
+	s, _, _ = strings.Cut(s, "+")
+	return s
 }
