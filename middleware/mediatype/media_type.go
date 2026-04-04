@@ -64,41 +64,17 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 				}
 			}
 
-			// Wrap response writer to set default content type if needed
+			// Set default Accept header if client accepts anything
 			if c.DefaultType != "" {
-				w = &responseWriter{
-					ResponseWriter: w,
-					defaultType:    c.DefaultType,
+				accept := r.Header.Get(httpx.HeaderAccept)
+				if accept == "" || accept == "*/*" {
+					r.Header.Set(httpx.HeaderAccept, c.DefaultType)
 				}
 			}
 
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// responseWriter wraps http.ResponseWriter to set a default Content-Type
-type responseWriter struct {
-	http.ResponseWriter
-	defaultType string
-	wroteHeader bool
-}
-
-func (w *responseWriter) WriteHeader(code int) {
-	if !w.wroteHeader {
-		w.wroteHeader = true
-		if w.Header().Get(httpx.HeaderContentType) == "" {
-			w.Header().Set(httpx.HeaderContentType, w.defaultType)
-		}
-	}
-	w.ResponseWriter.WriteHeader(code)
-}
-
-func (w *responseWriter) Write(b []byte) (int, error) {
-	if !w.wroteHeader {
-		w.WriteHeader(http.StatusOK)
-	}
-	return w.ResponseWriter.Write(b)
 }
 
 // normalizePatterns prepares patterns for matching

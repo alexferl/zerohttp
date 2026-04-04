@@ -138,20 +138,19 @@ func TestMediaTypeWildcardPatterns(t *testing.T) {
 
 func TestMediaTypeDefaultType(t *testing.T) {
 	tests := []struct {
-		name                string
-		accept              string
-		expectContentType   string
-		expectHeaderPresent bool
+		name         string
+		accept       string
+		expectAccept string
 	}{
-		{"*/* gets default", "*/*", "application/vnd.api+json", true},
-		{"no accept gets default", "", "application/vnd.api+json", true},
-		{"specific accept", "application/vnd.api+json", "application/vnd.api+json", true},
+		{"*/* gets default", "*/*", "application/vnd.api+json"},
+		{"no accept gets default", "", "application/vnd.api+json"},
+		{"specific accept preserved", "application/vnd.api.v2+json", "application/vnd.api.v2+json"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			middleware := New(Config{
-				AllowedTypes: []string{"application/vnd.api+json"},
+				AllowedTypes: []string{"application/vnd.api+json", "application/vnd.api.v2+json"},
 				DefaultType:  "application/vnd.api+json",
 			})
 
@@ -161,15 +160,15 @@ func TestMediaTypeDefaultType(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
+			var receivedAccept string
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, _ = w.Write([]byte(`{"test": "data"}`))
+				receivedAccept = r.Header.Get(httpx.HeaderAccept)
+				w.WriteHeader(http.StatusOK)
 			})
 			middleware(next).ServeHTTP(rr, req)
 
 			zhtest.AssertWith(t, rr).Status(http.StatusOK)
-			if tt.expectHeaderPresent {
-				zhtest.AssertEqual(t, tt.expectContentType, rr.Header().Get(httpx.HeaderContentType))
-			}
+			zhtest.AssertEqual(t, tt.expectAccept, receivedAccept)
 		})
 	}
 }
