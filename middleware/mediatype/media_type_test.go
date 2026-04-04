@@ -281,3 +281,140 @@ func TestMatchWildcard(t *testing.T) {
 		})
 	}
 }
+
+// TestBidirectionalWildcard tests that client-side wildcards match server allowed types
+func TestBidirectionalWildcard(t *testing.T) {
+	tests := []struct {
+		name       string
+		accept     string
+		expectNext bool
+	}{
+		{"client wildcard type/* matches json", "application/*", true},
+		{"client wildcard type/* matches vendor", "application/vnd.api+json", true},
+		{"client wildcard */* matches everything", "*/*", true},
+		{"client suffix wildcard *+json matches json type", "*+json", true},
+		{"client suffix wildcard *+json does not match xml", "*+xml", false},
+		{"client exact match for plain json", "application/json", true}, // exact match in allowed types
+		{"client full wildcard matches allowed", "*", true},
+	}
+
+	middleware := New(Config{AllowedTypes: []string{"application/json", "application/vnd.api+json"}})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set(httpx.HeaderAccept, tt.accept)
+
+			rr := httptest.NewRecorder()
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+			middleware(next).ServeHTTP(rr, req)
+
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
+		})
+	}
+}
+
+// TestSuffixWildcardPatterns tests patterns with wildcards in the suffix
+func TestSuffixWildcardPatterns(t *testing.T) {
+	tests := []struct {
+		name       string
+		accept     string
+		expectNext bool
+	}{
+		{"wildcard suffix matches json", "application/vnd.discogs+json", true},
+		{"wildcard suffix matches xml", "application/vnd.discogs+xml", true},
+		{"no suffix does not match", "application/vnd.discogs", false},
+		{"different prefix does not match", "application/other+json", false},
+	}
+
+	middleware := New(Config{AllowedTypes: []string{"application/vnd.discogs+*"}})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set(httpx.HeaderAccept, tt.accept)
+
+			rr := httptest.NewRecorder()
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+			middleware(next).ServeHTTP(rr, req)
+
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
+		})
+	}
+}
+
+// TestContentTypeValidationChunked tests that chunked request bodies are validated
+func TestContentTypeValidationChunked(t *testing.T) {
+	middleware := New(Config{
+		AllowedTypes:        []string{"application/json"},
+		ValidateContentType: true,
+	})
+
+	// Create a request and force ContentLength = -1 to simulate chunked encoding
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"test": "data"}`))
+	req.ContentLength = -1                                     // simulate chunked: unknown length
+	req.Header.Set(httpx.HeaderContentType, "application/xml") // disallowed type
+
+	rr := httptest.NewRecorder()
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	middleware(next).ServeHTTP(rr, req)
+
+	zhtest.AssertFalse(t, nextCalled)
+	zhtest.AssertWith(t, rr).Status(http.StatusUnsupportedMediaType)
+}
+
+// TestSymmetricSuffixMatching tests that suffix matching is symmetric
+func TestSymmetricSuffixMatching(t *testing.T) {
+	tests := []struct {
+		name       string
+		middleware func(http.Handler) http.Handler
+		accept     string
+		expectNext bool
+	}{
+		// Pattern has no suffix, request has suffix - should NOT match
+		{
+			"json pattern does not match json+foo",
+			New(Config{AllowedTypes: []string{"application/json"}}),
+			"application/json+foo", false,
+		},
+		// Pattern has suffix, request has no suffix - should NOT match
+		{
+			"json+suffix pattern does not match json",
+			New(Config{AllowedTypes: []string{"application/json+foo"}}),
+			"application/json", false,
+		},
+		// Both have same suffix - should match
+		{
+			"json+suffix pattern matches json+suffix",
+			New(Config{AllowedTypes: []string{"application/json+foo"}}),
+			"application/json+foo", true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set(httpx.HeaderAccept, tt.accept)
+
+			rr := httptest.NewRecorder()
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+			tt.middleware(next).ServeHTTP(rr, req)
+
+			zhtest.AssertEqual(t, tt.expectNext, nextCalled)
+		})
+	}
+}

@@ -44,13 +44,17 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 				if !matchAcceptHeader(accept, allowedPatterns) {
 					detail := problem.NewDetail(http.StatusNotAcceptable, "Not Acceptable")
 					detail.Detail = "The requested media type is not supported"
+					// NOTE: Accept header in response is non-standard here but commonly used
+					// to indicate what Content-Types the server accepts for the request body.
 					w.Header().Set(httpx.HeaderAccept, strings.Join(c.AllowedTypes, ", "))
 					_ = detail.RenderAuto(w, r)
 					return
 				}
 			}
 
-			if c.ValidateContentType && r.ContentLength > 0 {
+			// ValidateContentType check: ContentLength != 0 covers both explicit sizes (> 0)
+			// and unknown chunked bodies (-1). Go sets ContentLength = -1 for chunked encoding.
+			if c.ValidateContentType && r.ContentLength != 0 && r.Body != nil && r.Body != http.NoBody {
 				contentType := r.Header.Get(httpx.HeaderContentType)
 				contentType, _, _ = strings.Cut(contentType, ";")
 				contentType = strings.TrimSpace(strings.ToLower(contentType))
@@ -58,13 +62,15 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 				if contentType != "" && !matchMediaType(contentType, allowedPatterns) {
 					detail := problem.NewDetail(http.StatusUnsupportedMediaType, "Unsupported Media Type")
 					detail.Detail = "The request body content type is not supported"
+					// NOTE: Accept header in response is non-standard here but commonly used
+					// to indicate what Content-Types the server accepts for the request body.
 					w.Header().Set(httpx.HeaderAccept, strings.Join(c.AllowedTypes, ", "))
 					_ = detail.RenderAuto(w, r)
 					return
 				}
 			}
 
-			// Set default Accept header if client accepts anything
+			// Normalize Accept so downstream handlers always receive a concrete media type.
 			if c.DefaultType != "" {
 				accept := r.Header.Get(httpx.HeaderAccept)
 				if accept == "" || accept == "*/*" {
@@ -79,9 +85,10 @@ func New(cfg ...Config) func(http.Handler) http.Handler {
 
 // normalizePatterns prepares patterns for matching
 type pattern struct {
-	mediaType   string
-	suffix      string
-	hasWildcard bool
+	mediaType            string
+	suffix               string
+	hasMediaTypeWildcard bool
+	hasSuffixWildcard    bool
 }
 
 func normalizePatterns(patterns []string) []pattern {
@@ -92,16 +99,13 @@ func normalizePatterns(patterns []string) []pattern {
 			continue
 		}
 
-		mediaType, suffix, hasSuffix := strings.Cut(p, "+")
-		if !hasSuffix {
-			suffix = ""
-			mediaType = p
-		}
+		mediaType, suffix, _ := strings.Cut(p, "+")
 
 		result = append(result, pattern{
-			mediaType:   mediaType,
-			suffix:      suffix,
-			hasWildcard: strings.Contains(p, "*"),
+			mediaType:            mediaType,
+			suffix:               suffix,
+			hasMediaTypeWildcard: strings.Contains(mediaType, "*"),
+			hasSuffixWildcard:    strings.Contains(suffix, "*"),
 		})
 	}
 	return result
@@ -111,6 +115,9 @@ func normalizePatterns(patterns []string) []pattern {
 func matchAcceptHeader(accept string, allowed []pattern) bool {
 	// Parse Accept header (can contain multiple types with q-values)
 	// e.g., "application/json, application/xml;q=0.9, */*;q=0.1"
+	// NOTE: q-values are stripped and not used for priority ordering.
+	// This middleware only validates presence of an acceptable type, not preference.
+	// If format selection is added in the future, q-values must be respected per RFC 7231 §5.3.
 	for _, part := range strings.Split(accept, ",") {
 		part = strings.TrimSpace(part)
 		// Remove q-value if present
@@ -135,64 +142,69 @@ func matchAcceptHeader(accept string, allowed []pattern) bool {
 }
 
 // matchMediaType checks if a media type matches any of the allowed patterns
+// Supports bidirectional wildcard matching per RFC 7231 §5.3.2:
+// - Server pattern wildcards (e.g., application/*) match client types
+// - Client wildcard types (e.g., application/*) match server allowed types
 func matchMediaType(mediaType string, allowed []pattern) bool {
 	// Extract suffix from media type if present
-	baseType, suffix, hasSuffix := strings.Cut(mediaType, "+")
-	if !hasSuffix {
-		suffix = ""
-	}
+	baseType, suffix, _ := strings.Cut(mediaType, "+")
 
 	for _, p := range allowed {
 		if matchPattern(baseType, suffix, p) {
 			return true
 		}
 	}
+
+	// Bidirectional wildcard: client's wildcard covers a server-allowed type
+	// e.g., client sends "Accept: application/*" should match "application/json"
+	if strings.Contains(mediaType, "*") {
+		for _, p := range allowed {
+			// If client specified a +suffix, the allowed type must also carry that suffix
+			if suffix != "" && p.suffix != suffix {
+				continue
+			}
+			if matchWildcard(strings.ToLower(p.mediaType), baseType) {
+				return true
+			}
+		}
+	}
+
 	return false
 }
 
 // matchPattern checks if a media type matches a specific pattern
 func matchPattern(baseType, suffix string, p pattern) bool {
-	// If pattern has a suffix requirement, check it
-	if p.suffix != "" {
-		// If media type has no suffix, check if the last part of baseType matches the suffix
-		// e.g., "application/json" with suffix "json" should match "*+json"
+	// Match suffix (with wildcard support if present)
+	if p.hasSuffixWildcard {
+		// Pattern like "application/vnd+*" requires input to HAVE a suffix
 		if suffix == "" {
-			// Check if baseType ends with "/" + p.suffix (e.g., "/json")
-			if strings.HasSuffix(baseType, "/"+p.suffix) {
-				// Now match the base type part before the suffix
-				baseWithoutSuffix := baseType[:len(baseType)-len(p.suffix)-1]
-				if p.hasWildcard {
-					return matchWildcard(baseWithoutSuffix, p.mediaType)
-				}
-				return baseWithoutSuffix == p.mediaType
-			}
-			// Also try matching full type against pattern (for cases like "json" matching "*+json")
-			if p.hasWildcard {
-				fullPattern := p.mediaType + "+" + p.suffix
-				if matchWildcard(baseType, fullPattern) {
-					return true
-				}
-			}
 			return false
 		}
-		if suffix != p.suffix {
+		if !matchWildcard(suffix, p.suffix) {
 			return false
 		}
+	} else if p.suffix != suffix {
+		// Both must agree on suffix: either both empty, or both the same value
+		// Only matches literal +suffixes per RFC 6838 §4.2.8
+		return false
 	}
 
 	// Match the base type (with wildcard support)
-	if p.hasWildcard {
+	if p.hasMediaTypeWildcard {
 		return matchWildcard(baseType, p.mediaType)
 	}
 	return baseType == p.mediaType
 }
 
-// matchWildcard matches a media type against a pattern with wildcards
+// matchWildcard matches a media type against a pattern with wildcards.
+// NOTE: Only single-wildcard patterns per segment are fully supported.
+// Patterns with multiple wildcards in the same segment (e.g., "application/x*x*x")
+// use first-match greedy logic and may produce unexpected results.
 func matchWildcard(mediaType, pattern string) bool {
 	// Simple wildcard matching - * matches any sequence
 	parts := strings.Split(pattern, "*")
 
-	// No wildcards (shouldn't happen due to hasWildcard check)
+	// No wildcards (shouldn't happen due to hasMediaTypeWildcard/hasSuffixWildcard check)
 	if len(parts) == 1 {
 		return mediaType == pattern
 	}
