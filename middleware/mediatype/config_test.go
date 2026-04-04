@@ -10,6 +10,8 @@ func TestDefaultConfig(t *testing.T) {
 	zhtest.AssertEqual(t, 0, len(DefaultConfig.AllowedTypes))
 	zhtest.AssertEqual(t, "", DefaultConfig.DefaultType)
 	zhtest.AssertEqual(t, false, DefaultConfig.ValidateContentType)
+	zhtest.AssertEqual(t, "", DefaultConfig.ResponseTypeHeader)
+	zhtest.AssertEqual(t, "", DefaultConfig.ResponseTypeValue)
 	zhtest.AssertEqual(t, 0, len(DefaultConfig.ExcludedPaths))
 	zhtest.AssertEqual(t, 0, len(DefaultConfig.IncludedPaths))
 }
@@ -57,6 +59,40 @@ func TestConfigMerge(t *testing.T) {
 				AllowedTypes:        []string{"application/json"},
 				DefaultType:         "",
 				ValidateContentType: true,
+				ExcludedPaths:       []string{},
+				IncludedPaths:       []string{},
+			},
+		},
+		{
+			name: "with response type header",
+			config: Config{
+				AllowedTypes:       []string{"application/json"},
+				ResponseTypeHeader: "X-Media-Type",
+				ResponseTypeValue:  "v1",
+			},
+			expected: Config{
+				AllowedTypes:        []string{"application/json"},
+				DefaultType:         "",
+				ValidateContentType: false,
+				ResponseTypeHeader:  "X-Media-Type",
+				ResponseTypeValue:   "v1",
+				ExcludedPaths:       []string{},
+				IncludedPaths:       []string{},
+			},
+		},
+		{
+			name: "with response type header fallback to default",
+			config: Config{
+				AllowedTypes:       []string{"application/json"},
+				DefaultType:        "application/json",
+				ResponseTypeHeader: "X-Media-Type",
+			},
+			expected: Config{
+				AllowedTypes:        []string{"application/json"},
+				DefaultType:         "application/json",
+				ValidateContentType: false,
+				ResponseTypeHeader:  "X-Media-Type",
+				ResponseTypeValue:   "",
 				ExcludedPaths:       []string{},
 				IncludedPaths:       []string{},
 			},
