@@ -11,7 +11,7 @@ func TestDefaultConfig(t *testing.T) {
 	zhtest.AssertEqual(t, "", DefaultConfig.DefaultType)
 	zhtest.AssertEqual(t, false, DefaultConfig.ValidateContentType)
 	zhtest.AssertEqual(t, "", DefaultConfig.ResponseTypeHeader)
-	zhtest.AssertEqual(t, "", DefaultConfig.ResponseTypeValue)
+	zhtest.AssertNil(t, DefaultConfig.ResponseTypeFunc)
 	zhtest.AssertEqual(t, 0, len(DefaultConfig.ExcludedPaths))
 	zhtest.AssertEqual(t, 0, len(DefaultConfig.IncludedPaths))
 }
@@ -68,14 +68,13 @@ func TestConfigMerge(t *testing.T) {
 			config: Config{
 				AllowedTypes:       []string{"application/json"},
 				ResponseTypeHeader: "X-Media-Type",
-				ResponseTypeValue:  "v1",
+				ResponseTypeFunc:   func(t string) string { return "v1" },
 			},
 			expected: Config{
 				AllowedTypes:        []string{"application/json"},
 				DefaultType:         "",
 				ValidateContentType: false,
 				ResponseTypeHeader:  "X-Media-Type",
-				ResponseTypeValue:   "v1",
 				ExcludedPaths:       []string{},
 				IncludedPaths:       []string{},
 			},
@@ -92,7 +91,6 @@ func TestConfigMerge(t *testing.T) {
 				DefaultType:         "application/json",
 				ValidateContentType: false,
 				ResponseTypeHeader:  "X-Media-Type",
-				ResponseTypeValue:   "",
 				ExcludedPaths:       []string{},
 				IncludedPaths:       []string{},
 			},
