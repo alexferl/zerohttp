@@ -22,13 +22,21 @@ import (
 //	}
 type Request struct {
 	Page    int `query:"page" validate:"omitempty,min=1"`
-	PerPage int `query:"per_page" validate:"omitempty,min=1,max=100"`
+	PerPage int `query:"per_page" validate:"omitempty,min=1"`
 }
 
 // Params returns pagination Params from the request values.
 func (r Request) Params() Params {
 	return Params(r)
 }
+
+// DefaultPerPage is the default number of items per page when not specified.
+// This can be changed at runtime to configure the default for your application.
+var DefaultPerPage = 25
+
+// DefaultMaxPerPage is the maximum allowed number of items per page.
+// This can be changed at runtime to configure the maximum for your application.
+var DefaultMaxPerPage = 100
 
 // Params holds pagination parameters after binding and validation.
 type Params struct {
@@ -38,18 +46,18 @@ type Params struct {
 
 // Defaults returns pagination params with defaults applied.
 // If Page is less than 1, it defaults to 1.
-// If PerPage is less than 1, it defaults to 20.
-// If PerPage is greater than 100, it is capped at 100.
+// If PerPage is less than 1, it defaults to DefaultPerPage (25 by default).
+// If PerPage is greater than DefaultMaxPerPage (100 by default), it is capped.
 func (p Params) Defaults() Params {
 	result := p
 	if result.Page < 1 {
 		result.Page = 1
 	}
 	if result.PerPage < 1 {
-		result.PerPage = 20
+		result.PerPage = DefaultPerPage
 	}
-	if result.PerPage > 100 {
-		result.PerPage = 100
+	if result.PerPage > DefaultMaxPerPage {
+		result.PerPage = DefaultMaxPerPage
 	}
 	return result
 }
