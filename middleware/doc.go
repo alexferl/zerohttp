@@ -57,6 +57,7 @@
 //   - [github.com/alexferl/zerohttp/middleware/contenttype] - Content-Type header enforcement
 //   - [github.com/alexferl/zerohttp/middleware/contentencoding] - Content-Encoding negotiation
 //   - [github.com/alexferl/zerohttp/middleware/contentcharset] - Content-Type charset validation
+//   - [github.com/alexferl/zerohttp/middleware/mediatype] - Media type negotiation with wildcard and suffix support
 //
 // Caching:
 //   - [github.com/alexferl/zerohttp/middleware/cache] - HTTP caching with ETag and Last-Modified

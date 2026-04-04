@@ -64,6 +64,7 @@ Demonstrations of built-in and custom middleware.
 - [**`jwtauth_golang_jwt/`**](middleware/jwtauth_golang_jwt/) - golang-jwt integration (has go.mod)
 - [**`jwtauth_lestrrat_jwx/`**](middleware/jwtauth_lestrrat_jwx/) - lestrrat-go/jwx integration (has go.mod)
 - [**`jwtauth_refresh/`**](middleware/jwtauth_refresh/) - JWT refresh token flow (has go.mod)
+- [**`mediatype/`**](middleware/mediatype/) - Media type negotiation for content versioning
 - [**`nocache/`**](middleware/nocache/) - Cache control headers
 - [**`ratelimit/`**](middleware/ratelimit/) - Rate limiting (in-memory)
 - [**`ratelimit_redis/`**](middleware/ratelimit_redis/) - Redis-backed rate limiting (has go.mod)
