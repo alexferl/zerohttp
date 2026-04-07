@@ -773,10 +773,7 @@ func LogoutTokenHandler(cfg Config) http.HandlerFunc {
 		}
 
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"message": "logged out successfully",
-		})
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

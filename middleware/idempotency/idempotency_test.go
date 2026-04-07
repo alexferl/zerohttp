@@ -185,11 +185,11 @@ func TestIdempotency_Required(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
 		zhtest.AssertWith(t, w).IsProblemDetail().ProblemDetailDetail("Idempotency-Key header is required")
 
-		// Test plain text response
+		// Test JSON response (defaults to JSON without Accept header)
 		req = httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{}`)))
 		w = httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w, req)
-		zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+		zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, "application/problem+json")
 	})
 
 	t.Run("allows request when key is provided and required", func(t *testing.T) {
@@ -407,15 +407,15 @@ func TestIdempotency_ConcurrentLock(t *testing.T) {
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 		zhtest.AssertWith(t, w2).IsProblemDetail().ProblemDetailDetail("Idempotent request is still being processed")
 
-		// Test plain text response
+		// Test JSON response (defaults to JSON without Accept header)
 		req2 = httptest.NewRequest(http.MethodPost, "/api/payments", bytes.NewReader([]byte(`{"amount":100}`)))
 		req2.Header.Set(httpx.HeaderIdempotencyKey, "slow-key")
 		w2 = httptest.NewRecorder()
 		idempotencyMiddleware(handler).ServeHTTP(w2, req2)
 		// Note: This may return 409 (still processing) or 201 (completed) depending on timing
-		// The important thing is that when it returns 409, the content type is plain text
+		// The important thing is that when it returns 409, the content type is JSON
 		if w2.Code == http.StatusConflict {
-			zhtest.AssertWith(t, w2).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+			zhtest.AssertWith(t, w2).Header(httpx.HeaderContentType, "application/problem+json")
 		}
 	})
 }

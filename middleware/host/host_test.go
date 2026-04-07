@@ -195,11 +195,11 @@ func TestHostValidation_CustomStatusCodeAndMessage(t *testing.T) {
 	w := zhtest.Serve(handler, req)
 	zhtest.AssertWith(t, w).Status(http.StatusForbidden).IsProblemDetail().ProblemDetailDetail("Forbidden host")
 
-	// Test plain text response
+	// Test JSON response (defaults to JSON without Accept header)
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.Host = "evil.com"
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusForbidden).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusForbidden).Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestHostValidation_DefaultsFallback(t *testing.T) {
@@ -218,11 +218,11 @@ func TestHostValidation_DefaultsFallback(t *testing.T) {
 	w := zhtest.Serve(handler, req)
 	zhtest.AssertWith(t, w).Status(http.StatusBadRequest).IsProblemDetail().ProblemDetailDetail("Invalid Host header")
 
-	// Test plain text response
+	// Test JSON response (defaults to JSON without Accept header)
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.Host = "evil.com"
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusBadRequest).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusBadRequest).Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestHostValidation_StrictPort(t *testing.T) {

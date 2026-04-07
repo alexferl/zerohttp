@@ -48,7 +48,7 @@ func TestRateLimitStatusCodeAndMessageDefaults(t *testing.T) {
 	// Test plain text response
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestRateLimitMessageDefaults(t *testing.T) {
@@ -66,7 +66,7 @@ func TestRateLimitMessageDefaults(t *testing.T) {
 	// Test plain text response
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestRateLimitTokenBucket(t *testing.T) {
@@ -98,7 +98,7 @@ func TestRateLimitTokenBucket(t *testing.T) {
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	req.RemoteAddr = "127.0.0.1:12345"
 	w = zhtest.Serve(handler, req)
-	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, w).Status(http.StatusTooManyRequests).Header(httpx.HeaderContentType, "application/problem+json")
 
 	zhtest.AssertEqual(t, 2, count)
 }
@@ -288,7 +288,7 @@ func TestRateLimitCustomMessage(t *testing.T) {
 	w = zhtest.Serve(handler, req)
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
-		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestIPKeyExtractor(t *testing.T) {

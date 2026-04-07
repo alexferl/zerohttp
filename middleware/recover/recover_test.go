@@ -287,14 +287,14 @@ func TestRecover_NonHandlerError(t *testing.T) {
 	zhtest.AssertTrue(t, strings.Contains(body, `"status":500`))
 	zhtest.AssertTrue(t, strings.Contains(body, `"title":"Internal Server Error"`))
 
-	// Test plain text response without Accept header
+	// Test JSON response without Accept header (defaults to JSON)
 	logger = &mockLogger{} // Reset logger
 	handler = New(logger)(panicHandler("random panic"))
 	req = zhtest.NewRequest(http.MethodGet, "/").Build()
 	w = zhtest.Serve(handler, req)
 
 	contentType = w.Header().Get(httpx.HeaderContentType)
-	zhtest.AssertTrue(t, strings.Contains(contentType, "text/plain"))
+	zhtest.AssertTrue(t, strings.Contains(contentType, "application/problem+json"))
 }
 
 func TestRecover_Metrics(t *testing.T) {

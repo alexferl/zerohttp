@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/internal/problem"
 	"github.com/alexferl/zerohttp/log"
 	"github.com/alexferl/zerohttp/middleware/requestlogger"
 	"github.com/alexferl/zerohttp/validator"
@@ -921,31 +922,33 @@ func matchPattern(pattern, path string) bool {
 }
 
 // defaultNotFoundHandler is the default handler for 404 Not Found responses.
-// It checks the Accept header and returns JSON problem detail when requested.
+// It checks the Accept header and returns JSON problem detail by default.
 var defaultNotFoundHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	// Check if client accepts JSON/problem detail
-	accept := r.Header.Get(httpx.HeaderAccept)
-	if strings.Contains(accept, httpx.MIMEApplicationJSON) || strings.Contains(accept, httpx.MIMEApplicationProblemJSON) {
-		jsonNotFoundHandler(w, r)
+	// Default to JSON; only use plain text if client explicitly requests it
+	if problem.AcceptsJSON(r) {
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write(preEncodedNotFoundJSON)
 		return
 	}
-	// Default to plain text
+	// Plain text for non-JSON clients
 	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte("Requested resource was not found\n"))
 })
 
 // defaultMethodNotAllowedHandler is the default handler for 405 Method Not Allowed responses.
-// It checks the Accept header and returns JSON problem detail when requested.
+// It checks the Accept header and returns JSON problem detail by default.
 // The "Allow" header should be set by the caller to indicate which methods are allowed.
 var defaultMethodNotAllowedHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	// Check if client accepts JSON/problem detail
-	accept := r.Header.Get(httpx.HeaderAccept)
-	if strings.Contains(accept, httpx.MIMEApplicationJSON) || strings.Contains(accept, httpx.MIMEApplicationProblemJSON) {
-		jsonMethodNotAllowedHandler(w, r)
+	// Default to JSON; only use plain text if client explicitly requests it
+	if problem.AcceptsJSON(r) {
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = w.Write(preEncodedMethodNotAllowedJSON)
 		return
 	}
-	// Default to plain text
+	// Plain text for non-JSON clients
 	w.Header().Set(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	_, _ = w.Write([]byte("HTTP method is not allowed\n"))

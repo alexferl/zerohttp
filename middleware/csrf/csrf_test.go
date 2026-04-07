@@ -203,7 +203,7 @@ func TestCSRF_InvalidToken(t *testing.T) {
 		IsProblemDetail().
 		ProblemDetailTitle("Forbidden")
 
-	// Test plain text response without Accept header
+	// Test JSON response without Accept header (defaults to JSON)
 	req = httptest.NewRequest(http.MethodPost, "/", nil)
 	req.Header.Set(httpx.HeaderXCSRFToken, "invalid-token")
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "invalid-token"})
@@ -213,7 +213,7 @@ func TestCSRF_InvalidToken(t *testing.T) {
 
 	zhtest.AssertWith(t, rr).
 		Status(http.StatusForbidden).
-		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestCSRF_MissingToken(t *testing.T) {
