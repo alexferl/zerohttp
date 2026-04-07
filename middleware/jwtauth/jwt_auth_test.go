@@ -100,7 +100,7 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "text/plain")
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "application/problem+json")
 }
 
 func TestJWTAuth_InvalidToken(t *testing.T) {
@@ -152,7 +152,7 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 	req.Header.Set(httpx.HeaderAuthorization, "Bearer invalid-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "text/plain")
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "application/problem+json")
 }
 
 func TestJWTAuth_Success(t *testing.T) {
@@ -282,7 +282,7 @@ func TestJWTAuth_RequiredClaims(t *testing.T) {
 	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "text/plain")
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "application/problem+json")
 }
 
 func TestJWTAuth_CustomErrorHandler(t *testing.T) {
@@ -779,7 +779,7 @@ func TestRefreshTokenHandler_InvalidMethod(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/auth/refresh", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestRefreshTokenHandler_MissingToken(t *testing.T) {
@@ -900,7 +900,7 @@ func TestRefreshTokenHandler_TokenRevoked(t *testing.T) {
 	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "text/plain")
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "application/problem+json")
 }
 
 func TestRefreshTokenHandler_TokenAllowed(t *testing.T) {
@@ -968,12 +968,7 @@ func TestLogoutTokenHandler(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	zhtest.AssertTrue(t, revokeCalled)
-	zhtest.AssertEqual(t, http.StatusOK, rr.Code)
-
-	var resp map[string]any
-	zhtest.AssertNoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-
-	zhtest.AssertEqual(t, "logged out successfully", resp["message"])
+	zhtest.AssertEqual(t, http.StatusNoContent, rr.Code)
 }
 
 func TestLogoutTokenHandler_InvalidMethod(t *testing.T) {
@@ -997,7 +992,7 @@ func TestLogoutTokenHandler_InvalidMethod(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/auth/logout", nil)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+	zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestLogoutTokenHandler_NoTokenStore(t *testing.T) {
@@ -1118,12 +1113,12 @@ func TestLogoutTokenHandler_RevokeError(t *testing.T) {
 	var errResp AuthError
 	zhtest.AssertNoError(t, json.Unmarshal(rr.Body.Bytes(), &errResp))
 
-	// Test plain text response
+	// Test JSON response without Accept header (defaults to JSON)
 	req = httptest.NewRequest(http.MethodPost, "/auth/logout", strings.NewReader(body))
 	req.Header.Set(httpx.HeaderContentType, httpx.MIMEApplicationJSON)
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), httpx.MIMETextPlain)
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), httpx.MIMEApplicationProblemJSON)
 }
 
 func TestGetJWTClaimsExpiration(t *testing.T) {
@@ -1749,7 +1744,7 @@ func TestJWTAuth_RevokedToken(t *testing.T) {
 	req.Header.Set(httpx.HeaderAuthorization, "Bearer revoked-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "text/plain")
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "application/problem+json")
 }
 
 func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
@@ -1787,7 +1782,7 @@ func TestJWTAuth_RefreshTokenAsAccessToken(t *testing.T) {
 	req.Header.Set(httpx.HeaderAuthorization, "Bearer refresh-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "text/plain")
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "application/problem+json")
 }
 
 func TestJWTAuth_Metrics(t *testing.T) {
@@ -1883,7 +1878,7 @@ func TestJWTAuth_IsRevokedCheckError(t *testing.T) {
 	req.Header.Set(httpx.HeaderAuthorization, "Bearer valid-token")
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "text/plain")
+	zhtest.AssertContains(t, rr.Header().Get(httpx.HeaderContentType), "application/problem+json")
 }
 
 // Test for IsRevoked error path in RefreshTokenHandler
@@ -2492,11 +2487,7 @@ func TestLogoutTokenHandler_WithCookieEnabled(t *testing.T) {
 
 		handler.ServeHTTP(rr, req)
 
-		zhtest.AssertEqual(t, http.StatusOK, rr.Code)
-
-		var resp map[string]any
-		zhtest.AssertNoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		zhtest.AssertEqual(t, "logged out successfully", resp["message"])
+		zhtest.AssertEqual(t, http.StatusNoContent, rr.Code)
 
 		// Verify both cookies are deleted
 		cookies := rr.Result().Cookies()

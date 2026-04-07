@@ -125,17 +125,26 @@ func NewValidationDetail[T any](detail string, errors []T) *Detail {
 }
 
 // AcceptsJSON checks if the client accepts JSON responses based on the Accept header.
-// Returns true if the Accept header includes application/json or application/problem+json
-// with higher priority than text/html, or if */* is present without explicit HTML preference.
+// Returns true if the Accept header includes application/json, application/problem+json,
+// or any vendor media type with +json suffix (e.g., application/vnd.api.v1+json).
 // Explicit q=0 refusals (e.g., "application/json;q=0, */*") are respected per RFC 7231.
 func AcceptsJSON(r *http.Request) bool {
 	accept := r.Header.Get(httpx.HeaderAccept)
 	if accept == "" {
-		return false
+		return true // Default to JSON when no Accept header is present
 	}
 
 	// Parse explicit types only (no wildcard expansion)
 	jsonQ, jsonExplicit := parseAcceptQualityExact(accept, httpx.MIMEApplicationJSON, httpx.MIMEApplicationProblemJSON)
+	// Also check for vendor JSON media types (e.g., application/vnd.api.v1+json)
+	vendorJsonQ, vendorJsonExplicit := parseAcceptVendorJSON(accept)
+	if vendorJsonQ > jsonQ {
+		jsonQ = vendorJsonQ
+	}
+	if vendorJsonExplicit {
+		jsonExplicit = true
+	}
+
 	htmlQ, _ := parseAcceptQualityExact(accept, httpx.MIMETextHTML)
 	// Parse wildcards separately
 	wildcardQ := parseWildcardQuality(accept)
@@ -171,6 +180,26 @@ func parseAcceptQualityExact(accept string, mediaTypes ...string) (q float64, fo
 				if quality > maxQ {
 					maxQ = quality
 				}
+			}
+		}
+	})
+
+	return maxQ, wasFound
+}
+
+// parseAcceptVendorJSON parses the Accept header for vendor JSON media types
+// (e.g., application/vnd.api.v1+json) and returns the highest quality value.
+// Also returns true if any vendor JSON type was explicitly present.
+func parseAcceptVendorJSON(accept string) (q float64, found bool) {
+	maxQ := 0.0
+	wasFound := false
+
+	eachAcceptEntry(accept, func(mediaType string, quality float64) {
+		// Check for vendor JSON media types: application/*+json
+		if strings.HasPrefix(mediaType, "application/") && strings.HasSuffix(mediaType, "+json") {
+			wasFound = true
+			if quality > maxQ {
+				maxQ = quality
 			}
 		}
 	})

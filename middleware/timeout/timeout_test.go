@@ -61,10 +61,10 @@ func TestTimeout_Scenarios(t *testing.T) {
 				w = zhtest.Serve(middleware, req)
 				zhtest.AssertWith(t, w).Status(tt.wantStatus).IsProblemDetail()
 
-				// Test plain text response
+				// Test JSON response without Accept header (defaults to JSON)
 				req = zhtest.NewRequest(http.MethodGet, "/").Build()
 				w = zhtest.Serve(middleware, req)
-				zhtest.AssertWith(t, w).Status(tt.wantStatus).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+				zhtest.AssertWith(t, w).Status(tt.wantStatus).Header(httpx.HeaderContentType, "application/problem+json")
 			}
 		})
 	}

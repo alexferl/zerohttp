@@ -60,13 +60,13 @@ func TestCircuitBreaker_FailureThreshold(t *testing.T) {
 		IsProblemDetail().
 		ProblemDetailDetail("Service temporarily unavailable")
 
-	// Test plain text response (without Accept header)
+	// Test JSON response (without Accept header - defaults to JSON)
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w = zhtest.Serve(middleware, req)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusServiceUnavailable).
-		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "application/problem+json")
 
 	zhtest.AssertEqual(t, 3, handler.getCallCount())
 }
@@ -207,13 +207,13 @@ func TestCircuitBreaker_CustomOpenResponse(t *testing.T) {
 		IsProblemDetail().
 		ProblemDetailDetail("Circuit breaker active")
 
-	// Test plain text response
+	// Test JSON response (without Accept header - defaults to JSON)
 	req = zhtest.NewRequest(http.MethodGet, "/test").Build()
 	w = zhtest.Serve(middleware, req)
 
 	zhtest.AssertWith(t, w).
 		Status(http.StatusTooManyRequests).
-		Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+		Header(httpx.HeaderContentType, "application/problem+json")
 }
 
 func TestCircuitBreaker_ZeroConfigValues(t *testing.T) {

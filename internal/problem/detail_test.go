@@ -198,7 +198,7 @@ func TestDetail_RenderAuto(t *testing.T) {
 		{"accepts problem+json", "application/problem+json", true},
 		{"accepts wildcard", "*/*", true},
 		{"accepts HTML only", "text/html", false},
-		{"empty accept header", "", false},
+		{"empty accept header", "", true},
 		{"accepts JSON with quality", "application/json;q=0.9", true},
 		{"accepts HTML with wildcard", "text/html,*/*;q=0.8", false},
 		{"accepts browser header", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", false},
@@ -253,7 +253,7 @@ func TestAcceptsJSON(t *testing.T) {
 		header string
 		want   bool
 	}{
-		{"empty header", "", false},
+		{"empty header", "", true},
 		{"application/json", "application/json", true},
 		{"application/problem+json", "application/problem+json", true},
 		{"text/html", "text/html", false},
@@ -277,6 +277,9 @@ func TestAcceptsJSON(t *testing.T) {
 		{"quality out of range low", "application/json;q=-0.5", true},
 		{"quality exactly 0", "application/json;q=0, text/html", false},
 		{"quality exactly 1", "application/json;q=1", true},
+		{"vendor json type", "application/vnd.api.v1+json", true},
+		{"vendor json with quality", "application/vnd.api.v1+json;q=0.9", true},
+		{"vendor json vs html", "text/html;q=0.9,application/vnd.api.v1+json;q=0.8", false},
 	}
 
 	for _, tt := range tests {

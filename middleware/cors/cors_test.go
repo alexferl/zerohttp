@@ -99,7 +99,7 @@ func TestCORSPreflightRequest(t *testing.T) {
 				}
 				rr = httptest.NewRecorder()
 				mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
-				zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "text/plain; charset=utf-8")
+				zhtest.AssertWith(t, rr).Header(httpx.HeaderContentType, "application/problem+json")
 			}
 			if tt.checkAllowHeader {
 				zhtest.AssertWith(t, rr).HeaderExists("Allow")

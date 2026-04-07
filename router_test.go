@@ -504,7 +504,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
+			Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 
 		router.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
@@ -640,16 +640,16 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderAllow), "CUSTOM")
 	})
 
-	// Test fallback path when ProblemDetail fails
+	// Test JSON response even when write fails (no fallback to plain text)
 	t.Run("default not found handler fallback", func(t *testing.T) {
 		// Use a response writer that fails when writing the JSON body
 		w := &failWriteRecorder{ResponseRecorder: httptest.NewRecorder(), failWrite: true}
 		req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 
-		// Now call the handler - should trigger fallback path
+		// Now call the handler - returns JSON even if write fails
 		defaultNotFoundHandler.ServeHTTP(w, req)
 
-		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMETextPlainCharset)
+		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMEApplicationProblemJSON)
 	})
 
 	t.Run("default method not allowed handler fallback", func(t *testing.T) {
@@ -658,7 +658,7 @@ func TestRouter_ErrorHandlers(t *testing.T) {
 
 		defaultMethodNotAllowedHandler.ServeHTTP(w, req)
 
-		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMETextPlainCharset)
+		zhtest.AssertEqual(t, w.Header().Get(httpx.HeaderContentType), httpx.MIMEApplicationProblemJSON)
 	})
 
 	// Test for parameterized routes returning 405 instead of 404
@@ -936,7 +936,7 @@ func TestUtilityFunctions(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
+			Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 	})
 
 	t.Run("defaultMethodNotAllowedHandler", func(t *testing.T) {
@@ -946,7 +946,7 @@ func TestUtilityFunctions(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusMethodNotAllowed).
-			Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset)
+			Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 	})
 
 	t.Run("defaultNotFoundHandler body", func(t *testing.T) {
@@ -956,7 +956,8 @@ func TestUtilityFunctions(t *testing.T) {
 
 		zhtest.AssertWith(t, w).
 			Status(http.StatusNotFound).
-			Body("Requested resource was not found\n")
+			BodyContains(`"title":"Not Found"`).
+			BodyContains(`"status":404`)
 	})
 
 	t.Run("allowedMethods", func(t *testing.T) {
@@ -1957,7 +1958,7 @@ func TestDefaultNotFoundHandler_AcceptProblemJSON(t *testing.T) {
 }
 
 // TestDefaultNotFoundHandler_NoAcceptHeader verifies that the default NotFound handler
-// returns plain text when no Accept header is set.
+// returns JSON when no Accept header is set.
 func TestDefaultNotFoundHandler_NoAcceptHeader(t *testing.T) {
 	router := NewRouter()
 
@@ -1967,11 +1968,12 @@ func TestDefaultNotFoundHandler_NoAcceptHeader(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	// Should return plain text
+	// Should return JSON by default
 	zhtest.AssertWith(t, w).
 		Status(http.StatusNotFound).
-		Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset).
-		BodyContains("Requested resource was not found")
+		Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON).
+		BodyContains(`"title":"Not Found"`).
+		BodyContains(`"status":404`)
 }
 
 // TestDefaultMethodNotAllowedHandler_AcceptJSON verifies that the default MethodNotAllowed handler
@@ -1996,13 +1998,49 @@ func TestDefaultMethodNotAllowedHandler_AcceptJSON(t *testing.T) {
 }
 
 // TestDefaultMethodNotAllowedHandler_NoAcceptHeader verifies that the default MethodNotAllowed handler
-// returns plain text when no Accept header is set.
+// returns JSON when no Accept header is set.
 func TestDefaultMethodNotAllowedHandler_NoAcceptHeader(t *testing.T) {
 	router := NewRouter()
 	router.GET("/test", testHandler("GET handler"))
 
 	// Make a POST request without Accept header
 	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should return JSON by default
+	zhtest.AssertWith(t, w).
+		Status(http.StatusMethodNotAllowed).
+		Header(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON).
+		BodyContains(`"title":"Method Not Allowed"`).
+		BodyContains(`"status":405`)
+}
+
+func TestDefaultNotFoundHandler_PlainText(t *testing.T) {
+	router := NewRouter()
+
+	// Make a request with Accept: text/plain
+	req := httptest.NewRequest(http.MethodGet, "/not-found", nil)
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMETextPlain)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Should return plain text
+	zhtest.AssertWith(t, w).
+		Status(http.StatusNotFound).
+		Header(httpx.HeaderContentType, httpx.MIMETextPlainCharset).
+		BodyContains("Requested resource was not found")
+}
+
+func TestDefaultMethodNotAllowedHandler_PlainText(t *testing.T) {
+	router := NewRouter()
+	router.GET("/test", testHandler("GET handler"))
+
+	// Make a POST request with Accept: text/plain
+	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req.Header.Set(httpx.HeaderAccept, httpx.MIMETextPlain)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
