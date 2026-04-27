@@ -2,11 +2,30 @@ package sse
 
 import "sync"
 
+// Broadcaster is the interface for SSE broadcast hubs.
+// The built-in Hub satisfies this interface, and users can provide
+// their own implementations (e.g. backed by Redis) for cross-instance broadcast.
+type Broadcaster interface {
+	Register(s *SSE)
+	Unregister(s *SSE)
+	Subscribe(s *SSE, topic string)
+	Unsubscribe(s *SSE, topic string)
+	Broadcast(event Event)
+	BroadcastTo(topic string, event Event)
+	ConnectionCount() int
+	TopicCount(topic string) int
+}
+
+// Ensure Hub implements Broadcaster
+var _ Broadcaster = (*Hub)(nil)
+
 // Hub manages multiple SSE connections for broadcasting.
 type Hub struct {
-	connections map[*SSE]struct{}
-	topics      map[string]map[*SSE]struct{}
-	mu          sync.RWMutex
+	connections   map[*SSE]struct{}
+	topics        map[string]map[*SSE]struct{}
+	mu            sync.RWMutex
+	OnBroadcast   func(event Event)
+	OnBroadcastTo func(topic string, event Event)
 }
 
 // NewHub creates a new SSE broadcast hub.
@@ -62,6 +81,10 @@ func (h *Hub) Unsubscribe(s *SSE, topic string) {
 // Broadcast sends an event to all registered connections.
 // Connections that fail to receive the event are automatically unregistered.
 func (h *Hub) Broadcast(event Event) {
+	if h.OnBroadcast != nil {
+		h.OnBroadcast(event)
+	}
+
 	h.mu.RLock()
 	connections := make([]*SSE, 0, len(h.connections))
 	for conn := range h.connections {
@@ -86,6 +109,10 @@ func (h *Hub) Broadcast(event Event) {
 // BroadcastTo sends an event to all connections subscribed to a topic.
 // Connections that fail to receive the event are automatically unregistered.
 func (h *Hub) BroadcastTo(topic string, event Event) {
+	if h.OnBroadcastTo != nil {
+		h.OnBroadcastTo(topic, event)
+	}
+
 	h.mu.RLock()
 	var connections []*SSE
 	if subs, ok := h.topics[topic]; ok {
