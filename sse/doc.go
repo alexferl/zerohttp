@@ -52,15 +52,15 @@
 //	        return err
 //	    }
 //
-//	    hub.Register(stream)
-//	    defer hub.Unregister(stream)
+//	    hub.Register(r.Context(), stream)
+//	    defer hub.Unregister(r.Context(), stream)
 //
 //	    <-r.Context().Done()
 //	    return nil
 //	})
 //
 //	// Broadcast to all connected clients
-//	hub.Broadcast(sse.Event{Name: "update", Data: []byte("hello")})
+//	hub.Broadcast(r.Context(), sse.Event{Name: "update", Data: []byte("hello")})
 //
 // The Broadcaster interface allows custom implementations (e.g. Redis-backed)
 // for cross-instance broadcasting. The built-in Hub satisfies this interface.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -97,8 +98,8 @@ func main() {
 			}
 		}
 
-		hub.Subscribe(stream, "notifications")
-		defer hub.Unsubscribe(stream, "notifications")
+		hub.Subscribe(r.Context(), stream, "notifications")
+		defer hub.Unsubscribe(r.Context(), stream, "notifications")
 
 		_ = stream.Send(sse.Event{
 			Name: "info",
@@ -116,8 +117,8 @@ func main() {
 		}
 		defer func() { _ = stream.Close() }()
 
-		hub.Register(stream)
-		defer hub.Unregister(stream)
+		hub.Register(r.Context(), stream)
+		defer hub.Unregister(r.Context(), stream)
 
 		_ = stream.Send(sse.Event{
 			Name: "info",
@@ -154,7 +155,7 @@ func main() {
 			Name: "broadcast",
 			Data: []byte(msg),
 		}
-		hub.Broadcast(event)
+		hub.Broadcast(r.Context(), event)
 
 		_, err := fmt.Fprintf(w, "Broadcast sent to %d clients", hub.ConnectionCount())
 		return err
@@ -171,7 +172,7 @@ func main() {
 				Data: []byte(fmt.Sprintf("Auto notification #%d", counter)),
 			}
 			event = replayer.Store(event)
-			hub.BroadcastTo("notifications", event)
+			hub.BroadcastTo(context.Background(), "notifications", event)
 		}
 	}()
 

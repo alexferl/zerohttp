@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,11 +18,11 @@ func TestHub(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, _ := New(w, r)
-		hub.Register(stream)
+		hub.Register(context.Background(), stream)
 
 		zhtest.AssertEqual(t, 1, hub.ConnectionCount())
 
-		hub.Unregister(stream)
+		hub.Unregister(context.Background(), stream)
 		zhtest.AssertEqual(t, 0, hub.ConnectionCount())
 	})
 
@@ -31,11 +32,11 @@ func TestHub(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, _ := New(w, r)
-		hub.Subscribe(stream, "notifications")
+		hub.Subscribe(context.Background(), stream, "notifications")
 
 		zhtest.AssertEqual(t, 1, hub.TopicCount("notifications"))
 
-		hub.Unsubscribe(stream, "notifications")
+		hub.Unsubscribe(context.Background(), stream, "notifications")
 		zhtest.AssertEqual(t, 0, hub.TopicCount("notifications"))
 	})
 
@@ -50,10 +51,10 @@ func TestHub(t *testing.T) {
 		stream1, _ := New(w1, r)
 		stream2, _ := New(w2, r)
 
-		hub.Register(stream1)
-		hub.Register(stream2)
+		hub.Register(context.Background(), stream1)
+		hub.Register(context.Background(), stream2)
 
-		hub.Broadcast(Event{Data: []byte("hello all")})
+		hub.Broadcast(context.Background(), Event{Data: []byte("hello all")})
 
 		zhtest.AssertWith(t, w1).BodyContains("hello all")
 		zhtest.AssertWith(t, w2).BodyContains("hello all")
@@ -69,10 +70,10 @@ func TestHub(t *testing.T) {
 		stream1, _ := New(w1, r)
 		stream2, _ := New(w2, r)
 
-		hub.Subscribe(stream1, "topic1")
-		hub.Subscribe(stream2, "topic2")
+		hub.Subscribe(context.Background(), stream1, "topic1")
+		hub.Subscribe(context.Background(), stream2, "topic2")
 
-		hub.BroadcastTo("topic1", Event{Data: []byte("topic1 message")})
+		hub.BroadcastTo(context.Background(), "topic1", Event{Data: []byte("topic1 message")})
 
 		zhtest.AssertWith(t, w1).BodyContains("topic1 message")
 		zhtest.AssertWith(t, w2).BodyNotContains("topic1 message")
@@ -84,10 +85,10 @@ func TestHub(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 
 		stream, _ := New(w, r)
-		hub.Subscribe(stream, "topic1")
-		hub.Subscribe(stream, "topic2")
+		hub.Subscribe(context.Background(), stream, "topic1")
+		hub.Subscribe(context.Background(), stream, "topic2")
 
-		hub.Unregister(stream)
+		hub.Unregister(context.Background(), stream)
 
 		zhtest.AssertEqual(t, 0, hub.TopicCount("topic1"))
 		zhtest.AssertEqual(t, 0, hub.TopicCount("topic2"))
@@ -100,7 +101,7 @@ func TestHub(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 		stream1, _ := New(w1, r)
-		hub.Register(stream1)
+		hub.Register(context.Background(), stream1)
 
 		// Create a stream with an error writer that will fail on send
 		header := make(http.Header)
@@ -114,12 +115,12 @@ func TestHub(t *testing.T) {
 			done:    make(chan struct{}),
 			cancel:  func() {},
 		}
-		hub.Register(badStream)
+		hub.Register(context.Background(), badStream)
 
 		zhtest.AssertEqual(t, 2, hub.ConnectionCount())
 
 		// Broadcast should auto-unregister the failed connection
-		hub.Broadcast(Event{Data: []byte("test")})
+		hub.Broadcast(context.Background(), Event{Data: []byte("test")})
 
 		zhtest.AssertEqual(t, 1, hub.ConnectionCount())
 	})
@@ -131,7 +132,7 @@ func TestHub(t *testing.T) {
 		w1 := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 		stream1, _ := New(w1, r)
-		hub.Subscribe(stream1, "test-topic")
+		hub.Subscribe(context.Background(), stream1, "test-topic")
 
 		// Create a stream with an error writer
 		header := make(http.Header)
@@ -145,12 +146,12 @@ func TestHub(t *testing.T) {
 			done:    make(chan struct{}),
 			cancel:  func() {},
 		}
-		hub.Subscribe(badStream, "test-topic")
+		hub.Subscribe(context.Background(), badStream, "test-topic")
 
 		zhtest.AssertEqual(t, 2, hub.TopicCount("test-topic"))
 
 		// Broadcast should auto-unregister the failed connection
-		hub.BroadcastTo("test-topic", Event{Data: []byte("test")})
+		hub.BroadcastTo(context.Background(), "test-topic", Event{Data: []byte("test")})
 
 		zhtest.AssertEqual(t, 1, hub.TopicCount("test-topic"))
 	})
@@ -168,10 +169,10 @@ func TestHub(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 		stream, _ := New(w, r)
-		hub.Register(stream)
+		hub.Register(context.Background(), stream)
 
 		event := Event{Data: []byte("hook test")}
-		hub.Broadcast(event)
+		hub.Broadcast(context.Background(), event)
 
 		zhtest.AssertEqual(t, true, called)
 		zhtest.AssertEqual(t, string(event.Data), string(received.Data))
@@ -192,10 +193,10 @@ func TestHub(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
 		stream, _ := New(w, r)
-		hub.Subscribe(stream, "test-topic")
+		hub.Subscribe(context.Background(), stream, "test-topic")
 
 		event := Event{Data: []byte("hook test")}
-		hub.BroadcastTo("test-topic", event)
+		hub.BroadcastTo(context.Background(), "test-topic", event)
 
 		zhtest.AssertEqual(t, true, called)
 		zhtest.AssertEqual(t, "test-topic", receivedTopic)
@@ -221,7 +222,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			stream, err := New(w, r)
 			zhtest.AssertNoError(t, err)
 			streams = append(streams, stream)
-			hub.Register(stream)
+			hub.Register(context.Background(), stream)
 		}
 
 		zhtest.AssertEqual(t, 10, hub.ConnectionCount())
@@ -234,7 +235,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			// Broadcast from one goroutine
 			go func() {
 				defer wg.Done()
-				hub.Broadcast(Event{Data: []byte("test")})
+				hub.Broadcast(context.Background(), Event{Data: []byte("test")})
 			}()
 
 			// Close connections from another goroutine
@@ -267,7 +268,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			stream, err := New(w, r)
 			zhtest.AssertNoError(t, err)
 			streams = append(streams, stream)
-			hub.Subscribe(stream, "test-topic")
+			hub.Subscribe(context.Background(), stream, "test-topic")
 		}
 
 		zhtest.AssertEqual(t, 10, hub.TopicCount("test-topic"))
@@ -280,7 +281,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			// BroadcastTo from one goroutine
 			go func() {
 				defer wg.Done()
-				hub.BroadcastTo("test-topic", Event{Data: []byte("test")})
+				hub.BroadcastTo(context.Background(), "test-topic", Event{Data: []byte("test")})
 			}()
 
 			// Close connections from another goroutine
@@ -314,7 +315,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			stream, err := New(w, r)
 			zhtest.AssertNoError(t, err)
 			streams = append(streams, stream)
-			hub.Register(stream)
+			hub.Register(context.Background(), stream)
 		}
 
 		var wg sync.WaitGroup
@@ -327,7 +328,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 			go func(id int) {
 				defer wg.Done()
 				for j := 0; j < iterations; j++ {
-					hub.Broadcast(Event{Data: []byte("test"), ID: fmt.Sprintf("worker-%d-iter-%d", id, j)})
+					hub.Broadcast(context.Background(), Event{Data: []byte("test"), ID: fmt.Sprintf("worker-%d-iter-%d", id, j)})
 				}
 			}(i)
 		}
@@ -342,7 +343,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 					_ = streams[idx].Close()
 					// Re-register sometimes to keep the pool active
 					if j%3 == 0 {
-						hub.Register(streams[idx])
+						hub.Register(context.Background(), streams[idx])
 					}
 				}
 			}(i)
@@ -355,7 +356,7 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 				defer wg.Done()
 				for j := 0; j < iterations; j++ {
 					idx := (id*iterations + j) % len(streams)
-					hub.Register(streams[idx])
+					hub.Register(context.Background(), streams[idx])
 				}
 			}(i)
 		}
@@ -372,11 +373,11 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 // customBroadcaster is a minimal implementation of the Broadcaster interface for testing.
 type customBroadcaster struct{}
 
-func (c *customBroadcaster) Register(s *SSE)                       {}
-func (c *customBroadcaster) Unregister(s *SSE)                     {}
-func (c *customBroadcaster) Subscribe(s *SSE, topic string)        {}
-func (c *customBroadcaster) Unsubscribe(s *SSE, topic string)      {}
-func (c *customBroadcaster) Broadcast(event Event)                 {}
-func (c *customBroadcaster) BroadcastTo(topic string, event Event) {}
-func (c *customBroadcaster) ConnectionCount() int                  { return 0 }
-func (c *customBroadcaster) TopicCount(topic string) int           { return 0 }
+func (c *customBroadcaster) Register(_ context.Context, s *SSE)                       {}
+func (c *customBroadcaster) Unregister(_ context.Context, s *SSE)                     {}
+func (c *customBroadcaster) Subscribe(_ context.Context, s *SSE, topic string)        {}
+func (c *customBroadcaster) Unsubscribe(_ context.Context, s *SSE, topic string)      {}
+func (c *customBroadcaster) Broadcast(_ context.Context, event Event)                 {}
+func (c *customBroadcaster) BroadcastTo(_ context.Context, topic string, event Event) {}
+func (c *customBroadcaster) ConnectionCount() int                                     { return 0 }
+func (c *customBroadcaster) TopicCount(topic string) int                              { return 0 }
