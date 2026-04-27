@@ -154,6 +154,58 @@ func TestHub(t *testing.T) {
 
 		zhtest.AssertEqual(t, 1, hub.TopicCount("test-topic"))
 	})
+
+	t.Run("calls OnBroadcast hook", func(t *testing.T) {
+		hub := NewHub()
+
+		var called bool
+		var received Event
+		hub.OnBroadcast = func(event Event) {
+			called = true
+			received = event
+		}
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+		stream, _ := New(w, r)
+		hub.Register(stream)
+
+		event := Event{Data: []byte("hook test")}
+		hub.Broadcast(event)
+
+		zhtest.AssertEqual(t, true, called)
+		zhtest.AssertEqual(t, string(event.Data), string(received.Data))
+	})
+
+	t.Run("calls OnBroadcastTo hook", func(t *testing.T) {
+		hub := NewHub()
+
+		var called bool
+		var receivedTopic string
+		var received Event
+		hub.OnBroadcastTo = func(topic string, event Event) {
+			called = true
+			receivedTopic = topic
+			received = event
+		}
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/sse", nil)
+		stream, _ := New(w, r)
+		hub.Subscribe(stream, "test-topic")
+
+		event := Event{Data: []byte("hook test")}
+		hub.BroadcastTo("test-topic", event)
+
+		zhtest.AssertEqual(t, true, called)
+		zhtest.AssertEqual(t, "test-topic", receivedTopic)
+		zhtest.AssertEqual(t, string(event.Data), string(received.Data))
+	})
+
+	t.Run("custom broadcaster implements interface", func(t *testing.T) {
+		// Ensure a custom implementation can satisfy the Broadcaster interface
+		var _ Broadcaster = (*customBroadcaster)(nil)
+	})
 }
 
 // Test for race condition in Broadcast where connections are closed during broadcast
@@ -316,3 +368,15 @@ func TestHub_BroadcastRaceCondition(t *testing.T) {
 		}
 	})
 }
+
+// customBroadcaster is a minimal implementation of the Broadcaster interface for testing.
+type customBroadcaster struct{}
+
+func (c *customBroadcaster) Register(s *SSE)                       {}
+func (c *customBroadcaster) Unregister(s *SSE)                     {}
+func (c *customBroadcaster) Subscribe(s *SSE, topic string)        {}
+func (c *customBroadcaster) Unsubscribe(s *SSE, topic string)      {}
+func (c *customBroadcaster) Broadcast(event Event)                 {}
+func (c *customBroadcaster) BroadcastTo(topic string, event Event) {}
+func (c *customBroadcaster) ConnectionCount() int                  { return 0 }
+func (c *customBroadcaster) TopicCount(topic string) int           { return 0 }

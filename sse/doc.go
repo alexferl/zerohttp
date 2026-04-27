@@ -62,6 +62,12 @@
 //	// Broadcast to all connected clients
 //	hub.Broadcast(sse.Event{Name: "update", Data: []byte("hello")})
 //
+// The Broadcaster interface allows custom implementations (e.g. Redis-backed)
+// for cross-instance broadcasting. The built-in Hub satisfies this interface.
+//
+// Hub also provides OnBroadcast and OnBroadcastTo hooks for observability
+// or intercepting events before delivery.
+//
 // # Event Replay
 //
 // Enable clients to recover missed events using the Last-Event-ID header:
