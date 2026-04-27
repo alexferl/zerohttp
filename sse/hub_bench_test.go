@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,7 @@ func BenchmarkHub_Broadcast(b *testing.B) {
 					b.Fatalf("failed to create SSE: %v", err)
 				}
 				streams[i] = stream
-				hub.Register(stream)
+				hub.Register(context.Background(), stream)
 			}
 
 			// Cleanup
@@ -44,7 +45,7 @@ func BenchmarkHub_Broadcast(b *testing.B) {
 			b.ResetTimer()
 
 			for b.Loop() {
-				hub.Broadcast(event)
+				hub.Broadcast(context.Background(), event)
 			}
 		})
 	}
@@ -71,7 +72,7 @@ func BenchmarkHub_BroadcastTo(b *testing.B) {
 					b.Fatalf("failed to create SSE: %v", err)
 				}
 				streams[i] = stream
-				hub.Subscribe(stream, "notifications")
+				hub.Subscribe(context.Background(), stream, "notifications")
 			}
 
 			// Cleanup
@@ -87,7 +88,7 @@ func BenchmarkHub_BroadcastTo(b *testing.B) {
 			b.ResetTimer()
 
 			for b.Loop() {
-				hub.BroadcastTo("notifications", event)
+				hub.BroadcastTo(context.Background(), "notifications", event)
 			}
 		})
 	}
@@ -119,7 +120,7 @@ func BenchmarkHub_BroadcastTo_MultipleTopics(b *testing.B) {
 					b.Fatalf("failed to create SSE: %v", err)
 				}
 				topicName := fmt.Sprintf("topic-%d", i%s.numTopics)
-				hub.Subscribe(stream, topicName)
+				hub.Subscribe(context.Background(), stream, topicName)
 			}
 
 			event := Event{Data: []byte("topic message")}
@@ -128,7 +129,7 @@ func BenchmarkHub_BroadcastTo_MultipleTopics(b *testing.B) {
 			b.ResetTimer()
 
 			for b.Loop() {
-				hub.BroadcastTo("topic-0", event)
+				hub.BroadcastTo(context.Background(), "topic-0", event)
 			}
 		})
 	}
@@ -153,7 +154,7 @@ func BenchmarkHub_RegisterUnregister(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			hub.Register(streams[i])
+			hub.Register(context.Background(), streams[i])
 		}
 
 		// Cleanup
@@ -172,14 +173,14 @@ func BenchmarkHub_RegisterUnregister(b *testing.B) {
 			w := httptest.NewRecorder()
 			stream, _ := New(w, r)
 			streams[i] = stream
-			hub.Register(stream)
+			hub.Register(context.Background(), stream)
 		}
 
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			hub.Unregister(streams[i])
+			hub.Unregister(context.Background(), streams[i])
 		}
 
 		// Cleanup
@@ -204,7 +205,7 @@ func BenchmarkHub_RegisterUnregister(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			hub.Subscribe(streams[i], "test-topic")
+			hub.Subscribe(context.Background(), streams[i], "test-topic")
 		}
 
 		// Cleanup
@@ -232,11 +233,11 @@ func BenchmarkHub_RegisterUnregister_Concurrent(b *testing.B) {
 				for pb.Next() {
 					w := httptest.NewRecorder()
 					stream, _ := New(w, r)
-					hub.Register(stream)
+					hub.Register(context.Background(), stream)
 
 					// Alternate between register/unregister
 					if i%2 == 0 {
-						hub.Unregister(stream)
+						hub.Unregister(context.Background(), stream)
 					}
 					i++
 					_ = stream.Close()
@@ -259,7 +260,7 @@ func BenchmarkHub_Broadcast_Stress(b *testing.B) {
 			w := httptest.NewRecorder()
 			stream, _ := New(w, r)
 			streams[i] = stream
-			hub.Register(stream)
+			hub.Register(context.Background(), stream)
 		}
 
 		defer func() {
@@ -275,7 +276,7 @@ func BenchmarkHub_Broadcast_Stress(b *testing.B) {
 
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				hub.Broadcast(event)
+				hub.Broadcast(context.Background(), event)
 			}
 		})
 	})
@@ -329,7 +330,7 @@ func BenchmarkHub_Baseline(b *testing.B) {
 					recorders[i] = httptest.NewRecorder()
 					stream, _ := New(recorders[i], r)
 					streams[i] = stream
-					hub.Register(stream)
+					hub.Register(context.Background(), stream)
 				}
 
 				defer func() {
@@ -344,7 +345,7 @@ func BenchmarkHub_Baseline(b *testing.B) {
 				b.ResetTimer()
 
 				for b.Loop() {
-					hub.Broadcast(event)
+					hub.Broadcast(context.Background(), event)
 				}
 			})
 		})

@@ -1,17 +1,20 @@
 package sse
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // Broadcaster is the interface for SSE broadcast hubs.
 // The built-in Hub satisfies this interface, and users can provide
 // their own implementations (e.g. backed by Redis) for cross-instance broadcast.
 type Broadcaster interface {
-	Register(s *SSE)
-	Unregister(s *SSE)
-	Subscribe(s *SSE, topic string)
-	Unsubscribe(s *SSE, topic string)
-	Broadcast(event Event)
-	BroadcastTo(topic string, event Event)
+	Register(ctx context.Context, s *SSE)
+	Unregister(ctx context.Context, s *SSE)
+	Subscribe(ctx context.Context, s *SSE, topic string)
+	Unsubscribe(ctx context.Context, s *SSE, topic string)
+	Broadcast(ctx context.Context, event Event)
+	BroadcastTo(ctx context.Context, topic string, event Event)
 	ConnectionCount() int
 	TopicCount(topic string) int
 }
@@ -37,14 +40,14 @@ func NewHub() *Hub {
 }
 
 // Register adds an SSE connection to the hub.
-func (h *Hub) Register(s *SSE) {
+func (h *Hub) Register(_ context.Context, s *SSE) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.connections[s] = struct{}{}
 }
 
 // Unregister removes an SSE connection from the hub.
-func (h *Hub) Unregister(s *SSE) {
+func (h *Hub) Unregister(_ context.Context, s *SSE) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.connections, s)
@@ -57,7 +60,7 @@ func (h *Hub) Unregister(s *SSE) {
 }
 
 // Subscribe adds an SSE connection to a topic.
-func (h *Hub) Subscribe(s *SSE, topic string) {
+func (h *Hub) Subscribe(_ context.Context, s *SSE, topic string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.topics[topic] == nil {
@@ -67,7 +70,7 @@ func (h *Hub) Subscribe(s *SSE, topic string) {
 }
 
 // Unsubscribe removes an SSE connection from a topic.
-func (h *Hub) Unsubscribe(s *SSE, topic string) {
+func (h *Hub) Unsubscribe(_ context.Context, s *SSE, topic string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if subs, ok := h.topics[topic]; ok {
@@ -80,7 +83,7 @@ func (h *Hub) Unsubscribe(s *SSE, topic string) {
 
 // Broadcast sends an event to all registered connections.
 // Connections that fail to receive the event are automatically unregistered.
-func (h *Hub) Broadcast(event Event) {
+func (h *Hub) Broadcast(ctx context.Context, event Event) {
 	if h.OnBroadcast != nil {
 		h.OnBroadcast(event)
 	}
@@ -101,14 +104,14 @@ func (h *Hub) Broadcast(event Event) {
 
 	// Unregister failed connections
 	for _, conn := range failed {
-		h.Unregister(conn)
+		h.Unregister(ctx, conn)
 		_ = conn.Close()
 	}
 }
 
 // BroadcastTo sends an event to all connections subscribed to a topic.
 // Connections that fail to receive the event are automatically unregistered.
-func (h *Hub) BroadcastTo(topic string, event Event) {
+func (h *Hub) BroadcastTo(ctx context.Context, topic string, event Event) {
 	if h.OnBroadcastTo != nil {
 		h.OnBroadcastTo(topic, event)
 	}
@@ -132,7 +135,7 @@ func (h *Hub) BroadcastTo(topic string, event Event) {
 
 	// Unregister failed connections
 	for _, conn := range failed {
-		h.Unregister(conn)
+		h.Unregister(ctx, conn)
 		_ = conn.Close()
 	}
 }
