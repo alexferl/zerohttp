@@ -131,7 +131,10 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 
 		// Validate field if it has rules
 		if len(fi.rules) > 0 {
-			v.validateFieldWithInfo(field, fieldName, fi, errors)
+			// For pointer fields, required was already handled above (nil check).
+			// Don't re-run required on the dereferenced value.
+			skipRequired := fi.isPtr && fi.hasRequired
+			v.validateFieldWithInfo(field, fieldName, fi, errors, skipRequired)
 		}
 
 		// Recursively validate nested structs
@@ -177,7 +180,10 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 }
 
 // validateFieldWithInfo validates a single field using pre-parsed field info.
-func (v *defaultValidator) validateFieldWithInfo(field reflect.Value, fieldName string, fi *validatedFieldInfo, errors ValidationErrors) {
+// skipRequired is true when the field was originally a pointer and required
+// was already handled at the pointer level (nil check); in that case, required
+// should not be re-run on the dereferenced value.
+func (v *defaultValidator) validateFieldWithInfo(field reflect.Value, fieldName string, fi *validatedFieldInfo, errors ValidationErrors, skipRequired bool) {
 	// Check for omitempty first using cached value
 	if fi.omitempty && isZeroValue(field) {
 		return // Skip all other validators
@@ -195,6 +201,9 @@ func (v *defaultValidator) validateFieldWithInfo(field reflect.Value, fieldName 
 		rule := fi.rules[i]
 		if rule.Name == "omitempty" {
 			continue // Already handled above
+		}
+		if skipRequired && rule.Name == "required" {
+			continue // Already handled at pointer level
 		}
 
 		fn, exists := validators[rule.Name]

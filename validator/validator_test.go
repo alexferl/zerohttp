@@ -776,6 +776,45 @@ func TestPointerWithOmitEmpty(t *testing.T) {
 	})
 }
 
+func TestPointerRequiredZeroValue(t *testing.T) {
+	type testPtrRequiredZero struct {
+		Lat *float64 `json:"lat" validate:"required,gte=-90,lte=90"`
+		Lng *float64 `json:"lng" validate:"required,gte=-180,lte=180"`
+	}
+
+	v := New()
+
+	t.Run("nil required pointer fails", func(t *testing.T) {
+		input := testPtrRequiredZero{Lat: nil, Lng: nil}
+		err := v.Struct(&input)
+		zhtest.AssertError(t, err)
+	})
+
+	t.Run("zero value pointer passes required", func(t *testing.T) {
+		lat := 0.0
+		lng := 0.0
+		input := testPtrRequiredZero{Lat: &lat, Lng: &lng}
+		err := v.Struct(&input)
+		zhtest.AssertNoError(t, err)
+	})
+
+	t.Run("non-zero value pointer passes", func(t *testing.T) {
+		lat := 45.5
+		lng := -73.5
+		input := testPtrRequiredZero{Lat: &lat, Lng: &lng}
+		err := v.Struct(&input)
+		zhtest.AssertNoError(t, err)
+	})
+
+	t.Run("out of range zero value fails", func(t *testing.T) {
+		lat := 100.0
+		lng := 200.0
+		input := testPtrRequiredZero{Lat: &lat, Lng: &lng}
+		err := v.Struct(&input)
+		zhtest.AssertError(t, err)
+	})
+}
+
 func TestJSONFieldNameInErrors(t *testing.T) {
 	type testRequest struct {
 		UserName string `json:"user_name" validate:"required,min=5"`
