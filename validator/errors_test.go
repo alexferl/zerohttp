@@ -202,3 +202,29 @@ func TestIsBindError(t *testing.T) {
 	wrappedErr := fmt.Errorf("wrapped: %w", bindErr)
 	zhtest.AssertTrue(t, IsBindError(wrappedErr))
 }
+
+func TestUnknownFieldError(t *testing.T) {
+	ufe := &UnknownFieldError{Field: "foo"}
+	zhtest.AssertEqual(t, "unknown field: foo", ufe.Error())
+}
+
+func TestIsUnknownFieldError(t *testing.T) {
+	// Test with nil
+	zhtest.AssertFalse(t, IsUnknownFieldError(nil))
+
+	// Test with regular error
+	regularErr := errors.New("some error")
+	zhtest.AssertFalse(t, IsUnknownFieldError(regularErr))
+
+	// Test with UnknownFieldError
+	ufe := &UnknownFieldError{Field: "foo"}
+	zhtest.AssertTrue(t, IsUnknownFieldError(ufe))
+
+	// Test with wrapped UnknownFieldError
+	wrappedErr := fmt.Errorf("wrapped: %w", ufe)
+	zhtest.AssertTrue(t, IsUnknownFieldError(wrappedErr))
+
+	// Test with UnknownFieldError wrapped in BindError
+	bindWrapped := &BindError{Err: ufe}
+	zhtest.AssertTrue(t, IsUnknownFieldError(bindWrapped))
+}

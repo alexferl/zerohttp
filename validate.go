@@ -41,7 +41,7 @@ var DefaultMultipartMaxMemory int64 = 32 << 20
 // BindAndValidate binds request data based on Content-Type and validates the result.
 // It returns appropriate errors:
 //   - 400 Bad Request for binding failures (malformed JSON, type mismatches)
-//   - 422 Unprocessable Entity for validation failures
+//   - 422 Unprocessable Entity for unknown fields or validation failures
 //
 // Supported Content-Types:
 //   - application/json
@@ -85,6 +85,10 @@ func BindAndValidate(r *http.Request, dst any) error {
 	}
 
 	if bindErr != nil {
+		// Unknown fields are returned as 422, not 400.
+		if validator.IsUnknownFieldError(bindErr) {
+			return bindErr
+		}
 		// Wrap as binding error (400)
 		return &validator.BindError{Err: bindErr}
 	}
@@ -99,6 +103,11 @@ func BindAndValidate(r *http.Request, dst any) error {
 // IsBindError checks if an error is a binding error (should return 400).
 func IsBindError(err error) bool {
 	return validator.IsBindError(err)
+}
+
+// IsUnknownFieldError checks if an error is an unknown field error (should return 422).
+func IsUnknownFieldError(err error) bool {
+	return validator.IsUnknownFieldError(err)
 }
 
 // IsValidationError checks if an error is a validation error (should return 422).
@@ -134,7 +143,7 @@ func validateResponseData(data any) error {
 	v := reflect.ValueOf(data)
 
 	// Handle pointer
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 

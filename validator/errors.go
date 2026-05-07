@@ -80,3 +80,23 @@ func IsBindError(err error) bool {
 	var be *BindError
 	return errors.As(err, &be)
 }
+
+// UnknownFieldError indicates a JSON payload contained a field not present
+// in the target struct. The default error handler uses this to return
+// 422 Unprocessable Entity instead of 400 Bad Request.
+type UnknownFieldError struct {
+	Field string
+}
+
+func (e *UnknownFieldError) Error() string {
+	return "unknown field: " + e.Field
+}
+
+// IsUnknownFieldError checks if an error is an unknown field error.
+func IsUnknownFieldError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ufe *UnknownFieldError
+	return errors.As(err, &ufe)
+}

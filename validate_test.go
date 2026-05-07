@@ -402,6 +402,11 @@ func TestBindingHTTPResponse(t *testing.T) {
 			body:       `not json at all`,
 			wantStatus: http.StatusBadRequest,
 		},
+		{
+			name:       "unknown field",
+			body:       `{"name":"John","unknown":"field"}`,
+			wantStatus: http.StatusUnprocessableEntity,
+		},
 	}
 
 	for _, tt := range tests {
@@ -413,6 +418,47 @@ func TestBindingHTTPResponse(t *testing.T) {
 			zhtest.AssertEqual(t, tt.wantStatus, resp.StatusCode)
 		})
 	}
+}
+
+func TestUnknownFieldHTTPResponse(t *testing.T) {
+	type TestRequest struct {
+		Name string `json:"name" validate:"required"`
+	}
+
+	handler := HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		var req TestRequest
+		if err := BindAndValidate(r, &req); err != nil {
+			return err
+		}
+		return R.JSON(w, http.StatusOK, M{"name": req.Name})
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	body := `{"name":"John","unknown":"field"}`
+	resp, err := http.Post(server.URL, "application/json", bytes.NewReader([]byte(body)))
+	zhtest.AssertNoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	zhtest.AssertEqual(t, http.StatusUnprocessableEntity, resp.StatusCode)
+
+	var result map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	zhtest.AssertNoError(t, err)
+
+	zhtest.AssertEqual(t, "Unprocessable Entity", result["title"])
+	zhtest.AssertEqual(t, float64(http.StatusUnprocessableEntity), result["status"])
+	zhtest.AssertEqual(t, "Validation failed", result["detail"])
+
+	e, ok := result["errors"].(map[string]any)
+	zhtest.AssertTrue(t, ok)
+	zhtest.AssertEqual(t, 1, len(e))
+
+	unknownErrs, ok := e["unknown"].([]any)
+	zhtest.AssertTrue(t, ok)
+	zhtest.AssertEqual(t, 1, len(unknownErrs))
+	zhtest.AssertEqual(t, "extra inputs are not permitted", unknownErrs[0])
 }
 
 // crossFieldOrder for testing cross-field validation

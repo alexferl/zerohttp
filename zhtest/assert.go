@@ -722,7 +722,7 @@ func AssertNil(t testing.TB, v any) {
 		// Handle wrapped nil values (typed nil pointers, interfaces, etc.)
 		rv := reflect.ValueOf(v)
 		switch rv.Kind() {
-		case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
+		case reflect.Pointer, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
 			if !rv.IsNil() {
 				fail(t, "expected nil, got %v", v)
 			}
@@ -747,7 +747,7 @@ func AssertNotNil(t testing.TB, v any) {
 	// Handle wrapped nil values (typed nil pointers, interfaces, etc.)
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
-	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
+	case reflect.Pointer, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
 		if rv.IsNil() {
 			fail(t, "expected non-nil value, got nil")
 		}
@@ -1046,7 +1046,7 @@ func isEmpty(v any) bool {
 	switch rv.Kind() {
 	case reflect.String, reflect.Slice, reflect.Map, reflect.Array, reflect.Chan:
 		return rv.Len() == 0
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		if rv.IsNil() {
 			return true
 		}
@@ -1163,9 +1163,9 @@ func AssertIsType(t testing.TB, expectedType any, actual any) {
 	actualReflectType := reflect.TypeOf(actual)
 
 	// Handle nil pointer types for expected (e.g., (*MyType)(nil))
-	if expectedReflectType != nil && expectedReflectType.Kind() == reflect.Ptr && actualReflectType != nil {
+	if expectedReflectType != nil && expectedReflectType.Kind() == reflect.Pointer && actualReflectType != nil {
 		// If expected is a pointer type but actual is not, compare the underlying type
-		if actualReflectType.Kind() != reflect.Ptr {
+		if actualReflectType.Kind() != reflect.Pointer {
 			expectedReflectType = expectedReflectType.Elem()
 		}
 	}
@@ -1191,7 +1191,7 @@ func AssertIsType(t testing.TB, expectedType any, actual any) {
 func AssertImplements(t testing.TB, interfaceType any, actual any) {
 	interfaceReflectType := reflect.TypeOf(interfaceType)
 
-	if interfaceReflectType == nil || interfaceReflectType.Kind() != reflect.Ptr || interfaceReflectType.Elem().Kind() != reflect.Interface {
+	if interfaceReflectType == nil || interfaceReflectType.Kind() != reflect.Pointer || interfaceReflectType.Elem().Kind() != reflect.Interface {
 		fail(t, "AssertImplements requires a pointer to an interface as the first argument (e.g., (*io.Reader)(nil)), got %T", interfaceType)
 		return
 	}

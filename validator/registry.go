@@ -92,7 +92,7 @@ func (tr *typeRegistry) analyzeType(t reflect.Type) *typeInfo {
 
 		// Unwrap pointer if needed
 		fieldType := field.Type
-		if fieldType.Kind() == reflect.Ptr {
+		if fieldType.Kind() == reflect.Pointer {
 			fi.isPtr = true
 			fieldType = fieldType.Elem()
 		}
