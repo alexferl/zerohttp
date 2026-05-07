@@ -62,7 +62,7 @@ func TestContextWithSpan(t *testing.T) {
 	zhtest.AssertNotNil(t, retrieved)
 
 	// Nil context should return nil
-	zhtest.AssertNil(t, SpanFromContext(context.TODO()))
+	zhtest.AssertNil(t, SpanFromContext(context.Background()))
 
 	// Context without span should return nil
 	emptyCtx := context.Background()

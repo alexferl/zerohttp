@@ -274,7 +274,7 @@ func (ti *typeInfo) collectFieldsRecursive(path fieldPath, tagName string, allow
 
 	// Skip pointer-to-struct fields (except file fields) — they are not bindable
 	// primitives and pointer embeds are not expanded (Kind() == Ptr bypassed isEmbedded check).
-	if !isFileField && fieldType.Kind() == reflect.Ptr &&
+	if !isFileField && fieldType.Kind() == reflect.Pointer &&
 		fieldType.Elem().Kind() == reflect.Struct {
 		return result, nil
 	}

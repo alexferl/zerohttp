@@ -51,6 +51,7 @@ func init() {
 //
 // Errors are automatically converted to appropriate HTTP responses:
 //   - Validation errors return 422 Unprocessable Entity with field details
+//   - Unknown fields return 422 Unprocessable Entity
 //   - Binding errors return 400 Bad Request
 //   - Request too large returns 413 Payload Too Large
 //   - ProblemDetail errors return their specified status code
@@ -112,14 +113,40 @@ func handleHandlerError(w http.ResponseWriter, err error) {
 		return
 	}
 
+	// Check for unknown field errors (422)
+	if IsUnknownFieldError(err) {
+		var ufe *validator.UnknownFieldError
+		errors.As(err, &ufe)
+		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		response := map[string]any{
+			"title":  "Unprocessable Entity",
+			"status": http.StatusUnprocessableEntity,
+			"detail": "Validation failed",
+			"errors": map[string][]string{ufe.Field: {"extra inputs are not permitted"}},
+		}
+		if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
+			log.GetGlobalLogger().Error("Failed to encode unknown field error response", log.E(encErr))
+		}
+		return
+	}
+
 	// Check for binding errors (400)
 	if IsBindError(err) {
 		w.Header().Set(httpx.HeaderContentType, httpx.MIMEApplicationProblemJSON)
 		w.WriteHeader(http.StatusBadRequest)
+		detail := "Invalid request body"
+		var be *validator.BindError
+		if errors.As(err, &be) {
+			var syntaxErr *json.SyntaxError
+			if errors.As(be.Unwrap(), &syntaxErr) {
+				detail = syntaxErr.Error()
+			}
+		}
 		response := map[string]any{
 			"title":  "Bad Request",
 			"status": http.StatusBadRequest,
-			"detail": "Invalid request body",
+			"detail": detail,
 		}
 		if encErr := json.NewEncoder(w).Encode(response); encErr != nil {
 			log.GetGlobalLogger().Error("Failed to encode binding error response", log.E(encErr))

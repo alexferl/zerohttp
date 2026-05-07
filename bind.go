@@ -9,8 +9,10 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/alexferl/zerohttp/internal/bind"
+	"github.com/alexferl/zerohttp/validator"
 )
 
 // FileHeader represents an uploaded file in a multipart form.
@@ -75,7 +77,21 @@ type defaultBinder struct{}
 func (b *defaultBinder) JSON(r io.Reader, dst any) error {
 	decoder := json.NewDecoder(r)
 	decoder.DisallowUnknownFields()
-	return decoder.Decode(dst)
+	err := decoder.Decode(dst)
+	if err == nil {
+		return nil
+	}
+
+	// Detect unknown field errors from encoding/json and wrap them
+	// so the router can return 422 instead of 400.
+	msg := err.Error()
+	const unknownFieldPrefix = `json: unknown field "`
+	if field, ok := strings.CutPrefix(msg, unknownFieldPrefix); ok {
+		field = strings.TrimSuffix(field, `"`)
+		return &validator.UnknownFieldError{Field: field}
+	}
+
+	return err
 }
 
 // Form binds form data from a url.Values to a destination struct.
@@ -118,7 +134,7 @@ func (b *defaultBinder) Query(r *http.Request, dst any) error {
 // Uses the type registry to cache reflection information for improved performance.
 func bindValues(values url.Values, dst any, tagName string, allowFiles bool) error {
 	v := reflect.ValueOf(dst)
-	if v.Kind() != reflect.Ptr || v.IsNil() {
+	if v.Kind() != reflect.Pointer || v.IsNil() {
 		return fmt.Errorf("destination must be a non-nil pointer")
 	}
 
@@ -197,7 +213,7 @@ func setFieldValue(field reflect.Value, values []string) error {
 	case reflect.Slice:
 		return setSliceValue(field, values)
 
-	case reflect.Ptr:
+	case reflect.Pointer:
 		// If value is empty, leave pointer as nil (optional parameter)
 		if values[0] == "" {
 			return nil
@@ -238,7 +254,7 @@ func BindMultipartFormFiles(r *http.Request, dst any) error {
 	}
 
 	v := reflect.ValueOf(dst)
-	if v.Kind() != reflect.Ptr || v.IsNil() {
+	if v.Kind() != reflect.Pointer || v.IsNil() {
 		return fmt.Errorf("destination must be a non-nil pointer")
 	}
 

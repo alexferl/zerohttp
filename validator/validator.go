@@ -60,7 +60,7 @@ func (v *defaultValidator) Struct(dst any) error {
 	}
 
 	val := reflect.ValueOf(dst)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return ValidationErrors{"": {"nil pointer"}}
 		}
@@ -158,7 +158,7 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 				elemName := fmt.Sprintf("%s[%d]", fieldName, j)
 				if elem.Kind() == reflect.Struct {
 					v.validateStruct(elem, elemName, errors)
-				} else if elem.Kind() == reflect.Ptr && !elem.IsNil() && elem.Elem().Kind() == reflect.Struct {
+				} else if elem.Kind() == reflect.Pointer && !elem.IsNil() && elem.Elem().Kind() == reflect.Struct {
 					v.validateStruct(elem.Elem(), elemName, errors)
 				}
 			}
@@ -169,7 +169,7 @@ func (v *defaultValidator) validateStruct(val reflect.Value, prefix string, erro
 				elemName := fmt.Sprintf("%s[%v]", fieldName, key)
 				if elem.Kind() == reflect.Struct {
 					v.validateStruct(elem, elemName, errors)
-				} else if elem.Kind() == reflect.Ptr && !elem.IsNil() && elem.Elem().Kind() == reflect.Struct {
+				} else if elem.Kind() == reflect.Pointer && !elem.IsNil() && elem.Elem().Kind() == reflect.Struct {
 					v.validateStruct(elem.Elem(), elemName, errors)
 				}
 			}
@@ -236,7 +236,7 @@ func (v *defaultValidator) validateElements(field reflect.Value, fieldName strin
 			elemName := fmt.Sprintf("%s[%d]", fieldName, j)
 
 			// Handle pointer elements
-			if elem.Kind() == reflect.Ptr && !elem.IsNil() {
+			if elem.Kind() == reflect.Pointer && !elem.IsNil() {
 				elem = elem.Elem()
 			}
 
@@ -345,7 +345,7 @@ func isZeroValue(v reflect.Value) bool {
 		return !v.Bool()
 	case reflect.Slice, reflect.Map, reflect.Array:
 		return v.Len() == 0
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		return v.IsNil()
 	case reflect.Struct:
 		// Check if struct is zero by comparing with a new instance

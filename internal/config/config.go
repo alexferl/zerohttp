@@ -30,13 +30,13 @@ func Merge(dst, src any) {
 	}
 
 	dv := reflect.ValueOf(dst)
-	if dv.Kind() != reflect.Ptr || dv.IsNil() {
+	if dv.Kind() != reflect.Pointer || dv.IsNil() {
 		panic("config.Merge: dst must be a non-nil pointer")
 	}
 
 	sv := reflect.ValueOf(src)
 	// Dereference pointer src so callers can pass either &cfg or cfg
-	if sv.Kind() == reflect.Ptr {
+	if sv.Kind() == reflect.Pointer {
 		sv = sv.Elem()
 	}
 	if sv.Kind() != reflect.Struct {
@@ -52,11 +52,11 @@ func mergeValue(dst, src reflect.Value) {
 	}
 
 	switch src.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if src.IsNil() {
 			return
 		}
-		if dst.Kind() == reflect.Ptr || dst.Kind() == reflect.Interface {
+		if dst.Kind() == reflect.Pointer || dst.Kind() == reflect.Interface {
 			dst.Set(src)
 			return
 		}

@@ -2,6 +2,7 @@ package zerohttp
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/alexferl/zerohttp/httpx"
+	"github.com/alexferl/zerohttp/validator"
 	"github.com/alexferl/zerohttp/zhtest"
 )
 
@@ -64,6 +66,11 @@ func TestBinder_JSON(t *testing.T) {
 				zhtest.AssertError(t, err)
 				if tt.errorMsg != "" {
 					zhtest.AssertErrorContains(t, err, tt.errorMsg)
+				}
+				if tt.name == "unknown field" {
+					var ufe *validator.UnknownFieldError
+					zhtest.AssertTrue(t, errors.As(err, &ufe))
+					zhtest.AssertEqual(t, "unknown", ufe.Field)
 				}
 				return
 			}
