@@ -523,29 +523,28 @@ func (s *Server) Start() error {
 	}()
 
 	// Check for server errors or startup hook errors
-	for {
-		select {
-		case err := <-errCh:
-			if err != nil {
-				return err
-			}
-			// errCh closed without error, check startup hook
-			if hookErr := <-startupHookErrCh; hookErr != nil {
-				return hookErr
-			}
-			return nil
-		case hookErr := <-startupHookErrCh:
-			// Startup hook failed, wait for servers to shut down
-			if hookErr != nil {
-				// Drain errCh
-				go func() {
-					for range errCh {
-					}
-				}()
-				return hookErr
-			}
+	var hookErr error
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return err
+		}
+		hookErr = <-startupHookErrCh
+	case hookErr = <-startupHookErrCh:
+		if hookErr != nil {
+			// Drain errCh
+			go func() {
+				for range errCh {
+				}
+			}()
+			return hookErr
+		}
+		err := <-errCh
+		if err != nil {
+			return err
 		}
 	}
+	return hookErr
 }
 
 // ListenerAddr returns the network address that the HTTP server is listening on.
