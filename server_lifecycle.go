@@ -73,7 +73,7 @@ func (s *Server) runPreStartupHooks(ctx context.Context) error {
 		return nil
 	}
 
-	s.logger.Debug("Running pre-startup hooks", log.F("count", len(hooks)))
+	s.logger.Info("Running pre-startup hooks", log.F("count", len(hooks)))
 
 	for _, hook := range hooks {
 		select {
@@ -83,14 +83,14 @@ func (s *Server) runPreStartupHooks(ctx context.Context) error {
 		default:
 		}
 
-		s.logger.Debug("Running pre-startup hook", log.F("hook", hook.Name))
+		s.logger.Info("Running pre-startup hook", log.F("hook", hook.Name))
 		if err := hook.Hook(ctx); err != nil {
 			s.logger.Error("Pre-startup hook failed", log.F("hook", hook.Name), log.E(err))
 			return fmt.Errorf("pre-startup hook %q failed: %w", hook.Name, err)
 		}
 	}
 
-	s.logger.Debug("All pre-startup hooks completed successfully")
+	s.logger.Info("All pre-startup hooks completed successfully")
 	return nil
 }
 
@@ -105,7 +105,7 @@ func (s *Server) runStartupHooks(ctx context.Context) error {
 		return nil
 	}
 
-	s.logger.Debug("Running startup hooks", log.F("count", len(hooks)))
+	s.logger.Info("Running startup hooks", log.F("count", len(hooks)))
 
 	for _, hook := range hooks {
 		select {
@@ -115,14 +115,14 @@ func (s *Server) runStartupHooks(ctx context.Context) error {
 		default:
 		}
 
-		s.logger.Debug("Running startup hook", log.F("hook", hook.Name))
+		s.logger.Info("Running startup hook", log.F("hook", hook.Name))
 		if err := hook.Hook(ctx); err != nil {
 			s.logger.Error("Startup hook failed", log.F("hook", hook.Name), log.E(err))
 			return fmt.Errorf("startup hook %q failed: %w", hook.Name, err)
 		}
 	}
 
-	s.logger.Debug("All startup hooks completed successfully")
+	s.logger.Info("All startup hooks completed successfully")
 	return nil
 }
 
@@ -136,7 +136,7 @@ func (s *Server) runPostStartupHooks(ctx context.Context) error {
 		return nil
 	}
 
-	s.logger.Debug("Running post-startup hooks", log.F("count", len(hooks)))
+	s.logger.Info("Running post-startup hooks", log.F("count", len(hooks)))
 
 	for _, hook := range hooks {
 		select {
@@ -146,14 +146,14 @@ func (s *Server) runPostStartupHooks(ctx context.Context) error {
 		default:
 		}
 
-		s.logger.Debug("Running post-startup hook", log.F("hook", hook.Name))
+		s.logger.Info("Running post-startup hook", log.F("hook", hook.Name))
 		if err := hook.Hook(ctx); err != nil {
 			s.logger.Error("Post-startup hook failed", log.F("hook", hook.Name), log.E(err))
 			// Continue with other hooks despite error
 		}
 	}
 
-	s.logger.Debug("All post-startup hooks completed successfully")
+	s.logger.Info("All post-startup hooks completed successfully")
 	return nil
 }
 
@@ -222,7 +222,7 @@ func (s *Server) runPreShutdownHooks(ctx context.Context) error {
 		return nil
 	}
 
-	s.logger.Debug("Running pre-shutdown hooks", log.F("count", len(hooks)))
+	s.logger.Info("Running pre-shutdown hooks", log.F("count", len(hooks)))
 
 	for _, hook := range hooks {
 		select {
@@ -232,7 +232,7 @@ func (s *Server) runPreShutdownHooks(ctx context.Context) error {
 		default:
 		}
 
-		s.logger.Debug("Running pre-shutdown hook", log.F("hook", hook.Name))
+		s.logger.Info("Running pre-shutdown hook", log.F("hook", hook.Name))
 		if err := hook.Hook(ctx); err != nil {
 			s.logger.Error("Pre-shutdown hook failed", log.F("hook", hook.Name), log.E(err))
 			// Continue with other hooks despite error
@@ -256,14 +256,14 @@ func (s *Server) startShutdownHooks(ctx context.Context) (*sync.WaitGroup, chan 
 		return &wg, errCh
 	}
 
-	s.logger.Debug("Starting shutdown hooks", log.F("count", len(hooks)))
+	s.logger.Info("Starting shutdown hooks", log.F("count", len(hooks)))
 
 	for _, hook := range hooks {
 		wg.Add(1)
 		go func(h ShutdownHookConfig) {
 			defer wg.Done()
 
-			s.logger.Debug("Running shutdown hook", log.F("hook", h.Name))
+			s.logger.Info("Running shutdown hook", log.F("hook", h.Name))
 			if err := h.Hook(ctx); err != nil {
 				s.logger.Error("Shutdown hook failed", log.F("hook", h.Name), log.E(err))
 				errCh <- err
@@ -284,7 +284,7 @@ func (s *Server) runPostShutdownHooks(ctx context.Context) error {
 		return nil
 	}
 
-	s.logger.Debug("Running post-shutdown hooks", log.F("count", len(hooks)))
+	s.logger.Info("Running post-shutdown hooks", log.F("count", len(hooks)))
 
 	for _, hook := range hooks {
 		select {
@@ -294,7 +294,7 @@ func (s *Server) runPostShutdownHooks(ctx context.Context) error {
 		default:
 		}
 
-		s.logger.Debug("Running post-shutdown hook", log.F("hook", hook.Name))
+		s.logger.Info("Running post-shutdown hook", log.F("hook", hook.Name))
 		if err := hook.Hook(ctx); err != nil {
 			s.logger.Error("Post-shutdown hook failed", log.F("hook", hook.Name), log.E(err))
 			// Continue with other hooks despite error
