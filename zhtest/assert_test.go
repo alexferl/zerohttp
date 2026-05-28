@@ -1151,6 +1151,25 @@ func TestAssertErrorContains(t *testing.T) {
 	AssertErrorContains(t, errors.New("connection refused"), "refused")
 }
 
+func TestAnError(t *testing.T) {
+	t.Run("AnError is not nil", func(t *testing.T) {
+		AssertNotNil(t, AnError)
+	})
+
+	t.Run("AnError message", func(t *testing.T) {
+		AssertEqual(t, "an error", AnError.Error())
+	})
+
+	t.Run("AnError can be used with AssertError", func(t *testing.T) {
+		AssertError(t, AnError)
+	})
+
+	t.Run("AnError can be used with AssertErrorIs", func(t *testing.T) {
+		wrapped := fmt.Errorf("wrapped: %w", AnError)
+		AssertErrorIs(t, wrapped, AnError)
+	})
+}
+
 func TestAssertNil(t *testing.T) {
 	t.Run("passes with nil", func(t *testing.T) {
 		AssertNil(t, nil)
@@ -1540,6 +1559,14 @@ func TestGeneralAssert_FailurePaths(t *testing.T) {
 			panic("intentional panic")
 		})
 	})
+
+	t.Run("AssertWithin below range", func(t *testing.T) {
+		AssertWithin(nil, 10.0, 8.0, 1.0)
+	})
+
+	t.Run("AssertWithin above range", func(t *testing.T) {
+		AssertWithin(nil, 10.0, 12.0, 1.0)
+	})
 }
 
 // Test AssertGreater and AssertLess
@@ -1603,7 +1630,36 @@ func TestAssertLess(t *testing.T) {
 	})
 }
 
-// Test AssertPanic and AssertNoPanic
+func TestAssertWithin(t *testing.T) {
+	t.Run("value within range", func(t *testing.T) {
+		AssertWithin(t, 10.0, 10.05, 0.1)
+	})
+
+	t.Run("value exactly at lower bound", func(t *testing.T) {
+		AssertWithin(t, 10.0, 9.9, 0.1)
+	})
+
+	t.Run("value exactly at upper bound", func(t *testing.T) {
+		AssertWithin(t, 10.0, 10.1, 0.1)
+	})
+
+	t.Run("value in middle of range", func(t *testing.T) {
+		AssertWithin(t, 0.5, 0.5, 0.01)
+	})
+
+	t.Run("int values", func(t *testing.T) {
+		AssertWithin(t, 100, 101, 5)
+	})
+
+	t.Run("mixed int and float", func(t *testing.T) {
+		AssertWithin(t, 10, 10.5, 1.0)
+	})
+
+	t.Run("very small delta", func(t *testing.T) {
+		AssertWithin(t, 0.333333, 0.333334, 0.00001)
+	})
+}
+
 func TestAssertPanic(t *testing.T) {
 	t.Run("function panics", func(t *testing.T) {
 		AssertPanic(t, func() {
@@ -1670,7 +1726,6 @@ func TestAssertPanicContains(t *testing.T) {
 	})
 }
 
-// Test non-int64 numeric types for toInt64
 func TestAssertEqual_NonInt64Types(t *testing.T) {
 	t.Run("non-numeric type comparison", func(t *testing.T) {
 		// Compare strings (should use DeepEqual)
@@ -1684,7 +1739,6 @@ func TestAssertEqual_NonInt64Types(t *testing.T) {
 	})
 }
 
-// Test AssertContains with non-string non-slice types
 func TestAssertContains_TypeCoverage(t *testing.T) {
 	t.Run("slice contains int", func(t *testing.T) {
 		AssertContains(t, []int{1, 2, 3}, 2)
@@ -1703,7 +1757,6 @@ func TestAssertContains_TypeCoverage(t *testing.T) {
 	})
 }
 
-// Test AssertImplements with different interface types
 func TestAssertImplements_Coverage(t *testing.T) {
 	t.Run("strings.Reader implements io.Reader", func(t *testing.T) {
 		AssertImplements(t, (*io.Reader)(nil), &strings.Reader{})
@@ -1714,7 +1767,6 @@ func TestAssertImplements_Coverage(t *testing.T) {
 	})
 }
 
-// Test AssertIsType with pointer types
 func TestAssertIsType_Pointers(t *testing.T) {
 	t.Run("pointer type", func(t *testing.T) {
 		var ptr *int
@@ -1730,7 +1782,6 @@ func TestAssertIsType_Pointers(t *testing.T) {
 	})
 }
 
-// Test AssertLen with different collection types
 func TestAssertLen_Types(t *testing.T) {
 	t.Run("array length", func(t *testing.T) {
 		var arr [5]int
@@ -1749,7 +1800,6 @@ func TestAssertLen_Types(t *testing.T) {
 	})
 }
 
-// Test isEmpty with channels
 func TestAssertEmpty_Channels(t *testing.T) {
 	t.Run("empty channel", func(t *testing.T) {
 		ch := make(chan int)
@@ -1763,7 +1813,6 @@ func TestAssertEmpty_Channels(t *testing.T) {
 	})
 }
 
-// Test non-numeric type in toFloat64Generic
 func TestAssertEqual_NonNumericFallback(t *testing.T) {
 	t.Run("struct comparison", func(t *testing.T) {
 		type User struct {
@@ -1797,7 +1846,6 @@ func TestAssertFailf(t *testing.T) {
 	}
 }
 
-// Test additional numeric types for toFloat64Generic and toInt64
 func TestAssertEqual_NumericTypeCoverage(t *testing.T) {
 	t.Run("int8", func(t *testing.T) {
 		var a int8 = 5
@@ -1910,7 +1958,6 @@ func TestAssertLess_NumericTypeCoverage(t *testing.T) {
 	})
 }
 
-// Test isEmpty with pointer types
 func TestAssertEmpty_WithPointers(t *testing.T) {
 	t.Run("nil pointer is empty", func(t *testing.T) {
 		var ptr *int
