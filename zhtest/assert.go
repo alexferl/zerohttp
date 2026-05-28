@@ -710,6 +710,9 @@ func AssertErrorContains(t testing.TB, err error, substring string) {
 	}
 }
 
+// AnError is a sentinel error value for use in mock return values.
+var AnError = errors.New("an error") //nolint:staticcheck // Named for fluent test assertions (e.g., return zhtest.AnError).
+
 // AssertNil fails if v is not nil.
 // For automatic test failures, pass a non-nil testing.TB.
 //
@@ -943,6 +946,21 @@ func AssertLess(t testing.TB, actual, expected any) {
 	}
 
 	fail(t, "AssertLess requires comparable numeric types, got %T and %T", actual, expected)
+}
+
+// AssertWithin fails if actual is not within [expected-delta, expected+delta].
+// For automatic test failures, pass a non-nil testing.TB.
+//
+// Example:
+//
+//	zhtest.AssertWithin(t, 0.43, *resp.BatteryUsed, 0.01)
+func AssertWithin(t testing.TB, expected, actual, delta any) {
+	expFloat := toFloat64Generic(expected)
+	actFloat := toFloat64Generic(actual)
+	deltaFloat := toFloat64Generic(delta)
+	if actFloat < expFloat-deltaFloat || actFloat > expFloat+deltaFloat {
+		fail(t, "expected %v to be within %v of %v", actual, delta, expected)
+	}
 }
 
 // toInt64 attempts to convert a value to int64.
